@@ -8,7 +8,8 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 GOOGLE_TOKEN_INFO_URL = "https://oauth2.googleapis.com/tokeninfo"
-ALLOWED_DOMAIN = "@srmap.edu.in"
+ALLOWED_DOMAIN = ["@srmap.edu.in", "@vidyashilp.edu.in"]
+
 
 
 def verify_google_token(token: str):
@@ -20,10 +21,10 @@ def verify_google_token(token: str):
     data = response.json()
 
     email = data.get("email")
-    if not email.endswith(ALLOWED_DOMAIN):
+    if not any(email.endswith(domain) for domain in ALLOWED_DOMAIN):
         raise HTTPException(
             status_code=403,
-            detail="Only SRM AP accounts allowed"
+            detail="Only Vidyashilp accounts allowed"
         )
 
     return data
