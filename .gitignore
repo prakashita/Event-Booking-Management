@@ -27,6 +27,7 @@ build/
 
 # Vite
 Client/.env
+Server/.env
 
 # OS
 Thumbs.db
