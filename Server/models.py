@@ -1,13 +1,18 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from beanie import Document
+from pydantic import Field
 from datetime import datetime
-from database import Base
+from typing import Optional
 
-class User(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String)
-    email = Column(String, unique=True, index=True)
-    google_id = Column(String, unique=True)
-    role = Column(String, default="faculty")
-    created_at = Column(DateTime, default=datetime.utcnow)
+class User(Document):
+    name: str
+    email: str = Field(unique=True)
+    google_id: str = Field(unique=True)
+    role: str = Field(default="faculty")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    class Settings:
+        name = "users"  # Collection name in MongoDB
+        indexes = [
+            "email",
+            "google_id"
+        ]

@@ -1,19 +1,38 @@
+import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine
-import models
+from database import init_db, close_db
 from routers import auth
+from dotenv import load_dotenv
 
-models.Base.metadata.create_all(bind=engine)
+# Load environment variables
+load_dotenv()
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Initialize MongoDB connection
+    await init_db()
+    yield
+    # Shutdown: Close MongoDB connection
+    await close_db()
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173","https://event-booking-management.netlify.app"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://event-booking-management.netlify.app",
+        "https://delicate-rolypoly-9e3ca2.netlify.app",
+        "https://*.netlify.app",  # Allow all Netlify subdomains
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(auth.router)

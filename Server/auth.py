@@ -1,9 +1,14 @@
+import os
 from datetime import datetime, timedelta
 from jose import jwt
 import requests
 from fastapi import HTTPException
+from dotenv import load_dotenv
 
-SECRET_KEY = "CHANGE_ME_LATER"
+# Load environment variables from .env file
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME_LATER")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
