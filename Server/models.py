@@ -9,6 +9,9 @@ class User(Document):
     google_id: str = Field(unique=True)
     role: str = Field(default="faculty")
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    google_refresh_token: Optional[str] = None
+    google_access_token: Optional[str] = None
+    google_token_expiry: Optional[datetime] = None
     
     class Settings:
         name = "users"  # Collection name in MongoDB

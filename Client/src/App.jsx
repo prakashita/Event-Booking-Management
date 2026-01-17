@@ -1,9 +1,140 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import timeGridPlugin from "@fullcalendar/timegrid";
+import interactionPlugin from "@fullcalendar/interaction";
 
 const stats = [
   { label: "Active Events", value: "128+" },
   { label: "Attendees Managed", value: "24k" },
   { label: "Automated Reminders", value: "98%" }
+];
+
+const menuItems = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "my-events", label: "My Events" },
+  { id: "calendar", label: "Calendar View" },
+  { id: "venue", label: "Booking Venue" },
+  { id: "messages", label: "Messages" }
+];
+
+const preferenceItems = [
+  { id: "users", label: "User Management" },
+  { id: "settings", label: "Settings" }
+];
+
+const eventCards = [
+  {
+    title: "Business Conference 2025",
+    date: "Jan 25",
+    time: "09:30 AM",
+    status: "In Progress"
+  },
+  {
+    title: "Annual Fest",
+    date: "Nov 27",
+    time: "07:00 PM",
+    status: "Ready"
+  },
+  {
+    title: "Business Conference 2025",
+    date: "Jan 25",
+    time: "09:30 AM",
+    status: "Pending"
+  },
+  {
+    title: "Annual Meet",
+    date: "Dec 03",
+    time: "11:00 AM",
+    status: "Pending"
+  },
+  {
+    title: "Research Showcase",
+    date: "Dec 14",
+    time: "02:30 PM",
+    status: "Ready"
+  },
+  {
+    title: "Faculty Awards",
+    date: "Dec 18",
+    time: "05:15 PM",
+    status: "Ready"
+  }
+];
+
+const inboxItems = [
+  {
+    name: "Nur Azzahra",
+    time: "2 hours ago",
+    message: "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+  },
+  {
+    name: "Nur Azzahra",
+    time: "2 hours ago",
+    message: "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+  },
+  {
+    name: "Nur Azzahra",
+    time: "2 hours ago",
+    message: "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
+  }
+];
+
+const eventsTable = [
+  {
+    name: "Event 1",
+    date: "11 September 2025",
+    time: "9 am",
+    status: "In Progress"
+  },
+  {
+    name: "Event 2",
+    date: "12 September 2025",
+    time: "1 pm",
+    status: "Ready"
+  },
+  {
+    name: "Event 3",
+    date: "15 October 2025",
+    time: "2 pm",
+    status: "Pending"
+  },
+  {
+    name: "Event 4",
+    date: "18 September 2025",
+    time: "9 am",
+    status: "Ready"
+  },
+  {
+    name: "Event 5",
+    date: "22 September 2025",
+    time: "1 pm",
+    status: "Pending"
+  },
+  {
+    name: "Event 6",
+    date: "1 October 2025",
+    time: "2 pm",
+    status: "Pending"
+  },
+  {
+    name: "Event 7",
+    date: "18 September 2025",
+    time: "9 am",
+    status: "Ready"
+  },
+  {
+    name: "Event 8",
+    date: "22 September 2025",
+    time: "1 pm",
+    status: "Pending"
+  },
+  {
+    name: "Event 9",
+    date: "1 October 2025",
+    time: "2 pm",
+    status: "Pending"
+  }
 ];
 
 const GoogleIcon = () => (
@@ -36,9 +167,34 @@ const PlaceholderCard = () => (
   </div>
 );
 
+const SimpleIcon = ({ path }) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d={path} />
+  </svg>
+);
+
 export default function App() {
   const googleButtonRef = useRef(null);
   const [status, setStatus] = useState({ type: "idle", message: "" });
+  const [activeView, setActiveView] = useState("dashboard");
+  const [calendarState, setCalendarState] = useState({
+    status: "idle",
+    events: [],
+    error: ""
+  });
+  const [user, setUser] = useState(() => {
+    const storedToken = localStorage.getItem("auth_token");
+    const stored = localStorage.getItem("auth_user");
+    if (!storedToken || !stored) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(stored);
+    } catch (err) {
+      return null;
+    }
+  });
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
   const googleClientId =
     import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -69,6 +225,8 @@ export default function App() {
         const data = await res.json();
         localStorage.setItem("auth_token", data.access_token);
         localStorage.setItem("auth_user", JSON.stringify(data.user));
+        setUser(data.user);
+        setActiveView("dashboard");
         setStatus({ type: "success", message: "Signed in successfully." });
       } catch (err) {
         setStatus({
@@ -80,7 +238,80 @@ export default function App() {
     [apiBaseUrl]
   );
 
+  const fetchCalendarEvents = useCallback(async (range) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setCalendarState({
+        status: "needs_auth",
+        events: [],
+        error: "Missing auth token."
+      });
+      return;
+    }
+
+    setCalendarState((prev) => ({ ...prev, status: "loading", error: "" }));
+
+    try {
+      const params = new URLSearchParams();
+      if (range?.start) {
+        params.set("start", range.start.toISOString());
+      }
+      if (range?.end) {
+        params.set("end", range.end.toISOString());
+      }
+      const query = params.toString();
+      const url = query
+        ? `${apiBaseUrl}/calendar/events?${query}`
+        : `${apiBaseUrl}/calendar/events`;
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (res.status === 403) {
+        setCalendarState({
+          status: "needs_auth",
+          events: [],
+          error: "Connect your Google Calendar to load events."
+        });
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error("Unable to load events.");
+      }
+
+      const data = await res.json();
+      const mappedEvents = (data.events || []).map((event) => ({
+        id: event.id,
+        title: event.summary || "Untitled event",
+        start: event.start,
+        end: event.end,
+        url: event.htmlLink || undefined,
+        extendedProps: {
+          location: event.location
+        }
+      }));
+      setCalendarState({
+        status: "ready",
+        events: mappedEvents,
+        error: ""
+      });
+    } catch (err) {
+      setCalendarState({
+        status: "error",
+        events: [],
+        error: err?.message || "Unable to load events."
+      });
+    }
+  }, [apiBaseUrl]);
+
   useEffect(() => {
+    if (user) {
+      return;
+    }
+
     if (!googleClientId) {
       setStatus({
         type: "error",
@@ -127,7 +358,328 @@ export default function App() {
         window.clearInterval(timerId);
       }
     };
-  }, [googleClientId, handleGoogleCredential]);
+  }, [googleClientId, handleGoogleCredential, user]);
+
+  useEffect(() => {
+    if (user && activeView === "calendar") {
+      fetchCalendarEvents();
+    }
+  }, [activeView, fetchCalendarEvents, user]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("auth_user");
+    setUser(null);
+    setStatus({ type: "idle", message: "" });
+  };
+
+  const handleCalendarConnect = async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setCalendarState({
+        status: "needs_auth",
+        events: [],
+        error: "Missing auth token."
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch(`${apiBaseUrl}/calendar/connect-url`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error("Unable to start Google Calendar auth.");
+      }
+
+      const data = await res.json();
+      if (data?.url) {
+        window.open(data.url, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      setCalendarState({
+        status: "error",
+        events: [],
+        error: err?.message || "Unable to start Google Calendar auth."
+      });
+    }
+  };
+
+  if (user) {
+    const profileName = user?.name || "Annisa Thalia";
+    const profileRole = user?.role || "Event Manager";
+    const isMyEvents = activeView === "my-events";
+    const isCalendar = activeView === "calendar";
+
+    const renderPrimaryContent = () => {
+      if (isMyEvents) {
+        return (
+          <div className="primary-column">
+            <div className="events-actions">
+              <button type="button" className="primary-action">
+                + New Event
+              </button>
+              <button type="button" className="secondary-action">
+                RSVP
+              </button>
+            </div>
+
+            <div className="events-table-card">
+              <div className="table-header">
+                <h3>My Events</h3>
+                <div className="table-tabs">
+                  <button type="button" className="tab-button active">
+                    All Events
+                  </button>
+                  <button type="button" className="tab-button">
+                    Upcoming
+                  </button>
+                  <button type="button" className="tab-button">
+                    In Progress
+                  </button>
+                </div>
+              </div>
+              <div className="events-table">
+                <div className="events-table-row header">
+                  <span>Events</span>
+                  <span>Date</span>
+                  <span>Time</span>
+                  <span>Status</span>
+                  <span>Action</span>
+                </div>
+                {eventsTable.map((event) => (
+                  <div key={event.name} className="events-table-row">
+                    <span>{event.name}</span>
+                    <span>{event.date}</span>
+                    <span>{event.time}</span>
+                    <span className={`status-pill ${event.status.toLowerCase().replace(" ", "-")}`}>
+                      {event.status}
+                    </span>
+                    <button type="button" className="details-button">
+                      Details
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (isCalendar) {
+        return (
+          <div className="primary-column">
+            <div className="calendar-card">
+              <div className="calendar-toolbar">
+                <div>
+                  <h3>Google Calendar</h3>
+                  <p className="calendar-subtitle">Your upcoming events</p>
+                </div>
+                <div className="calendar-actions">
+                  <button type="button" className="secondary-action" onClick={() => fetchCalendarEvents()}>
+                    Refresh
+                  </button>
+                  <button type="button" className="primary-action" onClick={handleCalendarConnect}>
+                    Connect Google Calendar
+                  </button>
+                </div>
+              </div>
+
+              {calendarState.status === "loading" ? (
+                <p className="calendar-message">Loading events...</p>
+              ) : null}
+
+              {calendarState.status === "needs_auth" ? (
+                <p className="calendar-message">{calendarState.error}</p>
+              ) : null}
+
+              {calendarState.status === "error" ? (
+                <p className="calendar-message">{calendarState.error}</p>
+              ) : null}
+
+              <div className="calendar-shell">
+                <FullCalendar
+                  plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                  initialView="dayGridMonth"
+                  headerToolbar={{
+                    left: "prev,next today",
+                    center: "title",
+                    right: "dayGridMonth,timeGridWeek,timeGridDay"
+                  }}
+                  height="auto"
+                  events={calendarState.events}
+                  datesSet={(info) => fetchCalendarEvents({ start: info.start, end: info.end })}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="primary-column">
+          <button type="button" className="request-button">
+            Request Approval
+          </button>
+
+          <div className="events-card">
+            <div className="events-header">
+              <p>Your Events</p>
+              <div className="events-nav">
+                <button type="button" className="nav-button">
+                  <SimpleIcon path="M15 6 9 12l6 6" />
+                </button>
+                <button type="button" className="nav-button">
+                  <SimpleIcon path="M9 6l6 6-6 6" />
+                </button>
+              </div>
+            </div>
+            <div className="events-grid">
+              {eventCards.map((event, index) => (
+                <article key={`${event.title}-${index}`} className="event-card">
+                  <div className={`event-status ${event.status.toLowerCase().replace(" ", "-")}`}>
+                    {event.status}
+                  </div>
+                  <div className="event-image" />
+                  <p className="event-title">{event.title}</p>
+                  <p className="event-meta">
+                    <span className="event-date">{event.date}</span>
+                    <span className="event-dot">•</span>
+                    <span className="event-time">{event.time}</span>
+                  </p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div className="dashboard-page">
+        <aside className="sidebar">
+          <div className="brand">
+            <div className="brand-icon">
+              <SimpleIcon path="M6 12a6 6 0 1 1 6 6H6v-6Z" />
+            </div>
+            <span>FACULTY</span>
+          </div>
+
+          <div className="menu-block">
+            <p className="menu-title">Menu</p>
+            <nav className="menu-list">
+              {menuItems.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`menu-item ${activeView === item.id ? "active" : ""}`}
+                  onClick={() => setActiveView(item.id)}
+                >
+                  <span className="menu-icon">
+                    <SimpleIcon path="M3 10.5 12 3l9 7.5v9.5H3z" />
+                  </span>
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <div className="menu-block">
+            <p className="menu-title">Preferences</p>
+            <nav className="menu-list">
+              {preferenceItems.map((item) => (
+                <button key={item.id} type="button" className="menu-item">
+                  <span className="menu-icon">
+                    <SimpleIcon path="M12 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Zm0 14c4.4 0 8 2 8 4v2H4v-2c0-2 3.6-4 8-4Z" />
+                  </span>
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <button type="button" className="menu-item logout" onClick={handleLogout}>
+            <span className="menu-icon">
+              <SimpleIcon path="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-4-4 4-4M6 13h12" />
+            </span>
+            Logout
+          </button>
+        </aside>
+
+        <main className="dashboard-main">
+          <header className="dashboard-header">
+            <div>
+              <p className="dashboard-title">
+                {isMyEvents ? "My Events" : isCalendar ? "Calendar View" : "Dashboard Overview"}
+              </p>
+            </div>
+            <div className="search-bar">
+              <span className="search-icon">
+                <SimpleIcon path="M15.5 15.5 20 20M17 10.5a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z" />
+              </span>
+              <input
+                type="search"
+                placeholder="Events, Reports, Schedule, etc"
+              />
+            </div>
+            <div className="header-actions">
+              <button type="button" className="icon-button">
+                <SimpleIcon path="M12 3a6 6 0 0 1 6 6v4l2 3H4l2-3V9a6 6 0 0 1 6-6Zm0 18a2.5 2.5 0 0 0 2.45-2H9.55A2.5 2.5 0 0 0 12 21Z" />
+              </button>
+              <div className="profile">
+                <div>
+                  <p className="profile-name">{profileName}</p>
+                  <p className="profile-role">{profileRole}</p>
+                </div>
+                <div className="profile-avatar" />
+              </div>
+            </div>
+          </header>
+
+          <section className="dashboard-content">
+            {renderPrimaryContent()}
+
+            <aside className="inbox-card">
+              <div className="inbox-header">
+                <div>
+                  <p className="inbox-title">Inbox</p>
+                  <p className="inbox-subtitle">Handle Questions</p>
+                </div>
+                <button type="button" className="icon-button">
+                  <SimpleIcon path="M5 12a2 2 0 1 1 0 0Zm7 0a2 2 0 1 1 0 0Zm7 0a2 2 0 1 1 0 0Z" />
+                </button>
+              </div>
+              <div className="inbox-list">
+                {inboxItems.map((item, index) => (
+                  <div key={`${item.name}-${index}`} className="inbox-item">
+                    <div className="inbox-avatar" />
+                    <div className="inbox-body">
+                      <p className="inbox-name">
+                        {item.name}
+                        <span>{item.time}</span>
+                      </p>
+                      <p className="inbox-message">{item.message}</p>
+                      <div className="inbox-actions">
+                        <button type="button" className="ghost-button">
+                          Archive
+                        </button>
+                        <button type="button" className="primary-button">
+                          Reply
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </aside>
+          </section>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="page">

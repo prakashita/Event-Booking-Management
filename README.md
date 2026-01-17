@@ -1,98 +1,84 @@
 # Event Booking Management
 
-This repo contains a React (Vite) frontend and a FastAPI backend. The backend
-now uses MongoDB via Beanie/Motor and supports Google sign-in.
+A full-stack event booking login experience with a React + Vite client and a
+FastAPI + MongoDB backend. The app uses Google Sign-In to authenticate users,
+stores user profiles in MongoDB, and returns a JWT for session use.
 
-## What changed so far
+## Features
+- Google Sign-In with domain allowlist
+- JWT issuance on successful login
+- MongoDB persistence via Beanie (Motor)
+- Polished landing + login UI (React + Vite)
 
-- Merged the upstream repo changes into this project.
-- Switched the backend from SQLite/SQLAlchemy to MongoDB/Beanie.
-- Added async DB initialization on app startup and clean shutdown on app stop.
-- Updated backend auth to load `SECRET_KEY` from `.env`.
-- Added Mongo dependencies to `Server/requirements.txt`.
-- Added `Server/.env` with `MONGODB_URL`, `SECRET_KEY`, and `DB_NAME`.
-- Removed upstream deployment/docs files and cleaned the comparison folder.
+## Tech Stack
+- Client: React, Vite
+- Server: FastAPI, Beanie, Motor
+- Auth: Google OAuth token validation + JWT
+- Database: MongoDB
 
-## Project structure
+## Project Structure
+```
+Client/   # React + Vite frontend
+Server/   # FastAPI backend
+```
 
-- `Client/` - React + Vite frontend
-  - `src/App.jsx`, `src/main.jsx`, `src/styles.css`
-- `Server/` - FastAPI backend
-  - `main.py` - app setup, CORS, and lifespan hooks
-  - `database.py` - Mongo connection and Beanie init
-  - `models.py` - Beanie document models
-  - `routers/auth.py` - Google auth endpoint
-  - `auth.py` - JWT helpers and Google token verification
-
-## Requirements
-
-- Python 3.12+
+## Prerequisites
 - Node.js 18+
-- MongoDB Atlas or local MongoDB instance
+- Python 3.10+
+- MongoDB instance (local or cloud)
+- Google OAuth Client ID
 
-## Backend setup
+## Environment Variables
 
-1) Create `Server/.env` (already added locally). It should look like:
-
+Server (.env in `Server/`):
 ```
-MONGODB_URL=mongodb+srv://<user>:<password>@<cluster>/<db>
-SECRET_KEY=CHANGE_ME_LATER
+MONGODB_URL=mongodb://localhost:27017/eventdb
 DB_NAME=eventdb
+SECRET_KEY=replace_me
 ```
 
-2) Install backend dependencies:
+Client (`Client/.env`):
+```
+VITE_API_BASE_URL=http://localhost:8000
+VITE_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
+```
 
+Notes:
+- The backend also accepts `DATABASE_URL` as an alternative to `MONGODB_URL`.
+- Allowed email domains are hard-coded in `Server/auth.py` (default:
+  `@srmap.edu.in`, `@vidyashilp.edu.in`). Update as needed.
+- CORS origins are configured in `Server/main.py`.
+
+## Run Locally
+
+Server:
 ```
 cd Server
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
 ```
 
-3) Run the API:
-
-```
-uvicorn main:app --reload
-```
-
-API runs at `http://127.0.0.1:8000`.
-
-## Frontend setup
-
-1) Install frontend dependencies:
-
+Client:
 ```
 cd Client
 npm install
-```
-
-2) Run the dev server:
-
-```
 npm run dev
 ```
 
-Frontend runs at `http://localhost:5173`.
+Open `http://localhost:5173` in your browser.
 
-## Environment variables
+## API
 
-Frontend (optional):
-
-- `VITE_API_BASE_URL` (default `http://localhost:8000`)
-- `VITE_GOOGLE_CLIENT_ID` (fallback is hard-coded in `Client/src/App.jsx`)
-
-Backend:
-
-- `MONGODB_URL` or `DATABASE_URL` (Mongo connection string)
-- `SECRET_KEY` (JWT signing key)
-- `DB_NAME` (defaults to `eventdb` if not in URL)
-
-## Notes
-
-- The Google auth endpoint is `POST /auth/google` and expects:
-
+POST `/auth/google`
 ```
 { "token": "<google_id_token>" }
 ```
-
-- Allowed domains are configured in `Server/auth.py`.
-- CORS is configured in `Server/main.py`.
-
+Returns:
+```
+{
+  "access_token": "<jwt>",
+  "user": { "id": "...", "name": "...", "email": "..." }
+}
+```
