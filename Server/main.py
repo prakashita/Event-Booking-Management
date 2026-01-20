@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db, close_db
-from routers import auth, calendar
+from routers import auth, calendar, events, venues
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -37,6 +37,8 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(calendar.router)
+app.include_router(venues.router)
+app.include_router(events.router)
 
 @app.get("/")
 def home():

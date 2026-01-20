@@ -1,6 +1,6 @@
-from beanie import Document
+from beanie import Document, Indexed
 from pydantic import Field
-from datetime import datetime
+from datetime import datetime, date, time
 from typing import Optional
 
 class User(Document):
@@ -19,3 +19,29 @@ class User(Document):
             "email",
             "google_id"
         ]
+
+
+class Venue(Document):
+    name: Indexed(str, unique=True)
+
+    class Settings:
+        name = "venues"
+        indexes = [
+            "name"
+        ]
+
+
+class Event(Document):
+    name: str
+    facilitator: str
+    description: Optional[str] = None
+    venue_name: str
+    start_date: str
+    start_time: str
+    end_date: str
+    end_time: str
+    created_by: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "events"

@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import requests
 
 from auth import (
@@ -10,30 +9,12 @@ from auth import (
     GOOGLE_CLIENT_SECRET,
     GOOGLE_REDIRECT_URI,
     create_oauth_state,
-    decode_access_token,
     decode_oauth_state,
 )
 from models import User
+from routers.deps import get_current_user
 
 router = APIRouter(prefix="/calendar", tags=["Calendar"])
-security = HTTPBearer(auto_error=False)
-
-
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> User:
-    if not credentials:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
-
-    payload = decode_access_token(credentials.credentials)
-    user_id = payload.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
-    user = await User.get(user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    return user
 
 
 def build_google_oauth_url(state: str) -> str:

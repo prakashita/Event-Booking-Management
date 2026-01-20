@@ -177,6 +177,21 @@ export default function App() {
   const googleButtonRef = useRef(null);
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [activeView, setActiveView] = useState("dashboard");
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [venuesState, setVenuesState] = useState({ status: "idle", items: [], error: "" });
+  const [eventsState, setEventsState] = useState({ status: "idle", items: [], error: "" });
+  const [eventForm, setEventForm] = useState({
+    start_date: "",
+    end_date: "",
+    start_time: "",
+    end_time: "",
+    name: "",
+    facilitator: "",
+    venue_name: "",
+    description: ""
+  });
+  const [eventFormStatus, setEventFormStatus] = useState({ status: "idle", error: "" });
+  const [conflictState, setConflictState] = useState({ open: false, items: [] });
   const [calendarState, setCalendarState] = useState({
     status: "idle",
     events: [],
@@ -237,6 +252,24 @@ export default function App() {
     },
     [apiBaseUrl]
   );
+
+  const loadVenues = useCallback(async () => {
+    setVenuesState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await fetch(`${apiBaseUrl}/venues`);
+      if (!res.ok) {
+        throw new Error("Unable to load venues.");
+      }
+      const data = await res.json();
+      setVenuesState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setVenuesState({
+        status: "error",
+        items: [],
+        error: err?.message || "Unable to load venues."
+      });
+    }
+  }, [apiBaseUrl]);
 
   const fetchCalendarEvents = useCallback(async (range) => {
     const token = localStorage.getItem("auth_token");
@@ -307,6 +340,34 @@ export default function App() {
     }
   }, [apiBaseUrl]);
 
+  const loadEvents = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setEventsState({ status: "error", items: [], error: "Missing auth token." });
+      return;
+    }
+
+    setEventsState((prev) => ({ ...prev, status: "loading", error: "" }));
+    try {
+      const res = await fetch(`${apiBaseUrl}/events`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        throw new Error("Unable to load events.");
+      }
+      const data = await res.json();
+      setEventsState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setEventsState({
+        status: "error",
+        items: [],
+        error: err?.message || "Unable to load events."
+      });
+    }
+  }, [apiBaseUrl]);
+
   useEffect(() => {
     if (user) {
       return;
@@ -366,11 +427,118 @@ export default function App() {
     }
   }, [activeView, fetchCalendarEvents, user]);
 
+  useEffect(() => {
+    if (!user || activeView !== "my-events") {
+      return;
+    }
+    if (venuesState.status === "idle") {
+      loadVenues();
+    }
+    if (eventsState.status === "idle") {
+      loadEvents();
+    }
+  }, [activeView, eventsState.status, loadEvents, loadVenues, user, venuesState.status]);
+
   const handleLogout = () => {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
     setUser(null);
     setStatus({ type: "idle", message: "" });
+  };
+
+  const handleEventModalOpen = () => {
+    setIsEventModalOpen(true);
+    setEventFormStatus({ status: "idle", error: "" });
+  };
+
+  const handleEventModalClose = () => {
+    setIsEventModalOpen(false);
+    setConflictState({ open: false, items: [] });
+  };
+
+  const submitEvent = async (formEvent, override) => {
+    if (formEvent) {
+      formEvent.preventDefault();
+    }
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setEventFormStatus({ status: "error", error: "Please sign in again." });
+      return;
+    }
+
+    setEventFormStatus({ status: "loading", error: "" });
+
+    try {
+      const payload = override
+        ? { ...eventForm, override_conflict: true }
+        : eventForm;
+      const res = await fetch(`${apiBaseUrl}/events`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.status === 409) {
+        const data = await res.json();
+        setConflictState({
+          open: true,
+          items: data?.conflicts || []
+        });
+        setEventFormStatus({ status: "idle", error: "" });
+        return;
+      }
+
+      if (!res.ok) {
+        const message = res.status === 400 ? "Check your date/time inputs." : "Unable to create event.";
+        throw new Error(message);
+      }
+
+      setEventForm({
+        start_date: "",
+        end_date: "",
+        start_time: "",
+        end_time: "",
+        name: "",
+        facilitator: "",
+        venue_name: "",
+        description: ""
+      });
+      setIsEventModalOpen(false);
+      setConflictState({ open: false, items: [] });
+      loadEvents();
+    } catch (err) {
+      setEventFormStatus({
+        status: "error",
+        error: err?.message || "Unable to create event."
+      });
+    }
+  };
+
+  const handleEventSubmit = (event) => {
+    submitEvent(event, false);
+  };
+
+  const handleConflictReschedule = () => {
+    setConflictState({ open: false, items: [] });
+  };
+
+  const handleConflictCancel = () => {
+    setIsEventModalOpen(false);
+    setConflictState({ open: false, items: [] });
+  };
+
+  const handleConflictOverride = () => {
+    submitEvent(null, true);
+  };
+
+  const handleEventFieldChange = (field) => (event) => {
+    setEventForm((prev) => ({
+      ...prev,
+      [field]: event.target.value
+    }));
   };
 
   const handleCalendarConnect = async () => {
@@ -419,7 +587,7 @@ export default function App() {
         return (
           <div className="primary-column">
             <div className="events-actions">
-              <button type="button" className="primary-action">
+              <button type="button" className="primary-action" onClick={handleEventModalOpen}>
                 + New Event
               </button>
               <button type="button" className="secondary-action">
@@ -450,21 +618,187 @@ export default function App() {
                   <span>Status</span>
                   <span>Action</span>
                 </div>
-                {eventsTable.map((event) => (
-                  <div key={event.name} className="events-table-row">
-                    <span>{event.name}</span>
-                    <span>{event.date}</span>
-                    <span>{event.time}</span>
-                    <span className={`status-pill ${event.status.toLowerCase().replace(" ", "-")}`}>
-                      {event.status}
-                    </span>
-                    <button type="button" className="details-button">
-                      Details
-                    </button>
-                  </div>
-                ))}
+                {eventsState.status === "loading" ? (
+                  <p className="table-message">Loading events...</p>
+                ) : null}
+                {eventsState.status === "error" ? (
+                  <p className="table-message">{eventsState.error}</p>
+                ) : null}
+                {eventsState.status === "ready" && eventsState.items.length === 0 ? (
+                  <p className="table-message">No events yet. Create your first event.</p>
+                ) : null}
+                {eventsState.status === "ready"
+                  ? eventsState.items.map((event) => (
+                      <div key={event.id} className="events-table-row">
+                        <span>{event.name}</span>
+                        <span>{event.start_date}</span>
+                        <span>{event.start_time}</span>
+                        <span className="status-pill pending">Pending</span>
+                        <button type="button" className="details-button">
+                          Details
+                        </button>
+                      </div>
+                    ))
+                  : null}
               </div>
             </div>
+
+            {isEventModalOpen ? (
+              <div className="modal-overlay" role="dialog" aria-modal="true">
+                <div className="modal-card">
+                  <div className="modal-header">
+                    <h3>Create Event</h3>
+                    <button type="button" className="modal-close" onClick={handleEventModalClose}>
+                      &times;
+                    </button>
+                  </div>
+                  <form className="event-form" onSubmit={handleEventSubmit}>
+                    <div className="form-grid">
+                      <label className="form-field">
+                        <span>Start date</span>
+                        <input
+                          type="date"
+                          value={eventForm.start_date}
+                          onChange={handleEventFieldChange("start_date")}
+                          required
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>End date</span>
+                        <input
+                          type="date"
+                          value={eventForm.end_date}
+                          onChange={handleEventFieldChange("end_date")}
+                          required
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>Start time</span>
+                        <input
+                          type="time"
+                          value={eventForm.start_time}
+                          onChange={handleEventFieldChange("start_time")}
+                          required
+                        />
+                      </label>
+                      <label className="form-field">
+                        <span>End time</span>
+                        <input
+                          type="time"
+                          value={eventForm.end_time}
+                          onChange={handleEventFieldChange("end_time")}
+                          required
+                        />
+                      </label>
+                    </div>
+                    <label className="form-field">
+                      <span>Event name</span>
+                      <input
+                        type="text"
+                        placeholder="Business Conference 2025"
+                        value={eventForm.name}
+                        onChange={handleEventFieldChange("name")}
+                        required
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Facilitator</span>
+                      <input
+                        type="text"
+                        placeholder="James"
+                        value={eventForm.facilitator}
+                        onChange={handleEventFieldChange("facilitator")}
+                        required
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Venue</span>
+                      <select
+                        value={eventForm.venue_name}
+                        onChange={handleEventFieldChange("venue_name")}
+                        required
+                      >
+                        <option value="">Select a venue</option>
+                        {venuesState.items.map((venue) => (
+                          <option key={venue.id} value={venue.name}>
+                            {venue.name}
+                          </option>
+                        ))}
+                      </select>
+                      {venuesState.status === "error" ? (
+                        <span className="form-error">{venuesState.error}</span>
+                      ) : null}
+                    </label>
+                    <label className="form-field">
+                      <span>Description</span>
+                      <textarea
+                        rows="3"
+                        placeholder="Add a short overview of the event."
+                        value={eventForm.description}
+                        onChange={handleEventFieldChange("description")}
+                      />
+                    </label>
+                    {eventFormStatus.status === "error" ? (
+                      <p className="form-error">{eventFormStatus.error}</p>
+                    ) : null}
+                    <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleEventModalClose}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="primary-action" disabled={eventFormStatus.status === "loading"}>
+                        {eventFormStatus.status === "loading" ? "Creating..." : "Create Event"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : null}
+
+            {conflictState.open ? (
+              <div className="conflict-overlay" role="dialog" aria-modal="true">
+                <div className="conflict-card">
+                  <div className="conflict-header">
+                    <span className="conflict-icon" aria-hidden="true">
+                      !
+                    </span>
+                    <div>
+                      <h3>Schedule Conflict</h3>
+                      <p>The following event(s) are already scheduled at the selected time:</p>
+                    </div>
+                  </div>
+                  <div className="conflict-table">
+                    <div className="conflict-row header">
+                      <span>All Events</span>
+                      <span>Date</span>
+                      <span>Time</span>
+                      <span>Venue</span>
+                    </div>
+                    {conflictState.items.map((conflict) => (
+                      <div key={conflict.id} className="conflict-row">
+                        <span>{conflict.name}</span>
+                        <span>{conflict.start_date}</span>
+                        <span>{conflict.start_time}</span>
+                        <span>{conflict.venue_name}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="conflict-footnote">
+                    Would you like to reschedule your event or override this conflict?
+                  </p>
+                  <div className="conflict-actions">
+                    <button type="button" className="conflict-button reschedule" onClick={handleConflictReschedule}>
+                      Reschedule
+                    </button>
+                    <button type="button" className="conflict-button cancel" onClick={handleConflictCancel}>
+                      Cancel
+                    </button>
+                    <button type="button" className="conflict-button override" onClick={handleConflictOverride}>
+                      Override
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         );
       }
