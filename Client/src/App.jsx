@@ -14,6 +14,7 @@ const menuItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "my-events", label: "My Events" },
   { id: "calendar", label: "Calendar View" },
+  { id: "approvals", label: "Approvals" },
   { id: "venue", label: "Booking Venue" },
   { id: "messages", label: "Messages" }
 ];
@@ -180,6 +181,9 @@ export default function App() {
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [venuesState, setVenuesState] = useState({ status: "idle", items: [], error: "" });
   const [eventsState, setEventsState] = useState({ status: "idle", items: [], error: "" });
+  const [approvalsState, setApprovalsState] = useState({ status: "idle", items: [], error: "" });
+  const [marketingState, setMarketingState] = useState({ status: "idle", items: [], error: "" });
+  const [itState, setItState] = useState({ status: "idle", items: [], error: "" });
   const [eventForm, setEventForm] = useState({
     start_date: "",
     end_date: "",
@@ -192,6 +196,35 @@ export default function App() {
   });
   const [eventFormStatus, setEventFormStatus] = useState({ status: "idle", error: "" });
   const [conflictState, setConflictState] = useState({ open: false, items: [] });
+  const [approvalModal, setApprovalModal] = useState({ open: false, status: "idle", error: "" });
+  const [approvalForm, setApprovalForm] = useState({
+    to: "",
+    requirements: {
+      venue: true,
+      refreshments: false
+    },
+    other_notes: ""
+  });
+  const [pendingEvent, setPendingEvent] = useState(null);
+  const [marketingModal, setMarketingModal] = useState({ open: false, status: "idle", error: "" });
+  const [marketingForm, setMarketingForm] = useState({
+    to: "",
+    poster_required: true,
+    poster_dimension: "",
+    video_required: false,
+    video_dimension: "",
+    linkedin_post: false,
+    photography: false,
+    recording: false,
+    other_notes: ""
+  });
+  const [itModal, setItModal] = useState({ open: false, status: "idle", error: "" });
+  const [itForm, setItForm] = useState({
+    to: "",
+    pa_system: true,
+    projection: false,
+    other_notes: ""
+  });
   const [calendarState, setCalendarState] = useState({
     status: "idle",
     events: [],
@@ -349,21 +382,135 @@ export default function App() {
 
     setEventsState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
-      const res = await fetch(`${apiBaseUrl}/events`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-      if (!res.ok) {
+      const [eventsRes, approvalsRes] = await Promise.all([
+        fetch(`${apiBaseUrl}/events`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }),
+        fetch(`${apiBaseUrl}/approvals/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        })
+      ]);
+
+      if (!eventsRes.ok) {
         throw new Error("Unable to load events.");
       }
-      const data = await res.json();
-      setEventsState({ status: "ready", items: data, error: "" });
+      if (!approvalsRes.ok) {
+        throw new Error("Unable to load approval requests.");
+      }
+
+      const eventsData = await eventsRes.json();
+      const approvalsData = await approvalsRes.json();
+      const approvalItems = approvalsData
+        .filter((item) => item.status !== "approved")
+        .map((item) => ({
+          id: `approval-${item.id}`,
+          name: item.event_name,
+          start_date: item.start_date,
+          start_time: item.start_time,
+          end_date: item.end_date,
+          end_time: item.end_time,
+          status: item.status,
+          approval_request_id: item.id
+        }));
+
+      setEventsState({
+        status: "ready",
+        items: [...approvalItems, ...eventsData],
+        error: ""
+      });
     } catch (err) {
       setEventsState({
         status: "error",
         items: [],
         error: err?.message || "Unable to load events."
+      });
+    }
+  }, [apiBaseUrl]);
+
+  const loadApprovalsInbox = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setApprovalsState({ status: "error", items: [], error: "Missing auth token." });
+      return;
+    }
+
+    setApprovalsState((prev) => ({ ...prev, status: "loading", error: "" }));
+    try {
+      const res = await fetch(`${apiBaseUrl}/approvals/inbox`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        throw new Error("Unable to load approvals.");
+      }
+      const data = await res.json();
+      setApprovalsState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setApprovalsState({
+        status: "error",
+        items: [],
+        error: err?.message || "Unable to load approvals."
+      });
+    }
+  }, [apiBaseUrl]);
+
+  const loadMarketingInbox = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setMarketingState({ status: "error", items: [], error: "Missing auth token." });
+      return;
+    }
+
+    setMarketingState((prev) => ({ ...prev, status: "loading", error: "" }));
+    try {
+      const res = await fetch(`${apiBaseUrl}/marketing/inbox`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        throw new Error("Unable to load marketing requests.");
+      }
+      const data = await res.json();
+      setMarketingState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setMarketingState({
+        status: "error",
+        items: [],
+        error: err?.message || "Unable to load marketing requests."
+      });
+    }
+  }, [apiBaseUrl]);
+
+  const loadItInbox = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setItState({ status: "error", items: [], error: "Missing auth token." });
+      return;
+    }
+
+    setItState((prev) => ({ ...prev, status: "loading", error: "" }));
+    try {
+      const res = await fetch(`${apiBaseUrl}/it/inbox`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        throw new Error("Unable to load IT requests.");
+      }
+      const data = await res.json();
+      setItState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setItState({
+        status: "error",
+        items: [],
+        error: err?.message || "Unable to load IT requests."
       });
     }
   }, [apiBaseUrl]);
@@ -439,6 +586,30 @@ export default function App() {
     }
   }, [activeView, eventsState.status, loadEvents, loadVenues, user, venuesState.status]);
 
+  useEffect(() => {
+    if (!user || activeView !== "approvals") {
+      return;
+    }
+    if (approvalsState.status === "idle") {
+      loadApprovalsInbox();
+    }
+    if (marketingState.status === "idle") {
+      loadMarketingInbox();
+    }
+    if (itState.status === "idle") {
+      loadItInbox();
+    }
+  }, [
+    activeView,
+    approvalsState.status,
+    loadApprovalsInbox,
+    loadItInbox,
+    loadMarketingInbox,
+    itState.status,
+    marketingState.status,
+    user
+  ]);
+
   const handleLogout = () => {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
@@ -456,6 +627,54 @@ export default function App() {
     setConflictState({ open: false, items: [] });
   };
 
+  const handleApprovalModalOpen = () => {
+    setApprovalForm({
+      to: "",
+      requirements: {
+        venue: true,
+        refreshments: false
+      },
+      other_notes: ""
+    });
+    setApprovalModal({ open: true, status: "idle", error: "" });
+  };
+
+  const handleApprovalModalClose = () => {
+    setApprovalModal({ open: false, status: "idle", error: "" });
+  };
+
+  const handleMarketingModalOpen = () => {
+    setMarketingForm({
+      to: "",
+      poster_required: true,
+      poster_dimension: "",
+      video_required: false,
+      video_dimension: "",
+      linkedin_post: false,
+      photography: false,
+      recording: false,
+      other_notes: ""
+    });
+    setMarketingModal({ open: true, status: "idle", error: "" });
+  };
+
+  const handleMarketingModalClose = () => {
+    setMarketingModal({ open: false, status: "idle", error: "" });
+  };
+
+  const handleItModalOpen = () => {
+    setItForm({
+      to: "",
+      pa_system: true,
+      projection: false,
+      other_notes: ""
+    });
+    setItModal({ open: true, status: "idle", error: "" });
+  };
+
+  const handleItModalClose = () => {
+    setItModal({ open: false, status: "idle", error: "" });
+  };
   const submitEvent = async (formEvent, override) => {
     if (formEvent) {
       formEvent.preventDefault();
@@ -517,12 +736,244 @@ export default function App() {
     }
   };
 
-  const handleEventSubmit = (event) => {
-    submitEvent(event, false);
+  const submitApprovalRequest = async (formEvent) => {
+    if (formEvent) {
+      formEvent.preventDefault();
+    }
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setApprovalModal({
+        open: true,
+        status: "error",
+        error: "Please sign in again."
+      });
+      return;
+    }
+
+    setApprovalModal((prev) => ({ ...prev, status: "loading", error: "" }));
+
+    try {
+      const requirements = [];
+      if (approvalForm.requirements.venue) {
+        requirements.push("Venue");
+      }
+      if (approvalForm.requirements.refreshments) {
+        requirements.push("Refreshments");
+      }
+
+      const payload = {
+        ...eventForm,
+        submit_for_approval: true,
+        approval_to: approvalForm.to,
+        requirements,
+        other_notes: approvalForm.other_notes
+      };
+
+      const res = await fetch(`${apiBaseUrl}/events`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error("Unable to send approval request.");
+      }
+
+      setPendingEvent({ ...eventForm });
+      setApprovalModal({ open: false, status: "idle", error: "" });
+      handleMarketingModalOpen();
+      setConflictState({ open: false, items: [] });
+      loadEvents();
+    } catch (err) {
+      setApprovalModal({
+        open: true,
+        status: "error",
+        error: err?.message || "Unable to send approval request."
+      });
+    }
+  };
+
+  const submitMarketingRequest = async (formEvent) => {
+    if (formEvent) {
+      formEvent.preventDefault();
+    }
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setMarketingModal({
+        open: true,
+        status: "error",
+        error: "Please sign in again."
+      });
+      return;
+    }
+
+    setMarketingModal((prev) => ({ ...prev, status: "loading", error: "" }));
+
+    try {
+      const eventPayload = pendingEvent || eventForm;
+      const payload = {
+        requested_to: marketingForm.to,
+        event_name: eventPayload?.name || "",
+        start_date: eventPayload?.start_date || "",
+        start_time: eventPayload?.start_time || "",
+        end_date: eventPayload?.end_date || "",
+        end_time: eventPayload?.end_time || "",
+        poster_required: marketingForm.poster_required,
+        poster_dimension: marketingForm.poster_dimension,
+        video_required: marketingForm.video_required,
+        video_dimension: marketingForm.video_dimension,
+        linkedin_post: marketingForm.linkedin_post,
+        photography: marketingForm.photography,
+        recording: marketingForm.recording,
+        other_notes: marketingForm.other_notes
+      };
+
+      const res = await fetch(`${apiBaseUrl}/marketing/requests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error("Unable to send marketing request.");
+      }
+
+      setMarketingModal({ open: false, status: "idle", error: "" });
+      handleItModalOpen();
+    } catch (err) {
+      setMarketingModal({
+        open: true,
+        status: "error",
+        error: err?.message || "Unable to send marketing request."
+      });
+    }
+  };
+
+  const submitItRequest = async (formEvent) => {
+    if (formEvent) {
+      formEvent.preventDefault();
+    }
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setItModal({
+        open: true,
+        status: "error",
+        error: "Please sign in again."
+      });
+      return;
+    }
+
+    setItModal((prev) => ({ ...prev, status: "loading", error: "" }));
+
+    try {
+      const eventPayload = pendingEvent || eventForm;
+      const payload = {
+        requested_to: itForm.to,
+        event_name: eventPayload?.name || "",
+        start_date: eventPayload?.start_date || "",
+        start_time: eventPayload?.start_time || "",
+        end_date: eventPayload?.end_date || "",
+        end_time: eventPayload?.end_time || "",
+        pa_system: itForm.pa_system,
+        projection: itForm.projection,
+        other_notes: itForm.other_notes
+      };
+
+      const res = await fetch(`${apiBaseUrl}/it/requests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error("Unable to send IT request.");
+      }
+
+      setItModal({ open: false, status: "idle", error: "" });
+      setPendingEvent(null);
+      setEventForm({
+        start_date: "",
+        end_date: "",
+        start_time: "",
+        end_time: "",
+        name: "",
+        facilitator: "",
+        venue_name: "",
+        description: ""
+      });
+      loadEvents();
+    } catch (err) {
+      setItModal({
+        open: true,
+        status: "error",
+        error: err?.message || "Unable to send IT request."
+      });
+    }
+  };
+
+  const handleEventSubmit = async (event) => {
+    if (event) {
+      event.preventDefault();
+    }
+
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setEventFormStatus({ status: "error", error: "Please sign in again." });
+      return;
+    }
+
+    setEventFormStatus({ status: "loading", error: "" });
+
+    try {
+      const res = await fetch(`${apiBaseUrl}/events/conflicts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(eventForm)
+      });
+
+      if (!res.ok) {
+        const message = res.status === 400 ? "Check your date/time inputs." : "Unable to check conflicts.";
+        throw new Error(message);
+      }
+
+      const data = await res.json();
+      if (data?.conflicts?.length) {
+        setConflictState({ open: true, items: data.conflicts });
+        setEventFormStatus({ status: "idle", error: "" });
+        return;
+      }
+
+      setIsEventModalOpen(false);
+      setEventFormStatus({ status: "idle", error: "" });
+      handleApprovalModalOpen();
+    } catch (err) {
+      setEventFormStatus({
+        status: "error",
+        error: err?.message || "Unable to check conflicts."
+      });
+    }
   };
 
   const handleConflictReschedule = () => {
     setConflictState({ open: false, items: [] });
+  };
+
+  const handleConflictApprovalRequest = () => {
+    setConflictState({ open: false, items: [] });
+    setIsEventModalOpen(false);
+    handleApprovalModalOpen();
   };
 
   const handleConflictCancel = () => {
@@ -530,14 +981,55 @@ export default function App() {
     setConflictState({ open: false, items: [] });
   };
 
-  const handleConflictOverride = () => {
-    submitEvent(null, true);
-  };
-
   const handleEventFieldChange = (field) => (event) => {
     setEventForm((prev) => ({
       ...prev,
       [field]: event.target.value
+    }));
+  };
+
+  const handleApprovalFieldChange = (field) => (event) => {
+    setApprovalForm((prev) => ({
+      ...prev,
+      [field]: event.target.value
+    }));
+  };
+
+  const handleApprovalRequirementChange = (field) => (event) => {
+    setApprovalForm((prev) => ({
+      ...prev,
+      requirements: {
+        ...prev.requirements,
+        [field]: event.target.checked
+      }
+    }));
+  };
+
+  const handleMarketingFieldChange = (field) => (event) => {
+    setMarketingForm((prev) => ({
+      ...prev,
+      [field]: event.target.value
+    }));
+  };
+
+  const handleMarketingToggle = (field) => (event) => {
+    setMarketingForm((prev) => ({
+      ...prev,
+      [field]: event.target.checked
+    }));
+  };
+
+  const handleItFieldChange = (field) => (event) => {
+    setItForm((prev) => ({
+      ...prev,
+      [field]: event.target.value
+    }));
+  };
+
+  const handleItToggle = (field) => (event) => {
+    setItForm((prev) => ({
+      ...prev,
+      [field]: event.target.checked
     }));
   };
 
@@ -581,6 +1073,100 @@ export default function App() {
     const profileRole = user?.role || "Event Manager";
     const isMyEvents = activeView === "my-events";
     const isCalendar = activeView === "calendar";
+    const isApprovals = activeView === "approvals";
+
+    const handleApprovalDecision = async (requestId, decision) => {
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        setApprovalsState({ status: "error", items: [], error: "Missing auth token." });
+        return;
+      }
+
+      try {
+        const res = await fetch(`${apiBaseUrl}/approvals/${requestId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: decision })
+        });
+
+        if (!res.ok) {
+          throw new Error("Unable to update approval.");
+        }
+
+        loadApprovalsInbox();
+      } catch (err) {
+        setApprovalsState({
+          status: "error",
+          items: [],
+          error: err?.message || "Unable to update approval."
+        });
+      }
+    };
+
+    const handleMarketingDecision = async (requestId, decision) => {
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        setMarketingState({ status: "error", items: [], error: "Missing auth token." });
+        return;
+      }
+
+      try {
+        const res = await fetch(`${apiBaseUrl}/marketing/requests/${requestId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: decision })
+        });
+
+        if (!res.ok) {
+          throw new Error("Unable to update marketing request.");
+        }
+
+        loadMarketingInbox();
+      } catch (err) {
+        setMarketingState({
+          status: "error",
+          items: [],
+          error: err?.message || "Unable to update marketing request."
+        });
+      }
+    };
+
+    const handleItDecision = async (requestId, decision) => {
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        setItState({ status: "error", items: [], error: "Missing auth token." });
+        return;
+      }
+
+      try {
+        const res = await fetch(`${apiBaseUrl}/it/requests/${requestId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ status: decision })
+        });
+
+        if (!res.ok) {
+          throw new Error("Unable to update IT request.");
+        }
+
+        loadItInbox();
+      } catch (err) {
+        setItState({
+          status: "error",
+          items: [],
+          error: err?.message || "Unable to update IT request."
+        });
+      }
+    };
 
     const renderPrimaryContent = () => {
       if (isMyEvents) {
@@ -628,17 +1214,23 @@ export default function App() {
                   <p className="table-message">No events yet. Create your first event.</p>
                 ) : null}
                 {eventsState.status === "ready"
-                  ? eventsState.items.map((event) => (
-                      <div key={event.id} className="events-table-row">
-                        <span>{event.name}</span>
-                        <span>{event.start_date}</span>
-                        <span>{event.start_time}</span>
-                        <span className="status-pill pending">Pending</span>
-                        <button type="button" className="details-button">
-                          Details
-                        </button>
-                      </div>
-                    ))
+                  ? eventsState.items.map((event) => {
+                      const statusLabel = event.status
+                        ? `${event.status.charAt(0).toUpperCase()}${event.status.slice(1)}`
+                        : "Approved";
+                      const statusClass = statusLabel.toLowerCase().replace(" ", "-");
+                      return (
+                        <div key={event.id} className="events-table-row">
+                          <span>{event.name}</span>
+                          <span>{event.start_date}</span>
+                          <span>{event.start_time}</span>
+                          <span className={`status-pill ${statusClass}`}>{statusLabel}</span>
+                          <button type="button" className="details-button">
+                            Details
+                          </button>
+                        </div>
+                      );
+                    })
                   : null}
               </div>
             </div>
@@ -792,10 +1384,352 @@ export default function App() {
                     <button type="button" className="conflict-button cancel" onClick={handleConflictCancel}>
                       Cancel
                     </button>
-                    <button type="button" className="conflict-button override" onClick={handleConflictOverride}>
+                    <button
+                      type="button"
+                      className="conflict-button override"
+                      onClick={handleConflictApprovalRequest}
+                    >
                       Override
                     </button>
                   </div>
+                </div>
+              </div>
+            ) : null}
+
+            {approvalModal.open ? (
+              <div className="approval-overlay" role="dialog" aria-modal="true">
+                <div className="approval-card">
+                  <div className="approval-header">
+                    <h3>ADMIN</h3>
+                    <button type="button" className="modal-close" onClick={handleApprovalModalClose}>
+                      &times;
+                    </button>
+                  </div>
+                  <form className="approval-form" onSubmit={submitApprovalRequest}>
+                    <div className="approval-grid">
+                      <label className="approval-field">
+                        <span>From</span>
+                        <input type="email" value={user?.email || ""} readOnly />
+                      </label>
+                      <label className="approval-field">
+                        <span>To</span>
+                        <input
+                          type="email"
+                          placeholder="admin@campus.edu"
+                          value={approvalForm.to}
+                          onChange={handleApprovalFieldChange("to")}
+                          required
+                        />
+                      </label>
+                    </div>
+
+                    <div className="approval-summary">
+                      <p>
+                        <strong>Event:</strong> {pendingEvent?.name || eventForm.name || "Untitled event"}
+                      </p>
+                      <p>
+                        <strong>Date:</strong>{" "}
+                        {pendingEvent?.start_date || eventForm.start_date || "--"}{" "}
+                        {pendingEvent?.end_date
+                          ? `to ${pendingEvent.end_date}`
+                          : eventForm.end_date
+                            ? `to ${eventForm.end_date}`
+                            : ""}
+                      </p>
+                      <p>
+                        <strong>Time:</strong>{" "}
+                        {pendingEvent?.start_time || eventForm.start_time || "--"}{" "}
+                        {pendingEvent?.end_time
+                          ? `to ${pendingEvent.end_time}`
+                          : eventForm.end_time
+                            ? `to ${eventForm.end_time}`
+                            : ""}
+                      </p>
+                    </div>
+
+                    <div className="approval-requirements">
+                      <p>Requirements:</p>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={approvalForm.requirements.venue}
+                          onChange={handleApprovalRequirementChange("venue")}
+                        />
+                        Venue
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={approvalForm.requirements.refreshments}
+                          onChange={handleApprovalRequirementChange("refreshments")}
+                        />
+                        Refreshments
+                      </label>
+                    </div>
+
+                    <label className="approval-field">
+                      <span>Others</span>
+                      <textarea
+                        rows="4"
+                        placeholder="Add additional notes for the admin."
+                        value={approvalForm.other_notes}
+                        onChange={handleApprovalFieldChange("other_notes")}
+                      />
+                    </label>
+
+                    {approvalModal.status === "error" ? (
+                      <p className="form-error">{approvalModal.error}</p>
+                    ) : null}
+
+                    <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleApprovalModalClose}>
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="primary-action"
+                        disabled={approvalModal.status === "loading"}
+                      >
+                        {approvalModal.status === "loading" ? "Sending..." : "Send"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : null}
+
+            {marketingModal.open ? (
+              <div className="marketing-overlay" role="dialog" aria-modal="true">
+                <div className="marketing-card">
+                  <div className="approval-header">
+                    <h3>MARKETING TEAM</h3>
+                    <button type="button" className="modal-close" onClick={handleMarketingModalClose}>
+                      &times;
+                    </button>
+                  </div>
+                  <form className="approval-form" onSubmit={submitMarketingRequest}>
+                    <div className="approval-grid">
+                      <label className="approval-field">
+                        <span>From</span>
+                        <input type="email" value={user?.email || ""} readOnly />
+                      </label>
+                      <label className="approval-field">
+                        <span>To</span>
+                        <input
+                          type="email"
+                          placeholder="marketing@campus.edu"
+                          value={marketingForm.to}
+                          onChange={handleMarketingFieldChange("to")}
+                          required
+                        />
+                      </label>
+                    </div>
+
+                    <div className="approval-summary">
+                      <p>
+                        <strong>Event:</strong> {eventForm.name || "Untitled event"}
+                      </p>
+                      <p>
+                        <strong>Date:</strong>{" "}
+                        {eventForm.start_date || "--"} {eventForm.end_date ? `to ${eventForm.end_date}` : ""}
+                      </p>
+                      <p>
+                        <strong>Time:</strong>{" "}
+                        {eventForm.start_time || "--"} {eventForm.end_time ? `to ${eventForm.end_time}` : ""}
+                      </p>
+                    </div>
+
+                    <div className="marketing-requirements">
+                      <p>Requirements:</p>
+                      <div className="marketing-grid">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={marketingForm.poster_required}
+                            onChange={handleMarketingToggle("poster_required")}
+                          />
+                          Poster
+                          <select
+                            value={marketingForm.poster_dimension}
+                            onChange={handleMarketingFieldChange("poster_dimension")}
+                          >
+                            <option value="">Dimension</option>
+                            <option value="A4">A4</option>
+                            <option value="A3">A3</option>
+                            <option value="1080x1080">1080x1080</option>
+                          </select>
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={marketingForm.video_required}
+                            onChange={handleMarketingToggle("video_required")}
+                          />
+                          Video
+                          <select
+                            value={marketingForm.video_dimension}
+                            onChange={handleMarketingFieldChange("video_dimension")}
+                          >
+                            <option value="">Dimension</option>
+                            <option value="1920x1080">1920x1080</option>
+                            <option value="1080x1920">1080x1920</option>
+                            <option value="1280x720">1280x720</option>
+                          </select>
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={marketingForm.linkedin_post}
+                            onChange={handleMarketingToggle("linkedin_post")}
+                          />
+                          Linkedin Post
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={marketingForm.photography}
+                            onChange={handleMarketingToggle("photography")}
+                          />
+                          Photography
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={marketingForm.recording}
+                            onChange={handleMarketingToggle("recording")}
+                          />
+                          Recording
+                        </label>
+                      </div>
+                    </div>
+
+                    <label className="approval-field">
+                      <span>Others</span>
+                      <textarea
+                        rows="4"
+                        placeholder="Add additional notes for the marketing team."
+                        value={marketingForm.other_notes}
+                        onChange={handleMarketingFieldChange("other_notes")}
+                      />
+                    </label>
+
+                    {marketingModal.status === "error" ? (
+                      <p className="form-error">{marketingModal.error}</p>
+                    ) : null}
+
+                    <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleMarketingModalClose}>
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="primary-action"
+                        disabled={marketingModal.status === "loading"}
+                      >
+                        {marketingModal.status === "loading" ? "Sending..." : "Send"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : null}
+
+            {itModal.open ? (
+              <div className="marketing-overlay" role="dialog" aria-modal="true">
+                <div className="marketing-card">
+                  <div className="approval-header">
+                    <h3>IT DEPARTMENT</h3>
+                    <button type="button" className="modal-close" onClick={handleItModalClose}>
+                      &times;
+                    </button>
+                  </div>
+                  <form className="approval-form" onSubmit={submitItRequest}>
+                    <div className="approval-grid">
+                      <label className="approval-field">
+                        <span>From</span>
+                        <input type="email" value={user?.email || ""} readOnly />
+                      </label>
+                      <label className="approval-field">
+                        <span>To</span>
+                        <input
+                          type="email"
+                          placeholder="it@campus.edu"
+                          value={itForm.to}
+                          onChange={handleItFieldChange("to")}
+                          required
+                        />
+                      </label>
+                    </div>
+
+                    <div className="approval-summary">
+                      <p>
+                        <strong>Event:</strong> {pendingEvent?.name || eventForm.name || "Untitled event"}
+                      </p>
+                      <p>
+                        <strong>Date:</strong>{" "}
+                        {pendingEvent?.start_date || eventForm.start_date || "--"}{" "}
+                        {pendingEvent?.end_date
+                          ? `to ${pendingEvent.end_date}`
+                          : eventForm.end_date
+                            ? `to ${eventForm.end_date}`
+                            : ""}
+                      </p>
+                      <p>
+                        <strong>Time:</strong>{" "}
+                        {pendingEvent?.start_time || eventForm.start_time || "--"}{" "}
+                        {pendingEvent?.end_time
+                          ? `to ${pendingEvent.end_time}`
+                          : eventForm.end_time
+                            ? `to ${eventForm.end_time}`
+                            : ""}
+                      </p>
+                    </div>
+
+                    <div className="marketing-requirements">
+                      <p>Requirements:</p>
+                      <div className="marketing-grid">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={itForm.pa_system}
+                            onChange={handleItToggle("pa_system")}
+                          />
+                          PA System
+                        </label>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={itForm.projection}
+                            onChange={handleItToggle("projection")}
+                          />
+                          Projection
+                        </label>
+                      </div>
+                    </div>
+
+                    <label className="approval-field">
+                      <span>Others</span>
+                      <textarea
+                        rows="4"
+                        placeholder="Add additional notes for IT."
+                        value={itForm.other_notes}
+                        onChange={handleItFieldChange("other_notes")}
+                      />
+                    </label>
+
+                    {itModal.status === "error" ? (
+                      <p className="form-error">{itModal.error}</p>
+                    ) : null}
+
+                    <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleItModalClose}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="primary-action" disabled={itModal.status === "loading"}>
+                        {itModal.status === "loading" ? "Sending..." : "Send"}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
             ) : null}
@@ -847,6 +1781,212 @@ export default function App() {
                   events={calendarState.events}
                   datesSet={(info) => fetchCalendarEvents({ start: info.start, end: info.end })}
                 />
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      if (isApprovals) {
+        return (
+          <div className="primary-column">
+            <div className="events-table-card">
+              <div className="table-header">
+                <h3>Approval Requests</h3>
+              </div>
+              <div className="events-table">
+                <div className="events-table-row header approvals">
+                  <span>Event</span>
+                  <span>Requester</span>
+                  <span>Date</span>
+                  <span>Time</span>
+                  <span>Status</span>
+                  <span>Action</span>
+                </div>
+                {approvalsState.status === "loading" ? (
+                  <p className="table-message">Loading approvals...</p>
+                ) : null}
+                {approvalsState.status === "error" ? (
+                  <p className="table-message">{approvalsState.error}</p>
+                ) : null}
+                {approvalsState.status === "ready" && approvalsState.items.length === 0 ? (
+                  <p className="table-message">No approval requests yet.</p>
+                ) : null}
+                {approvalsState.status === "ready"
+                    ? approvalsState.items.map((item) => {
+                        const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                        return (
+                          <div key={item.id} className="events-table-row approvals">
+                            <span>{item.event_name}</span>
+                            <span>{item.requester_email}</span>
+                            <span>{item.start_date}</span>
+                            <span>{item.start_time}</span>
+                            <span className={`status-pill ${item.status}`}>{statusLabel}</span>
+                            <div className="approval-actions">
+                              <button
+                                type="button"
+                                className="details-button"
+                                onClick={() => handleApprovalDecision(item.id, "approved")}
+                                disabled={item.status !== "pending"}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                className="details-button reject"
+                                onClick={() => handleApprovalDecision(item.id, "rejected")}
+                                disabled={item.status !== "pending"}
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    : null}
+              </div>
+            </div>
+
+            <div className="events-table-card">
+              <div className="table-header">
+                <h3>Marketing Requests</h3>
+              </div>
+              <div className="events-table">
+                <div className="events-table-row header marketing">
+                  <span>Event</span>
+                  <span>Requester</span>
+                  <span>Date</span>
+                  <span>Time</span>
+                  <span>Status</span>
+                  <span>Needs</span>
+                  <span>Action</span>
+                </div>
+                {marketingState.status === "loading" ? (
+                  <p className="table-message">Loading marketing requests...</p>
+                ) : null}
+                {marketingState.status === "error" ? (
+                  <p className="table-message">{marketingState.error}</p>
+                ) : null}
+                {marketingState.status === "ready" && marketingState.items.length === 0 ? (
+                  <p className="table-message">No marketing requests yet.</p>
+                ) : null}
+                {marketingState.status === "ready"
+                  ? marketingState.items.map((item) => {
+                      const needs = [];
+                      if (item.poster_required) {
+                        needs.push("Poster");
+                      }
+                      if (item.video_required) {
+                        needs.push("Video");
+                      }
+                      if (item.linkedin_post) {
+                        needs.push("LinkedIn");
+                      }
+                      if (item.photography) {
+                        needs.push("Photography");
+                      }
+                      if (item.recording) {
+                        needs.push("Recording");
+                      }
+                      const needsLabel = needs.length ? needs.join(", ") : "None";
+                      const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                      return (
+                        <div key={item.id} className="events-table-row marketing">
+                          <span>{item.event_name}</span>
+                          <span>{item.requester_email}</span>
+                          <span>{item.start_date}</span>
+                          <span>{item.start_time}</span>
+                          <span className={`status-pill ${item.status}`}>{statusLabel}</span>
+                          <span className="marketing-needs">{needsLabel}</span>
+                          <div className="approval-actions">
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => handleMarketingDecision(item.id, "approved")}
+                              disabled={item.status !== "pending"}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              className="details-button reject"
+                              onClick={() => handleMarketingDecision(item.id, "rejected")}
+                              disabled={item.status !== "pending"}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  : null}
+              </div>
+            </div>
+
+            <div className="events-table-card">
+              <div className="table-header">
+                <h3>IT Requests</h3>
+              </div>
+              <div className="events-table">
+                <div className="events-table-row header it">
+                  <span>Event</span>
+                  <span>Requester</span>
+                  <span>Date</span>
+                  <span>Time</span>
+                  <span>Status</span>
+                  <span>Needs</span>
+                  <span>Action</span>
+                </div>
+                {itState.status === "loading" ? (
+                  <p className="table-message">Loading IT requests...</p>
+                ) : null}
+                {itState.status === "error" ? (
+                  <p className="table-message">{itState.error}</p>
+                ) : null}
+                {itState.status === "ready" && itState.items.length === 0 ? (
+                  <p className="table-message">No IT requests yet.</p>
+                ) : null}
+                {itState.status === "ready"
+                  ? itState.items.map((item) => {
+                      const needs = [];
+                      if (item.pa_system) {
+                        needs.push("PA System");
+                      }
+                      if (item.projection) {
+                        needs.push("Projection");
+                      }
+                      const needsLabel = needs.length ? needs.join(", ") : "None";
+                      const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                      return (
+                        <div key={item.id} className="events-table-row it">
+                          <span>{item.event_name}</span>
+                          <span>{item.requester_email}</span>
+                          <span>{item.start_date}</span>
+                          <span>{item.start_time}</span>
+                          <span className={`status-pill ${item.status}`}>{statusLabel}</span>
+                          <span className="marketing-needs">{needsLabel}</span>
+                          <div className="approval-actions">
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => handleItDecision(item.id, "approved")}
+                              disabled={item.status !== "pending"}
+                            >
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              className="details-button reject"
+                              onClick={() => handleItDecision(item.id, "rejected")}
+                              disabled={item.status !== "pending"}
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  : null}
               </div>
             </div>
           </div>
@@ -947,7 +2087,13 @@ export default function App() {
           <header className="dashboard-header">
             <div>
               <p className="dashboard-title">
-                {isMyEvents ? "My Events" : isCalendar ? "Calendar View" : "Dashboard Overview"}
+                {isMyEvents
+                  ? "My Events"
+                  : isCalendar
+                    ? "Calendar View"
+                    : isApprovals
+                      ? "Approvals"
+                      : "Dashboard Overview"}
               </p>
             </div>
             <div className="search-bar">

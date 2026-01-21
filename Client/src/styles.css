@@ -593,6 +593,157 @@ body {
   animation: riseIn 0.2s ease-out;
 }
 
+.approval-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 20, 32, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 1200;
+}
+
+.approval-card {
+  width: min(720px, 100%);
+  background: #ffffff;
+  border-radius: 26px;
+  padding: 28px;
+  box-shadow: 0 30px 80px rgba(9, 24, 46, 0.25);
+  display: grid;
+  gap: 20px;
+  animation: riseIn 0.2s ease-out;
+}
+
+.approval-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.approval-header h3 {
+  font-size: 1.4rem;
+  letter-spacing: 0.08em;
+}
+
+.approval-form {
+  display: grid;
+  gap: 16px;
+}
+
+.approval-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.approval-field {
+  display: grid;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #5a6a82;
+}
+
+.approval-field span {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+}
+
+.approval-field input,
+.approval-field textarea {
+  border: 1px solid #d7deea;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: #1c2b45;
+  background: #ffffff;
+}
+
+.approval-field textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.approval-summary {
+  border-top: 1px solid #e3e8f2;
+  border-bottom: 1px solid #e3e8f2;
+  padding: 16px 0;
+  display: grid;
+  gap: 8px;
+  color: #3e4d66;
+}
+
+.approval-summary strong {
+  color: #1c2b45;
+}
+
+.approval-requirements {
+  display: grid;
+  gap: 10px;
+  font-size: 0.95rem;
+  color: #3e4d66;
+}
+
+.approval-requirements label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+}
+
+.marketing-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 20, 32, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 1250;
+}
+
+.marketing-card {
+  width: min(760px, 100%);
+  background: #ffffff;
+  border-radius: 26px;
+  padding: 28px;
+  box-shadow: 0 30px 80px rgba(9, 24, 46, 0.25);
+  display: grid;
+  gap: 20px;
+  animation: riseIn 0.2s ease-out;
+}
+
+.marketing-requirements {
+  display: grid;
+  gap: 12px;
+  font-size: 0.95rem;
+  color: #3e4d66;
+}
+
+.marketing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+}
+
+.marketing-grid label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+  flex-wrap: wrap;
+}
+
+.marketing-grid select {
+  border: 1px solid #d7deea;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: #3e4d66;
+  background: #f7f9fe;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -950,6 +1101,18 @@ body {
   font-size: 0.9rem;
 }
 
+.events-table-row.approvals {
+  grid-template-columns: 1.4fr 1.2fr 0.9fr 0.9fr 0.8fr 1.2fr;
+}
+
+.events-table-row.marketing {
+  grid-template-columns: 1.4fr 1.2fr 0.9fr 0.9fr 0.8fr 1.3fr 1.2fr;
+}
+
+.events-table-row.it {
+  grid-template-columns: 1.4fr 1.2fr 0.9fr 0.9fr 0.8fr 1.3fr 1.2fr;
+}
+
 .events-table-row.header {
   font-weight: 600;
   color: #6d7c93;
@@ -980,6 +1143,16 @@ body {
   color: #f08d1f;
 }
 
+.status-pill.approved {
+  background: #e6f5ec;
+  color: #2f9a57;
+}
+
+.status-pill.rejected {
+  background: #ffe4e4;
+  color: #d43c39;
+}
+
 .details-button {
   border: 1px solid #2060ff;
   background: transparent;
@@ -988,6 +1161,21 @@ body {
   border-radius: 12px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.details-button.reject {
+  border-color: #a72b33;
+  color: #a72b33;
+}
+
+.marketing-needs {
+  color: #5b6b83;
+  font-size: 0.85rem;
 }
 
 .events-header {
@@ -1205,6 +1393,14 @@ body {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .approval-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .marketing-grid {
     grid-template-columns: 1fr;
   }
 }
