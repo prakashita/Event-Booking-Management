@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db, close_db
-from routers import approvals, auth, calendar, events, it, marketing, venues
+from routers import approvals, auth, calendar, events, invites, it, marketing, venues
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -30,7 +30,7 @@ app.add_middleware(
         "https://*.netlify.app",  # Allow all Netlify subdomains
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
@@ -42,6 +42,7 @@ app.include_router(events.router)
 app.include_router(approvals.router)
 app.include_router(marketing.router)
 app.include_router(it.router)
+app.include_router(invites.router)
 
 @app.get("/")
 def home():

@@ -71,6 +71,7 @@ class ApprovalDecision(BaseModel):
 
 class MarketingRequestCreate(BaseModel):
     requested_to: Optional[str] = Field(default=None, max_length=200)
+    event_id: Optional[str] = None
     event_name: str = Field(..., min_length=1, max_length=160)
     start_date: str
     start_time: str
@@ -91,6 +92,7 @@ class MarketingRequestResponse(BaseModel):
     requester_id: str
     requester_email: str
     requested_to: Optional[str] = None
+    event_id: Optional[str] = None
     event_name: str
     start_date: str
     start_time: str
@@ -116,6 +118,7 @@ class MarketingDecision(BaseModel):
 
 class ItRequestCreate(BaseModel):
     requested_to: Optional[str] = Field(default=None, max_length=200)
+    event_id: Optional[str] = None
     event_name: str = Field(..., min_length=1, max_length=160)
     start_date: str
     start_time: str
@@ -131,6 +134,7 @@ class ItRequestResponse(BaseModel):
     requester_id: str
     requester_email: str
     requested_to: Optional[str] = None
+    event_id: Optional[str] = None
     event_name: str
     start_date: str
     start_time: str
@@ -153,3 +157,22 @@ class EventCreateResponse(BaseModel):
     status: str
     event: Optional[EventResponse] = None
     approval_request: Optional[ApprovalRequestResponse] = None
+
+
+class InviteCreate(BaseModel):
+    event_id: str
+    to_email: str
+    subject: str
+    body: str
+
+
+class InviteResponse(BaseModel):
+    id: str
+    event_id: str
+    created_by: str
+    to_email: str
+    subject: str
+    body: str
+    status: str
+    sent_at: datetime
+    created_at: datetime

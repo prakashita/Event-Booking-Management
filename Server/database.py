@@ -120,12 +120,12 @@ async def init_db():
     )
     
     # Import models here to avoid circular imports
-    from models import ApprovalRequest, Event, ItRequest, MarketingRequest, User, Venue
+    from models import ApprovalRequest, Event, Invite, ItRequest, MarketingRequest, User, Venue
     
     # Initialize Beanie with the database and document models
     await init_beanie(
         database=client[DB_NAME],
-        document_models=[User, Venue, Event, ApprovalRequest, MarketingRequest, ItRequest]
+        document_models=[User, Venue, Event, ApprovalRequest, MarketingRequest, ItRequest, Invite]
     )
 
 async def close_db():

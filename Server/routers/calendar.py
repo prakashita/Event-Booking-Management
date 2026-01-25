@@ -4,12 +4,13 @@ from fastapi.responses import HTMLResponse
 import requests
 
 from auth import (
-    GOOGLE_CALENDAR_SCOPE,
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
+    GOOGLE_OAUTH_SCOPE,
     GOOGLE_REDIRECT_URI,
     create_oauth_state,
     decode_oauth_state,
+    ensure_google_access_token,
 )
 from models import User
 from routers.deps import get_current_user
@@ -28,7 +29,7 @@ def build_google_oauth_url(state: str) -> str:
         "client_id": GOOGLE_CLIENT_ID,
         "redirect_uri": GOOGLE_REDIRECT_URI,
         "response_type": "code",
-        "scope": GOOGLE_CALENDAR_SCOPE,
+        "scope": GOOGLE_OAUTH_SCOPE,
         "access_type": "offline",
         "prompt": "consent",
         "include_granted_scopes": "true",
@@ -37,57 +38,6 @@ def build_google_oauth_url(state: str) -> str:
     query = "&".join([f"{key}={requests.utils.quote(str(value))}" for key, value in params.items()])
     return f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
 
-
-async def ensure_access_token(user: User) -> str:
-    if user.google_access_token and user.google_token_expiry:
-        expiry = user.google_token_expiry
-        if expiry.tzinfo is None:
-            expiry = expiry.replace(tzinfo=timezone.utc)
-        if expiry > datetime.now(timezone.utc) + timedelta(minutes=1):
-            return user.google_access_token
-
-    if not user.google_refresh_token:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Google Calendar not connected"
-        )
-
-    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Google OAuth not configured"
-        )
-
-    response = requests.post(
-        "https://oauth2.googleapis.com/token",
-        data={
-            "client_id": GOOGLE_CLIENT_ID,
-            "client_secret": GOOGLE_CLIENT_SECRET,
-            "refresh_token": user.google_refresh_token,
-            "grant_type": "refresh_token",
-        },
-        timeout=15,
-    )
-
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unable to refresh Google token",
-        )
-
-    data = response.json()
-    access_token = data.get("access_token")
-    expires_in = data.get("expires_in", 3600)
-    if not access_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Google token missing",
-        )
-
-    user.google_access_token = access_token
-    user.google_token_expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
-    await user.save()
-    return access_token
 
 
 @router.get("/connect-url")
@@ -163,7 +113,7 @@ async def get_calendar_events(
     end: str | None = None,
     user: User = Depends(get_current_user),
 ):
-    access_token = await ensure_access_token(user)
+    access_token = await ensure_google_access_token(user)
     time_min = start or datetime.now(timezone.utc).isoformat()
     time_max = end or (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
 

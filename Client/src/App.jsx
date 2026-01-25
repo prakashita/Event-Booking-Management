@@ -205,6 +205,18 @@ export default function App() {
     },
     other_notes: ""
   });
+  const [inviteModal, setInviteModal] = useState({ open: false, status: "idle", error: "" });
+  const [inviteForm, setInviteForm] = useState({
+    to: "",
+    subject: "",
+    description: ""
+  });
+  const [inviteContext, setInviteContext] = useState({
+    eventId: "",
+    eventName: "",
+    startDate: "",
+    startTime: ""
+  });
   const [pendingEvent, setPendingEvent] = useState(null);
   const [marketingModal, setMarketingModal] = useState({ open: false, status: "idle", error: "" });
   const [marketingForm, setMarketingForm] = useState({
@@ -382,13 +394,28 @@ export default function App() {
 
     setEventsState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
-      const [eventsRes, approvalsRes] = await Promise.all([
+      const [eventsRes, approvalsRes, marketingRes, itRes, invitesRes] = await Promise.all([
         fetch(`${apiBaseUrl}/events`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
         }),
         fetch(`${apiBaseUrl}/approvals/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }),
+        fetch(`${apiBaseUrl}/marketing/requests/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }),
+        fetch(`${apiBaseUrl}/it/requests/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }),
+        fetch(`${apiBaseUrl}/invites/me`, {
           headers: {
             Authorization: `Bearer ${token}`
           }
@@ -404,6 +431,55 @@ export default function App() {
 
       const eventsData = await eventsRes.json();
       const approvalsData = await approvalsRes.json();
+      const marketingData = marketingRes.ok ? await marketingRes.json() : [];
+      const itData = itRes.ok ? await itRes.json() : [];
+      const invitesData = invitesRes.ok ? await invitesRes.json() : [];
+      const approvalByEventId = new Map();
+      const marketingByEventId = new Map();
+      const itByEventId = new Map();
+      const inviteByEventId = new Map();
+      const approvalByEventKey = new Map();
+      const marketingByEventKey = new Map();
+      const itByEventKey = new Map();
+
+      const normalizeTime = (value) => {
+        if (!value) {
+          return "";
+        }
+        return value.split(":").slice(0, 2).join(":");
+      };
+
+      const buildEventKey = (item) =>
+        [
+          item?.event_name || "",
+          item?.start_date || "",
+          normalizeTime(item?.start_time || ""),
+          item?.end_date || "",
+          normalizeTime(item?.end_time || "")
+        ].join("|");
+      approvalsData.forEach((item) => {
+        if (item.event_id) {
+          approvalByEventId.set(item.event_id, item.status);
+        }
+        approvalByEventKey.set(buildEventKey(item), item.status);
+      });
+      marketingData.forEach((item) => {
+        if (item.event_id) {
+          marketingByEventId.set(item.event_id, item.status);
+        }
+        marketingByEventKey.set(buildEventKey(item), item.status);
+      });
+      itData.forEach((item) => {
+        if (item.event_id) {
+          itByEventId.set(item.event_id, item.status);
+        }
+        itByEventKey.set(buildEventKey(item), item.status);
+      });
+      invitesData.forEach((invite) => {
+        if (invite.event_id) {
+          inviteByEventId.set(invite.event_id, invite.status);
+        }
+      });
       const approvalItems = approvalsData
         .filter((item) => item.status !== "approved")
         .map((item) => ({
@@ -417,9 +493,28 @@ export default function App() {
           approval_request_id: item.id
         }));
 
+      const enrichedEvents = eventsData.map((event) => {
+        const eventKey = [
+          event?.name || "",
+          event?.start_date || "",
+          normalizeTime(event?.start_time || ""),
+          event?.end_date || "",
+          normalizeTime(event?.end_time || "")
+        ].join("|");
+        return {
+          ...event,
+          approval_status:
+            approvalByEventId.get(event.id) || approvalByEventKey.get(eventKey),
+          marketing_status:
+            marketingByEventId.get(event.id) || marketingByEventKey.get(eventKey),
+          it_status: itByEventId.get(event.id) || itByEventKey.get(eventKey),
+          invite_status: inviteByEventId.get(event.id)
+        };
+      });
+
       setEventsState({
         status: "ready",
-        items: [...approvalItems, ...eventsData],
+        items: [...approvalItems, ...enrichedEvents],
         error: ""
       });
     } catch (err) {
@@ -578,13 +673,9 @@ export default function App() {
     if (!user || activeView !== "my-events") {
       return;
     }
-    if (venuesState.status === "idle") {
-      loadVenues();
-    }
-    if (eventsState.status === "idle") {
-      loadEvents();
-    }
-  }, [activeView, eventsState.status, loadEvents, loadVenues, user, venuesState.status]);
+    loadVenues();
+    loadEvents();
+  }, [activeView, loadEvents, loadVenues, user]);
 
   useEffect(() => {
     if (!user || activeView !== "approvals") {
@@ -643,6 +734,26 @@ export default function App() {
     setApprovalModal({ open: false, status: "idle", error: "" });
   };
 
+  const handleInviteOpen = (item) => {
+    const eventId = item?.id || item?.event_id || "";
+    const eventName = item?.event_name || item?.name || "";
+    const startDate = item?.start_date || "";
+    const startTime = item?.start_time || "";
+    setInviteContext({ eventId, eventName, startDate, startTime });
+    setInviteForm({
+      to: "",
+      subject: eventName ? `Event Invitation: ${eventName}` : "Event Invitation",
+      description: eventName
+        ? `You are invited to ${eventName} on ${startDate} at ${startTime}.`
+        : ""
+    });
+    setInviteModal({ open: true, status: "idle", error: "" });
+  };
+
+  const handleInviteClose = () => {
+    setInviteModal({ open: false, status: "idle", error: "" });
+  };
+
   const handleMarketingModalOpen = () => {
     setMarketingForm({
       to: "",
@@ -674,6 +785,13 @@ export default function App() {
 
   const handleItModalClose = () => {
     setItModal({ open: false, status: "idle", error: "" });
+  };
+
+  const handleInviteFieldChange = (field) => (event) => {
+    setInviteForm((prev) => ({
+      ...prev,
+      [field]: event.target.value
+    }));
   };
   const submitEvent = async (formEvent, override) => {
     if (formEvent) {
@@ -920,6 +1038,65 @@ export default function App() {
     }
   };
 
+  const submitInvite = async (formEvent) => {
+    if (formEvent) {
+      formEvent.preventDefault();
+    }
+
+    if (!inviteForm.to.trim()) {
+      setInviteModal({ open: true, status: "error", error: "Recipient email is required." });
+      return;
+    }
+
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setInviteModal({ open: true, status: "error", error: "Please sign in again." });
+      return;
+    }
+
+    if (!inviteContext.eventId) {
+      setInviteModal({ open: true, status: "error", error: "Event is missing." });
+      return;
+    }
+
+    setInviteModal({ open: true, status: "loading", error: "" });
+
+    try {
+      const res = await fetch(`${apiBaseUrl}/invites`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          event_id: inviteContext.eventId,
+          to_email: inviteForm.to,
+          subject: inviteForm.subject,
+          body: inviteForm.description
+        })
+      });
+
+      if (res.status === 403) {
+        throw new Error("Connect Google to send invites.");
+      }
+
+      if (!res.ok) {
+        throw new Error("Unable to send invite.");
+      }
+
+      setInviteModal({ open: false, status: "idle", error: "" });
+      setInviteForm({ to: "", subject: "", description: "" });
+      setInviteContext({ eventId: "", eventName: "", startDate: "", startTime: "" });
+      loadEvents();
+    } catch (err) {
+      setInviteModal({
+        open: true,
+        status: "error",
+        error: err?.message || "Unable to send invite."
+      });
+    }
+  };
+
   const handleEventSubmit = async (event) => {
     if (event) {
       event.preventDefault();
@@ -1092,6 +1269,9 @@ export default function App() {
           body: JSON.stringify({ status: decision })
         });
 
+        if (res.status === 409) {
+          throw new Error("Schedule conflict detected. Ask the requester to reschedule.");
+        }
         if (!res.ok) {
           throw new Error("Unable to update approval.");
         }
@@ -1176,8 +1356,8 @@ export default function App() {
               <button type="button" className="primary-action" onClick={handleEventModalOpen}>
                 + New Event
               </button>
-              <button type="button" className="secondary-action">
-                RSVP
+              <button type="button" className="secondary-action" onClick={loadEvents}>
+                Refresh
               </button>
             </div>
 
@@ -1215,19 +1395,61 @@ export default function App() {
                 ) : null}
                 {eventsState.status === "ready"
                   ? eventsState.items.map((event) => {
-                      const statusLabel = event.status
+                      const explicitStatus = event.status
                         ? `${event.status.charAt(0).toUpperCase()}${event.status.slice(1)}`
-                        : "Approved";
+                        : null;
+                      const hasApprovalData =
+                        event.approval_status || event.marketing_status || event.it_status;
+                      let derivedStatus = "Approved";
+                      if (hasApprovalData) {
+                        const statuses = [
+                          event.approval_status,
+                          event.marketing_status,
+                          event.it_status
+                        ];
+                        if (statuses.includes("rejected")) {
+                          derivedStatus = "Rejected";
+                        } else if (statuses.every((status) => status === "approved")) {
+                          derivedStatus = "Approved";
+                        } else {
+                          derivedStatus = "Pending";
+                        }
+                      }
+
+                      const statusLabel = explicitStatus || derivedStatus;
                       const statusClass = statusLabel.toLowerCase().replace(" ", "-");
+                      const inviteSent = event.invite_status === "sent";
+                      const canInvite =
+                        statusLabel === "Approved" &&
+                        event.approval_status === "approved" &&
+                        event.marketing_status === "approved" &&
+                        event.it_status === "approved" &&
+                        !inviteSent;
                       return (
                         <div key={event.id} className="events-table-row">
                           <span>{event.name}</span>
                           <span>{event.start_date}</span>
                           <span>{event.start_time}</span>
                           <span className={`status-pill ${statusClass}`}>{statusLabel}</span>
-                          <button type="button" className="details-button">
-                            Details
-                          </button>
+                          <div className="event-actions">
+                            <button type="button" className="details-button">
+                              Details
+                            </button>
+                            {inviteSent ? (
+                              <button type="button" className="details-button invite" disabled>
+                                Sent
+                              </button>
+                            ) : null}
+                            {canInvite ? (
+                              <button
+                                type="button"
+                                className="details-button invite"
+                                onClick={() => handleInviteOpen(event)}
+                              >
+                                Send Invite
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                       );
                     })
@@ -1491,6 +1713,69 @@ export default function App() {
                         disabled={approvalModal.status === "loading"}
                       >
                         {approvalModal.status === "loading" ? "Sending..." : "Send"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : null}
+
+            {inviteModal.open ? (
+              <div className="approval-overlay" role="dialog" aria-modal="true">
+                <div className="invite-card">
+                  <div className="approval-header">
+                    <h3>Send Invite</h3>
+                    <button type="button" className="modal-close" onClick={handleInviteClose}>
+                      &times;
+                    </button>
+                  </div>
+                  <form className="approval-form" onSubmit={submitInvite}>
+                    <label className="approval-field">
+                      <span>From</span>
+                      <input type="email" value={user?.email || ""} readOnly />
+                    </label>
+                    <label className="approval-field">
+                      <span>To</span>
+                      <input
+                        type="email"
+                        placeholder="recipient@campus.edu"
+                        value={inviteForm.to}
+                        onChange={handleInviteFieldChange("to")}
+                        required
+                      />
+                    </label>
+                    <label className="approval-field">
+                      <span>Subject</span>
+                      <input
+                        type="text"
+                        value={inviteForm.subject}
+                        onChange={handleInviteFieldChange("subject")}
+                      />
+                    </label>
+                    <label className="approval-field">
+                      <span>Description</span>
+                      <textarea
+                        placeholder="Add a short invitation message."
+                        value={inviteForm.description}
+                        onChange={handleInviteFieldChange("description")}
+                      />
+                    </label>
+                    {inviteModal.status === "error" ? (
+                      <div className="form-error">
+                        <p>{inviteModal.error}</p>
+                        {inviteModal.error === "Connect Google to send invites." ? (
+                          <button type="button" className="secondary-action" onClick={handleCalendarConnect}>
+                            Connect Google
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleInviteClose}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="primary-action" disabled={inviteModal.status === "loading"}>
+                        {inviteModal.status === "loading" ? "Sending..." : "Send Invite"}
                       </button>
                     </div>
                   </form>
@@ -1819,30 +2104,32 @@ export default function App() {
                           <div key={item.id} className="events-table-row approvals">
                             <span>{item.event_name}</span>
                             <span>{item.requester_email}</span>
-                            <span>{item.start_date}</span>
-                            <span>{item.start_time}</span>
-                            <span className={`status-pill ${item.status}`}>{statusLabel}</span>
-                            <div className="approval-actions">
-                              <button
-                                type="button"
-                                className="details-button"
-                                onClick={() => handleApprovalDecision(item.id, "approved")}
-                                disabled={item.status !== "pending"}
-                              >
-                                Approve
-                              </button>
-                              <button
-                                type="button"
-                                className="details-button reject"
-                                onClick={() => handleApprovalDecision(item.id, "rejected")}
-                                disabled={item.status !== "pending"}
-                              >
-                                Reject
-                              </button>
-                            </div>
+                          <span>{item.start_date}</span>
+                          <span>{item.start_time}</span>
+                          <span className={`status-pill ${item.status}`}>{statusLabel}</span>
+                          <div className="approval-actions">
+                            {item.status === "pending" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="details-button"
+                                  onClick={() => handleApprovalDecision(item.id, "approved")}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  className="details-button reject"
+                                  onClick={() => handleApprovalDecision(item.id, "rejected")}
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            ) : null}
                           </div>
-                        );
-                      })
+                        </div>
+                      );
+                    })
                     : null}
               </div>
             </div>
@@ -1899,22 +2186,24 @@ export default function App() {
                           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                           <span className="marketing-needs">{needsLabel}</span>
                           <div className="approval-actions">
-                            <button
-                              type="button"
-                              className="details-button"
-                              onClick={() => handleMarketingDecision(item.id, "approved")}
-                              disabled={item.status !== "pending"}
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              className="details-button reject"
-                              onClick={() => handleMarketingDecision(item.id, "rejected")}
-                              disabled={item.status !== "pending"}
-                            >
-                              Reject
-                            </button>
+                            {item.status === "pending" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="details-button"
+                                  onClick={() => handleMarketingDecision(item.id, "approved")}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  className="details-button reject"
+                                  onClick={() => handleMarketingDecision(item.id, "rejected")}
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            ) : null}
                           </div>
                         </div>
                       );
@@ -1966,22 +2255,24 @@ export default function App() {
                           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                           <span className="marketing-needs">{needsLabel}</span>
                           <div className="approval-actions">
-                            <button
-                              type="button"
-                              className="details-button"
-                              onClick={() => handleItDecision(item.id, "approved")}
-                              disabled={item.status !== "pending"}
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              className="details-button reject"
-                              onClick={() => handleItDecision(item.id, "rejected")}
-                              disabled={item.status !== "pending"}
-                            >
-                              Reject
-                            </button>
+                            {item.status === "pending" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="details-button"
+                                  onClick={() => handleItDecision(item.id, "approved")}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  className="details-button reject"
+                                  onClick={() => handleItDecision(item.id, "rejected")}
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            ) : null}
                           </div>
                         </div>
                       );

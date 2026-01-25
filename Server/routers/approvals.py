@@ -3,11 +3,17 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from models import ApprovalRequest, Event, User
+from models import ApprovalRequest, Event, ItRequest, MarketingRequest, User
 from routers.deps import get_current_user
 from schemas import ApprovalDecision, ApprovalRequestResponse
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
+
+def normalize_time(value: str | None) -> str:
+    if not value:
+        return ""
+    parts = value.split(":")
+    return ":".join(parts[:2])
 
 
 @router.get("/me", response_model=list[ApprovalRequestResponse])
@@ -110,6 +116,33 @@ async def decide_request(
                 )
                 await event.insert()
                 approval.event_id = str(event.id)
+                matching_query = {
+                    "requester_id": approval.requester_id,
+                    "event_name": approval.event_name,
+                    "start_date": approval.start_date,
+                    "end_date": approval.end_date,
+                    "event_id": None,
+                }
+                approval_start = normalize_time(approval.start_time)
+                approval_end = normalize_time(approval.end_time)
+
+                marketing_requests = await MarketingRequest.find(matching_query).to_list()
+                for request_item in marketing_requests:
+                    if (
+                        normalize_time(request_item.start_time) == approval_start
+                        and normalize_time(request_item.end_time) == approval_end
+                    ):
+                        request_item.event_id = approval.event_id
+                        await request_item.save()
+
+                it_requests = await ItRequest.find(matching_query).to_list()
+                for request_item in it_requests:
+                    if (
+                        normalize_time(request_item.start_time) == approval_start
+                        and normalize_time(request_item.end_time) == approval_end
+                    ):
+                        request_item.event_id = approval.event_id
+                        await request_item.save()
             approval.status = "approved"
         else:
             approval.status = "rejected"

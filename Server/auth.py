@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 import requests
 from fastapi import HTTPException, status
@@ -18,7 +18,7 @@ ALLOWED_DOMAIN = ["@srmap.edu.in", "@vidyashilp.edu.in"]
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/calendar/oauth/callback")
-GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
+GOOGLE_OAUTH_SCOPE = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.send"
 
 
 
@@ -72,3 +72,55 @@ def decode_oauth_state(state: str) -> dict:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid OAuth state"
         )
+
+
+async def ensure_google_access_token(user):
+    if user.google_access_token and user.google_token_expiry:
+        expiry = user.google_token_expiry
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        if expiry > datetime.now(timezone.utc) + timedelta(minutes=1):
+            return user.google_access_token
+
+    if not user.google_refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Google not connected"
+        )
+
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google OAuth not configured"
+        )
+
+    response = requests.post(
+        "https://oauth2.googleapis.com/token",
+        data={
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "refresh_token": user.google_refresh_token,
+            "grant_type": "refresh_token",
+        },
+        timeout=15,
+    )
+
+    if response.status_code != 200:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unable to refresh Google token",
+        )
+
+    data = response.json()
+    access_token = data.get("access_token")
+    expires_in = data.get("expires_in", 3600)
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google token missing",
+        )
+
+    user.google_access_token = access_token
+    user.google_token_expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    await user.save()
+    return access_token

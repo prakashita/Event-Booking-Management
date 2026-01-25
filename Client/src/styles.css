@@ -614,6 +614,17 @@ body {
   animation: riseIn 0.2s ease-out;
 }
 
+.invite-card {
+  width: min(720px, 100%);
+  background: #ffffff;
+  border-radius: 26px;
+  padding: 28px;
+  box-shadow: 0 30px 80px rgba(9, 24, 46, 0.25);
+  display: grid;
+  gap: 20px;
+  animation: riseIn 0.2s ease-out;
+}
+
 .approval-header {
   display: flex;
   align-items: center;
@@ -809,6 +820,8 @@ body {
 .form-error {
   color: #b12c2a;
   font-size: 0.8rem;
+  display: grid;
+  gap: 8px;
 }
 
 .modal-actions {
@@ -1095,7 +1108,7 @@ body {
 
 .events-table-row {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 0.7fr 0.9fr 0.7fr;
+  grid-template-columns: 1.4fr 1fr 0.7fr 0.9fr 1.3fr;
   align-items: center;
   gap: 10px;
   font-size: 0.9rem;
@@ -1161,6 +1174,22 @@ body {
   border-radius: 12px;
   font-weight: 600;
   cursor: pointer;
+}
+
+.details-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.details-button.invite {
+  border-color: #1f8a4a;
+  color: #1f8a4a;
+}
+
+.event-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .approval-actions {

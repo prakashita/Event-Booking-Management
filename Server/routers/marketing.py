@@ -25,6 +25,7 @@ async def create_marketing_request(
         requester_id=str(user.id),
         requester_email=user.email,
         requested_to=requested_to,
+        event_id=payload.event_id,
         event_name=payload.event_name,
         start_date=payload.start_date,
         start_time=payload.start_time,
@@ -46,6 +47,7 @@ async def create_marketing_request(
         requester_id=request_item.requester_id,
         requester_email=request_item.requester_email,
         requested_to=request_item.requested_to,
+        event_id=request_item.event_id,
         event_name=request_item.event_name,
         start_date=request_item.start_date,
         start_time=request_item.start_time,
@@ -78,6 +80,7 @@ async def list_marketing_inbox(user: User = Depends(get_current_user)):
             requester_id=item.requester_id,
             requester_email=item.requester_email,
             requested_to=item.requested_to,
+            event_id=item.event_id,
             event_name=item.event_name,
             start_date=item.start_date,
             start_time=item.start_time,
@@ -131,6 +134,7 @@ async def decide_marketing_request(
         requester_id=request_item.requester_id,
         requester_email=request_item.requester_email,
         requested_to=request_item.requested_to,
+        event_id=request_item.event_id,
         event_name=request_item.event_name,
         start_date=request_item.start_date,
         start_time=request_item.start_time,
@@ -149,3 +153,37 @@ async def decide_marketing_request(
         decided_by=request_item.decided_by,
         created_at=request_item.created_at,
     )
+
+
+@router.get("/requests/me", response_model=list[MarketingRequestResponse])
+async def list_my_marketing_requests(user: User = Depends(get_current_user)):
+    requests = await MarketingRequest.find(
+        MarketingRequest.requester_id == str(user.id)
+    ).sort("-created_at").to_list()
+    return [
+        MarketingRequestResponse(
+            id=str(item.id),
+            requester_id=item.requester_id,
+            requester_email=item.requester_email,
+            requested_to=item.requested_to,
+            event_id=item.event_id,
+            event_name=item.event_name,
+            start_date=item.start_date,
+            start_time=item.start_time,
+            end_date=item.end_date,
+            end_time=item.end_time,
+            poster_required=item.poster_required,
+            poster_dimension=item.poster_dimension,
+            video_required=item.video_required,
+            video_dimension=item.video_dimension,
+            linkedin_post=item.linkedin_post,
+            photography=item.photography,
+            recording=item.recording,
+            other_notes=item.other_notes,
+            status=item.status,
+            decided_at=item.decided_at,
+            decided_by=item.decided_by,
+            created_at=item.created_at,
+        )
+        for item in requests
+    ]

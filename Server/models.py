@@ -75,6 +75,7 @@ class MarketingRequest(Document):
     requester_id: str
     requester_email: str
     requested_to: Optional[str] = None
+    event_id: Optional[str] = None
     event_name: str
     start_date: str
     start_time: str
@@ -101,6 +102,7 @@ class ItRequest(Document):
     requester_id: str
     requester_email: str
     requested_to: Optional[str] = None
+    event_id: Optional[str] = None
     event_name: str
     start_date: str
     start_time: str
@@ -116,3 +118,17 @@ class ItRequest(Document):
 
     class Settings:
         name = "it_requests"
+
+
+class Invite(Document):
+    event_id: str
+    created_by: str
+    to_email: str
+    subject: str
+    body: str
+    status: str = Field(default="sent")
+    sent_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "invites"
