@@ -10,7 +10,7 @@ and route marketing/IT support requests, with optional Google Calendar sync.
 - Approval workflow with inbox/decision endpoints
 - Marketing + IT request pipelines with decision tracking
 - Venue management + seeding
-- Google OAuth connect for Calendar + Gmail send
+  - Google OAuth connect for Calendar + Gmail send + Drive uploads
 - Invite sending (Gmail API) with sent status tracking
 - Single-page dashboard UI (React + FullCalendar)
 
@@ -59,6 +59,7 @@ Server/   # FastAPI backend
 Notes:
 - `created_by`, `requester_id`, and `event_id` are stored as string ids.
 - Date/time values are stored as ISO strings in the database.
+- Report uploads use the user's OAuth token; users must complete Google OAuth and have access to the Drive folder.
 
 ## Key Flows
 - Sign-in:
@@ -79,7 +80,7 @@ Notes:
   - Decisions via `PATCH /marketing/requests/{id}` and `PATCH /it/requests/{id}`
 - Google Calendar + Gmail:
   - Client calls `GET /calendar/connect-url` to start OAuth
-  - OAuth scope includes Calendar read-only and Gmail send
+  - OAuth scope includes Calendar create, Gmail send, and Drive file upload
   - Callback stores refresh/access tokens on the user
   - Client fetches `GET /calendar/events` for the calendar view
   - Client sends invites via `POST /invites`
@@ -153,7 +154,7 @@ Notes:
 - Allowed email domains are hard-coded in `Server/auth.py` (default:
   `@srmap.edu.in`, `@vidyashilp.edu.in`). Update as needed.
 - CORS origins are configured in `Server/main.py`.
-- Reconnect Google OAuth after adding Gmail scope (new refresh token required).
+- Reconnect Google OAuth after adding Calendar/Gmail/Drive scopes (new refresh token required).
 - Enable Gmail API in Google Cloud Console for your project.
 
 ## Run Locally
