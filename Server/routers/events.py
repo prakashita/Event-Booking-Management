@@ -1,8 +1,12 @@
+import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 
+from auth import ensure_google_access_token
+from drive import upload_report_file
+from event_status import compute_event_status, sync_event_status
 from models import ApprovalRequest, Event, User
 from routers.deps import get_current_user
 from schemas import ApprovalRequestResponse, EventCreate, EventCreateResponse, EventResponse
@@ -27,7 +31,9 @@ def serialize_conflict(event: Event) -> dict:
 @router.get("", response_model=list[EventResponse])
 async def list_events(user: User = Depends(get_current_user)):
     events = await Event.find(Event.created_by == str(user.id)).sort("-created_at").to_list()
-    return [
+    for event in events:
+        await sync_event_status(event)
+        return [
         EventResponse(
             id=str(event.id),
             name=event.name,
@@ -39,6 +45,13 @@ async def list_events(user: User = Depends(get_current_user)):
             end_date=event.end_date,
             end_time=event.end_time,
             created_by=event.created_by,
+            status=event.status,
+            google_event_id=event.google_event_id,
+            google_event_link=event.google_event_link,
+            report_file_id=event.report_file_id,
+            report_file_name=event.report_file_name,
+            report_web_view_link=event.report_web_view_link,
+            report_uploaded_at=event.report_uploaded_at,
             created_at=event.created_at,
         )
         for event in events
@@ -152,6 +165,7 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
         end_date=payload.end_date.isoformat(),
         end_time=payload.end_time.isoformat(),
         created_by=str(user.id),
+        status=compute_event_status(start_dt, end_dt),
     )
     await event.insert()
     return EventCreateResponse(
@@ -167,6 +181,98 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
             end_date=event.end_date,
             end_time=event.end_time,
             created_by=event.created_by,
+            status=event.status,
+            google_event_id=event.google_event_id,
+            google_event_link=event.google_event_link,
+            report_file_id=event.report_file_id,
+            report_file_name=event.report_file_name,
+            report_web_view_link=event.report_web_view_link,
+            report_uploaded_at=event.report_uploaded_at,
             created_at=event.created_at,
         ),
+    )
+
+
+@router.post("/{event_id}/report", response_model=EventResponse)
+async def upload_event_report(
+    event_id: str,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    event = await Event.get(event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    if event.created_by != str(user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+
+    await sync_event_status(event)
+    if event.status != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Report can be uploaded only after the event is completed",
+        )
+
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
+    if file.content_type not in {"application/pdf"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
+
+    contents = await file.read()
+    max_size = 10 * 1024 * 1024
+    if len(contents) > max_size:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 10MB)")
+
+    folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
+    if not folder_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google Drive folder not configured",
+        )
+
+    try:
+        access_token = await ensure_google_access_token(user)
+        drive_file = upload_report_file(
+            access_token=access_token,
+            file_name=file.filename,
+            file_bytes=contents,
+            mime_type=file.content_type,
+            folder_id=folder_id,
+            replace_file_id=event.report_file_id,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unable to upload report: {exc}",
+        )
+
+    event.report_file_id = drive_file.get("id")
+    event.report_file_name = drive_file.get("name")
+    event.report_web_view_link = drive_file.get("webViewLink")
+    event.report_uploaded_at = datetime.utcnow()
+    await event.save()
+
+    return EventResponse(
+        id=str(event.id),
+        name=event.name,
+        facilitator=event.facilitator,
+        description=event.description,
+        venue_name=event.venue_name,
+        start_date=event.start_date,
+        start_time=event.start_time,
+        end_date=event.end_date,
+        end_time=event.end_time,
+        created_by=event.created_by,
+        status=event.status,
+        google_event_id=event.google_event_id,
+        google_event_link=event.google_event_link,
+        report_file_id=event.report_file_id,
+        report_file_name=event.report_file_name,
+        report_web_view_link=event.report_web_view_link,
+        report_uploaded_at=event.report_uploaded_at,
+        created_at=event.created_at,
     )

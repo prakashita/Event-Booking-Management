@@ -2,19 +2,27 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from database import init_db, close_db
+from event_status import update_event_statuses
 from routers import approvals, auth, calendar, events, invites, it, marketing, venues
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from Server/.env explicitly
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Initialize MongoDB connection
     await init_db()
+    await update_event_statuses()
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(update_event_statuses, "interval", minutes=5)
+    scheduler.start()
+    app.state.scheduler = scheduler
     yield
+    scheduler.shutdown()
     # Shutdown: Close MongoDB connection
     await close_db()
 

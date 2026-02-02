@@ -5,8 +5,8 @@ import requests
 from fastapi import HTTPException, status
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from Server/.env explicitly
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME_LATER")
 ALGORITHM = "HS256"
@@ -18,7 +18,8 @@ ALLOWED_DOMAIN = ["@srmap.edu.in", "@vidyashilp.edu.in"]
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/calendar/oauth/callback")
-GOOGLE_OAUTH_SCOPE = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/gmail.send"
+GOOGLE_OAUTH_SCOPE = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.file"
+REQUIRED_GOOGLE_SCOPES = GOOGLE_OAUTH_SCOPE.split()
 
 
 

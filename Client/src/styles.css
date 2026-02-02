@@ -1166,6 +1166,21 @@ body {
   color: #d43c39;
 }
 
+.status-pill.upcoming {
+  background: #e8f1ff;
+  color: #2b63d6;
+}
+
+.status-pill.ongoing {
+  background: #fff1e0;
+  color: #f08d1f;
+}
+
+.status-pill.completed {
+  background: #e6f5ec;
+  color: #2f9a57;
+}
+
 .details-button {
   border: 1px solid #2060ff;
   background: transparent;

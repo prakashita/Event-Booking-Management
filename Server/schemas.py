@@ -40,6 +40,13 @@ class EventResponse(BaseModel):
     end_date: str
     end_time: str
     created_by: str
+    status: str
+    google_event_id: Optional[str] = None
+    google_event_link: Optional[str] = None
+    report_file_id: Optional[str] = None
+    report_file_name: Optional[str] = None
+    report_web_view_link: Optional[str] = None
+    report_uploaded_at: Optional[datetime] = None
     created_at: datetime
 
 

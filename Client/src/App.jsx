@@ -24,45 +24,6 @@ const preferenceItems = [
   { id: "settings", label: "Settings" }
 ];
 
-const eventCards = [
-  {
-    title: "Business Conference 2025",
-    date: "Jan 25",
-    time: "09:30 AM",
-    status: "In Progress"
-  },
-  {
-    title: "Annual Fest",
-    date: "Nov 27",
-    time: "07:00 PM",
-    status: "Ready"
-  },
-  {
-    title: "Business Conference 2025",
-    date: "Jan 25",
-    time: "09:30 AM",
-    status: "Pending"
-  },
-  {
-    title: "Annual Meet",
-    date: "Dec 03",
-    time: "11:00 AM",
-    status: "Pending"
-  },
-  {
-    title: "Research Showcase",
-    date: "Dec 14",
-    time: "02:30 PM",
-    status: "Ready"
-  },
-  {
-    title: "Faculty Awards",
-    date: "Dec 18",
-    time: "05:15 PM",
-    status: "Ready"
-  }
-];
-
 const inboxItems = [
   {
     name: "Nur Azzahra",
@@ -237,10 +198,23 @@ export default function App() {
     projection: false,
     other_notes: ""
   });
+  const [reportModal, setReportModal] = useState({
+    open: false,
+    status: "idle",
+    error: "",
+    eventId: "",
+    eventName: "",
+    hasReport: false
+  });
+  const [reportFile, setReportFile] = useState(null);
   const [calendarState, setCalendarState] = useState({
     status: "idle",
     events: [],
     error: ""
+  });
+  const [googleScopeModal, setGoogleScopeModal] = useState({
+    open: false,
+    missing: []
   });
   const [user, setUser] = useState(() => {
     const storedToken = localStorage.getItem("auth_token");
@@ -259,6 +233,36 @@ export default function App() {
   const googleClientId =
     import.meta.env.VITE_GOOGLE_CLIENT_ID ||
     "947113013769-dsal8c7k52irs6eokfnvl6o1a6v2rvea.apps.googleusercontent.com";
+
+  const handleSessionExpired = useCallback(() => {
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("auth_user");
+    setUser(null);
+    setActiveView("dashboard");
+    setStatus({ type: "error", message: "Session expired. Please log in again." });
+  }, []);
+
+  const apiFetch = useCallback(
+    async (input, init = {}) => {
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        handleSessionExpired();
+        throw new Error("Missing auth token.");
+      }
+
+      const headers = {
+        ...(init.headers || {}),
+        Authorization: `Bearer ${token}`
+      };
+
+      const res = await fetch(input, { ...init, headers });
+      if (res.status === 401) {
+        handleSessionExpired();
+      }
+      return res;
+    },
+    [handleSessionExpired]
+  );
 
   const handleGoogleCredential = useCallback(
     async (response) => {
@@ -341,11 +345,7 @@ export default function App() {
       const url = query
         ? `${apiBaseUrl}/calendar/events?${query}`
         : `${apiBaseUrl}/calendar/events`;
-      const res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const res = await apiFetch(url);
 
       if (res.status === 403) {
         setCalendarState({
@@ -395,31 +395,11 @@ export default function App() {
     setEventsState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
       const [eventsRes, approvalsRes, marketingRes, itRes, invitesRes] = await Promise.all([
-        fetch(`${apiBaseUrl}/events`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }),
-        fetch(`${apiBaseUrl}/approvals/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }),
-        fetch(`${apiBaseUrl}/marketing/requests/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }),
-        fetch(`${apiBaseUrl}/it/requests/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }),
-        fetch(`${apiBaseUrl}/invites/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        })
+        apiFetch(`${apiBaseUrl}/events`),
+        apiFetch(`${apiBaseUrl}/approvals/me`),
+        apiFetch(`${apiBaseUrl}/marketing/requests/me`),
+        apiFetch(`${apiBaseUrl}/it/requests/me`),
+        apiFetch(`${apiBaseUrl}/invites/me`)
       ]);
 
       if (!eventsRes.ok) {
@@ -535,11 +515,7 @@ export default function App() {
 
     setApprovalsState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
-      const res = await fetch(`${apiBaseUrl}/approvals/inbox`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const res = await apiFetch(`${apiBaseUrl}/approvals/inbox`);
       if (!res.ok) {
         throw new Error("Unable to load approvals.");
       }
@@ -563,11 +539,7 @@ export default function App() {
 
     setMarketingState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
-      const res = await fetch(`${apiBaseUrl}/marketing/inbox`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const res = await apiFetch(`${apiBaseUrl}/marketing/inbox`);
       if (!res.ok) {
         throw new Error("Unable to load marketing requests.");
       }
@@ -591,11 +563,7 @@ export default function App() {
 
     setItState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
-      const res = await fetch(`${apiBaseUrl}/it/inbox`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const res = await apiFetch(`${apiBaseUrl}/it/inbox`);
       if (!res.ok) {
         throw new Error("Unable to load IT requests.");
       }
@@ -609,6 +577,29 @@ export default function App() {
       });
     }
   }, [apiBaseUrl]);
+
+  const checkGoogleScopes = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      return;
+    }
+
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/auth/google/status`);
+      if (!res.ok) {
+        return;
+      }
+      const data = await res.json();
+      const missing = data?.missing_scopes || [];
+      if (missing.length) {
+        setGoogleScopeModal({ open: true, missing });
+      } else {
+        setGoogleScopeModal({ open: false, missing: [] });
+      }
+    } catch (err) {
+      // Keep silent to avoid blocking the UI on a status check
+    }
+  }, [apiBaseUrl, apiFetch]);
 
   useEffect(() => {
     if (user) {
@@ -670,11 +661,19 @@ export default function App() {
   }, [activeView, fetchCalendarEvents, user]);
 
   useEffect(() => {
-    if (!user || activeView !== "my-events") {
+    if (user) {
+      checkGoogleScopes();
+    }
+  }, [checkGoogleScopes, user]);
+
+  useEffect(() => {
+    if (!user || (activeView !== "my-events" && activeView !== "dashboard")) {
       return;
     }
-    loadVenues();
     loadEvents();
+    if (activeView === "my-events") {
+      loadVenues();
+    }
   }, [activeView, loadEvents, loadVenues, user]);
 
   useEffect(() => {
@@ -787,11 +786,102 @@ export default function App() {
     setItModal({ open: false, status: "idle", error: "" });
   };
 
+  const handleReportOpen = (eventItem) => {
+    setReportFile(null);
+    setReportModal({
+      open: true,
+      status: "idle",
+      error: "",
+      eventId: eventItem.id,
+      eventName: eventItem.name,
+      hasReport: Boolean(eventItem.report_file_id)
+    });
+  };
+
+  const handleReportClose = () => {
+    setReportFile(null);
+    setReportModal({ open: false, status: "idle", error: "", eventId: "", eventName: "", hasReport: false });
+  };
+
+  const handleReportFileChange = (event) => {
+    setReportFile(event.target.files?.[0] || null);
+  };
+
   const handleInviteFieldChange = (field) => (event) => {
     setInviteForm((prev) => ({
       ...prev,
       [field]: event.target.value
     }));
+  };
+
+  const submitReport = async (formEvent) => {
+    if (formEvent) {
+      formEvent.preventDefault();
+    }
+    if (!reportFile) {
+      setReportModal((prev) => ({
+        ...prev,
+        status: "error",
+        error: "Please select a PDF report."
+      }));
+      return;
+    }
+
+    setReportModal((prev) => ({ ...prev, status: "loading", error: "" }));
+
+    try {
+      const formData = new FormData();
+      formData.append("file", reportFile);
+      const res = await apiFetch(`${apiBaseUrl}/events/${reportModal.eventId}/report`, {
+        method: "POST",
+        body: formData
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const message = data?.detail || "Unable to upload report.";
+        throw new Error(message);
+      }
+
+      handleReportClose();
+      loadEvents();
+    } catch (err) {
+      setReportModal((prev) => ({
+        ...prev,
+        status: "error",
+        error: err?.message || "Unable to upload report."
+      }));
+    }
+  };
+
+  const formatStatusLabel = (value) => {
+    if (!value) {
+      return "";
+    }
+    return value
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  };
+  const getEventStatusInfo = (event) => {
+    const statusValue = event.status || "";
+    const explicitStatus = statusValue ? formatStatusLabel(statusValue) : null;
+    const hasApprovalData =
+      event.approval_status || event.marketing_status || event.it_status;
+    let derivedStatus = "Approved";
+    if (hasApprovalData) {
+      const statuses = [event.approval_status, event.marketing_status, event.it_status];
+      if (statuses.includes("rejected")) {
+        derivedStatus = "Rejected";
+      } else if (statuses.every((status) => status === "approved")) {
+        derivedStatus = "Approved";
+      } else {
+        derivedStatus = "Pending";
+      }
+    }
+    const statusLabel = explicitStatus || derivedStatus;
+    const statusClass = (statusValue || statusLabel).toLowerCase().replace(/\s+/g, "-");
+    return { statusLabel, statusClass };
   };
   const submitEvent = async (formEvent, override) => {
     if (formEvent) {
@@ -809,11 +899,10 @@ export default function App() {
       const payload = override
         ? { ...eventForm, override_conflict: true }
         : eventForm;
-      const res = await fetch(`${apiBaseUrl}/events`, {
+      const res = await apiFetch(`${apiBaseUrl}/events`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(payload)
       });
@@ -887,11 +976,10 @@ export default function App() {
         other_notes: approvalForm.other_notes
       };
 
-      const res = await fetch(`${apiBaseUrl}/events`, {
+      const res = await apiFetch(`${apiBaseUrl}/events`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(payload)
       });
@@ -949,11 +1037,10 @@ export default function App() {
         other_notes: marketingForm.other_notes
       };
 
-      const res = await fetch(`${apiBaseUrl}/marketing/requests`, {
+      const res = await apiFetch(`${apiBaseUrl}/marketing/requests`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(payload)
       });
@@ -1003,11 +1090,10 @@ export default function App() {
         other_notes: itForm.other_notes
       };
 
-      const res = await fetch(`${apiBaseUrl}/it/requests`, {
+      const res = await apiFetch(`${apiBaseUrl}/it/requests`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(payload)
       });
@@ -1062,11 +1148,10 @@ export default function App() {
     setInviteModal({ open: true, status: "loading", error: "" });
 
     try {
-      const res = await fetch(`${apiBaseUrl}/invites`, {
+      const res = await apiFetch(`${apiBaseUrl}/invites`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           event_id: inviteContext.eventId,
@@ -1111,11 +1196,10 @@ export default function App() {
     setEventFormStatus({ status: "loading", error: "" });
 
     try {
-      const res = await fetch(`${apiBaseUrl}/events/conflicts`, {
+      const res = await apiFetch(`${apiBaseUrl}/events/conflicts`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify(eventForm)
       });
@@ -1222,11 +1306,7 @@ export default function App() {
     }
 
     try {
-      const res = await fetch(`${apiBaseUrl}/calendar/connect-url`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const res = await apiFetch(`${apiBaseUrl}/calendar/connect-url`);
 
       if (!res.ok) {
         throw new Error("Unable to start Google Calendar auth.");
@@ -1260,11 +1340,10 @@ export default function App() {
       }
 
       try {
-        const res = await fetch(`${apiBaseUrl}/approvals/${requestId}`, {
+        const res = await apiFetch(`${apiBaseUrl}/approvals/${requestId}`, {
           method: "PATCH",
           headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
+            "Content-Type": "application/json"
           },
           body: JSON.stringify({ status: decision })
         });
@@ -1294,11 +1373,10 @@ export default function App() {
       }
 
       try {
-        const res = await fetch(`${apiBaseUrl}/marketing/requests/${requestId}`, {
+        const res = await apiFetch(`${apiBaseUrl}/marketing/requests/${requestId}`, {
           method: "PATCH",
           headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
+            "Content-Type": "application/json"
           },
           body: JSON.stringify({ status: decision })
         });
@@ -1325,11 +1403,10 @@ export default function App() {
       }
 
       try {
-        const res = await fetch(`${apiBaseUrl}/it/requests/${requestId}`, {
+        const res = await apiFetch(`${apiBaseUrl}/it/requests/${requestId}`, {
           method: "PATCH",
           headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
+            "Content-Type": "application/json"
           },
           body: JSON.stringify({ status: decision })
         });
@@ -1395,9 +1472,8 @@ export default function App() {
                 ) : null}
                 {eventsState.status === "ready"
                   ? eventsState.items.map((event) => {
-                      const explicitStatus = event.status
-                        ? `${event.status.charAt(0).toUpperCase()}${event.status.slice(1)}`
-                        : null;
+                      const statusValue = event.status || "";
+                      const explicitStatus = statusValue ? formatStatusLabel(statusValue) : null;
                       const hasApprovalData =
                         event.approval_status || event.marketing_status || event.it_status;
                       let derivedStatus = "Approved";
@@ -1417,14 +1493,17 @@ export default function App() {
                       }
 
                       const statusLabel = explicitStatus || derivedStatus;
-                      const statusClass = statusLabel.toLowerCase().replace(" ", "-");
+                      const statusClass = (statusValue || statusLabel)
+                        .toLowerCase()
+                        .replace(/\s+/g, "-");
                       const inviteSent = event.invite_status === "sent";
                       const canInvite =
-                        statusLabel === "Approved" &&
                         event.approval_status === "approved" &&
                         event.marketing_status === "approved" &&
                         event.it_status === "approved" &&
                         !inviteSent;
+                      const isApprovalItem = String(event.id || "").startsWith("approval-");
+                      const canUploadReport = !isApprovalItem && statusValue === "completed";
                       return (
                         <div key={event.id} className="events-table-row">
                           <span>{event.name}</span>
@@ -1447,6 +1526,15 @@ export default function App() {
                                 onClick={() => handleInviteOpen(event)}
                               >
                                 Send Invite
+                              </button>
+                            ) : null}
+                            {canUploadReport ? (
+                              <button
+                                type="button"
+                                className="details-button invite"
+                                onClick={() => handleReportOpen(event)}
+                              >
+                                {event.report_file_id ? "Replace Report" : "Upload Report"}
                               </button>
                             ) : null}
                           </div>
@@ -2018,6 +2106,42 @@ export default function App() {
                 </div>
               </div>
             ) : null}
+
+            {reportModal.open ? (
+              <div className="modal-overlay" role="dialog" aria-modal="true">
+                <div className="modal-card">
+                  <div className="modal-header">
+                    <h3>{reportModal.hasReport ? "Replace Report" : "Upload Report"}</h3>
+                    <button type="button" className="modal-close" onClick={handleReportClose}>
+                      &times;
+                    </button>
+                  </div>
+                  <form className="event-form" onSubmit={submitReport}>
+                    <label className="form-field">
+                      <span>Event</span>
+                      <input type="text" value={reportModal.eventName || "Event"} readOnly />
+                    </label>
+                    <label className="form-field">
+                      <span>Report (PDF, max 10MB)</span>
+                      <input type="file" accept=".pdf,application/pdf" onChange={handleReportFileChange} />
+                    </label>
+
+                    {reportModal.status === "error" ? (
+                      <p className="form-error">{reportModal.error}</p>
+                    ) : null}
+
+                    <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleReportClose}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="primary-action" disabled={reportModal.status === "loading"}>
+                        {reportModal.status === "loading" ? "Uploading..." : "Upload"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : null}
           </div>
         );
       }
@@ -2303,20 +2427,32 @@ export default function App() {
               </div>
             </div>
             <div className="events-grid">
-              {eventCards.map((event, index) => (
-                <article key={`${event.title}-${index}`} className="event-card">
-                  <div className={`event-status ${event.status.toLowerCase().replace(" ", "-")}`}>
-                    {event.status}
-                  </div>
-                  <div className="event-image" />
-                  <p className="event-title">{event.title}</p>
-                  <p className="event-meta">
-                    <span className="event-date">{event.date}</span>
-                    <span className="event-dot">•</span>
-                    <span className="event-time">{event.time}</span>
-                  </p>
-                </article>
-              ))}
+              {eventsState.status === "loading" ? (
+                <p className="table-message">Loading events...</p>
+              ) : null}
+              {eventsState.status === "error" ? (
+                <p className="table-message">{eventsState.error}</p>
+              ) : null}
+              {eventsState.status === "ready" && eventsState.items.length === 0 ? (
+                <p className="table-message">No events yet. Create your first event.</p>
+              ) : null}
+              {eventsState.status === "ready"
+                ? eventsState.items.map((event) => {
+                    const { statusLabel, statusClass } = getEventStatusInfo(event);
+                    return (
+                      <article key={event.id} className="event-card">
+                        <div className={`event-status ${statusClass}`}>{statusLabel}</div>
+                        <div className="event-image" />
+                        <p className="event-title">{event.name}</p>
+                        <p className="event-meta">
+                          <span className="event-date">{event.start_date}</span>
+                          <span className="event-dot">•</span>
+                          <span className="event-time">{event.start_time}</span>
+                        </p>
+                      </article>
+                    );
+                  })
+                : null}
             </div>
           </div>
         </div>
@@ -2325,6 +2461,45 @@ export default function App() {
 
     return (
       <div className="dashboard-page">
+        {googleScopeModal.open ? (
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="modal-card">
+              <div className="modal-header">
+                <h3>Connect Google</h3>
+                <button
+                  type="button"
+                  className="modal-close"
+                  onClick={() => setGoogleScopeModal({ open: false, missing: [] })}
+                >
+                  &times;
+                </button>
+              </div>
+              <div className="approval-summary">
+                <p>
+                  Your Google connection is missing permissions needed for calendar,
+                  invites, or report uploads. Please connect Google to continue.
+                </p>
+                {googleScopeModal.missing.length ? (
+                  <p>
+                    <strong>Missing scopes:</strong> {googleScopeModal.missing.join(", ")}
+                  </p>
+                ) : null}
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="secondary-action"
+                  onClick={() => setGoogleScopeModal({ open: false, missing: [] })}
+                >
+                  Later
+                </button>
+                <button type="button" className="primary-action" onClick={handleCalendarConnect}>
+                  Connect Google
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <aside className="sidebar">
           <div className="brand">
             <div className="brand-icon">
@@ -2508,3 +2683,4 @@ export default function App() {
     </div>
   );
 }
+
