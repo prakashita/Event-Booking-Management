@@ -33,3 +33,6 @@ Server/.env
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Service account keys
+Server/event-booking-system-dev-*.json
