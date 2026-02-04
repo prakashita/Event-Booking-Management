@@ -1,7 +1,8 @@
 from beanie import Document, Indexed
 from pydantic import Field
 from datetime import datetime, date, time
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel
 
 class User(Document):
     name: str
@@ -9,6 +10,7 @@ class User(Document):
     google_id: str = Field(unique=True)
     role: str = Field(default="faculty")
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    last_seen: Optional[datetime] = None
     google_refresh_token: Optional[str] = None
     google_access_token: Optional[str] = None
     google_token_expiry: Optional[datetime] = None
@@ -139,3 +141,48 @@ class Invite(Document):
 
     class Settings:
         name = "invites"
+
+
+class Publication(Document):
+    name: str
+    title: str
+    others: Optional[str] = None
+    file_id: str
+    file_name: str
+    web_view_link: Optional[str] = None
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "publications"
+
+
+class ChatAttachment(BaseModel):
+    name: str
+    url: str
+    content_type: str
+    size: int
+
+
+class ChatConversation(Document):
+    participants: List[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "chat_conversations"
+
+
+class ChatMessage(Document):
+    conversation_id: str
+    sender_id: str
+    sender_name: str
+    sender_email: str
+    content: Optional[str] = None
+    attachments: List[ChatAttachment] = Field(default_factory=list)
+    read_by: List[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "chat_messages"

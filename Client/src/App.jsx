@@ -13,10 +13,10 @@ const stats = [
 const menuItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "my-events", label: "My Events" },
+  { id: "event-reports", label: "Event Reports" },
   { id: "calendar", label: "Calendar View" },
   { id: "approvals", label: "Approvals" },
-  { id: "venue", label: "Booking Venue" },
-  { id: "messages", label: "Messages" }
+  { id: "publications", label: "Publications" }
 ];
 
 const preferenceItems = [
@@ -139,6 +139,7 @@ export default function App() {
   const googleButtonRef = useRef(null);
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [activeView, setActiveView] = useState("dashboard");
+  const [myEventsTab, setMyEventsTab] = useState("all");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [venuesState, setVenuesState] = useState({ status: "idle", items: [], error: "" });
   const [eventsState, setEventsState] = useState({ status: "idle", items: [], error: "" });
@@ -166,6 +167,8 @@ export default function App() {
     },
     other_notes: ""
   });
+  const [skipApprovalFlow, setSkipApprovalFlow] = useState(false);
+  const [overrideConflict, setOverrideConflict] = useState(false);
   const [inviteModal, setInviteModal] = useState({ open: false, status: "idle", error: "" });
   const [inviteForm, setInviteForm] = useState({
     to: "",
@@ -206,16 +209,49 @@ export default function App() {
     eventName: "",
     hasReport: false
   });
+  const [publicationModal, setPublicationModal] = useState({
+    open: false,
+    status: "idle",
+    error: ""
+  });
+  const [publicationForm, setPublicationForm] = useState({
+    name: "",
+    title: "",
+    file: null,
+    others: ""
+  });
   const [reportFile, setReportFile] = useState(null);
   const [calendarState, setCalendarState] = useState({
     status: "idle",
     events: [],
     error: ""
   });
+  const [publicationsState, setPublicationsState] = useState({
+    status: "idle",
+    items: [],
+    error: ""
+  });
   const [googleScopeModal, setGoogleScopeModal] = useState({
     open: false,
     missing: []
   });
+  const [chatUsers, setChatUsers] = useState([]);
+  const [chatActiveUser, setChatActiveUser] = useState(null);
+  const [chatConversationId, setChatConversationId] = useState("");
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatStatus, setChatStatus] = useState({ status: "idle", error: "" });
+  const [chatInput, setChatInput] = useState("");
+  const [chatFiles, setChatFiles] = useState([]);
+  const [chatTypingUser, setChatTypingUser] = useState(null);
+  const [chatUnreadByUser, setChatUnreadByUser] = useState({});
+  const [chatHasMore, setChatHasMore] = useState(true);
+  const [chatLoadingMore, setChatLoadingMore] = useState(false);
+  const chatWsRef = useRef(null);
+  const chatListRef = useRef(null);
+  const chatTypingTimeoutRef = useRef(null);
+  const chatActiveConversationRef = useRef("");
+  const chatActiveUserRef = useRef(null);
+  const loadConversationMessagesRef = useRef(null);
   const [user, setUser] = useState(() => {
     const storedToken = localStorage.getItem("auth_token");
     const stored = localStorage.getItem("auth_user");
@@ -233,6 +269,12 @@ export default function App() {
   const googleClientId =
     import.meta.env.VITE_GOOGLE_CLIENT_ID ||
     "947113013769-dsal8c7k52irs6eokfnvl6o1a6v2rvea.apps.googleusercontent.com";
+
+  useEffect(() => {
+    if (activeView === "event-reports") {
+      setMyEventsTab("closed");
+    }
+  }, [activeView]);
 
   const handleSessionExpired = useCallback(() => {
     localStorage.removeItem("auth_token");
@@ -263,6 +305,283 @@ export default function App() {
     },
     [handleSessionExpired]
   );
+
+  const loadPublications = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setPublicationsState({ status: "error", items: [], error: "Missing auth token." });
+      return;
+    }
+    setPublicationsState((prev) => ({ ...prev, status: "loading", error: "" }));
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/publications`);
+      if (!res.ok) {
+        throw new Error("Unable to load publications.");
+      }
+      const data = await res.json();
+      setPublicationsState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setPublicationsState({
+        status: "error",
+        items: [],
+        error: err?.message || "Unable to load publications."
+      });
+    }
+  }, [apiBaseUrl, apiFetch]);
+
+  const formatChatTime = useCallback((value) => {
+    if (!value) {
+      return "";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }, []);
+
+  const resolveAttachmentUrl = useCallback(
+    (url) => {
+      if (!url) {
+        return "";
+      }
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        return url;
+      }
+      return `${apiBaseUrl}${url}`;
+    },
+    [apiBaseUrl]
+  );
+
+  const loadChatUsers = useCallback(async () => {
+    if (!user) {
+      return;
+    }
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/chat/users`);
+      if (!res.ok) {
+        throw new Error("Unable to load users.");
+      }
+      const data = await res.json();
+      setChatUsers((prev) => {
+        const unreadMap = chatUnreadByUser;
+        return data.map((item) => ({
+          ...item,
+          unread: unreadMap[item.id] || 0
+        }));
+      });
+      setChatStatus({ status: "ready", error: "" });
+    } catch (err) {
+      setChatStatus((prev) => ({
+        status: "error",
+        error: err?.message || "Unable to load users."
+      }));
+    }
+  }, [apiBaseUrl, apiFetch, chatUnreadByUser, user]);
+
+  const loadConversationMessages = useCallback(
+    async (conversationId, before) => {
+      if (!conversationId) {
+        return;
+      }
+      if (before) {
+        setChatLoadingMore(true);
+      } else {
+        setChatStatus({ status: "loading", error: "" });
+      }
+      try {
+        const params = new URLSearchParams({ limit: "50" });
+        if (before) {
+          params.set("before", before);
+        }
+        const res = await apiFetch(
+          `${apiBaseUrl}/chat/conversations/${conversationId}/messages?${params.toString()}`
+        );
+        if (!res.ok) {
+          throw new Error("Unable to load messages.");
+        }
+        const data = await res.json();
+        setChatMessages((prev) => (before ? [...data, ...prev] : data));
+        if (data.length < 50) {
+          setChatHasMore(false);
+        } else if (!before) {
+          setChatHasMore(true);
+        }
+        setChatStatus({ status: "ready", error: "" });
+      } catch (err) {
+        setChatStatus({ status: "error", error: err?.message || "Unable to load messages." });
+      } finally {
+        setChatLoadingMore(false);
+      }
+    },
+    [apiBaseUrl, apiFetch]
+  );
+
+  const startConversation = useCallback(
+    async (targetUser) => {
+      if (!targetUser) {
+        return;
+      }
+      setChatActiveUser(targetUser);
+      setChatTypingUser(null);
+      setChatMessages([]);
+      setChatHasMore(true);
+      setChatLoadingMore(false);
+      setChatStatus({ status: "loading", error: "" });
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/chat/conversations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: targetUser.id })
+        });
+        if (!res.ok) {
+          throw new Error("Unable to start conversation.");
+        }
+        const data = await res.json();
+        setChatConversationId(data.id);
+        await loadConversationMessages(data.id);
+        setChatUnreadByUser((prev) => ({ ...prev, [targetUser.id]: 0 }));
+        setChatUsers((prev) =>
+          prev.map((item) => (item.id === targetUser.id ? { ...item, unread: 0 } : item))
+        );
+      } catch (err) {
+        setChatStatus({ status: "error", error: err?.message || "Unable to start conversation." });
+      }
+    },
+    [apiBaseUrl, apiFetch, loadConversationMessages]
+  );
+
+  const uploadChatAttachment = useCallback(
+    async (file) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await apiFetch(`${apiBaseUrl}/chat/upload`, {
+        method: "POST",
+        body: formData
+      });
+      if (!res.ok) {
+        throw new Error("Unable to upload attachment.");
+      }
+      const data = await res.json();
+      return data.attachment;
+    },
+    [apiBaseUrl, apiFetch]
+  );
+
+  const sendReadReceipts = useCallback(
+    async (messageIds) => {
+      if (!messageIds?.length) {
+        return;
+      }
+      const ws = chatWsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "read", message_ids: messageIds }));
+        return;
+      }
+      await apiFetch(`${apiBaseUrl}/chat/read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message_ids: messageIds })
+      });
+    },
+    [apiBaseUrl, apiFetch]
+  );
+
+  const sendChatMessage = useCallback(
+    async () => {
+      const trimmed = chatInput.trim();
+      if (!trimmed && chatFiles.length === 0) {
+        return;
+      }
+      if (!chatConversationId) {
+        setChatStatus({ status: "error", error: "Select a user to start chatting." });
+        return;
+      }
+      const clientId =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      try {
+        const attachments =
+          chatFiles.length > 0 ? await Promise.all(chatFiles.map(uploadChatAttachment)) : [];
+        const optimisticMessage = {
+          id: `client-${clientId}`,
+          client_id: clientId,
+          conversation_id: chatConversationId,
+          sender_id: user.id,
+          sender_name: user.name,
+          sender_email: user.email,
+          content: trimmed,
+          attachments,
+          read_by: [user.id],
+          created_at: new Date().toISOString()
+        };
+        setChatMessages((prev) => [...prev, optimisticMessage]);
+        const payload = {
+          type: "message",
+          text: trimmed,
+          attachments,
+          conversation_id: chatConversationId,
+          client_id: clientId
+        };
+        const ws = chatWsRef.current;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(payload));
+        } else {
+          await apiFetch(`${apiBaseUrl}/chat/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              conversation_id: chatConversationId,
+              content: trimmed,
+              attachments
+            })
+          });
+        }
+        setChatInput("");
+        setChatFiles([]);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "typing", is_typing: false, conversation_id: chatConversationId }));
+        }
+      } catch (err) {
+        setChatStatus({ status: "error", error: err?.message || "Unable to send message." });
+      }
+    },
+    [apiBaseUrl, apiFetch, chatConversationId, chatFiles, chatInput, uploadChatAttachment, user]
+  );
+
+  const handleChatInputChange = useCallback(
+    (event) => {
+      const value = event.target.value;
+      setChatInput(value);
+      const ws = chatWsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN && chatConversationId) {
+        ws.send(JSON.stringify({ type: "typing", is_typing: true, conversation_id: chatConversationId }));
+      }
+      if (chatTypingTimeoutRef.current) {
+        clearTimeout(chatTypingTimeoutRef.current);
+      }
+      chatTypingTimeoutRef.current = setTimeout(() => {
+        const activeWs = chatWsRef.current;
+        if (activeWs && activeWs.readyState === WebSocket.OPEN && chatConversationId) {
+          activeWs.send(JSON.stringify({ type: "typing", is_typing: false, conversation_id: chatConversationId }));
+        }
+      }, 1500);
+    },
+    [chatConversationId]
+  );
+
+  const handleChatFiles = useCallback((event) => {
+    const nextFiles = Array.from(event.target.files || []);
+    if (nextFiles.length) {
+      setChatFiles((prev) => [...prev, ...nextFiles]);
+    }
+    event.target.value = "";
+  }, []);
+
+  const removeChatFile = useCallback((index) => {
+    setChatFiles((prev) => prev.filter((_, idx) => idx !== index));
+  }, []);
 
   const handleGoogleCredential = useCallback(
     async (response) => {
@@ -667,6 +986,163 @@ export default function App() {
   }, [checkGoogleScopes, user]);
 
   useEffect(() => {
+    chatActiveConversationRef.current = chatConversationId;
+  }, [chatConversationId]);
+
+  useEffect(() => {
+    chatActiveUserRef.current = chatActiveUser?.id || null;
+  }, [chatActiveUser]);
+
+  useEffect(() => {
+    loadConversationMessagesRef.current = loadConversationMessages;
+  }, [loadConversationMessages]);
+
+  useEffect(() => {
+    if (!user) {
+      if (chatWsRef.current) {
+        chatWsRef.current.close();
+        chatWsRef.current = null;
+      }
+      setChatUsers([]);
+      setChatMessages([]);
+      setChatActiveUser(null);
+      setChatConversationId("");
+      setChatStatus({ status: "idle", error: "" });
+      setChatTypingUser(null);
+      setChatUnreadByUser({});
+      return;
+    }
+
+    loadChatUsers();
+
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      return;
+    }
+
+    const wsBase = apiBaseUrl.replace(/^http/, "ws");
+    const ws = new WebSocket(`${wsBase}/chat/ws?token=${token}`);
+    chatWsRef.current = ws;
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "message" && data.message) {
+          const incoming = data.message;
+          const activeConversation = chatActiveConversationRef.current;
+          const activeUserId = chatActiveUserRef.current;
+          if (incoming.conversation_id === activeConversation) {
+            if (incoming.client_id) {
+              setChatMessages((prev) => {
+                const replaced = prev.map((message) =>
+                  message.client_id === incoming.client_id ? incoming : message
+                );
+                const hasMatch = prev.some((message) => message.client_id === incoming.client_id);
+                return hasMatch ? replaced : [...prev, incoming];
+              });
+            } else {
+              setChatMessages((prev) => [...prev, incoming]);
+            }
+          } else if (activeUserId && incoming.sender_id === activeUserId) {
+            setChatConversationId(incoming.conversation_id);
+            setChatMessages((prev) => [...prev, incoming]);
+            if (loadConversationMessagesRef.current) {
+              loadConversationMessagesRef.current(incoming.conversation_id);
+            }
+          } else if (incoming.sender_id) {
+            setChatUnreadByUser((prev) => ({
+              ...prev,
+              [incoming.sender_id]: (prev[incoming.sender_id] || 0) + 1
+            }));
+            setChatUsers((prev) =>
+              prev.map((item) =>
+                item.id === incoming.sender_id
+                  ? { ...item, unread: (item.unread || 0) + 1 }
+                  : item
+              )
+            );
+          }
+          return;
+        }
+        if (data.type === "typing") {
+          if (data.conversation_id !== chatActiveConversationRef.current) {
+            return;
+          }
+          if (data.is_typing) {
+            setChatTypingUser({ id: data.user_id, name: data.user_name });
+          } else {
+            setChatTypingUser(null);
+          }
+          return;
+        }
+        if (data.type === "read" && data.message_ids) {
+          setChatMessages((prev) =>
+            prev.map((message) => {
+              if (!data.message_ids.includes(message.id)) {
+                return message;
+              }
+              if (message.read_by.includes(data.user_id)) {
+                return message;
+              }
+              return { ...message, read_by: [...message.read_by, data.user_id] };
+            })
+          );
+          return;
+        }
+        if (data.type === "presence") {
+          setChatUsers((prev) =>
+            prev.map((item) =>
+              item.id === data.user_id
+                ? { ...item, online: data.online, last_seen: data.last_seen }
+                : item
+            )
+          );
+          setChatActiveUser((prev) =>
+            prev && prev.id === data.user_id
+              ? { ...prev, online: data.online, last_seen: data.last_seen }
+              : prev
+          );
+        }
+      } catch (err) {
+        // Ignore malformed payloads
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [apiBaseUrl, loadChatUsers, user]);
+
+  useEffect(() => {
+    if (!chatListRef.current) {
+      return;
+    }
+    chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
+  }, [chatMessages.length]);
+
+  useEffect(() => {
+    if (!chatActiveUser) {
+      return;
+    }
+    const updated = chatUsers.find((item) => item.id === chatActiveUser.id);
+    if (updated) {
+      setChatActiveUser(updated);
+    }
+  }, [chatUsers, chatActiveUser]);
+
+  useEffect(() => {
+    if (!user || chatMessages.length === 0 || !chatConversationId) {
+      return;
+    }
+    const unread = chatMessages
+      .filter((message) => message.sender_id !== user.id && !message.read_by.includes(user.id))
+      .map((message) => message.id);
+    if (unread.length) {
+      sendReadReceipts(unread);
+    }
+  }, [chatMessages, chatConversationId, sendReadReceipts, user]);
+
+  useEffect(() => {
     if (!user || (activeView !== "my-events" && activeView !== "dashboard")) {
       return;
     }
@@ -675,6 +1151,13 @@ export default function App() {
       loadVenues();
     }
   }, [activeView, loadEvents, loadVenues, user]);
+
+  useEffect(() => {
+    if (!user || activeView !== "publications") {
+      return;
+    }
+    loadPublications();
+  }, [activeView, loadPublications, user]);
 
   useEffect(() => {
     if (!user || activeView !== "approvals") {
@@ -718,6 +1201,7 @@ export default function App() {
   };
 
   const handleApprovalModalOpen = () => {
+    setSkipApprovalFlow(false);
     setApprovalForm({
       to: "",
       requirements: {
@@ -731,6 +1215,13 @@ export default function App() {
 
   const handleApprovalModalClose = () => {
     setApprovalModal({ open: false, status: "idle", error: "" });
+  };
+
+  const handleApprovalSkip = async () => {
+    setSkipApprovalFlow(true);
+    setPendingEvent({ ...eventForm });
+    handleApprovalModalClose();
+    handleMarketingModalOpen();
   };
 
   const handleInviteOpen = (item) => {
@@ -786,6 +1277,54 @@ export default function App() {
     setItModal({ open: false, status: "idle", error: "" });
   };
 
+  const resetEventFormState = () => {
+    setPendingEvent(null);
+    setOverrideConflict(false);
+    setEventForm({
+      start_date: "",
+      end_date: "",
+      start_time: "",
+      end_time: "",
+      name: "",
+      facilitator: "",
+      venue_name: "",
+      description: ""
+    });
+  };
+
+  const createEventDirect = async () => {
+    try {
+      const payload = overrideConflict ? { ...eventForm, override_conflict: true } : eventForm;
+      const res = await apiFetch(`${apiBaseUrl}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const message = data?.detail || "Unable to create event.";
+        throw new Error(message);
+      }
+      resetEventFormState();
+      setSkipApprovalFlow(false);
+      loadEvents();
+    } catch (err) {
+      setStatus({ type: "error", message: err?.message || "Unable to create event." });
+    }
+  };
+
+  const handleMarketingSkip = () => {
+    handleMarketingModalClose();
+    handleItModalOpen();
+  };
+
+  const handleItSkip = async () => {
+    handleItModalClose();
+    if (skipApprovalFlow) {
+      await createEventDirect();
+    }
+  };
+
   const handleReportOpen = (eventItem) => {
     setReportFile(null);
     setReportModal({
@@ -805,6 +1344,97 @@ export default function App() {
 
   const handleReportFileChange = (event) => {
     setReportFile(event.target.files?.[0] || null);
+  };
+
+  const handlePublicationOpen = () => {
+    setPublicationForm({
+      name: "",
+      title: "",
+      file: null,
+      others: ""
+    });
+    setPublicationModal({ open: true, status: "idle", error: "" });
+  };
+
+  const handlePublicationClose = () => {
+    setPublicationModal({ open: false, status: "idle", error: "" });
+  };
+
+  const handlePublicationChange = (field) => (event) => {
+    if (field === "file") {
+      setPublicationForm((prev) => ({ ...prev, file: event.target.files?.[0] || null }));
+      return;
+    }
+    setPublicationForm((prev) => ({ ...prev, [field]: event.target.value }));
+  };
+
+  const submitPublication = async (formEvent) => {
+    if (formEvent) {
+      formEvent.preventDefault();
+    }
+    if (!publicationForm.name || !publicationForm.title || !publicationForm.file) {
+      setPublicationModal({
+        open: true,
+        status: "error",
+        error: "Please fill name, title, and attach a file."
+      });
+      return;
+    }
+    setPublicationModal({ open: true, status: "loading", error: "" });
+    try {
+      const formData = new FormData();
+      formData.append("name", publicationForm.name);
+      formData.append("title", publicationForm.title);
+      formData.append("others", publicationForm.others || "");
+      formData.append("file", publicationForm.file);
+      const res = await apiFetch(`${apiBaseUrl}/publications`, {
+        method: "POST",
+        body: formData
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const message = data?.detail || "Unable to submit publication.";
+        throw new Error(message);
+      }
+      setStatus({ type: "success", message: "Publication submitted." });
+      handlePublicationClose();
+      loadPublications();
+    } catch (err) {
+      setPublicationModal({
+        open: true,
+        status: "error",
+        error: err?.message || "Unable to submit publication."
+      });
+    }
+  };
+
+  const handleCloseEvent = async (eventItem) => {
+    if (!eventItem?.id) {
+      return;
+    }
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/events/${eventItem.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "closed" })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const message = data?.detail || "Unable to close event.";
+        throw new Error(message);
+      }
+      loadEvents();
+    } catch (err) {
+      setStatus({ type: "error", message: err?.message || "Unable to close event." });
+    }
+  };
+
+  const handleViewReport = (eventItem) => {
+    if (eventItem?.report_web_view_link) {
+      window.open(eventItem.report_web_view_link, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setStatus({ type: "error", message: "Report link unavailable." });
   };
 
   const handleInviteFieldChange = (field) => (event) => {
@@ -883,9 +1513,28 @@ export default function App() {
     const statusClass = (statusValue || statusLabel).toLowerCase().replace(/\s+/g, "-");
     return { statusLabel, statusClass };
   };
+
+  const getNormalizedEventStatus = (event) => {
+    const { statusLabel } = getEventStatusInfo(event);
+    return (statusLabel || "").toLowerCase();
+  };
   const submitEvent = async (formEvent, override) => {
     if (formEvent) {
       formEvent.preventDefault();
+    }
+    const completedUnclosedCount = eventsState.items.filter((event) => {
+      const isApprovalItem = String(event.id || "").startsWith("approval-");
+      if (isApprovalItem) {
+        return false;
+      }
+      return getNormalizedEventStatus(event) === "completed";
+    }).length;
+    if (completedUnclosedCount >= 5) {
+      setEventFormStatus({
+        status: "error",
+        error: "Submit reports for completed events before creating a new one."
+      });
+      return;
     }
     const token = localStorage.getItem("auth_token");
     if (!token) {
@@ -989,6 +1638,7 @@ export default function App() {
       }
 
       setPendingEvent({ ...eventForm });
+      setSkipApprovalFlow(false);
       setApprovalModal({ open: false, status: "idle", error: "" });
       handleMarketingModalOpen();
       setConflictState({ open: false, items: [] });
@@ -1103,17 +1753,11 @@ export default function App() {
       }
 
       setItModal({ open: false, status: "idle", error: "" });
-      setPendingEvent(null);
-      setEventForm({
-        start_date: "",
-        end_date: "",
-        start_time: "",
-        end_time: "",
-        name: "",
-        facilitator: "",
-        venue_name: "",
-        description: ""
-      });
+      if (skipApprovalFlow) {
+        await createEventDirect();
+        return;
+      }
+      resetEventFormState();
       loadEvents();
     } catch (err) {
       setItModal({
@@ -1228,16 +1872,19 @@ export default function App() {
   };
 
   const handleConflictReschedule = () => {
+    setOverrideConflict(false);
     setConflictState({ open: false, items: [] });
   };
 
   const handleConflictApprovalRequest = () => {
+    setOverrideConflict(true);
     setConflictState({ open: false, items: [] });
     setIsEventModalOpen(false);
     handleApprovalModalOpen();
   };
 
   const handleConflictCancel = () => {
+    setOverrideConflict(false);
     setIsEventModalOpen(false);
     setConflictState({ open: false, items: [] });
   };
@@ -1329,8 +1976,11 @@ export default function App() {
     const profileName = user?.name || "Annisa Thalia";
     const profileRole = user?.role || "Event Manager";
     const isMyEvents = activeView === "my-events";
+    const isReportsView = activeView === "event-reports";
     const isCalendar = activeView === "calendar";
     const isApprovals = activeView === "approvals";
+    const isPublications = activeView === "publications";
+    const typingName = chatTypingUser?.name || "";
 
     const handleApprovalDecision = async (requestId, decision) => {
       const token = localStorage.getItem("auth_token");
@@ -1426,13 +2076,66 @@ export default function App() {
     };
 
     const renderPrimaryContent = () => {
-      if (isMyEvents) {
+      if (isMyEvents || isReportsView) {
+        const isReportsTab = myEventsTab === "closed";
+        const getNormalizedStatus = (event) => getNormalizedEventStatus(event);
+        const filteredEvents = eventsState.items.filter((event) =>
+          isReportsView
+            ? getNormalizedStatus(event) === "closed"
+            : myEventsTab === "all"
+              ? true
+              : myEventsTab === "pending"
+                ? getNormalizedStatus(event) === "pending"
+                : myEventsTab === "upcoming"
+                  ? getNormalizedStatus(event) === "upcoming"
+                  : myEventsTab === "ongoing"
+                    ? getNormalizedStatus(event) === "ongoing"
+                    : myEventsTab === "completed"
+                      ? getNormalizedStatus(event) === "completed"
+                      : getNormalizedStatus(event) === "closed"
+        );
+        const completedUnclosedCount = eventsState.items.filter((event) => {
+          const isApprovalItem = String(event.id || "").startsWith("approval-");
+          if (isApprovalItem) {
+            return false;
+          }
+          return getNormalizedStatus(event) === "completed";
+        }).length;
+        const limitReached = completedUnclosedCount >= 5;
+        const warnThresholdReached = completedUnclosedCount >= 3 && completedUnclosedCount < 5;
+        const createTooltip = limitReached
+          ? "Submit reports of completed events before creating a new one."
+          : warnThresholdReached
+            ? "Submit report of completed events to avoid creation block."
+            : "";
         return (
           <div className="primary-column">
             <div className="events-actions">
-              <button type="button" className="primary-action" onClick={handleEventModalOpen}>
-                + New Event
-              </button>
+              <span title={createTooltip} className="action-tooltip">
+                <button
+                  type="button"
+                  className="primary-action"
+                  onClick={() => {
+                    if (limitReached) {
+                      setStatus({
+                        type: "error",
+                        message: "Submit reports of completed events before creating a new one."
+                      });
+                      return;
+                    }
+                    if (warnThresholdReached) {
+                      setStatus({
+                        type: "info",
+                        message: "Submit report of completed events to avoid creation block."
+                      });
+                    }
+                    handleEventModalOpen();
+                  }}
+                  disabled={limitReached}
+                >
+                  + New Event
+                </button>
+              </span>
               <button type="button" className="secondary-action" onClick={loadEvents}>
                 Refresh
               </button>
@@ -1440,24 +2143,59 @@ export default function App() {
 
             <div className="events-table-card">
               <div className="table-header">
-                <h3>My Events</h3>
-                <div className="table-tabs">
-                  <button type="button" className="tab-button active">
-                    All Events
+                <h3>{isReportsView ? "Event Reports" : "My Events"}</h3>
+                {isReportsView ? null : (
+                  <div className="table-tabs">
+                  <button
+                    type="button"
+                    className={`tab-button ${myEventsTab === "all" ? "active" : ""}`}
+                    onClick={() => setMyEventsTab("all")}
+                  >
+                    All
                   </button>
-                  <button type="button" className="tab-button">
+                  <button
+                    type="button"
+                    className={`tab-button ${myEventsTab === "pending" ? "active" : ""}`}
+                    onClick={() => setMyEventsTab("pending")}
+                  >
+                    Pending
+                  </button>
+                  <button
+                    type="button"
+                    className={`tab-button ${myEventsTab === "upcoming" ? "active" : ""}`}
+                    onClick={() => setMyEventsTab("upcoming")}
+                  >
                     Upcoming
                   </button>
-                  <button type="button" className="tab-button">
-                    In Progress
+                  <button
+                    type="button"
+                    className={`tab-button ${myEventsTab === "ongoing" ? "active" : ""}`}
+                    onClick={() => setMyEventsTab("ongoing")}
+                  >
+                    Ongoing
+                  </button>
+                  <button
+                    type="button"
+                    className={`tab-button ${myEventsTab === "completed" ? "active" : ""}`}
+                    onClick={() => setMyEventsTab("completed")}
+                  >
+                    Completed
+                  </button>
+                  <button
+                    type="button"
+                    className={`tab-button ${myEventsTab === "closed" ? "active" : ""}`}
+                    onClick={() => setMyEventsTab("closed")}
+                  >
+                    Closed
                   </button>
                 </div>
+                )}
               </div>
               <div className="events-table">
-                <div className="events-table-row header">
+                <div className={`events-table-row header ${isReportsTab ? "reports" : ""}`}>
                   <span>Events</span>
-                  <span>Date</span>
-                  <span>Time</span>
+                  {isReportsTab ? null : <span>Date</span>}
+                  {isReportsTab ? null : <span>Time</span>}
                   <span>Status</span>
                   <span>Action</span>
                 </div>
@@ -1467,11 +2205,13 @@ export default function App() {
                 {eventsState.status === "error" ? (
                   <p className="table-message">{eventsState.error}</p>
                 ) : null}
-                {eventsState.status === "ready" && eventsState.items.length === 0 ? (
-                  <p className="table-message">No events yet. Create your first event.</p>
+                {eventsState.status === "ready" && filteredEvents.length === 0 ? (
+                  <p className="table-message">
+                    {isReportsTab ? "No closed events yet." : "No events yet. Create your first event."}
+                  </p>
                 ) : null}
                 {eventsState.status === "ready"
-                  ? eventsState.items.map((event) => {
+                  ? filteredEvents.map((event) => {
                       const statusValue = event.status || "";
                       const explicitStatus = statusValue ? formatStatusLabel(statusValue) : null;
                       const hasApprovalData =
@@ -1498,18 +2238,50 @@ export default function App() {
                         .replace(/\s+/g, "-");
                       const inviteSent = event.invite_status === "sent";
                       const canInvite =
-                        event.approval_status === "approved" &&
-                        event.marketing_status === "approved" &&
-                        event.it_status === "approved" &&
+                        ((!event.approval_status && !event.marketing_status && !event.it_status) ||
+                          (event.approval_status === "approved" &&
+                            event.marketing_status === "approved" &&
+                            event.it_status === "approved")) &&
                         !inviteSent;
                       const isApprovalItem = String(event.id || "").startsWith("approval-");
                       const canUploadReport = !isApprovalItem && statusValue === "completed";
+                      const canCloseEvent =
+                        !isApprovalItem && statusValue === "completed" && Boolean(event.report_file_id);
+                      if (isReportsTab) {
+                        return (
+                          <div key={event.id} className="events-table-row reports">
+                            <span>{event.name}</span>
+                            <span className={`status-pill ${statusClass}`}>{statusLabel}</span>
+                            <div className="event-actions">
+                              <button
+                                type="button"
+                                className="details-button invite"
+                                onClick={() => handleViewReport(event)}
+                              >
+                                View Report
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
                       return (
                         <div key={event.id} className="events-table-row">
                           <span>{event.name}</span>
                           <span>{event.start_date}</span>
                           <span>{event.start_time}</span>
-                          <span className={`status-pill ${statusClass}`}>{statusLabel}</span>
+                          <div className="status-cell">
+                            {canCloseEvent ? (
+                              <button
+                                type="button"
+                                className="details-button reject status-close"
+                                onClick={() => handleCloseEvent(event)}
+                              >
+                                Close
+                              </button>
+                            ) : (
+                              <span className={`status-pill ${statusClass}`}>{statusLabel}</span>
+                            )}
+                          </div>
                           <div className="event-actions">
                             <button type="button" className="details-button">
                               Details
@@ -1535,6 +2307,15 @@ export default function App() {
                                 onClick={() => handleReportOpen(event)}
                               >
                                 {event.report_file_id ? "Replace Report" : "Upload Report"}
+                              </button>
+                            ) : null}
+                            {event.report_file_id && event.status === "closed" ? (
+                              <button
+                                type="button"
+                                className="details-button invite"
+                                onClick={() => handleViewReport(event)}
+                              >
+                                View Report
                               </button>
                             ) : null}
                           </div>
@@ -1655,6 +2436,7 @@ export default function App() {
                 </div>
               </div>
             ) : null}
+
 
             {conflictState.open ? (
               <div className="conflict-overlay" role="dialog" aria-modal="true">
@@ -1792,6 +2574,9 @@ export default function App() {
                     ) : null}
 
                     <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleApprovalSkip}>
+                        Skip
+                      </button>
                       <button type="button" className="secondary-action" onClick={handleApprovalModalClose}>
                         Cancel
                       </button>
@@ -1991,6 +2776,9 @@ export default function App() {
                     ) : null}
 
                     <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleMarketingSkip}>
+                        Skip
+                      </button>
                       <button type="button" className="secondary-action" onClick={handleMarketingModalClose}>
                         Cancel
                       </button>
@@ -2095,6 +2883,9 @@ export default function App() {
                     ) : null}
 
                     <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleItSkip}>
+                        Skip
+                      </button>
                       <button type="button" className="secondary-action" onClick={handleItModalClose}>
                         Cancel
                       </button>
@@ -2142,6 +2933,62 @@ export default function App() {
                 </div>
               </div>
             ) : null}
+          </div>
+        );
+      }
+
+      if (isPublications) {
+        return (
+          <div className="primary-column">
+            <div className="events-actions">
+              <button type="button" className="primary-action" onClick={handlePublicationOpen}>
+                + New Publication
+              </button>
+            </div>
+            <div className="events-table-card">
+              <div className="table-header">
+                <h3>Publications</h3>
+              </div>
+              <div className="events-table">
+                <div className="events-table-row header reports">
+                  <span>Name</span>
+                  <span>Title</span>
+                  <span>Action</span>
+                </div>
+                {publicationsState.status === "loading" ? (
+                  <p className="table-message">Loading publications...</p>
+                ) : null}
+                {publicationsState.status === "error" ? (
+                  <p className="table-message">{publicationsState.error}</p>
+                ) : null}
+                {publicationsState.status === "ready" && publicationsState.items.length === 0 ? (
+                  <p className="table-message">No publications submitted yet.</p>
+                ) : null}
+                {publicationsState.status === "ready"
+                  ? publicationsState.items.map((item) => (
+                      <div key={item.id} className="events-table-row reports">
+                        <span>{item.name}</span>
+                        <span>{item.title}</span>
+                        <div className="event-actions">
+                          <button
+                            type="button"
+                            className="details-button invite"
+                            onClick={() => {
+                              if (item.web_view_link) {
+                                window.open(item.web_view_link, "_blank", "noopener,noreferrer");
+                              } else {
+                                setStatus({ type: "error", message: "Publication link unavailable." });
+                              }
+                            }}
+                          >
+                            View File
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  : null}
+              </div>
+            </div>
           </div>
         );
       }
@@ -2500,6 +3347,63 @@ export default function App() {
             </div>
           </div>
         ) : null}
+        {publicationModal.open ? (
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="modal-card">
+              <div className="modal-header">
+                <h3>New Publication</h3>
+                <button type="button" className="modal-close" onClick={handlePublicationClose}>
+                  &times;
+                </button>
+              </div>
+              <form className="event-form" onSubmit={submitPublication}>
+                <div className="form-grid">
+                  <label className="form-field">
+                    <span>Name</span>
+                    <input
+                      type="text"
+                      value={publicationForm.name}
+                      onChange={handlePublicationChange("name")}
+                      required
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Title</span>
+                    <input
+                      type="text"
+                      value={publicationForm.title}
+                      onChange={handlePublicationChange("title")}
+                      required
+                    />
+                  </label>
+                </div>
+                <label className="form-field">
+                  <span>File</span>
+                  <input type="file" onChange={handlePublicationChange("file")} required />
+                </label>
+                <label className="form-field">
+                  <span>Others</span>
+                  <textarea
+                    value={publicationForm.others}
+                    onChange={handlePublicationChange("others")}
+                    placeholder="Additional details"
+                  />
+                </label>
+                {publicationModal.status === "error" ? (
+                  <p className="form-error">{publicationModal.error}</p>
+                ) : null}
+                <div className="modal-actions">
+                  <button type="button" className="secondary-action" onClick={handlePublicationClose}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="primary-action" disabled={publicationModal.status === "loading"}>
+                    {publicationModal.status === "loading" ? "Submitting..." : "Submit"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        ) : null}
         <aside className="sidebar">
           <div className="brand">
             <div className="brand-icon">
@@ -2555,11 +3459,15 @@ export default function App() {
               <p className="dashboard-title">
                 {isMyEvents
                   ? "My Events"
-                  : isCalendar
-                    ? "Calendar View"
-                    : isApprovals
-                      ? "Approvals"
-                      : "Dashboard Overview"}
+                  : isReportsView
+                    ? "Event Reports"
+                    : isPublications
+                      ? "Publications"
+                      : isCalendar
+                        ? "Calendar View"
+                        : isApprovals
+                          ? "Approvals"
+                          : "Dashboard Overview"}
               </p>
             </div>
             <div className="search-bar">
@@ -2588,39 +3496,169 @@ export default function App() {
           <section className="dashboard-content">
             {renderPrimaryContent()}
 
-            <aside className="inbox-card">
-              <div className="inbox-header">
+            <aside className="chat-panel">
+              <div className="chat-header">
                 <div>
-                  <p className="inbox-title">Inbox</p>
-                  <p className="inbox-subtitle">Handle Questions</p>
+                  <p className="chat-title">Messages</p>
+                  <p className="chat-subtitle">Select a user to start chatting</p>
                 </div>
-                <button type="button" className="icon-button">
-                  <SimpleIcon path="M5 12a2 2 0 1 1 0 0Zm7 0a2 2 0 1 1 0 0Zm7 0a2 2 0 1 1 0 0Z" />
+                <button
+                  type="button"
+                  className="icon-button chat-refresh"
+                  onClick={() => loadChatUsers()}
+                  aria-label="Refresh users"
+                >
+                  <SimpleIcon path="M12 5a7 7 0 1 1-6.3 4H3l3-3 3 3H7.3A4.7 4.7 0 1 0 12 7v2l3-3-3-3v2Z" />
                 </button>
               </div>
-              <div className="inbox-list">
-                {inboxItems.map((item, index) => (
-                  <div key={`${item.name}-${index}`} className="inbox-item">
-                    <div className="inbox-avatar" />
-                    <div className="inbox-body">
-                      <p className="inbox-name">
-                        {item.name}
-                        <span>{item.time}</span>
-                      </p>
-                      <p className="inbox-message">{item.message}</p>
-                      <div className="inbox-actions">
-                        <button type="button" className="ghost-button">
-                          Archive
-                        </button>
-                        <button type="button" className="primary-button">
-                          Reply
-                        </button>
+              <div className="chat-users">
+                {chatUsers.map((chatUser) => {
+                  const name = chatUser.name || "Unknown";
+                  const avatarLabel = name.trim().charAt(0).toUpperCase() || "?";
+                  return (
+                    <button
+                      key={chatUser.id}
+                      type="button"
+                      className={`chat-user ${chatActiveUser?.id === chatUser.id ? "active" : ""}`}
+                      onClick={() => startConversation(chatUser)}
+                    >
+                      <span className="chat-avatar" aria-hidden="true">
+                        {avatarLabel}
+                        <span className={`chat-presence ${chatUser.online ? "online" : ""}`} />
+                      </span>
+                      <div className="chat-user-text">
+                        <p className="chat-user-name">
+                          {name}
+                          {chatUser.unread ? <span className="chat-unread">{chatUser.unread}</span> : null}
+                        </p>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    </button>
+                  );
+                })}
+                {chatUsers.length === 0 ? <p className="chat-note">No users found.</p> : null}
               </div>
             </aside>
+            {chatActiveUser ? (
+              <div className="chat-window" role="dialog" aria-label={`Chat with ${chatActiveUser.name}`}>
+                <div className="chat-window-header">
+                  <div>
+                    <p className="chat-thread-name">{chatActiveUser.name}</p>
+                    <p className="chat-thread-status">
+                      {chatActiveUser.online
+                        ? "Online"
+                        : chatActiveUser.last_seen
+                          ? `Last seen ${formatChatTime(chatActiveUser.last_seen)}`
+                          : "Last seen unknown"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="chat-window-close"
+                    onClick={() => {
+                      setChatActiveUser(null);
+                      setChatConversationId("");
+                      setChatMessages([]);
+                      setChatTypingUser(null);
+                    }}
+                    aria-label="Close chat window"
+                  >
+                    &times;
+                  </button>
+                </div>
+                <div className="chat-body" ref={chatListRef}>
+                  {chatHasMore && chatMessages.length ? (
+                    <button
+                      type="button"
+                      className="chat-load"
+                      onClick={() => loadConversationMessages(chatConversationId, chatMessages[0]?.created_at)}
+                      disabled={chatLoadingMore}
+                    >
+                      {chatLoadingMore ? "Loading..." : "Load earlier"}
+                    </button>
+                  ) : null}
+                  {chatStatus.status === "loading" ? <p className="chat-note">Loading chat...</p> : null}
+                  {chatStatus.status === "error" ? <p className="chat-note">{chatStatus.error}</p> : null}
+                  {chatMessages.map((message) => {
+                    const isOwn = message.sender_id === user.id;
+                    const isRead = chatActiveUser && message.read_by.includes(chatActiveUser.id);
+                    return (
+                      <div key={message.id} className={`chat-message ${isOwn ? "own" : ""}`}>
+                        <div className="chat-bubble">
+                          <div className="chat-meta">
+                            <span className="chat-author">{message.sender_name}</span>
+                            <span>{formatChatTime(message.created_at)}</span>
+                          </div>
+                          {message.content ? <p className="chat-text">{message.content}</p> : null}
+                          {message.attachments?.length ? (
+                            <div className="chat-attachments">
+                              {message.attachments.map((attachment) => {
+                                const url = resolveAttachmentUrl(attachment.url);
+                                const isImage = attachment.content_type?.startsWith("image/");
+                                return (
+                                  <div key={`${message.id}-${attachment.url}`} className="chat-attachment">
+                                    {isImage ? (
+                                      <img src={url} alt={attachment.name} />
+                                    ) : (
+                                      <a href={url} target="_blank" rel="noreferrer">
+                                        {attachment.name}
+                                      </a>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                          {isOwn ? (
+                            <div className="chat-read">{isRead ? "✓✓" : "✓"}</div>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {typingName ? <div className="chat-typing">{typingName} typing...</div> : null}
+                <div className="chat-composer compact">
+                  {chatFiles.length ? (
+                    <div className="chat-files">
+                      {chatFiles.map((file, index) => (
+                        <div key={`${file.name}-${index}`} className="chat-file">
+                          <span>{file.name}</span>
+                          <button
+                            type="button"
+                            className="chat-file-remove"
+                            onClick={() => removeChatFile(index)}
+                            aria-label={`Remove ${file.name}`}
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="chat-input-row">
+                    <label className="chat-attach">
+                      <input type="file" multiple onChange={handleChatFiles} disabled={!chatActiveUser} />
+                      <span>+</span>
+                    </label>
+                    <textarea
+                      value={chatInput}
+                      onChange={handleChatInputChange}
+                      placeholder="Type a message..."
+                      rows={2}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" && !event.shiftKey) {
+                          event.preventDefault();
+                          sendChatMessage();
+                        }
+                      }}
+                    />
+                    <button type="button" className="chat-send" onClick={sendChatMessage}>
+                      Send
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </section>
         </main>
       </div>

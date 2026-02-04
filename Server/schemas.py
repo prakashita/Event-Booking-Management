@@ -166,6 +166,10 @@ class EventCreateResponse(BaseModel):
     approval_request: Optional[ApprovalRequestResponse] = None
 
 
+class EventStatusUpdate(BaseModel):
+    status: str
+
+
 class InviteCreate(BaseModel):
     event_id: str
     to_email: str
@@ -182,4 +186,68 @@ class InviteResponse(BaseModel):
     body: str
     status: str
     sent_at: datetime
+    created_at: datetime
+
+
+class ChatAttachment(BaseModel):
+    name: str
+    url: str
+    content_type: str
+    size: int
+
+
+class ChatMessageCreate(BaseModel):
+    conversation_id: str
+    content: Optional[str] = Field(default=None, max_length=4000)
+    attachments: list[ChatAttachment] = Field(default_factory=list)
+
+
+class ChatMessageResponse(BaseModel):
+    id: str
+    conversation_id: str
+    sender_id: str
+    sender_name: str
+    sender_email: str
+    content: Optional[str] = None
+    attachments: list[ChatAttachment]
+    read_by: list[str]
+    created_at: datetime
+
+
+class ChatReadReceipt(BaseModel):
+    message_ids: list[str] = Field(default_factory=list)
+
+
+class ChatUserResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    online: bool
+    last_seen: Optional[datetime] = None
+
+
+class ChatConversationCreate(BaseModel):
+    user_id: str
+
+
+class ChatConversationResponse(BaseModel):
+    id: str
+    participants: list[str]
+    updated_at: datetime
+
+
+class ChatUploadResponse(BaseModel):
+    attachment: ChatAttachment
+
+
+class PublicationResponse(BaseModel):
+    id: str
+    name: str
+    title: str
+    others: Optional[str] = None
+    file_id: str
+    file_name: str
+    web_view_link: Optional[str] = None
+    uploaded_at: datetime
     created_at: datetime

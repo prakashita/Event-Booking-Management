@@ -9,7 +9,7 @@ from drive import upload_report_file
 from event_status import compute_event_status, sync_event_status
 from models import ApprovalRequest, Event, User
 from routers.deps import get_current_user
-from schemas import ApprovalRequestResponse, EventCreate, EventCreateResponse, EventResponse
+from schemas import ApprovalRequestResponse, EventCreate, EventCreateResponse, EventResponse, EventStatusUpdate
 
 router = APIRouter(prefix="/events", tags=["Events"])
 
@@ -256,6 +256,56 @@ async def upload_event_report(
     event.report_uploaded_at = datetime.utcnow()
     await event.save()
 
+    return EventResponse(
+        id=str(event.id),
+        name=event.name,
+        facilitator=event.facilitator,
+        description=event.description,
+        venue_name=event.venue_name,
+        start_date=event.start_date,
+        start_time=event.start_time,
+        end_date=event.end_date,
+        end_time=event.end_time,
+        created_by=event.created_by,
+        status=event.status,
+        google_event_id=event.google_event_id,
+        google_event_link=event.google_event_link,
+        report_file_id=event.report_file_id,
+        report_file_name=event.report_file_name,
+        report_web_view_link=event.report_web_view_link,
+        report_uploaded_at=event.report_uploaded_at,
+        created_at=event.created_at,
+    )
+
+
+@router.patch("/{event_id}/status", response_model=EventResponse)
+async def update_event_status(
+    event_id: str,
+    payload: EventStatusUpdate,
+    user: User = Depends(get_current_user),
+):
+    event = await Event.get(event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    if event.created_by != str(user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+
+    normalized_status = (payload.status or "").strip().lower()
+    if normalized_status != "closed":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+    if event.status != "completed":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Event must be completed before closing",
+        )
+    if not event.report_file_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Upload a report before closing",
+        )
+
+    event.status = "closed"
+    await event.save()
     return EventResponse(
         id=str(event.id),
         name=event.name,

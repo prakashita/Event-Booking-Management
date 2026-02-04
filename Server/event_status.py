@@ -20,6 +20,8 @@ def compute_event_status(start_dt: datetime, end_dt: datetime, now: datetime | N
 
 
 async def sync_event_status(event: Event, now: datetime | None = None) -> str:
+    if event.status == "closed":
+        return event.status
     try:
         start_dt = combine_datetime(event.start_date, event.start_time)
         end_dt = combine_datetime(event.end_date, event.end_time)
@@ -37,6 +39,8 @@ async def update_event_statuses() -> int:
     events = await Event.find_all().to_list()
     updates = 0
     for event in events:
+        if event.status == "closed":
+            continue
         try:
             start_dt = combine_datetime(event.start_date, event.start_time)
             end_dt = combine_datetime(event.end_date, event.end_time)

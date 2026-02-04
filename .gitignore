@@ -13,6 +13,7 @@ pip-wheel-metadata/
 
 # Python virtualenv in Server
 Server/venv/
+Server/uploads/
 
 # Node
 node_modules/

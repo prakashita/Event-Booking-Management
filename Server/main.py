@@ -1,11 +1,12 @@
 import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from database import init_db, close_db
 from event_status import update_event_statuses
-from routers import approvals, auth, calendar, events, invites, it, marketing, venues
+from routers import approvals, auth, calendar, chat, events, invites, it, marketing, publications, venues
 from dotenv import load_dotenv
 
 # Load environment variables from Server/.env explicitly
@@ -29,6 +30,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+uploads_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "uploads"))
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -51,6 +56,8 @@ app.include_router(approvals.router)
 app.include_router(marketing.router)
 app.include_router(it.router)
 app.include_router(invites.router)
+app.include_router(chat.router)
+app.include_router(publications.router)
 
 @app.get("/")
 def home():

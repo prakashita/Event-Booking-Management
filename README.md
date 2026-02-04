@@ -7,11 +7,15 @@ and route marketing/IT support requests, with optional Google Calendar sync.
 ## Features
 - Google Sign-In with domain allowlist and JWT sessions
 - Event scheduling with conflict detection + override
+- Automatic event status updates (upcoming/ongoing/completed/closed)
 - Approval workflow with inbox/decision endpoints
 - Marketing + IT request pipelines with decision tracking
 - Venue management + seeding
   - Google OAuth connect for Calendar + Gmail send + Drive uploads
 - Invite sending (Gmail API) with sent status tracking
+- Event report uploads to Google Drive (PDF only)
+- Publications upload + listing (Google Drive folder)
+- In-app chat with presence, typing indicators, read receipts, and attachments
 - Single-page dashboard UI (React + FullCalendar)
 
 ## Tech Stack
@@ -35,6 +39,8 @@ Server/   # FastAPI backend
 - `events`
   - `name`, `facilitator`, `description`
   - `venue_name`, `start_date`, `start_time`, `end_date`, `end_time`
+  - `status` (upcoming/ongoing/completed/closed)
+  - report metadata: `report_file_id`, `report_file_name`, `report_web_view_link`, `report_uploaded_at`
   - `created_by` (user id), `created_at`
 - `approval_requests`
   - `requester_id` (user id), `requester_email`
@@ -55,6 +61,15 @@ Server/   # FastAPI backend
   - `event_id`, `created_by` (user id)
   - `to_email`, `subject`, `body`
   - `status`, `sent_at`, `created_at`
+- `publications`
+  - `name`, `title`, `others`
+  - `file_id`, `file_name`, `web_view_link`
+  - `created_by`, `created_at`, `uploaded_at`
+- `chat_conversations`
+  - `participants`, `created_at`, `updated_at`
+- `chat_messages`
+  - `conversation_id`, `sender_id`, `sender_name`, `sender_email`
+  - `content`, `attachments`, `read_by`, `created_at`
 
 Notes:
 - `created_by`, `requester_id`, and `event_id` are stored as string ids.
@@ -69,6 +84,9 @@ Notes:
   - Client checks conflicts via `POST /events/conflicts`
   - If no conflicts, creates event via `POST /events`
   - If conflicts, user can reschedule or override
+- Event closure:
+  - When a completed event has a report uploaded, user can close it
+  - `PATCH /events/{event_id}/status` sets status to `closed`
 - Approval workflow:
   - Client submits event with `submit_for_approval` -> `POST /events`
   - Server creates `approval_requests` entry (status `pending`)
@@ -83,7 +101,15 @@ Notes:
   - OAuth scope includes Calendar create, Gmail send, and Drive file upload
   - Callback stores refresh/access tokens on the user
   - Client fetches `GET /calendar/events` for the calendar view
-  - Client sends invites via `POST /invites`
+- Client sends invites via `POST /invites`
+- Publications:
+  - Client uploads via `POST /publications` (Google Drive)
+  - Client lists via `GET /publications`
+- Chat:
+  - Users list via `GET /chat/users`
+  - Conversations via `POST /chat/conversations`
+  - Messages via `GET /chat/conversations/{id}/messages` and `POST /chat/messages`
+  - WebSocket: `/chat/ws`
 
 ## API Overview
 Auth
@@ -98,6 +124,7 @@ Events
 - `GET /events`
 - `POST /events`
 - `POST /events/conflicts`
+- `PATCH /events/{event_id}/status`
 
 Approvals
 - `GET /approvals/me`
@@ -123,6 +150,19 @@ Invites
 - `POST /invites`
 - `GET /invites/me`
 
+Publications
+- `POST /publications`
+- `GET /publications`
+
+Chat
+- `GET /chat/users`
+- `POST /chat/conversations`
+- `GET /chat/conversations/{conversation_id}/messages`
+- `POST /chat/messages`
+- `POST /chat/upload`
+- `POST /chat/read`
+- `WS /chat/ws`
+
 ## Prerequisites
 - Node.js 18+
 - Python 3.10+
@@ -141,6 +181,9 @@ SECRET_KEY=replace_me
 GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:8000/calendar/oauth/callback
+PUBLICATIONS_DRIVE_FOLDER_ID=1Ad_30BIMiZSLxzyVvcCXcSi9zEMmPSw0
+GOOGLE_DRIVE_FOLDER_ID=your_event_reports_folder_id
+DEFAULT_TIMEZONE=UTC
 ```
 
 Client (`Client/.env`):
@@ -156,6 +199,7 @@ Notes:
 - CORS origins are configured in `Server/main.py`.
 - Reconnect Google OAuth after adding Calendar/Gmail/Drive scopes (new refresh token required).
 - Enable Gmail API in Google Cloud Console for your project.
+- Publications and report uploads require Google OAuth with Drive scope.
 
 ## Run Locally
 
