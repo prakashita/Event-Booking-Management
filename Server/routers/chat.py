@@ -33,7 +33,11 @@ def resolve_uploads_dir() -> str:
 
 
 UPLOADS_DIR = resolve_uploads_dir()
-os.makedirs(UPLOADS_DIR, exist_ok=True)
+try:
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
+except OSError:
+    UPLOADS_DIR = "/tmp/uploads"
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
 def serialize_message(message: ChatMessage) -> ChatMessageResponse:

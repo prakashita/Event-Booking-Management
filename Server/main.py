@@ -42,6 +42,11 @@ def resolve_uploads_dir() -> str:
 uploads_dir = resolve_uploads_dir()
 try:
     os.makedirs(uploads_dir, exist_ok=True)
+except OSError:
+    uploads_dir = "/tmp/uploads"
+    os.makedirs(uploads_dir, exist_ok=True)
+
+try:
     app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 except OSError:
     # On read-only filesystems, skip mounting uploads.
