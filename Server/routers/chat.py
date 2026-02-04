@@ -23,7 +23,16 @@ from schemas import (
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-UPLOADS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads"))
+def resolve_uploads_dir() -> str:
+    env_dir = os.getenv("UPLOADS_DIR")
+    if env_dir:
+        return os.path.abspath(env_dir)
+    if os.getenv("VERCEL") == "1":
+        return "/tmp/uploads"
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads"))
+
+
+UPLOADS_DIR = resolve_uploads_dir()
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 

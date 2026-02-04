@@ -30,9 +30,22 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-uploads_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "uploads"))
-os.makedirs(uploads_dir, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+def resolve_uploads_dir() -> str:
+    env_dir = os.getenv("UPLOADS_DIR")
+    if env_dir:
+        return os.path.abspath(env_dir)
+    if os.getenv("VERCEL") == "1":
+        return "/tmp/uploads"
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "uploads"))
+
+
+uploads_dir = resolve_uploads_dir()
+try:
+    os.makedirs(uploads_dir, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+except OSError:
+    # On read-only filesystems, skip mounting uploads.
+    pass
 
 app.add_middleware(
     CORSMiddleware,
