@@ -8,6 +8,7 @@ import requests
 
 from auth import ensure_google_access_token
 from models import ApprovalRequest, Event, ItRequest, MarketingRequest, User
+from event_status import compute_event_status
 from routers.deps import get_current_user
 from schemas import ApprovalDecision, ApprovalRequestResponse
 
@@ -107,6 +108,23 @@ async def decide_request(
     if approval.status == "pending":
         if normalized_status == "approved":
             if not approval.event_id:
+                # Check for conflicts before creating the event
+                start_dt = datetime.fromisoformat(f"{approval.start_date}T{approval.start_time}")
+                end_dt = datetime.fromisoformat(f"{approval.end_date}T{approval.end_time}")
+                if end_dt < start_dt:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="End datetime must be after start datetime",
+                    )
+                existing_events = await Event.find_all().to_list()
+                for existing in existing_events:
+                    existing_start = datetime.fromisoformat(f"{existing.start_date}T{existing.start_time}")
+                    existing_end = datetime.fromisoformat(f"{existing.end_date}T{existing.end_time}")
+                    if start_dt < existing_end and end_dt > existing_start and existing.venue_name == approval.venue_name:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="Schedule conflict detected for the venue",
+                        )
                 event = Event(
                     name=approval.event_name,
                     facilitator=approval.facilitator,
@@ -117,6 +135,7 @@ async def decide_request(
                     end_date=approval.end_date,
                     end_time=approval.end_time,
                     created_by=approval.requester_id,
+                    status=compute_event_status(start_dt, end_dt),
                 )
                 await event.insert()
                 approval.event_id = str(event.id)

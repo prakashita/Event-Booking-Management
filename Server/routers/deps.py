@@ -22,3 +22,12 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
+
+async def require_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> User:
+    user = await get_current_user(credentials)
+    if (user.role or '').strip().lower() != 'admin':
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Admin access required')
+    return user
+

@@ -21,6 +21,17 @@ GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/ca
 GOOGLE_OAUTH_SCOPE = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.file"
 REQUIRED_GOOGLE_SCOPES = GOOGLE_OAUTH_SCOPE.split()
 
+ADMIN_EMAILS = [
+    email.strip().lower()
+    for email in os.getenv("ADMIN_EMAILS", "").split(",")
+    if email.strip()
+]
+
+
+def is_admin_email(email: str) -> bool:
+    return (email or "").strip().lower() in ADMIN_EMAILS
+
+
 
 
 def verify_google_token(token: str):

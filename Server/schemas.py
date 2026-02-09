@@ -4,6 +4,19 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class UserAdminResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    created_at: datetime
+    last_seen: Optional[datetime] = None
+
+
+class UserRoleUpdate(BaseModel):
+    role: str
+
+
 class VenueCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
 

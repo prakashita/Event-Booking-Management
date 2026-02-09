@@ -16,7 +16,8 @@ const menuItems = [
   { id: "event-reports", label: "Event Reports" },
   { id: "calendar", label: "Calendar View" },
   { id: "approvals", label: "Approvals" },
-  { id: "publications", label: "Publications" }
+  { id: "publications", label: "Publications" },
+  { id: "admin", label: "Admin Console" }
 ];
 
 const preferenceItems = [
@@ -209,6 +210,7 @@ export default function App() {
     eventName: "",
     hasReport: false
   });
+  const [eventDetailsModal, setEventDetailsModal] = useState({ open: false, event: null });
   const [publicationModal, setPublicationModal] = useState({
     open: false,
     status: "idle",
@@ -231,6 +233,18 @@ export default function App() {
     items: [],
     error: ""
   });
+
+  const [adminTab, setAdminTab] = useState("users");
+  const [adminOverview, setAdminOverview] = useState({ status: "idle", data: null, error: "" });
+  const [adminUsersState, setAdminUsersState] = useState({ status: "idle", items: [], error: "" });
+  const [adminVenuesState, setAdminVenuesState] = useState({ status: "idle", items: [], error: "" });
+  const [adminEventsState, setAdminEventsState] = useState({ status: "idle", items: [], error: "" });
+  const [adminApprovalsState, setAdminApprovalsState] = useState({ status: "idle", items: [], error: "" });
+  const [adminMarketingState, setAdminMarketingState] = useState({ status: "idle", items: [], error: "" });
+  const [adminItState, setAdminItState] = useState({ status: "idle", items: [], error: "" });
+  const [adminInvitesState, setAdminInvitesState] = useState({ status: "idle", items: [], error: "" });
+  const [adminPublicationsState, setAdminPublicationsState] = useState({ status: "idle", items: [], error: "" });
+  const [adminVenueName, setAdminVenueName] = useState("");
   const [googleScopeModal, setGoogleScopeModal] = useState({
     open: false,
     missing: []
@@ -252,6 +266,7 @@ export default function App() {
   const chatActiveConversationRef = useRef("");
   const chatActiveUserRef = useRef(null);
   const loadConversationMessagesRef = useRef(null);
+  const loadEventsRef = useRef(null);
   const [user, setUser] = useState(() => {
     const storedToken = localStorage.getItem("auth_token");
     const stored = localStorage.getItem("auth_user");
@@ -265,6 +280,8 @@ export default function App() {
       return null;
     }
   });
+  const isAdmin = (user?.role || "").toLowerCase() === "admin";
+
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
   const googleClientId =
     import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -328,6 +345,457 @@ export default function App() {
       });
     }
   }, [apiBaseUrl, apiFetch]);
+
+  const loadAdminOverview = useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setAdminOverview({ status: "loading", data: null, error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/admin/overview`);
+      if (!res.ok) {
+        throw new Error("Unable to load admin overview.");
+      }
+      const data = await res.json();
+      setAdminOverview({ status: "ready", data, error: "" });
+    } catch (err) {
+      setAdminOverview({
+        status: "error",
+        data: null,
+        error: err?.message || "Unable to load admin overview."
+      });
+    }
+  }, [apiBaseUrl, apiFetch, isAdmin]);
+
+  const loadAdminUsers = useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setAdminUsersState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/users`);
+      if (!res.ok) {
+        throw new Error("Unable to load users.");
+      }
+      const data = await res.json();
+      setAdminUsersState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setAdminUsersState({ status: "error", items: [], error: err?.message || "Unable to load users." });
+    }
+  }, [apiBaseUrl, apiFetch, isAdmin]);
+
+  const loadAdminVenues = useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setAdminVenuesState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/admin/venues`);
+      if (!res.ok) {
+        throw new Error("Unable to load venues.");
+      }
+      const data = await res.json();
+      setAdminVenuesState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setAdminVenuesState({ status: "error", items: [], error: err?.message || "Unable to load venues." });
+    }
+  }, [apiBaseUrl, apiFetch, isAdmin]);
+
+  const loadAdminEvents = useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setAdminEventsState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/admin/events`);
+      if (!res.ok) {
+        throw new Error("Unable to load events.");
+      }
+      const data = await res.json();
+      setAdminEventsState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setAdminEventsState({ status: "error", items: [], error: err?.message || "Unable to load events." });
+    }
+  }, [apiBaseUrl, apiFetch, isAdmin]);
+
+  const loadAdminApprovals = useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setAdminApprovalsState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/admin/approvals`);
+      if (!res.ok) {
+        throw new Error("Unable to load approvals.");
+      }
+      const data = await res.json();
+      setAdminApprovalsState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setAdminApprovalsState({ status: "error", items: [], error: err?.message || "Unable to load approvals." });
+    }
+  }, [apiBaseUrl, apiFetch, isAdmin]);
+
+  const loadAdminMarketing = useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setAdminMarketingState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/admin/marketing`);
+      if (!res.ok) {
+        throw new Error("Unable to load marketing requests.");
+      }
+      const data = await res.json();
+      setAdminMarketingState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setAdminMarketingState({ status: "error", items: [], error: err?.message || "Unable to load marketing requests." });
+    }
+  }, [apiBaseUrl, apiFetch, isAdmin]);
+
+  const loadAdminIt = useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setAdminItState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/admin/it`);
+      if (!res.ok) {
+        throw new Error("Unable to load IT requests.");
+      }
+      const data = await res.json();
+      setAdminItState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setAdminItState({ status: "error", items: [], error: err?.message || "Unable to load IT requests." });
+    }
+  }, [apiBaseUrl, apiFetch, isAdmin]);
+
+  const loadAdminInvites = useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setAdminInvitesState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/admin/invites`);
+      if (!res.ok) {
+        throw new Error("Unable to load invites.");
+      }
+      const data = await res.json();
+      setAdminInvitesState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setAdminInvitesState({ status: "error", items: [], error: err?.message || "Unable to load invites." });
+    }
+  }, [apiBaseUrl, apiFetch, isAdmin]);
+
+  const loadAdminPublications = useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setAdminPublicationsState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/admin/publications`);
+      if (!res.ok) {
+        throw new Error("Unable to load publications.");
+      }
+      const data = await res.json();
+      setAdminPublicationsState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setAdminPublicationsState({ status: "error", items: [], error: err?.message || "Unable to load publications." });
+    }
+  }, [apiBaseUrl, apiFetch, isAdmin]);
+
+
+  const handleAdminRoleChange = useCallback(
+    async (targetUserId, role) => {
+      if (!isAdmin) {
+        return;
+      }
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/users/${targetUserId}/role`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role })
+        });
+        if (!res.ok) {
+          throw new Error("Unable to update role.");
+        }
+        const updated = await res.json();
+        setAdminUsersState((prev) => ({
+          ...prev,
+          items: prev.items.map((item) => (item.id === updated.id ? updated : item))
+        }));
+        if (user?.id === updated.id) {
+          const nextUser = { ...user, role: updated.role };
+          setUser(nextUser);
+          localStorage.setItem("auth_user", JSON.stringify(nextUser));
+        }
+      } catch (err) {
+        setAdminUsersState((prev) => ({
+          ...prev,
+          error: err?.message || "Unable to update role."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, isAdmin, user]
+  );
+
+  const handleAdminDeleteUser = useCallback(
+    async (targetUserId) => {
+      if (!isAdmin) {
+        return;
+      }
+      if (!window.confirm("Delete this user? This cannot be undone.")) {
+        return;
+      }
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/users/${targetUserId}`, { method: "DELETE" });
+        if (!res.ok) {
+          throw new Error("Unable to delete user.");
+        }
+        setAdminUsersState((prev) => ({
+          ...prev,
+          items: prev.items.filter((item) => item.id !== targetUserId)
+        }));
+      } catch (err) {
+        setAdminUsersState((prev) => ({
+          ...prev,
+          error: err?.message || "Unable to delete user."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, isAdmin]
+  );
+
+  const handleAdminCreateVenue = useCallback(
+    async (name) => {
+      if (!isAdmin) {
+        return;
+      }
+      const trimmed = (name || "").trim();
+      if (!trimmed) {
+        setAdminVenuesState((prev) => ({
+          ...prev,
+          error: "Venue name is required."
+        }));
+        return;
+      }
+      setAdminVenuesState((prev) => ({ ...prev, status: "loading", error: "" }));
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/venues`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: trimmed })
+        });
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          throw new Error(payload.detail || "Unable to add venue.");
+        }
+        const created = await res.json();
+        setAdminVenuesState((prev) => ({
+          status: "ready",
+          items: [created, ...prev.items],
+          error: ""
+        }));
+        setAdminVenueName("");
+      } catch (err) {
+        setAdminVenuesState((prev) => ({
+          ...prev,
+          status: "error",
+          error: err?.message || "Unable to add venue."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, isAdmin]
+  );
+
+  const handleAdminDeleteVenue = useCallback(
+    async (venueId) => {
+      if (!isAdmin) {
+        return;
+      }
+      if (!window.confirm("Delete this venue?")) {
+        return;
+      }
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/venues/${venueId}`, { method: "DELETE" });
+        if (!res.ok) {
+          throw new Error("Unable to delete venue.");
+        }
+        setAdminVenuesState((prev) => ({
+          ...prev,
+          items: prev.items.filter((item) => item.id !== venueId)
+        }));
+      } catch (err) {
+        setAdminVenuesState((prev) => ({
+          ...prev,
+          error: err?.message || "Unable to delete venue."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, isAdmin]
+  );
+
+  const handleAdminDeleteEvent = useCallback(
+    async (eventId) => {
+      if (!isAdmin) {
+        return;
+      }
+      if (!window.confirm("Delete this event?")) {
+        return;
+      }
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/admin/events/${eventId}`, { method: "DELETE" });
+        if (!res.ok) {
+          throw new Error("Unable to delete event.");
+        }
+        setAdminEventsState((prev) => ({
+          ...prev,
+          items: prev.items.filter((item) => item.id !== eventId)
+        }));
+        loadEventsRef.current?.();
+      } catch (err) {
+        setAdminEventsState((prev) => ({
+          ...prev,
+          error: err?.message || "Unable to delete event."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, isAdmin]
+  );
+
+  const handleAdminDeleteApproval = useCallback(
+    async (requestId) => {
+      if (!isAdmin) {
+        return;
+      }
+      if (!window.confirm("Delete this approval request?")) {
+        return;
+      }
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/admin/approvals/${requestId}`, { method: "DELETE" });
+        if (!res.ok) {
+          throw new Error("Unable to delete approval request.");
+        }
+        setAdminApprovalsState((prev) => ({
+          ...prev,
+          items: prev.items.filter((item) => item.id !== requestId)
+        }));
+      } catch (err) {
+        setAdminApprovalsState((prev) => ({
+          ...prev,
+          error: err?.message || "Unable to delete approval request."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, isAdmin]
+  );
+
+  const handleAdminDeleteMarketing = useCallback(
+    async (requestId) => {
+      if (!isAdmin) {
+        return;
+      }
+      if (!window.confirm("Delete this marketing request?")) {
+        return;
+      }
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/admin/marketing/${requestId}`, { method: "DELETE" });
+        if (!res.ok) {
+          throw new Error("Unable to delete marketing request.");
+        }
+        setAdminMarketingState((prev) => ({
+          ...prev,
+          items: prev.items.filter((item) => item.id !== requestId)
+        }));
+      } catch (err) {
+        setAdminMarketingState((prev) => ({
+          ...prev,
+          error: err?.message || "Unable to delete marketing request."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, isAdmin]
+  );
+
+  const handleAdminDeleteIt = useCallback(
+    async (requestId) => {
+      if (!isAdmin) {
+        return;
+      }
+      if (!window.confirm("Delete this IT request?")) {
+        return;
+      }
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/admin/it/${requestId}`, { method: "DELETE" });
+        if (!res.ok) {
+          throw new Error("Unable to delete IT request.");
+        }
+        setAdminItState((prev) => ({
+          ...prev,
+          items: prev.items.filter((item) => item.id !== requestId)
+        }));
+      } catch (err) {
+        setAdminItState((prev) => ({
+          ...prev,
+          error: err?.message || "Unable to delete IT request."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, isAdmin]
+  );
+
+  const handleAdminDeleteInvite = useCallback(
+    async (inviteId) => {
+      if (!isAdmin) {
+        return;
+      }
+      if (!window.confirm("Delete this invite?")) {
+        return;
+      }
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/admin/invites/${inviteId}`, { method: "DELETE" });
+        if (!res.ok) {
+          throw new Error("Unable to delete invite.");
+        }
+        setAdminInvitesState((prev) => ({
+          ...prev,
+          items: prev.items.filter((item) => item.id !== inviteId)
+        }));
+      } catch (err) {
+        setAdminInvitesState((prev) => ({
+          ...prev,
+          error: err?.message || "Unable to delete invite."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, isAdmin]
+  );
+
+  const handleAdminDeletePublication = useCallback(
+    async (publicationId) => {
+      if (!isAdmin) {
+        return;
+      }
+      if (!window.confirm("Delete this publication?")) {
+        return;
+      }
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/admin/publications/${publicationId}`, { method: "DELETE" });
+        if (!res.ok) {
+          throw new Error("Unable to delete publication.");
+        }
+        setAdminPublicationsState((prev) => ({
+          ...prev,
+          items: prev.items.filter((item) => item.id !== publicationId)
+        }));
+      } catch (err) {
+        setAdminPublicationsState((prev) => ({
+          ...prev,
+          error: err?.message || "Unable to delete publication."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, isAdmin]
+  );
 
   const formatChatTime = useCallback((value) => {
     if (!value) {
@@ -998,6 +1466,10 @@ export default function App() {
   }, [loadConversationMessages]);
 
   useEffect(() => {
+    loadEventsRef.current = loadEvents;
+  }, [loadEvents]);
+
+  useEffect(() => {
     if (!user) {
       if (chatWsRef.current) {
         chatWsRef.current.close();
@@ -1183,6 +1655,34 @@ export default function App() {
     user
   ]);
 
+  useEffect(() => {
+    if (!user || !isAdmin || activeView !== "admin") {
+      return;
+    }
+    loadAdminOverview();
+    loadAdminUsers();
+    loadAdminVenues();
+    loadAdminEvents();
+    loadAdminApprovals();
+    loadAdminMarketing();
+    loadAdminIt();
+    loadAdminInvites();
+    loadAdminPublications();
+  }, [
+    activeView,
+    isAdmin,
+    loadAdminApprovals,
+    loadAdminEvents,
+    loadAdminIt,
+    loadAdminMarketing,
+    loadAdminOverview,
+    loadAdminPublications,
+    loadAdminInvites,
+    loadAdminUsers,
+    loadAdminVenues,
+    user
+  ]);
+
   const handleLogout = () => {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
@@ -1335,6 +1835,14 @@ export default function App() {
       eventName: eventItem.name,
       hasReport: Boolean(eventItem.report_file_id)
     });
+  };
+
+  const handleEventDetailsOpen = (eventItem) => {
+    setEventDetailsModal({ open: true, event: eventItem });
+  };
+
+  const handleEventDetailsClose = () => {
+    setEventDetailsModal({ open: false, event: null });
   };
 
   const handleReportClose = () => {
@@ -1980,6 +2488,8 @@ export default function App() {
     const isCalendar = activeView === "calendar";
     const isApprovals = activeView === "approvals";
     const isPublications = activeView === "publications";
+    const isAdminView = activeView === "admin";
+    const visibleMenuItems = isAdmin ? menuItems : menuItems.filter((item) => item.id !== "admin");
     const typingName = chatTypingUser?.name || "";
 
     const handleApprovalDecision = async (requestId, decision) => {
@@ -2076,6 +2586,441 @@ export default function App() {
     };
 
     const renderPrimaryContent = () => {
+      if (isAdminView) {
+        if (!isAdmin) {
+          return (
+            <div className="admin-empty">
+              <p>Admin access required.</p>
+            </div>
+          );
+        }
+
+        const overview = adminOverview.data || {};
+        return (
+          <div className="primary-column admin-console">
+            <div className="admin-hero">
+              <div>
+                <p className="admin-eyebrow">System Control</p>
+                <h2>Administration Center</h2>
+                <p className="admin-note">
+                  Manage users, venues, and requests across the entire platform.
+                </p>
+              </div>
+              <div className="admin-overview">
+                <div className="admin-card">
+                  <p>Users</p>
+                  <h3>{overview.users ?? "--"}</h3>
+                </div>
+                <div className="admin-card">
+                  <p>Venues</p>
+                  <h3>{overview.venues ?? "--"}</h3>
+                </div>
+                <div className="admin-card">
+                  <p>Events</p>
+                  <h3>{overview.events ?? "--"}</h3>
+                </div>
+                <div className="admin-card">
+                  <p>Approvals</p>
+                  <h3>{overview.approvals ?? "--"}</h3>
+                </div>
+              </div>
+              <button type="button" className="secondary-action" onClick={loadAdminOverview}>
+                Refresh Overview
+              </button>
+            </div>
+
+            <div className="admin-tabs">
+              <button
+                type="button"
+                className={`tab-button ${adminTab === "users" ? "active" : ""}`}
+                onClick={() => setAdminTab("users")}
+              >
+                Users
+              </button>
+              <button
+                type="button"
+                className={`tab-button ${adminTab === "venues" ? "active" : ""}`}
+                onClick={() => setAdminTab("venues")}
+              >
+                Venues
+              </button>
+              <button
+                type="button"
+                className={`tab-button ${adminTab === "events" ? "active" : ""}`}
+                onClick={() => setAdminTab("events")}
+              >
+                Events
+              </button>
+              <button
+                type="button"
+                className={`tab-button ${adminTab === "requests" ? "active" : ""}`}
+                onClick={() => setAdminTab("requests")}
+              >
+                Requests
+              </button>
+              <button
+                type="button"
+                className={`tab-button ${adminTab === "invites" ? "active" : ""}`}
+                onClick={() => setAdminTab("invites")}
+              >
+                Invites
+              </button>
+              <button
+                type="button"
+                className={`tab-button ${adminTab === "publications" ? "active" : ""}`}
+                onClick={() => setAdminTab("publications")}
+              >
+                Publications
+              </button>
+            </div>
+
+            {adminTab === "users" ? (
+              <div className="admin-panel">
+                <div className="admin-panel-header">
+                  <h3>User Management</h3>
+                  <button type="button" className="secondary-action" onClick={loadAdminUsers}>
+                    Refresh
+                  </button>
+                </div>
+                {adminUsersState.status === "loading" ? <p className="table-message">Loading users...</p> : null}
+                {adminUsersState.status === "error" ? (
+                  <p className="table-message">{adminUsersState.error}</p>
+                ) : null}
+                <div className="admin-table">
+                  <div className="admin-row header">
+                    <span>User</span>
+                    <span>Role</span>
+                    <span>Actions</span>
+                  </div>
+                  {adminUsersState.items.map((item) => {
+                    const initial = (item.name || item.email || "?").trim().charAt(0).toUpperCase();
+                    return (
+                      <div className="admin-row" key={item.id}>
+                        <div className="admin-cell">
+                          <div className="admin-user">
+                            <span className="admin-avatar" aria-hidden="true">{initial}</span>
+                            <div>
+                              <p className="admin-name">{item.name || "Unnamed"}</p>
+                              <p className="admin-email">{item.email}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="admin-cell">
+                          <select
+                            value={item.role || "faculty"}
+                            onChange={(event) => handleAdminRoleChange(item.id, event.target.value)}
+                          >
+                            <option value="admin">Admin</option>
+                            <option value="faculty">Faculty</option>
+                            <option value="approver">Approver</option>
+                            <option value="marketing">Marketing</option>
+                            <option value="it">IT</option>
+                          </select>
+                        </div>
+                        <div className="admin-cell">
+                          <button
+                            type="button"
+                            className="details-button reject"
+                            onClick={() => handleAdminDeleteUser(item.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {adminUsersState.items.length === 0 && adminUsersState.status === "ready" ? (
+                    <p className="table-message">No users found.</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {adminTab === "venues" ? (
+              <div className="admin-panel">
+                <div className="admin-panel-header">
+                  <h3>Venue Management</h3>
+                  <button type="button" className="secondary-action" onClick={loadAdminVenues}>
+                    Refresh
+                  </button>
+                </div>
+                <form
+                  className="admin-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    handleAdminCreateVenue(adminVenueName);
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Add a new venue"
+                    value={adminVenueName}
+                    onChange={(event) => setAdminVenueName(event.target.value)}
+                  />
+                  <button type="submit" className="primary-action">
+                    Add Venue
+                  </button>
+                </form>
+                {adminVenuesState.status === "loading" ? <p className="table-message">Loading venues...</p> : null}
+                {adminVenuesState.error ? <p className="table-message">{adminVenuesState.error}</p> : null}
+                <div className="admin-venue-list">
+                  {adminVenuesState.items.map((venue) => (
+                    <div key={venue.id} className="admin-venue-item">
+                      <span>{venue.name}</span>
+                      <button
+                        type="button"
+                        className="details-button reject"
+                        onClick={() => handleAdminDeleteVenue(venue.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                  {adminVenuesState.items.length === 0 && adminVenuesState.status === "ready" ? (
+                    <p className="table-message">No venues yet.</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {adminTab === "events" ? (
+              <div className="admin-panel">
+                <div className="admin-panel-header">
+                  <h3>All Events</h3>
+                  <button type="button" className="secondary-action" onClick={loadAdminEvents}>
+                    Refresh
+                  </button>
+                </div>
+                {adminEventsState.status === "loading" ? <p className="table-message">Loading events...</p> : null}
+                {adminEventsState.status === "error" ? (
+                  <p className="table-message">{adminEventsState.error}</p>
+                ) : null}
+                <div className="admin-table">
+                  <div className="admin-row header events">
+                    <span>Event</span>
+                    <span>Venue</span>
+                    <span>Status</span>
+                    <span>Action</span>
+                  </div>
+                  {adminEventsState.items.map((event) => {
+                    const { statusLabel, statusClass } = getEventStatusInfo(event);
+                    return (
+                      <div className="admin-row events" key={event.id}>
+                        <div className="admin-cell">
+                          <p className="admin-name">{event.name}</p>
+                          <p className="admin-email">
+                            {event.start_date} ? {event.start_time}
+                          </p>
+                        </div>
+                        <div className="admin-cell">{event.venue_name}</div>
+                        <div className="admin-cell">
+                          <span className={`status-pill ${statusClass}`}>{statusLabel}</span>
+                        </div>
+                        <div className="admin-cell">
+                          <button
+                            type="button"
+                            className="details-button reject"
+                            onClick={() => handleAdminDeleteEvent(event.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {adminEventsState.items.length === 0 && adminEventsState.status === "ready" ? (
+                    <p className="table-message">No events found.</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {adminTab === "invites" ? (
+              <div className="admin-panel">
+                <div className="admin-panel-header">
+                  <h3>Invites</h3>
+                  <button type="button" className="secondary-action" onClick={loadAdminInvites}>
+                    Refresh
+                  </button>
+                </div>
+                {adminInvitesState.status === "loading" ? <p className="table-message">Loading invites...</p> : null}
+                {adminInvitesState.status === "error" ? (
+                  <p className="table-message">{adminInvitesState.error}</p>
+                ) : null}
+                <div className="admin-table">
+                  <div className="admin-row header events">
+                    <span>To</span>
+                    <span>Subject</span>
+                    <span>Status</span>
+                    <span>Action</span>
+                  </div>
+                  {adminInvitesState.items.map((invite) => (
+                    <div className="admin-row events" key={invite.id}>
+                      <div className="admin-cell">
+                        <p className="admin-name">{invite.to_email}</p>
+                        <p className="admin-email">{invite.created_at?.slice(0, 10)}</p>
+                      </div>
+                      <div className="admin-cell">{invite.subject}</div>
+                      <div className="admin-cell">
+                        <span className={`status-pill ${invite.status}`}>{invite.status}</span>
+                      </div>
+                      <div className="admin-cell">
+                        <button
+                          type="button"
+                          className="details-button reject"
+                          onClick={() => handleAdminDeleteInvite(invite.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {adminInvitesState.items.length === 0 && adminInvitesState.status === "ready" ? (
+                    <p className="table-message">No invites found.</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {adminTab === "publications" ? (
+              <div className="admin-panel">
+                <div className="admin-panel-header">
+                  <h3>Publications</h3>
+                  <button type="button" className="secondary-action" onClick={loadAdminPublications}>
+                    Refresh
+                  </button>
+                </div>
+                {adminPublicationsState.status === "loading" ? (
+                  <p className="table-message">Loading publications...</p>
+                ) : null}
+                {adminPublicationsState.status === "error" ? (
+                  <p className="table-message">{adminPublicationsState.error}</p>
+                ) : null}
+                <div className="admin-table">
+                  <div className="admin-row header events">
+                    <span>Name</span>
+                    <span>Title</span>
+                    <span>Uploaded</span>
+                    <span>Action</span>
+                  </div>
+                  {adminPublicationsState.items.map((pub) => (
+                    <div className="admin-row events" key={pub.id}>
+                      <div className="admin-cell">
+                        <p className="admin-name">{pub.name}</p>
+                        <p className="admin-email">{pub.file_name}</p>
+                      </div>
+                      <div className="admin-cell">{pub.title}</div>
+                      <div className="admin-cell">{pub.uploaded_at?.slice(0, 10)}</div>
+                      <div className="admin-cell">
+                        <button
+                          type="button"
+                          className="details-button reject"
+                          onClick={() => handleAdminDeletePublication(pub.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {adminPublicationsState.items.length === 0 && adminPublicationsState.status === "ready" ? (
+                    <p className="table-message">No publications found.</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {adminTab === "requests" ? (
+              <div className="admin-panel">
+                <div className="admin-panel-header">
+                  <h3>Requests Overview</h3>
+                  <button type="button" className="secondary-action" onClick={() => {
+                    loadAdminApprovals();
+                    loadAdminMarketing();
+                    loadAdminIt();
+                  }}>
+                    Refresh
+                  </button>
+                </div>
+                <div className="admin-requests-grid">
+                  <div className="admin-request-block">
+                    <h4>Approvals</h4>
+                    {adminApprovalsState.status === "loading" ? (
+                      <p className="table-message">Loading approvals...</p>
+                    ) : null}
+                    {adminApprovalsState.items.slice(0, 6).map((item) => (
+                      <div key={item.id} className="admin-request-item">
+                        <div>
+                          <p className="admin-name">{item.event_name}</p>
+                          <p className="admin-email">{item.requester_email}</p>
+                        </div>
+                        <div className="admin-request-actions">
+                          <span className={`status-pill ${item.status}`}>{item.status}</span>
+                          <button
+                            type="button"
+                            className="details-button reject"
+                            onClick={() => handleAdminDeleteApproval(item.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="admin-request-block">
+                    <h4>Marketing</h4>
+                    {adminMarketingState.status === "loading" ? (
+                      <p className="table-message">Loading marketing...</p>
+                    ) : null}
+                    {adminMarketingState.items.slice(0, 6).map((item) => (
+                      <div key={item.id} className="admin-request-item">
+                        <div>
+                          <p className="admin-name">{item.event_name}</p>
+                          <p className="admin-email">{item.requester_email}</p>
+                        </div>
+                        <div className="admin-request-actions">
+                          <span className={`status-pill ${item.status}`}>{item.status}</span>
+                          <button
+                            type="button"
+                            className="details-button reject"
+                            onClick={() => handleAdminDeleteMarketing(item.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="admin-request-block">
+                    <h4>IT</h4>
+                    {adminItState.status === "loading" ? (
+                      <p className="table-message">Loading IT...</p>
+                    ) : null}
+                    {adminItState.items.slice(0, 6).map((item) => (
+                      <div key={item.id} className="admin-request-item">
+                        <div>
+                          <p className="admin-name">{item.event_name}</p>
+                          <p className="admin-email">{item.requester_email}</p>
+                        </div>
+                        <div className="admin-request-actions">
+                          <span className={`status-pill ${item.status}`}>{item.status}</span>
+                          <button
+                            type="button"
+                            className="details-button reject"
+                            onClick={() => handleAdminDeleteIt(item.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        );
+      }
+
       if (isMyEvents || isReportsView) {
         const isReportsTab = myEventsTab === "closed";
         const getNormalizedStatus = (event) => getNormalizedEventStatus(event);
@@ -2237,7 +3182,9 @@ export default function App() {
                         .toLowerCase()
                         .replace(/\s+/g, "-");
                       const inviteSent = event.invite_status === "sent";
+                      const isUpcomingEvent = getNormalizedEventStatus(event) === "upcoming";
                       const canInvite =
+                        isUpcomingEvent &&
                         ((!event.approval_status && !event.marketing_status && !event.it_status) ||
                           (event.approval_status === "approved" &&
                             event.marketing_status === "approved" &&
@@ -2283,7 +3230,7 @@ export default function App() {
                             )}
                           </div>
                           <div className="event-actions">
-                            <button type="button" className="details-button">
+                            <button type="button" className="details-button" onClick={() => handleEventDetailsOpen(event)}>
                               Details
                             </button>
                             {inviteSent ? (
@@ -3404,6 +4351,61 @@ export default function App() {
             </div>
           </div>
         ) : null}
+        {eventDetailsModal.open ? (
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="modal-card details-card">
+              <div className="modal-header">
+                <h3>Event Details</h3>
+                <button type="button" className="modal-close" onClick={handleEventDetailsClose}>
+                  &times;
+                </button>
+              </div>
+              {eventDetailsModal.event ? (
+                <div className="details-grid">
+                  <div>
+                    <p className="details-label">Event</p>
+                    <p className="details-value">{eventDetailsModal.event.name}</p>
+                  </div>
+                  <div>
+                    <p className="details-label">Facilitator</p>
+                    <p className="details-value">{eventDetailsModal.event.facilitator}</p>
+                  </div>
+                  <div>
+                    <p className="details-label">Venue</p>
+                    <p className="details-value">{eventDetailsModal.event.venue_name}</p>
+                  </div>
+                  <div>
+                    <p className="details-label">Status</p>
+                    <p className="details-value">{eventDetailsModal.event.status}</p>
+                  </div>
+                  <div>
+                    <p className="details-label">Start</p>
+                    <p className="details-value">
+                      {eventDetailsModal.event.start_date} ? {eventDetailsModal.event.start_time}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="details-label">End</p>
+                    <p className="details-value">
+                      {eventDetailsModal.event.end_date} ? {eventDetailsModal.event.end_time}
+                    </p>
+                  </div>
+                  <div className="details-wide">
+                    <p className="details-label">Description</p>
+                    <p className="details-value">{eventDetailsModal.event.description || "?"}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="table-message">Event details not available.</p>
+              )}
+              <div className="modal-actions">
+                <button type="button" className="secondary-action" onClick={handleEventDetailsClose}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <aside className="sidebar">
           <div className="brand">
             <div className="brand-icon">
@@ -3415,7 +4417,7 @@ export default function App() {
           <div className="menu-block">
             <p className="menu-title">Menu</p>
             <nav className="menu-list">
-              {menuItems.map((item, index) => (
+              {visibleMenuItems.map((item, index) => (
                 <button
                   key={item.id}
                   type="button"
@@ -3467,7 +4469,9 @@ export default function App() {
                         ? "Calendar View"
                         : isApprovals
                           ? "Approvals"
-                          : "Dashboard Overview"}
+                          : isAdminView
+                            ? "Admin Console"
+                            : "Dashboard Overview"}
               </p>
             </div>
             <div className="search-bar">

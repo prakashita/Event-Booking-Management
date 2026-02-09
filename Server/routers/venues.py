@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from models import Venue, User
-from routers.deps import get_current_user
+from models import Event, Venue, User
+from routers.deps import get_current_user, require_admin
 from schemas import VenueCreate, VenueResponse
 
 router = APIRouter(prefix="/venues", tags=["Venues"])
@@ -45,3 +45,18 @@ async def seed_venues(user: User = Depends(get_current_user)):
         inserted += 1
 
     return {"inserted": inserted, "total": len(DEFAULT_VENUES)}
+
+@router.delete("/{venue_id}")
+async def delete_venue(venue_id: str, admin: User = Depends(require_admin)):
+    venue = await Venue.get(venue_id)
+    if not venue:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Venue not found")
+    active_events = await Event.find(Event.venue_name == venue.name).limit(1).to_list()
+    if active_events:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Venue has events. Delete or move events before removing the venue.",
+        )
+    await venue.delete()
+    return {"status": "deleted", "id": venue_id}
+

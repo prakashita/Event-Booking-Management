@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from database import init_db, close_db
 from event_status import update_event_statuses
-from routers import approvals, auth, calendar, chat, events, invites, it, marketing, publications, venues
+from routers import admin, approvals, auth, calendar, chat, events, invites, it, marketing, publications, users, venues
 from dotenv import load_dotenv
 
 # Load environment variables from Server/.env explicitly
@@ -67,6 +67,8 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(admin.router)
 app.include_router(calendar.router)
 app.include_router(venues.router)
 app.include_router(events.router)

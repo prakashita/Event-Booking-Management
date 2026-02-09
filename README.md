@@ -181,6 +181,7 @@ SECRET_KEY=replace_me
 GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:8000/calendar/oauth/callback
+ADMIN_EMAILS=admin1@example.com,admin2@example.com
 PUBLICATIONS_DRIVE_FOLDER_ID=1Ad_30BIMiZSLxzyVvcCXcSi9zEMmPSw0
 GOOGLE_DRIVE_FOLDER_ID=your_event_reports_folder_id
 DEFAULT_TIMEZONE=UTC

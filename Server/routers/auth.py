@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from models import User
-from auth import REQUIRED_GOOGLE_SCOPES, ensure_google_access_token, verify_google_token, create_access_token
+from auth import REQUIRED_GOOGLE_SCOPES, ensure_google_access_token, verify_google_token, create_access_token, is_admin_email
 from routers.deps import get_current_user
 import requests
 
@@ -31,6 +31,10 @@ async def google_login(payload: TokenRequest):
             google_id=google_id
         )
         await user.insert()
+
+    if is_admin_email(email) and (user.role or "").strip().lower() != "admin":
+        user.role = "admin"
+        await user.save()
 
     jwt_token = create_access_token({"user_id": str(user.id)})
 

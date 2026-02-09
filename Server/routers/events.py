@@ -33,29 +33,29 @@ async def list_events(user: User = Depends(get_current_user)):
     events = await Event.find(Event.created_by == str(user.id)).sort("-created_at").to_list()
     for event in events:
         await sync_event_status(event)
-        return [
-        EventResponse(
-            id=str(event.id),
-            name=event.name,
-            facilitator=event.facilitator,
-            description=event.description,
-            venue_name=event.venue_name,
-            start_date=event.start_date,
-            start_time=event.start_time,
-            end_date=event.end_date,
-            end_time=event.end_time,
-            created_by=event.created_by,
-            status=event.status,
-            google_event_id=event.google_event_id,
-            google_event_link=event.google_event_link,
-            report_file_id=event.report_file_id,
-            report_file_name=event.report_file_name,
-            report_web_view_link=event.report_web_view_link,
-            report_uploaded_at=event.report_uploaded_at,
-            created_at=event.created_at,
-        )
-        for event in events
-    ]
+    return [
+    EventResponse(
+        id=str(event.id),
+        name=event.name,
+        facilitator=event.facilitator,
+        description=event.description,
+        venue_name=event.venue_name,
+        start_date=event.start_date,
+        start_time=event.start_time,
+        end_date=event.end_date,
+        end_time=event.end_time,
+        created_by=event.created_by,
+        status=event.status,
+        google_event_id=event.google_event_id,
+        google_event_link=event.google_event_link,
+        report_file_id=event.report_file_id,
+        report_file_name=event.report_file_name,
+        report_web_view_link=event.report_web_view_link,
+        report_uploaded_at=event.report_uploaded_at,
+        created_at=event.created_at,
+    )
+    for event in events
+]
 
 
 @router.post("/conflicts")
