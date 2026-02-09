@@ -139,6 +139,8 @@ const SimpleIcon = ({ path }) => (
 export default function App() {
   const googleButtonRef = useRef(null);
   const [status, setStatus] = useState({ type: "idle", message: "" });
+  const [searchInput, setSearchInput] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [activeView, setActiveView] = useState("dashboard");
   const [myEventsTab, setMyEventsTab] = useState("all");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -156,6 +158,10 @@ export default function App() {
     facilitator: "",
     venue_name: "",
     description: ""
+  });
+  const [eventTimeParts, setEventTimeParts] = useState({
+    start_time: { hour: "", minute: "", period: "AM" },
+    end_time: { hour: "", minute: "", period: "AM" }
   });
   const [eventFormStatus, setEventFormStatus] = useState({ status: "idle", error: "" });
   const [conflictState, setConflictState] = useState({ open: false, items: [] });
@@ -281,6 +287,7 @@ export default function App() {
     }
   });
   const isAdmin = (user?.role || "").toLowerCase() === "admin";
+  const defaultFacilitator = (user?.name || "").trim();
 
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
   const googleClientId =
@@ -805,8 +812,95 @@ export default function App() {
     if (Number.isNaN(date.getTime())) {
       return "";
     }
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return date
+      .toLocaleTimeString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
+      })
+      .toUpperCase();
   }, []);
+
+  const formatISTTime = useCallback((value) => {
+    if (!value) {
+      return "";
+    }
+    const raw = String(value).trim();
+    const timeMatch = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (timeMatch) {
+      const hours24 = Number(timeMatch[1]);
+      const minutes = timeMatch[2];
+      if (Number.isNaN(hours24) || hours24 > 23) {
+        return raw;
+      }
+      const period = hours24 >= 12 ? "PM" : "AM";
+      const hours12 = hours24 % 12 || 12;
+      return `${hours12}:${minutes} ${period}`;
+    }
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) {
+      return raw;
+    }
+    return parsed
+      .toLocaleTimeString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true
+      })
+      .toUpperCase();
+  }, []);
+
+  const parse24ToTimeParts = useCallback((value) => {
+    const raw = String(value || "").trim();
+    const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+    if (!match) {
+      return { hour: "", minute: "", period: "AM" };
+    }
+    const hours24 = Number(match[1]);
+    if (Number.isNaN(hours24) || hours24 > 23) {
+      return { hour: "", minute: "", period: "AM" };
+    }
+    const minute = match[2];
+    const period = hours24 >= 12 ? "PM" : "AM";
+    const hour12 = hours24 % 12 || 12;
+    return { hour: String(hour12), minute, period };
+  }, []);
+
+  const timePartsTo24 = useCallback((parts) => {
+    if (!parts?.hour || !parts?.minute || !parts?.period) {
+      return "";
+    }
+    const hour12 = Number(parts.hour);
+    if (Number.isNaN(hour12) || hour12 < 1 || hour12 > 12) {
+      return "";
+    }
+    const minute = String(parts.minute).padStart(2, "0");
+    if (!/^\d{2}$/.test(minute)) {
+      return "";
+    }
+    const period = String(parts.period).toUpperCase();
+    let hour24 = hour12 % 12;
+    if (period === "PM") {
+      hour24 += 12;
+    }
+    return `${String(hour24).padStart(2, "0")}:${minute}`;
+  }, []);
+
+  useEffect(() => {
+    setEventTimeParts({
+      start_time: parse24ToTimeParts(eventForm.start_time),
+      end_time: parse24ToTimeParts(eventForm.end_time)
+    });
+  }, [eventForm.start_time, eventForm.end_time, parse24ToTimeParts]);
+
+  useEffect(() => {
+    if (!defaultFacilitator) {
+      return;
+    }
+    setEventForm((prev) => (prev.facilitator ? prev : { ...prev, facilitator: defaultFacilitator }));
+  }, [defaultFacilitator]);
 
   const resolveAttachmentUrl = useCallback(
     (url) => {
@@ -1691,6 +1785,10 @@ export default function App() {
   };
 
   const handleEventModalOpen = () => {
+    setEventForm((prev) => ({
+      ...prev,
+      facilitator: prev.facilitator || defaultFacilitator
+    }));
     setIsEventModalOpen(true);
     setEventFormStatus({ status: "idle", error: "" });
   };
@@ -1728,13 +1826,13 @@ export default function App() {
     const eventId = item?.id || item?.event_id || "";
     const eventName = item?.event_name || item?.name || "";
     const startDate = item?.start_date || "";
-    const startTime = item?.start_time || "";
+    const startTime = formatISTTime(item?.start_time || "");
     setInviteContext({ eventId, eventName, startDate, startTime });
     setInviteForm({
       to: "",
       subject: eventName ? `Event Invitation: ${eventName}` : "Event Invitation",
       description: eventName
-        ? `You are invited to ${eventName} on ${startDate} at ${startTime}.`
+        ? `You are invited to ${eventName} on ${startDate} at ${startTime} IST.`
         : ""
     });
     setInviteModal({ open: true, status: "idle", error: "" });
@@ -1780,13 +1878,17 @@ export default function App() {
   const resetEventFormState = () => {
     setPendingEvent(null);
     setOverrideConflict(false);
+    setEventTimeParts({
+      start_time: { hour: "", minute: "", period: "AM" },
+      end_time: { hour: "", minute: "", period: "AM" }
+    });
     setEventForm({
       start_date: "",
       end_date: "",
       start_time: "",
       end_time: "",
       name: "",
-      facilitator: "",
+      facilitator: defaultFacilitator,
       venue_name: "",
       description: ""
     });
@@ -1794,7 +1896,19 @@ export default function App() {
 
   const createEventDirect = async () => {
     try {
-      const payload = overrideConflict ? { ...eventForm, override_conflict: true } : eventForm;
+      const parsedStart = timePartsTo24(eventTimeParts.start_time);
+      const parsedEnd = timePartsTo24(eventTimeParts.end_time);
+      if (!parsedStart || !parsedEnd) {
+        throw new Error("Select hour, minute and AM/PM for start and end time.");
+      }
+      const normalizedEventForm = {
+        ...eventForm,
+        start_time: parsedStart,
+        end_time: parsedEnd
+      };
+      const payload = overrideConflict
+        ? { ...normalizedEventForm, override_conflict: true }
+        : normalizedEventForm;
       const res = await apiFetch(`${apiBaseUrl}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2053,9 +2167,18 @@ export default function App() {
     setEventFormStatus({ status: "loading", error: "" });
 
     try {
+      const parsedStart = timePartsTo24(eventTimeParts.start_time);
+      const parsedEnd = timePartsTo24(eventTimeParts.end_time);
+      if (!parsedStart || !parsedEnd) {
+        setEventFormStatus({
+          status: "error",
+          error: "Select hour, minute and AM/PM for start and end time."
+        });
+        return;
+      }
       const payload = override
-        ? { ...eventForm, override_conflict: true }
-        : eventForm;
+        ? { ...eventForm, start_time: parsedStart, end_time: parsedEnd, override_conflict: true }
+        : { ...eventForm, start_time: parsedStart, end_time: parsedEnd };
       const res = await apiFetch(`${apiBaseUrl}/events`, {
         method: "POST",
         headers: {
@@ -2085,9 +2208,13 @@ export default function App() {
         start_time: "",
         end_time: "",
         name: "",
-        facilitator: "",
+        facilitator: defaultFacilitator,
         venue_name: "",
         description: ""
+      });
+      setEventTimeParts({
+        start_time: { hour: "", minute: "", period: "AM" },
+        end_time: { hour: "", minute: "", period: "AM" }
       });
       setIsEventModalOpen(false);
       setConflictState({ open: false, items: [] });
@@ -2348,12 +2475,26 @@ export default function App() {
     setEventFormStatus({ status: "loading", error: "" });
 
     try {
+      const parsedStart = timePartsTo24(eventTimeParts.start_time);
+      const parsedEnd = timePartsTo24(eventTimeParts.end_time);
+      if (!parsedStart || !parsedEnd) {
+        setEventFormStatus({
+          status: "error",
+          error: "Select hour, minute and AM/PM for start and end time."
+        });
+        return;
+      }
+      const normalizedEventForm = {
+        ...eventForm,
+        start_time: parsedStart,
+        end_time: parsedEnd
+      };
       const res = await apiFetch(`${apiBaseUrl}/events/conflicts`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(eventForm)
+        body: JSON.stringify(normalizedEventForm)
       });
 
       if (!res.ok) {
@@ -2370,6 +2511,7 @@ export default function App() {
 
       setIsEventModalOpen(false);
       setEventFormStatus({ status: "idle", error: "" });
+      setEventForm(normalizedEventForm);
       handleApprovalModalOpen();
     } catch (err) {
       setEventFormStatus({
@@ -2402,6 +2544,19 @@ export default function App() {
       ...prev,
       [field]: event.target.value
     }));
+  };
+
+  const handleEventTimePartChange = (field, key) => (event) => {
+    const value = event.target.value;
+    setEventTimeParts((prev) => {
+      const nextField = { ...prev[field], [key]: value };
+      const parsed = timePartsTo24(nextField);
+      setEventForm((current) => ({
+        ...current,
+        [field]: parsed || ""
+      }));
+      return { ...prev, [field]: nextField };
+    });
   };
 
   const handleApprovalFieldChange = (field) => (event) => {
@@ -2482,7 +2637,31 @@ export default function App() {
 
   if (user) {
     const profileName = user?.name || "Annisa Thalia";
-    const profileRole = user?.role || "Event Manager";
+    const profileRole = (user?.role || "Event Manager").toUpperCase();
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const eventMatchesSearch = (event) => {
+      if (!normalizedSearch) {
+        return true;
+      }
+      const searchable = [
+        event?.name,
+        event?.description,
+        event?.facilitator,
+        event?.venue_name,
+        event?.status,
+        event?.start_date,
+        event?.start_time
+      ].filter(Boolean).join(" ").toLowerCase();
+      return searchable.includes(normalizedSearch);
+    };
+    const getEventImageUrl = (event) => {
+      const seedSource = String(event?.id || event?.name || "event-card");
+      const seed = encodeURIComponent(`event-${seedSource}`);
+      return `https://picsum.photos/seed/${seed}/640/360`;
+    };
+    const applySearch = () => {
+      setSearchQuery(searchInput.trim());
+    };
     const isMyEvents = activeView === "my-events";
     const isReportsView = activeView === "event-reports";
     const isCalendar = activeView === "calendar";
@@ -2809,7 +2988,7 @@ export default function App() {
                         <div className="admin-cell">
                           <p className="admin-name">{event.name}</p>
                           <p className="admin-email">
-                            {event.start_date} ? {event.start_time}
+                            {event.start_date} ? {formatISTTime(event.start_time)}
                           </p>
                         </div>
                         <div className="admin-cell">{event.venue_name}</div>
@@ -3024,8 +3203,8 @@ export default function App() {
       if (isMyEvents || isReportsView) {
         const isReportsTab = myEventsTab === "closed";
         const getNormalizedStatus = (event) => getNormalizedEventStatus(event);
-        const filteredEvents = eventsState.items.filter((event) =>
-          isReportsView
+        const filteredEvents = eventsState.items.filter((event) => {
+          const statusMatches = isReportsView
             ? getNormalizedStatus(event) === "closed"
             : myEventsTab === "all"
               ? true
@@ -3034,11 +3213,12 @@ export default function App() {
                 : myEventsTab === "upcoming"
                   ? getNormalizedStatus(event) === "upcoming"
                   : myEventsTab === "ongoing"
-                    ? getNormalizedStatus(event) === "ongoing"
-                    : myEventsTab === "completed"
+                  ? getNormalizedStatus(event) === "ongoing"
+                  : myEventsTab === "completed"
                       ? getNormalizedStatus(event) === "completed"
                       : getNormalizedStatus(event) === "closed"
-        );
+          return statusMatches && eventMatchesSearch(event);
+        });
         const completedUnclosedCount = eventsState.items.filter((event) => {
           const isApprovalItem = String(event.id || "").startsWith("approval-");
           if (isApprovalItem) {
@@ -3215,7 +3395,7 @@ export default function App() {
                         <div key={event.id} className="events-table-row">
                           <span>{event.name}</span>
                           <span>{event.start_date}</span>
-                          <span>{event.start_time}</span>
+                          <span>{formatISTTime(event.start_time)}</span>
                           <div className="status-cell">
                             {canCloseEvent ? (
                               <button
@@ -3304,21 +3484,77 @@ export default function App() {
                       </label>
                       <label className="form-field">
                         <span>Start time</span>
-                        <input
-                          type="time"
-                          value={eventForm.start_time}
-                          onChange={handleEventFieldChange("start_time")}
-                          required
-                        />
+                        <div className="time-picker">
+                          <select
+                            value={eventTimeParts.start_time.hour}
+                            onChange={handleEventTimePartChange("start_time", "hour")}
+                            required
+                          >
+                            <option value="">Hour</option>
+                            {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((hour) => (
+                              <option key={`start-hour-${hour}`} value={hour}>
+                                {hour}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={eventTimeParts.start_time.minute}
+                            onChange={handleEventTimePartChange("start_time", "minute")}
+                            required
+                          >
+                            <option value="">Minute</option>
+                            {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map((minute) => (
+                              <option key={`start-minute-${minute}`} value={minute}>
+                                {minute}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={eventTimeParts.start_time.period}
+                            onChange={handleEventTimePartChange("start_time", "period")}
+                            required
+                          >
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                          </select>
+                        </div>
                       </label>
                       <label className="form-field">
                         <span>End time</span>
-                        <input
-                          type="time"
-                          value={eventForm.end_time}
-                          onChange={handleEventFieldChange("end_time")}
-                          required
-                        />
+                        <div className="time-picker">
+                          <select
+                            value={eventTimeParts.end_time.hour}
+                            onChange={handleEventTimePartChange("end_time", "hour")}
+                            required
+                          >
+                            <option value="">Hour</option>
+                            {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((hour) => (
+                              <option key={`end-hour-${hour}`} value={hour}>
+                                {hour}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={eventTimeParts.end_time.minute}
+                            onChange={handleEventTimePartChange("end_time", "minute")}
+                            required
+                          >
+                            <option value="">Minute</option>
+                            {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map((minute) => (
+                              <option key={`end-minute-${minute}`} value={minute}>
+                                {minute}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={eventTimeParts.end_time.period}
+                            onChange={handleEventTimePartChange("end_time", "period")}
+                            required
+                          >
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                          </select>
+                        </div>
                       </label>
                     </div>
                     <label className="form-field">
@@ -3408,7 +3644,7 @@ export default function App() {
                       <div key={conflict.id} className="conflict-row">
                         <span>{conflict.name}</span>
                         <span>{conflict.start_date}</span>
-                        <span>{conflict.start_time}</span>
+                        <span>{formatISTTime(conflict.start_time)}</span>
                         <span>{conflict.venue_name}</span>
                       </div>
                     ))}
@@ -3477,11 +3713,11 @@ export default function App() {
                       </p>
                       <p>
                         <strong>Time:</strong>{" "}
-                        {pendingEvent?.start_time || eventForm.start_time || "--"}{" "}
+                        {formatISTTime(pendingEvent?.start_time || eventForm.start_time) || "--"}{" "}
                         {pendingEvent?.end_time
-                          ? `to ${pendingEvent.end_time}`
+                          ? `to ${formatISTTime(pendingEvent.end_time)}`
                           : eventForm.end_time
-                            ? `to ${eventForm.end_time}`
+                            ? `to ${formatISTTime(eventForm.end_time)}`
                             : ""}
                       </p>
                     </div>
@@ -3640,7 +3876,8 @@ export default function App() {
                       </p>
                       <p>
                         <strong>Time:</strong>{" "}
-                        {eventForm.start_time || "--"} {eventForm.end_time ? `to ${eventForm.end_time}` : ""}
+                        {formatISTTime(eventForm.start_time) || "--"}{" "}
+                        {eventForm.end_time ? `to ${formatISTTime(eventForm.end_time)}` : ""}
                       </p>
                     </div>
 
@@ -3784,11 +4021,11 @@ export default function App() {
                       </p>
                       <p>
                         <strong>Time:</strong>{" "}
-                        {pendingEvent?.start_time || eventForm.start_time || "--"}{" "}
+                        {formatISTTime(pendingEvent?.start_time || eventForm.start_time) || "--"}{" "}
                         {pendingEvent?.end_time
-                          ? `to ${pendingEvent.end_time}`
+                          ? `to ${formatISTTime(pendingEvent.end_time)}`
                           : eventForm.end_time
-                            ? `to ${eventForm.end_time}`
+                            ? `to ${formatISTTime(eventForm.end_time)}`
                             : ""}
                       </p>
                     </div>
@@ -3975,6 +4212,8 @@ export default function App() {
                 <FullCalendar
                   plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                   initialView="dayGridMonth"
+                  timeZone="Asia/Kolkata"
+                  eventTimeFormat={{ hour: "numeric", minute: "2-digit", meridiem: "short" }}
                   headerToolbar={{
                     left: "prev,next today",
                     center: "title",
@@ -4023,7 +4262,7 @@ export default function App() {
                             <span>{item.event_name}</span>
                             <span>{item.requester_email}</span>
                           <span>{item.start_date}</span>
-                          <span>{item.start_time}</span>
+                          <span>{formatISTTime(item.start_time)}</span>
                           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                           <div className="approval-actions">
                             {item.status === "pending" ? (
@@ -4100,7 +4339,7 @@ export default function App() {
                           <span>{item.event_name}</span>
                           <span>{item.requester_email}</span>
                           <span>{item.start_date}</span>
-                          <span>{item.start_time}</span>
+                          <span>{formatISTTime(item.start_time)}</span>
                           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                           <span className="marketing-needs">{needsLabel}</span>
                           <div className="approval-actions">
@@ -4169,7 +4408,7 @@ export default function App() {
                           <span>{item.event_name}</span>
                           <span>{item.requester_email}</span>
                           <span>{item.start_date}</span>
-                          <span>{item.start_time}</span>
+                          <span>{formatISTTime(item.start_time)}</span>
                           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                           <span className="marketing-needs">{needsLabel}</span>
                           <div className="approval-actions">
@@ -4204,10 +4443,6 @@ export default function App() {
 
       return (
         <div className="primary-column">
-          <button type="button" className="request-button">
-            Request Approval
-          </button>
-
           <div className="events-card">
             <div className="events-header">
               <p>Your Events</p>
@@ -4230,18 +4465,26 @@ export default function App() {
               {eventsState.status === "ready" && eventsState.items.length === 0 ? (
                 <p className="table-message">No events yet. Create your first event.</p>
               ) : null}
+              {eventsState.status === "ready" && eventsState.items.length > 0 && !eventsState.items.some(eventMatchesSearch) ? (
+                <p className="table-message">No events match your search.</p>
+              ) : null}
               {eventsState.status === "ready"
-                ? eventsState.items.map((event) => {
+                ? eventsState.items.filter(eventMatchesSearch).map((event) => {
                     const { statusLabel, statusClass } = getEventStatusInfo(event);
                     return (
                       <article key={event.id} className="event-card">
                         <div className={`event-status ${statusClass}`}>{statusLabel}</div>
-                        <div className="event-image" />
+                        <div
+                          className="event-image"
+                          style={{
+                            backgroundImage: `linear-gradient(180deg, rgba(13,14,20,0.08) 0%, rgba(13,14,20,0.28) 100%), url(${getEventImageUrl(event)})`
+                          }}
+                        />
                         <p className="event-title">{event.name}</p>
                         <p className="event-meta">
                           <span className="event-date">{event.start_date}</span>
                           <span className="event-dot">•</span>
-                          <span className="event-time">{event.start_time}</span>
+                          <span className="event-time">{formatISTTime(event.start_time)}</span>
                         </p>
                       </article>
                     );
@@ -4381,13 +4624,13 @@ export default function App() {
                   <div>
                     <p className="details-label">Start</p>
                     <p className="details-value">
-                      {eventDetailsModal.event.start_date} ? {eventDetailsModal.event.start_time}
+                      {eventDetailsModal.event.start_date} ? {formatISTTime(eventDetailsModal.event.start_time)}
                     </p>
                   </div>
                   <div>
                     <p className="details-label">End</p>
                     <p className="details-value">
-                      {eventDetailsModal.event.end_date} ? {eventDetailsModal.event.end_time}
+                      {eventDetailsModal.event.end_date} ? {formatISTTime(eventDetailsModal.event.end_time)}
                     </p>
                   </div>
                   <div className="details-wide">
@@ -4481,7 +4724,28 @@ export default function App() {
               <input
                 type="search"
                 placeholder="Events, Reports, Schedule, etc"
+                value={searchInput}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSearchInput(value);
+                  if (!value.trim()) {
+                    setSearchQuery("");
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    applySearch();
+                  }
+                }}
               />
+              <button
+                type="button"
+                className={`search-button ${searchInput.trim() ? "active" : ""}`}
+                onClick={applySearch}
+                aria-label="Apply search"
+              >
+                Search
+              </button>
             </div>
             <div className="header-actions">
               <button type="button" className="icon-button">
@@ -4717,7 +4981,7 @@ export default function App() {
             ) : null}
 
             <p className="panel-footnote">
-              New here? <span>Create an account</span>
+              Use your institutional Google account to continue.
             </p>
           </div>
         </section>

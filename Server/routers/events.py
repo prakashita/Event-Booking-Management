@@ -3,6 +3,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
+import requests
 
 from auth import ensure_google_access_token
 from drive import upload_report_file
@@ -12,6 +13,55 @@ from routers.deps import get_current_user
 from schemas import ApprovalRequestResponse, EventCreate, EventCreateResponse, EventResponse, EventStatusUpdate
 
 router = APIRouter(prefix="/events", tags=["Events"])
+
+
+async def sync_event_to_google_calendar(event: Event, user: User) -> None:
+    if not user.google_refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Connect Google Calendar to create events",
+        )
+
+    access_token = await ensure_google_access_token(user)
+    time_zone = os.getenv("DEFAULT_TIMEZONE", "Asia/Kolkata")
+    payload = {
+        "summary": event.name,
+        "description": event.description or "",
+        "location": event.venue_name,
+        "start": {"dateTime": f"{event.start_date}T{event.start_time}", "timeZone": time_zone},
+        "end": {"dateTime": f"{event.end_date}T{event.end_time}", "timeZone": time_zone},
+    }
+    response = requests.post(
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json=payload,
+        timeout=15,
+    )
+    if response.status_code not in {200, 201}:
+        detail = "Unable to create Google Calendar event"
+        try:
+            error_payload = response.json()
+            error_message = error_payload.get("error", {}).get("message")
+            if error_message:
+                detail = f"{detail}: {error_message}"
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=detail,
+        )
+
+    data = response.json()
+    google_event_id = data.get("id")
+    if not google_event_id:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Google Calendar event created without an event id",
+        )
+
+    event.google_event_id = google_event_id
+    event.google_event_link = data.get("htmlLink")
+    await event.save()
 
 def combine_datetime(date_value: str, time_value: str) -> datetime:
     return datetime.fromisoformat(f"{date_value}T{time_value}")
@@ -168,6 +218,19 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
         status=compute_event_status(start_dt, end_dt),
     )
     await event.insert()
+
+    try:
+        await sync_event_to_google_calendar(event, user)
+    except HTTPException:
+        await event.delete()
+        raise
+    except Exception as exc:
+        await event.delete()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Unable to sync event to Google Calendar: {exc}",
+        )
+
     return EventCreateResponse(
         status="created",
         event=EventResponse(

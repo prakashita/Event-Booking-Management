@@ -1,15 +1,12 @@
 from datetime import datetime
-import os
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-import requests
-
-from auth import ensure_google_access_token
 from models import ApprovalRequest, Event, ItRequest, MarketingRequest, User
 from event_status import compute_event_status
 from routers.deps import get_current_user
+from routers.events import sync_event_to_google_calendar
 from schemas import ApprovalDecision, ApprovalRequestResponse
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
@@ -138,6 +135,22 @@ async def decide_request(
                     status=compute_event_status(start_dt, end_dt),
                 )
                 await event.insert()
+                requester = await User.get(approval.requester_id)
+                if not requester:
+                    await event.delete()
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requester not found")
+                try:
+                    await sync_event_to_google_calendar(event, requester)
+                except HTTPException:
+                    await event.delete()
+                    raise
+                except Exception as exc:
+                    await event.delete()
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Unable to sync event to Google Calendar: {exc}",
+                    )
+
                 approval.event_id = str(event.id)
                 matching_query = {
                     "requester_id": approval.requester_id,
@@ -166,34 +179,6 @@ async def decide_request(
                     ):
                         request_item.event_id = approval.event_id
                         await request_item.save()
-
-                requester = await User.get(approval.requester_id)
-                if requester and requester.google_refresh_token:
-                    try:
-                        access_token = await ensure_google_access_token(requester)
-                        time_zone = os.getenv("DEFAULT_TIMEZONE", "UTC")
-                        start_dt = f"{approval.start_date}T{approval.start_time}"
-                        end_dt = f"{approval.end_date}T{approval.end_time}"
-                        payload = {
-                            "summary": approval.event_name,
-                            "description": approval.description or "",
-                            "location": approval.venue_name,
-                            "start": {"dateTime": start_dt, "timeZone": time_zone},
-                            "end": {"dateTime": end_dt, "timeZone": time_zone},
-                        }
-                        response = requests.post(
-                            "https://www.googleapis.com/calendar/v3/calendars/primary/events",
-                            headers={"Authorization": f"Bearer {access_token}"},
-                            json=payload,
-                            timeout=15,
-                        )
-                        if response.status_code in {200, 201}:
-                            data = response.json()
-                            event.google_event_id = data.get("id")
-                            event.google_event_link = data.get("htmlLink")
-                            await event.save()
-                    except Exception:
-                        pass
             approval.status = "approved"
         else:
             approval.status = "rejected"
