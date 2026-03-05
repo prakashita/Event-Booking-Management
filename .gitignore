@@ -37,3 +37,12 @@ Desktop.ini
 
 # Service account keys
 Server/event-booking-system-dev-*.json
+
+# Env files (global)
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+**/.env.example
+
