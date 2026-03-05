@@ -1,18 +1,21 @@
 import os
+import base64
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 import requests
 
-from auth import ensure_google_access_token
+from auth import ensure_google_access_token, get_primary_email_by_role
 from drive import upload_report_file
-from event_status import compute_event_status, sync_event_status
+from event_status import sync_event_status
 from models import ApprovalRequest, Event, User
 from routers.deps import get_current_user
 from schemas import ApprovalRequestResponse, EventCreate, EventCreateResponse, EventResponse, EventStatusUpdate
 
 router = APIRouter(prefix="/events", tags=["Events"])
+logger = logging.getLogger("event-booking.events")
 
 
 async def sync_event_to_google_calendar(event: Event, user: User) -> None:
@@ -78,6 +81,51 @@ def serialize_conflict(event: Event) -> dict:
         "end_time": event.end_time,
     }
 
+
+def _build_raw_email(to_email: str, subject: str, body: str) -> str:
+    headers = [
+        f"To: {to_email}",
+        f"Subject: {subject}",
+        "Content-Type: text/plain; charset=\"UTF-8\"",
+    ]
+    return "\r\n".join(headers) + "\r\n\r\n" + body
+
+
+async def notify_registrar_for_approval(
+    requester: User,
+    registrar_email: str,
+    approval: ApprovalRequest,
+) -> None:
+    access_token = await ensure_google_access_token(requester)
+    subject = f"Event Approval Request: {approval.event_name}"
+    body = (
+        f"A new event requires your approval.\n\n"
+        f"Requester: {approval.requester_email}\n"
+        f"Event: {approval.event_name}\n"
+        f"Facilitator: {approval.facilitator}\n"
+        f"Venue: {approval.venue_name}\n"
+        f"Start: {approval.start_date} {approval.start_time}\n"
+        f"End: {approval.end_date} {approval.end_time}\n"
+        f"\nPlease approve or reject this event from your dashboard."
+    )
+    raw_message = _build_raw_email(registrar_email, subject, body)
+    encoded_message = base64.urlsafe_b64encode(raw_message.encode("utf-8")).decode("utf-8")
+
+    response = requests.post(
+        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"raw": encoded_message},
+        timeout=15,
+    )
+    if response.status_code not in {200, 202}:
+        detail = "Unable to send registrar notification email"
+        try:
+            payload = response.json()
+            detail = payload.get("error", {}).get("message", detail)
+        except Exception:
+            pass
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
+
 @router.get("", response_model=list[EventResponse])
 async def list_events(user: User = Depends(get_current_user)):
     events = await Event.find(Event.created_by == str(user.id)).sort("-created_at").to_list()
@@ -123,7 +171,11 @@ async def check_conflicts(payload: EventCreate, user: User = Depends(get_current
     for existing in existing_events:
         existing_start = combine_datetime(existing.start_date, existing.start_time)
         existing_end = combine_datetime(existing.end_date, existing.end_time)
-        if start_dt < existing_end and end_dt > existing_start:
+        if (
+            existing.venue_name == payload.venue_name
+            and start_dt < existing_end
+            and end_dt > existing_start
+        ):
             conflicts.append(serialize_conflict(existing))
 
     return {"conflicts": conflicts}
@@ -139,61 +191,17 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
             detail="End datetime must be after start datetime",
         )
 
-    if payload.submit_for_approval:
-        approval_to = (payload.approval_to or "").strip().lower()
-        if not approval_to:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Approval recipient is required",
-            )
-        approval = ApprovalRequest(
-            requester_id=str(user.id),
-            requester_email=user.email,
-            requested_to=approval_to,
-            event_name=payload.name,
-            facilitator=payload.facilitator,
-            description=payload.description,
-            venue_name=payload.venue_name,
-            start_date=payload.start_date.isoformat(),
-            start_time=payload.start_time.isoformat(),
-            end_date=payload.end_date.isoformat(),
-            end_time=payload.end_time.isoformat(),
-            requirements=payload.requirements,
-            other_notes=payload.other_notes,
-        )
-        await approval.insert()
-        return EventCreateResponse(
-            status="pending_approval",
-            approval_request=ApprovalRequestResponse(
-                id=str(approval.id),
-                status=approval.status,
-                requester_id=approval.requester_id,
-                requester_email=approval.requester_email,
-                requested_to=approval.requested_to,
-                event_name=approval.event_name,
-                facilitator=approval.facilitator,
-                description=approval.description,
-                venue_name=approval.venue_name,
-                start_date=approval.start_date,
-                start_time=approval.start_time,
-                end_date=approval.end_date,
-                end_time=approval.end_time,
-                requirements=approval.requirements,
-                other_notes=approval.other_notes,
-                event_id=approval.event_id,
-                decided_at=approval.decided_at,
-                decided_by=approval.decided_by,
-                created_at=approval.created_at,
-            ),
-        )
-
     if not payload.override_conflict:
         existing_events = await Event.find_all().to_list()
         conflicts = []
         for existing in existing_events:
             existing_start = combine_datetime(existing.start_date, existing.start_time)
             existing_end = combine_datetime(existing.end_date, existing.end_time)
-            if start_dt < existing_end and end_dt > existing_start:
+            if (
+                existing.venue_name == payload.venue_name
+                and start_dt < existing_end
+                and end_dt > existing_start
+            ):
                 conflicts.append(serialize_conflict(existing))
 
         if conflicts:
@@ -205,8 +213,20 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
                 },
             )
 
-    event = Event(
-        name=payload.name,
+    registrar_email = await get_primary_email_by_role("registrar")
+    if not registrar_email:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registrar email is not configured",
+        )
+
+    # Registrar receives only event details for approve/reject. Requirements (venue, refreshments)
+    # go to Facility Manager after approval.
+    approval = ApprovalRequest(
+        requester_id=str(user.id),
+        requester_email=user.email,
+        requested_to=registrar_email,
+        event_name=payload.name,
         facilitator=payload.facilitator,
         description=payload.description,
         venue_name=payload.venue_name,
@@ -214,44 +234,40 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
         start_time=payload.start_time.isoformat(),
         end_date=payload.end_date.isoformat(),
         end_time=payload.end_time.isoformat(),
-        created_by=str(user.id),
-        status=compute_event_status(start_dt, end_dt),
+        requirements=[],
+        other_notes=None,
     )
-    await event.insert()
+    await approval.insert()
 
+    status_label = "pending_registrar_approval"
     try:
-        await sync_event_to_google_calendar(event, user)
-    except HTTPException:
-        await event.delete()
-        raise
+        await notify_registrar_for_approval(user, registrar_email, approval)
     except Exception as exc:
-        await event.delete()
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Unable to sync event to Google Calendar: {exc}",
-        )
+        logger.warning("Registrar email notification failed approval_id=%s error=%s", str(approval.id), exc)
+        status_label = "pending_registrar_approval_email_failed"
 
     return EventCreateResponse(
-        status="created",
-        event=EventResponse(
-            id=str(event.id),
-            name=event.name,
-            facilitator=event.facilitator,
-            description=event.description,
-            venue_name=event.venue_name,
-            start_date=event.start_date,
-            start_time=event.start_time,
-            end_date=event.end_date,
-            end_time=event.end_time,
-            created_by=event.created_by,
-            status=event.status,
-            google_event_id=event.google_event_id,
-            google_event_link=event.google_event_link,
-            report_file_id=event.report_file_id,
-            report_file_name=event.report_file_name,
-            report_web_view_link=event.report_web_view_link,
-            report_uploaded_at=event.report_uploaded_at,
-            created_at=event.created_at,
+        status=status_label,
+        approval_request=ApprovalRequestResponse(
+            id=str(approval.id),
+            status=approval.status,
+            requester_id=approval.requester_id,
+            requester_email=approval.requester_email,
+            requested_to=approval.requested_to,
+            event_name=approval.event_name,
+            facilitator=approval.facilitator,
+            description=approval.description,
+            venue_name=approval.venue_name,
+            start_date=approval.start_date,
+            start_time=approval.start_time,
+            end_date=approval.end_date,
+            end_time=approval.end_time,
+            requirements=approval.requirements,
+            other_notes=approval.other_notes,
+            event_id=approval.event_id,
+            decided_at=approval.decided_at,
+            decided_by=approval.decided_by,
+            created_at=approval.created_at,
         ),
     )
 

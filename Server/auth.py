@@ -10,10 +10,12 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME_LATER")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+# Default 7 days; set ACCESS_TOKEN_EXPIRE_MINUTES in .env to override
+_access_minutes = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(_access_minutes) if _access_minutes.isdigit() else (60 * 24 * 7)
 
 GOOGLE_TOKEN_INFO_URL = "https://oauth2.googleapis.com/tokeninfo"
-ALLOWED_DOMAIN = ["@srmap.edu.in", "@vidyashilp.edu.in"]
+ALLOWED_DOMAIN = ["@srmap.edu.in", "@vidyashilp.edu.in","@gmail.com"]
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -31,6 +33,12 @@ ADMIN_EMAILS = [
 def is_admin_email(email: str) -> bool:
     return (email or "").strip().lower() in ADMIN_EMAILS
 
+
+async def get_primary_email_by_role(role: str) -> str:
+    """Get primary email for a role from User collection. Used for registrar, facility_manager, marketing, it."""
+    from models import User
+    user = await User.find_one(User.role == role.lower())
+    return (user.email or "").strip().lower() if user else ""
 
 
 

@@ -16,6 +16,7 @@ const menuItems = [
   { id: "event-reports", label: "Event Reports" },
   { id: "calendar", label: "Calendar View" },
   { id: "approvals", label: "Approvals" },
+  { id: "requirements", label: "Requirements" },
   { id: "publications", label: "Publications" },
   { id: "admin", label: "Admin Console" }
 ];
@@ -149,6 +150,7 @@ export default function App() {
   const [approvalsState, setApprovalsState] = useState({ status: "idle", items: [], error: "" });
   const [marketingState, setMarketingState] = useState({ status: "idle", items: [], error: "" });
   const [itState, setItState] = useState({ status: "idle", items: [], error: "" });
+  const [facilityState, setFacilityState] = useState({ status: "idle", items: [], error: "" });
   const [eventForm, setEventForm] = useState({
     start_date: "",
     end_date: "",
@@ -167,14 +169,12 @@ export default function App() {
   const [conflictState, setConflictState] = useState({ open: false, items: [] });
   const [approvalModal, setApprovalModal] = useState({ open: false, status: "idle", error: "" });
   const [approvalForm, setApprovalForm] = useState({
-    to: "",
     requirements: {
       venue: true,
       refreshments: false
     },
     other_notes: ""
   });
-  const [skipApprovalFlow, setSkipApprovalFlow] = useState(false);
   const [overrideConflict, setOverrideConflict] = useState(false);
   const [inviteModal, setInviteModal] = useState({ open: false, status: "idle", error: "" });
   const [inviteForm, setInviteForm] = useState({
@@ -208,6 +208,15 @@ export default function App() {
     projection: false,
     other_notes: ""
   });
+  const [facilityModal, setFacilityModal] = useState({ open: false, status: "idle", error: "" });
+  const [facilityForm, setFacilityForm] = useState({
+    to: "",
+    venue_required: true,
+    refreshments: false,
+    other_notes: ""
+  });
+  const [requirementsModal, setRequirementsModal] = useState({ open: false, event: null });
+  const [approvalsTab, setApprovalsTab] = useState("approval-requests");
   const [reportModal, setReportModal] = useState({
     open: false,
     status: "idle",
@@ -217,6 +226,7 @@ export default function App() {
     hasReport: false
   });
   const [eventDetailsModal, setEventDetailsModal] = useState({ open: false, event: null });
+  const [approvalDetailsModal, setApprovalDetailsModal] = useState({ open: false, request: null });
   const [publicationModal, setPublicationModal] = useState({
     open: false,
     status: "idle",
@@ -251,6 +261,13 @@ export default function App() {
   const [adminInvitesState, setAdminInvitesState] = useState({ status: "idle", items: [], error: "" });
   const [adminPublicationsState, setAdminPublicationsState] = useState({ status: "idle", items: [], error: "" });
   const [adminVenueName, setAdminVenueName] = useState("");
+  const [addUserModal, setAddUserModal] = useState({
+    open: false,
+    email: "",
+    role: "registrar",
+    status: "idle",
+    error: ""
+  });
   const [googleScopeModal, setGoogleScopeModal] = useState({
     open: false,
     missing: []
@@ -273,6 +290,7 @@ export default function App() {
   const chatActiveUserRef = useRef(null);
   const loadConversationMessagesRef = useRef(null);
   const loadEventsRef = useRef(null);
+  const requirementsFlowQueueRef = useRef([]);
   const [user, setUser] = useState(() => {
     const storedToken = localStorage.getItem("auth_token");
     const stored = localStorage.getItem("auth_user");
@@ -286,7 +304,16 @@ export default function App() {
       return null;
     }
   });
-  const isAdmin = (user?.role || "").toLowerCase() === "admin";
+  const normalizedUserRole = (user?.role || "").toLowerCase();
+  const isAdmin = normalizedUserRole === "admin";
+  const isRegistrar = normalizedUserRole === "registrar";
+  const isApproverRole = normalizedUserRole === "approver" || isRegistrar;
+  const isFacilityManagerRole = normalizedUserRole === "facility_manager";
+  const isMarketingRole = normalizedUserRole === "marketing";
+  const isItRole = normalizedUserRole === "it";
+  const canAccessAdminConsole = isAdmin || isRegistrar;
+  const canAccessApprovals = isRegistrar;
+  const canAccessRequirements = isFacilityManagerRole || isMarketingRole || isItRole;
   const defaultFacilitator = (user?.name || "").trim();
 
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -321,7 +348,11 @@ export default function App() {
         Authorization: `Bearer ${token}`
       };
 
-      const res = await fetch(input, { ...init, headers });
+      const res = await fetch(input, {
+        ...init,
+        headers,
+        credentials: "include"
+      });
       if (res.status === 401) {
         handleSessionExpired();
       }
@@ -354,7 +385,7 @@ export default function App() {
   }, [apiBaseUrl, apiFetch]);
 
   const loadAdminOverview = useCallback(async () => {
-    if (!isAdmin) {
+    if (!canAccessAdminConsole) {
       return;
     }
     setAdminOverview({ status: "loading", data: null, error: "" });
@@ -372,10 +403,10 @@ export default function App() {
         error: err?.message || "Unable to load admin overview."
       });
     }
-  }, [apiBaseUrl, apiFetch, isAdmin]);
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
 
   const loadAdminUsers = useCallback(async () => {
-    if (!isAdmin) {
+    if (!canAccessAdminConsole) {
       return;
     }
     setAdminUsersState({ status: "loading", items: [], error: "" });
@@ -389,10 +420,10 @@ export default function App() {
     } catch (err) {
       setAdminUsersState({ status: "error", items: [], error: err?.message || "Unable to load users." });
     }
-  }, [apiBaseUrl, apiFetch, isAdmin]);
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
 
   const loadAdminVenues = useCallback(async () => {
-    if (!isAdmin) {
+    if (!canAccessAdminConsole) {
       return;
     }
     setAdminVenuesState({ status: "loading", items: [], error: "" });
@@ -406,10 +437,10 @@ export default function App() {
     } catch (err) {
       setAdminVenuesState({ status: "error", items: [], error: err?.message || "Unable to load venues." });
     }
-  }, [apiBaseUrl, apiFetch, isAdmin]);
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
 
   const loadAdminEvents = useCallback(async () => {
-    if (!isAdmin) {
+    if (!canAccessAdminConsole) {
       return;
     }
     setAdminEventsState({ status: "loading", items: [], error: "" });
@@ -423,10 +454,10 @@ export default function App() {
     } catch (err) {
       setAdminEventsState({ status: "error", items: [], error: err?.message || "Unable to load events." });
     }
-  }, [apiBaseUrl, apiFetch, isAdmin]);
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
 
   const loadAdminApprovals = useCallback(async () => {
-    if (!isAdmin) {
+    if (!canAccessAdminConsole) {
       return;
     }
     setAdminApprovalsState({ status: "loading", items: [], error: "" });
@@ -440,10 +471,10 @@ export default function App() {
     } catch (err) {
       setAdminApprovalsState({ status: "error", items: [], error: err?.message || "Unable to load approvals." });
     }
-  }, [apiBaseUrl, apiFetch, isAdmin]);
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
 
   const loadAdminMarketing = useCallback(async () => {
-    if (!isAdmin) {
+    if (!canAccessAdminConsole) {
       return;
     }
     setAdminMarketingState({ status: "loading", items: [], error: "" });
@@ -457,10 +488,10 @@ export default function App() {
     } catch (err) {
       setAdminMarketingState({ status: "error", items: [], error: err?.message || "Unable to load marketing requests." });
     }
-  }, [apiBaseUrl, apiFetch, isAdmin]);
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
 
   const loadAdminIt = useCallback(async () => {
-    if (!isAdmin) {
+    if (!canAccessAdminConsole) {
       return;
     }
     setAdminItState({ status: "loading", items: [], error: "" });
@@ -474,10 +505,10 @@ export default function App() {
     } catch (err) {
       setAdminItState({ status: "error", items: [], error: err?.message || "Unable to load IT requests." });
     }
-  }, [apiBaseUrl, apiFetch, isAdmin]);
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
 
   const loadAdminInvites = useCallback(async () => {
-    if (!isAdmin) {
+    if (!canAccessAdminConsole) {
       return;
     }
     setAdminInvitesState({ status: "loading", items: [], error: "" });
@@ -491,10 +522,10 @@ export default function App() {
     } catch (err) {
       setAdminInvitesState({ status: "error", items: [], error: err?.message || "Unable to load invites." });
     }
-  }, [apiBaseUrl, apiFetch, isAdmin]);
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
 
   const loadAdminPublications = useCallback(async () => {
-    if (!isAdmin) {
+    if (!canAccessAdminConsole) {
       return;
     }
     setAdminPublicationsState({ status: "loading", items: [], error: "" });
@@ -508,12 +539,12 @@ export default function App() {
     } catch (err) {
       setAdminPublicationsState({ status: "error", items: [], error: err?.message || "Unable to load publications." });
     }
-  }, [apiBaseUrl, apiFetch, isAdmin]);
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
 
 
   const handleAdminRoleChange = useCallback(
     async (targetUserId, role) => {
-      if (!isAdmin) {
+      if (!canAccessAdminConsole) {
         return;
       }
       try {
@@ -542,12 +573,66 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, isAdmin, user]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole, user]
+  );
+
+  const handleAddUserModalOpen = useCallback(() => {
+    setAddUserModal({ open: true, email: "", role: "registrar", status: "idle", error: "" });
+  }, []);
+
+  const handleAddUserModalClose = useCallback(() => {
+    setAddUserModal({ open: false, email: "", role: "registrar", status: "idle", error: "" });
+  }, []);
+
+  const handleAddUserSubmit = useCallback(
+    async (e) => {
+      e?.preventDefault();
+      if (!canAccessAdminConsole) return;
+      const email = (addUserModal.email || "").trim();
+      if (!email) {
+        setAddUserModal((prev) => ({ ...prev, error: "Email is required.", status: "error" }));
+        return;
+      }
+      setAddUserModal((prev) => ({ ...prev, status: "loading", error: "" }));
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/users/add`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, role: addUserModal.role })
+        });
+        const data = res.ok ? await res.json().catch(() => ({})) : null;
+        const errBody = !res.ok ? await res.json().catch(() => ({})) : null;
+        if (!res.ok) {
+          throw new Error(errBody?.detail || "Unable to add user.");
+        }
+        setAddUserModal({ open: false, email: "", role: "registrar", status: "idle", error: "" });
+        setStatus({
+          type: "success",
+          message: data?.detail || (data?.id ? "User role updated." : "User added. They will get this role when they first sign in.")
+        });
+        loadAdminUsers();
+        if (data?.id) {
+          setAdminUsersState((prev) => ({
+            ...prev,
+            items: prev.items.some((u) => u.id === data.id)
+              ? prev.items.map((u) => (u.id === data.id ? data : u))
+              : [...prev.items, data]
+          }));
+        }
+      } catch (err) {
+        setAddUserModal((prev) => ({
+          ...prev,
+          status: "error",
+          error: err?.message || "Unable to add user."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, canAccessAdminConsole, addUserModal.email, addUserModal.role, loadAdminUsers]
   );
 
   const handleAdminDeleteUser = useCallback(
     async (targetUserId) => {
-      if (!isAdmin) {
+      if (!canAccessAdminConsole) {
         return;
       }
       if (!window.confirm("Delete this user? This cannot be undone.")) {
@@ -569,12 +654,12 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, isAdmin]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole]
   );
 
   const handleAdminCreateVenue = useCallback(
     async (name) => {
-      if (!isAdmin) {
+      if (!canAccessAdminConsole) {
         return;
       }
       const trimmed = (name || "").trim();
@@ -611,12 +696,12 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, isAdmin]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole]
   );
 
   const handleAdminDeleteVenue = useCallback(
     async (venueId) => {
-      if (!isAdmin) {
+      if (!canAccessAdminConsole) {
         return;
       }
       if (!window.confirm("Delete this venue?")) {
@@ -638,12 +723,12 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, isAdmin]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole]
   );
 
   const handleAdminDeleteEvent = useCallback(
     async (eventId) => {
-      if (!isAdmin) {
+      if (!canAccessAdminConsole) {
         return;
       }
       if (!window.confirm("Delete this event?")) {
@@ -666,12 +751,12 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, isAdmin]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole]
   );
 
   const handleAdminDeleteApproval = useCallback(
     async (requestId) => {
-      if (!isAdmin) {
+      if (!canAccessAdminConsole) {
         return;
       }
       if (!window.confirm("Delete this approval request?")) {
@@ -693,12 +778,12 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, isAdmin]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole]
   );
 
   const handleAdminDeleteMarketing = useCallback(
     async (requestId) => {
-      if (!isAdmin) {
+      if (!canAccessAdminConsole) {
         return;
       }
       if (!window.confirm("Delete this marketing request?")) {
@@ -720,12 +805,12 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, isAdmin]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole]
   );
 
   const handleAdminDeleteIt = useCallback(
     async (requestId) => {
-      if (!isAdmin) {
+      if (!canAccessAdminConsole) {
         return;
       }
       if (!window.confirm("Delete this IT request?")) {
@@ -747,12 +832,12 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, isAdmin]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole]
   );
 
   const handleAdminDeleteInvite = useCallback(
     async (inviteId) => {
-      if (!isAdmin) {
+      if (!canAccessAdminConsole) {
         return;
       }
       if (!window.confirm("Delete this invite?")) {
@@ -774,12 +859,12 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, isAdmin]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole]
   );
 
   const handleAdminDeletePublication = useCallback(
     async (publicationId) => {
-      if (!isAdmin) {
+      if (!canAccessAdminConsole) {
         return;
       }
       if (!window.confirm("Delete this publication?")) {
@@ -801,7 +886,7 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, isAdmin]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole]
   );
 
   const formatChatTime = useCallback((value) => {
@@ -1275,9 +1360,10 @@ export default function App() {
 
     setEventsState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
-      const [eventsRes, approvalsRes, marketingRes, itRes, invitesRes] = await Promise.all([
+      const [eventsRes, approvalsRes, facilityRes, marketingRes, itRes, invitesRes] = await Promise.all([
         apiFetch(`${apiBaseUrl}/events`),
         apiFetch(`${apiBaseUrl}/approvals/me`),
+        apiFetch(`${apiBaseUrl}/facility/requests/me`),
         apiFetch(`${apiBaseUrl}/marketing/requests/me`),
         apiFetch(`${apiBaseUrl}/it/requests/me`),
         apiFetch(`${apiBaseUrl}/invites/me`)
@@ -1292,14 +1378,17 @@ export default function App() {
 
       const eventsData = await eventsRes.json();
       const approvalsData = await approvalsRes.json();
+      const facilityData = facilityRes.ok ? await facilityRes.json() : [];
       const marketingData = marketingRes.ok ? await marketingRes.json() : [];
       const itData = itRes.ok ? await itRes.json() : [];
       const invitesData = invitesRes.ok ? await invitesRes.json() : [];
       const approvalByEventId = new Map();
+      const facilityByEventId = new Map();
       const marketingByEventId = new Map();
       const itByEventId = new Map();
       const inviteByEventId = new Map();
       const approvalByEventKey = new Map();
+      const facilityByEventKey = new Map();
       const marketingByEventKey = new Map();
       const itByEventKey = new Map();
 
@@ -1323,6 +1412,12 @@ export default function App() {
           approvalByEventId.set(item.event_id, item.status);
         }
         approvalByEventKey.set(buildEventKey(item), item.status);
+      });
+      facilityData.forEach((item) => {
+        if (item.event_id) {
+          facilityByEventId.set(item.event_id, item.status);
+        }
+        facilityByEventKey.set(buildEventKey(item), item.status);
       });
       marketingData.forEach((item) => {
         if (item.event_id) {
@@ -1366,6 +1461,8 @@ export default function App() {
           ...event,
           approval_status:
             approvalByEventId.get(event.id) || approvalByEventKey.get(eventKey),
+          facility_status:
+            facilityByEventId.get(event.id) || facilityByEventKey.get(eventKey),
           marketing_status:
             marketingByEventId.get(event.id) || marketingByEventKey.get(eventKey),
           it_status: itByEventId.get(event.id) || itByEventKey.get(eventKey),
@@ -1373,11 +1470,31 @@ export default function App() {
         };
       });
 
+      const items = [...approvalItems, ...enrichedEvents];
+      const eventNeedingRequirements = enrichedEvents.find(
+        (e) =>
+          !String(e.id || "").startsWith("approval-") &&
+          e.approval_status === "approved" &&
+          (e.facility_status !== "approved" || e.marketing_status !== "approved" || e.it_status !== "approved")
+      );
       setEventsState({
         status: "ready",
-        items: [...approvalItems, ...enrichedEvents],
+        items,
         error: ""
       });
+      if (eventNeedingRequirements && activeView === "my-events") {
+        setRequirementsModal({ open: true, event: eventNeedingRequirements });
+        setPendingEvent({ ...eventNeedingRequirements, event_id: eventNeedingRequirements.id });
+        if (eventNeedingRequirements.facility_status !== "approved") {
+          setFacilityModal({ open: true, status: "idle", error: "" });
+          setFacilityForm({
+            to: "",
+            venue_required: true,
+            refreshments: false,
+            other_notes: ""
+          });
+        }
+      }
     } catch (err) {
       setEventsState({
         status: "error",
@@ -1385,7 +1502,7 @@ export default function App() {
         error: err?.message || "Unable to load events."
       });
     }
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, apiFetch, activeView]);
 
   const loadApprovalsInbox = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
@@ -1434,6 +1551,29 @@ export default function App() {
       });
     }
   }, [apiBaseUrl]);
+
+  const loadFacilityInbox = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setFacilityState({ status: "error", items: [], error: "Missing auth token." });
+      return;
+    }
+    setFacilityState((prev) => ({ ...prev, status: "loading", error: "" }));
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/facility/inbox`);
+      if (!res.ok) {
+        throw new Error("Unable to load facility requests.");
+      }
+      const data = await res.json();
+      setFacilityState({ status: "ready", items: data, error: "" });
+    } catch (err) {
+      setFacilityState({
+        status: "error",
+        items: [],
+        error: err?.message || "Unable to load facility requests."
+      });
+    }
+  }, [apiBaseUrl, apiFetch]);
 
   const loadItInbox = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
@@ -1726,22 +1866,32 @@ export default function App() {
   }, [activeView, loadPublications, user]);
 
   useEffect(() => {
-    if (!user || activeView !== "approvals") {
+    const isApprovalsOrRequirements = activeView === "approvals" || activeView === "requirements";
+    if (!user || !isApprovalsOrRequirements) {
       return;
     }
-    if (approvalsState.status === "idle") {
+    if (isApproverRole && approvalsState.status === "idle") {
       loadApprovalsInbox();
     }
-    if (marketingState.status === "idle") {
+    if (isFacilityManagerRole && facilityState.status === "idle") {
+      loadFacilityInbox();
+    }
+    if (isMarketingRole && marketingState.status === "idle") {
       loadMarketingInbox();
     }
-    if (itState.status === "idle") {
+    if (isItRole && itState.status === "idle") {
       loadItInbox();
     }
   }, [
     activeView,
     approvalsState.status,
+    facilityState.status,
+    isApproverRole,
+    isFacilityManagerRole,
+    isItRole,
+    isMarketingRole,
     loadApprovalsInbox,
+    loadFacilityInbox,
     loadItInbox,
     loadMarketingInbox,
     itState.status,
@@ -1750,7 +1900,24 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if (!user || !isAdmin || activeView !== "admin") {
+    if ((activeView === "approvals" && !canAccessApprovals) || (activeView === "requirements" && !canAccessRequirements)) {
+      setActiveView("dashboard");
+    }
+  }, [activeView, canAccessApprovals, canAccessRequirements]);
+
+  useEffect(() => {
+    const showApprovalsOrRequirements =
+      (activeView === "approvals" && canAccessApprovals) || (activeView === "requirements" && canAccessRequirements);
+    if (showApprovalsOrRequirements) {
+      if (isApproverRole) setApprovalsTab("approval-requests");
+      else if (isFacilityManagerRole) setApprovalsTab("facility");
+      else if (isMarketingRole) setApprovalsTab("marketing");
+      else if (isItRole) setApprovalsTab("it");
+    }
+  }, [activeView, canAccessApprovals, canAccessRequirements, isApproverRole, isFacilityManagerRole, isMarketingRole, isItRole]);
+
+  useEffect(() => {
+    if (!user || !canAccessAdminConsole || activeView !== "admin") {
       return;
     }
     loadAdminOverview();
@@ -1764,7 +1931,7 @@ export default function App() {
     loadAdminPublications();
   }, [
     activeView,
-    isAdmin,
+    canAccessAdminConsole,
     loadAdminApprovals,
     loadAdminEvents,
     loadAdminIt,
@@ -1799,9 +1966,7 @@ export default function App() {
   };
 
   const handleApprovalModalOpen = () => {
-    setSkipApprovalFlow(false);
     setApprovalForm({
-      to: "",
       requirements: {
         venue: true,
         refreshments: false
@@ -1813,13 +1978,6 @@ export default function App() {
 
   const handleApprovalModalClose = () => {
     setApprovalModal({ open: false, status: "idle", error: "" });
-  };
-
-  const handleApprovalSkip = async () => {
-    setSkipApprovalFlow(true);
-    setPendingEvent({ ...eventForm });
-    handleApprovalModalClose();
-    handleMarketingModalOpen();
   };
 
   const handleInviteOpen = (item) => {
@@ -1858,7 +2016,23 @@ export default function App() {
   };
 
   const handleMarketingModalClose = () => {
+    requirementsFlowQueueRef.current = [];
     setMarketingModal({ open: false, status: "idle", error: "" });
+  };
+
+  const handleFacilityModalOpen = () => {
+    setFacilityForm({
+      to: "",
+      venue_required: true,
+      refreshments: false,
+      other_notes: ""
+    });
+    setFacilityModal({ open: true, status: "idle", error: "" });
+  };
+
+  const handleFacilityModalClose = () => {
+    requirementsFlowQueueRef.current = [];
+    setFacilityModal({ open: false, status: "idle", error: "" });
   };
 
   const handleItModalOpen = () => {
@@ -1872,6 +2046,7 @@ export default function App() {
   };
 
   const handleItModalClose = () => {
+    requirementsFlowQueueRef.current = [];
     setItModal({ open: false, status: "idle", error: "" });
   };
 
@@ -1894,49 +2069,43 @@ export default function App() {
     });
   };
 
-  const createEventDirect = async () => {
-    try {
-      const parsedStart = timePartsTo24(eventTimeParts.start_time);
-      const parsedEnd = timePartsTo24(eventTimeParts.end_time);
-      if (!parsedStart || !parsedEnd) {
-        throw new Error("Select hour, minute and AM/PM for start and end time.");
-      }
-      const normalizedEventForm = {
-        ...eventForm,
-        start_time: parsedStart,
-        end_time: parsedEnd
-      };
-      const payload = overrideConflict
-        ? { ...normalizedEventForm, override_conflict: true }
-        : normalizedEventForm;
-      const res = await apiFetch(`${apiBaseUrl}/events`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        const message = data?.detail || "Unable to create event.";
-        throw new Error(message);
-      }
-      resetEventFormState();
-      setSkipApprovalFlow(false);
-      loadEvents();
-    } catch (err) {
-      setStatus({ type: "error", message: err?.message || "Unable to create event." });
-    }
-  };
-
   const handleMarketingSkip = () => {
     handleMarketingModalClose();
+  };
+
+  const handleItSkip = () => {
+    handleItModalClose();
+  };
+
+  const handleRequirementsModalClose = () => {
+    setRequirementsModal({ open: false, event: null });
+  };
+
+  const handleFacilityRequestForEvent = (eventItem) => {
+    setPendingEvent({ ...eventItem, event_id: eventItem?.id || eventItem?.event_id || "" });
+    handleFacilityModalOpen();
+  };
+
+  const handleMarketingRequestForEvent = (eventItem) => {
+    setPendingEvent({ ...eventItem, event_id: eventItem?.id || eventItem?.event_id || "" });
+    handleMarketingModalOpen();
+  };
+
+  const handleItRequestForEvent = (eventItem) => {
+    setPendingEvent({ ...eventItem, event_id: eventItem?.id || eventItem?.event_id || "" });
     handleItModalOpen();
   };
 
-  const handleItSkip = async () => {
-    handleItModalClose();
-    if (skipApprovalFlow) {
-      await createEventDirect();
-    }
+  const handleSendRequirements = (eventItem) => {
+    setPendingEvent({ ...eventItem, event_id: eventItem?.id || eventItem?.event_id || "" });
+    const queue = [];
+    if (eventItem.facility_status !== "approved") queue.push("facility");
+    if (eventItem.it_status !== "approved") queue.push("it");
+    if (eventItem.marketing_status !== "approved") queue.push("marketing");
+    requirementsFlowQueueRef.current = queue;
+    if (queue[0] === "facility") handleFacilityModalOpen();
+    else if (queue[0] === "it") handleItModalOpen();
+    else if (queue[0] === "marketing") handleMarketingModalOpen();
   };
 
   const handleReportOpen = (eventItem) => {
@@ -1957,6 +2126,14 @@ export default function App() {
 
   const handleEventDetailsClose = () => {
     setEventDetailsModal({ open: false, event: null });
+  };
+
+  const handleApprovalDetailsOpen = (requestItem) => {
+    setApprovalDetailsModal({ open: true, request: requestItem });
+  };
+
+  const handleApprovalDetailsClose = () => {
+    setApprovalDetailsModal({ open: false, request: null });
   };
 
   const handleReportClose = () => {
@@ -2131,7 +2308,10 @@ export default function App() {
         derivedStatus = "Pending";
       }
     }
-    const statusLabel = explicitStatus || derivedStatus;
+    const statusLabel =
+      event.approval_status === "approved"
+        ? "Approved"
+        : explicitStatus || derivedStatus;
     const statusClass = (statusValue || statusLabel).toLowerCase().replace(/\s+/g, "-");
     return { statusLabel, statusClass };
   };
@@ -2244,20 +2424,11 @@ export default function App() {
     setApprovalModal((prev) => ({ ...prev, status: "loading", error: "" }));
 
     try {
-      const requirements = [];
-      if (approvalForm.requirements.venue) {
-        requirements.push("Venue");
-      }
-      if (approvalForm.requirements.refreshments) {
-        requirements.push("Refreshments");
-      }
-
+      // Registrar receives only event details. Requirements go to Facility Manager after approval.
       const payload = {
         ...eventForm,
-        submit_for_approval: true,
-        approval_to: approvalForm.to,
-        requirements,
-        other_notes: approvalForm.other_notes
+        requirements: [],
+        other_notes: ""
       };
 
       const res = await apiFetch(`${apiBaseUrl}/events`, {
@@ -2272,17 +2443,80 @@ export default function App() {
         throw new Error("Unable to send approval request.");
       }
 
-      setPendingEvent({ ...eventForm });
-      setSkipApprovalFlow(false);
       setApprovalModal({ open: false, status: "idle", error: "" });
-      handleMarketingModalOpen();
+      resetEventFormState();
+      setIsEventModalOpen(false);
       setConflictState({ open: false, items: [] });
+      setStatus({ type: "success", message: "Event sent to registrar for approval." });
       loadEvents();
     } catch (err) {
       setApprovalModal({
         open: true,
         status: "error",
         error: err?.message || "Unable to send approval request."
+      });
+    }
+  };
+
+  const submitFacilityRequest = async (formEvent) => {
+    if (formEvent) {
+      formEvent.preventDefault();
+    }
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setFacilityModal({
+        open: true,
+        status: "error",
+        error: "Please sign in again."
+      });
+      return;
+    }
+
+    setFacilityModal((prev) => ({ ...prev, status: "loading", error: "" }));
+
+    try {
+      const eventPayload = pendingEvent || eventForm;
+      const payload = {
+        requested_to: facilityForm.to || undefined,
+        event_id: eventPayload?.event_id || eventPayload?.id || "",
+        event_name: eventPayload?.name || "",
+        start_date: eventPayload?.start_date || "",
+        start_time: eventPayload?.start_time || "",
+        end_date: eventPayload?.end_date || "",
+        end_time: eventPayload?.end_time || "",
+        venue_required: facilityForm.venue_required,
+        refreshments: facilityForm.refreshments,
+        other_notes: facilityForm.other_notes || ""
+      };
+
+      const res = await apiFetch(`${apiBaseUrl}/facility/requests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        throw new Error("Unable to send facility manager request.");
+      }
+
+      setFacilityModal({ open: false, status: "idle", error: "" });
+      setRequirementsModal((prev) => (prev.open ? { ...prev, open: false, event: null } : prev));
+      setStatus({ type: "success", message: "Facility manager request submitted." });
+      loadEvents();
+      const queue = requirementsFlowQueueRef.current;
+      if (queue[0] === "facility") {
+        requirementsFlowQueueRef.current = queue.slice(1);
+        const next = requirementsFlowQueueRef.current[0];
+        if (next === "it") handleItModalOpen();
+        else if (next === "marketing") handleMarketingModalOpen();
+      }
+    } catch (err) {
+      setFacilityModal({
+        open: true,
+        status: "error",
+        error: err?.message || "Unable to send facility manager request."
       });
     }
   };
@@ -2307,6 +2541,7 @@ export default function App() {
       const eventPayload = pendingEvent || eventForm;
       const payload = {
         requested_to: marketingForm.to,
+        event_id: eventPayload?.event_id || eventPayload?.id || "",
         event_name: eventPayload?.name || "",
         start_date: eventPayload?.start_date || "",
         start_time: eventPayload?.start_time || "",
@@ -2335,7 +2570,9 @@ export default function App() {
       }
 
       setMarketingModal({ open: false, status: "idle", error: "" });
-      handleItModalOpen();
+      setStatus({ type: "success", message: "Marketing request submitted." });
+      loadEvents();
+      requirementsFlowQueueRef.current = [];
     } catch (err) {
       setMarketingModal({
         open: true,
@@ -2365,6 +2602,7 @@ export default function App() {
       const eventPayload = pendingEvent || eventForm;
       const payload = {
         requested_to: itForm.to,
+        event_id: eventPayload?.event_id || eventPayload?.id || "",
         event_name: eventPayload?.name || "",
         start_date: eventPayload?.start_date || "",
         start_time: eventPayload?.start_time || "",
@@ -2388,12 +2626,14 @@ export default function App() {
       }
 
       setItModal({ open: false, status: "idle", error: "" });
-      if (skipApprovalFlow) {
-        await createEventDirect();
-        return;
-      }
-      resetEventFormState();
+      setStatus({ type: "success", message: "IT request submitted." });
       loadEvents();
+      const queue = requirementsFlowQueueRef.current;
+      if (queue[0] === "it") {
+        requirementsFlowQueueRef.current = queue.slice(1);
+        const next = requirementsFlowQueueRef.current[0];
+        if (next === "marketing") handleMarketingModalOpen();
+      }
     } catch (err) {
       setItModal({
         open: true,
@@ -2576,6 +2816,20 @@ export default function App() {
     }));
   };
 
+  const handleFacilityFieldChange = (field) => (event) => {
+    setFacilityForm((prev) => ({
+      ...prev,
+      [field]: event.target.value
+    }));
+  };
+
+  const handleFacilityToggle = (field) => (event) => {
+    setFacilityForm((prev) => ({
+      ...prev,
+      [field]: event.target.checked
+    }));
+  };
+
   const handleMarketingFieldChange = (field) => (event) => {
     setMarketingForm((prev) => ({
       ...prev,
@@ -2666,9 +2920,23 @@ export default function App() {
     const isReportsView = activeView === "event-reports";
     const isCalendar = activeView === "calendar";
     const isApprovals = activeView === "approvals";
+    const isRequirements = activeView === "requirements";
+    const showApprovalsOrRequirementsContent =
+      (isApprovals && canAccessApprovals) || (isRequirements && canAccessRequirements);
     const isPublications = activeView === "publications";
     const isAdminView = activeView === "admin";
-    const visibleMenuItems = isAdmin ? menuItems : menuItems.filter((item) => item.id !== "admin");
+    const visibleMenuItems = menuItems.filter((item) => {
+      if (item.id === "admin" && !canAccessAdminConsole) {
+        return false;
+      }
+      if (item.id === "approvals" && !canAccessApprovals) {
+        return false;
+      }
+      if (item.id === "requirements" && !canAccessRequirements) {
+        return false;
+      }
+      return true;
+    });
     const typingName = chatTypingUser?.name || "";
 
     const handleApprovalDecision = async (requestId, decision) => {
@@ -2700,6 +2968,36 @@ export default function App() {
           status: "error",
           items: [],
           error: err?.message || "Unable to update approval."
+        });
+      }
+    };
+
+    const handleFacilityDecision = async (requestId, decision) => {
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        setFacilityState({ status: "error", items: [], error: "Missing auth token." });
+        return;
+      }
+
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/facility/requests/${requestId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ status: decision })
+        });
+
+        if (!res.ok) {
+          throw new Error("Unable to update facility request.");
+        }
+
+        loadFacilityInbox();
+      } catch (err) {
+        setFacilityState({
+          status: "error",
+          items: [],
+          error: err?.message || "Unable to update facility request."
         });
       }
     };
@@ -2766,7 +3064,7 @@ export default function App() {
 
     const renderPrimaryContent = () => {
       if (isAdminView) {
-        if (!isAdmin) {
+        if (!canAccessAdminConsole) {
           return (
             <div className="admin-empty">
               <p>Admin access required.</p>
@@ -2857,9 +3155,14 @@ export default function App() {
               <div className="admin-panel">
                 <div className="admin-panel-header">
                   <h3>User Management</h3>
-                  <button type="button" className="secondary-action" onClick={loadAdminUsers}>
-                    Refresh
-                  </button>
+                  <div>
+                    <button type="button" className="primary-action" onClick={handleAddUserModalOpen}>
+                      Add User
+                    </button>
+                    <button type="button" className="secondary-action" onClick={loadAdminUsers}>
+                      Refresh
+                    </button>
+                  </div>
                 </div>
                 {adminUsersState.status === "loading" ? <p className="table-message">Loading users...</p> : null}
                 {adminUsersState.status === "error" ? (
@@ -2891,7 +3194,8 @@ export default function App() {
                           >
                             <option value="admin">Admin</option>
                             <option value="faculty">Faculty</option>
-                            <option value="approver">Approver</option>
+                            <option value="registrar">Registrar</option>
+                            <option value="facility_manager">Facility Manager</option>
                             <option value="marketing">Marketing</option>
                             <option value="it">IT</option>
                           </select>
@@ -3340,11 +3644,12 @@ export default function App() {
                       const statusValue = event.status || "";
                       const explicitStatus = statusValue ? formatStatusLabel(statusValue) : null;
                       const hasApprovalData =
-                        event.approval_status || event.marketing_status || event.it_status;
+                        event.approval_status || event.facility_status || event.marketing_status || event.it_status;
                       let derivedStatus = "Approved";
                       if (hasApprovalData) {
                         const statuses = [
                           event.approval_status,
+                          event.facility_status,
                           event.marketing_status,
                           event.it_status
                         ];
@@ -3357,7 +3662,10 @@ export default function App() {
                         }
                       }
 
-                      const statusLabel = explicitStatus || derivedStatus;
+                      const statusLabel =
+                        event.approval_status === "approved"
+                          ? "Approved"
+                          : explicitStatus || derivedStatus;
                       const statusClass = (statusValue || statusLabel)
                         .toLowerCase()
                         .replace(/\s+/g, "-");
@@ -3365,12 +3673,21 @@ export default function App() {
                       const isUpcomingEvent = getNormalizedEventStatus(event) === "upcoming";
                       const canInvite =
                         isUpcomingEvent &&
-                        ((!event.approval_status && !event.marketing_status && !event.it_status) ||
+                        ((!event.approval_status && !event.facility_status && !event.marketing_status && !event.it_status) ||
                           (event.approval_status === "approved" &&
+                            event.facility_status === "approved" &&
                             event.marketing_status === "approved" &&
                             event.it_status === "approved")) &&
                         !inviteSent;
                       const isApprovalItem = String(event.id || "").startsWith("approval-");
+                      const canSendSupportForms =
+                        !isApprovalItem &&
+                        event.approval_status === "approved";
+                      const canSendFacilityRequest =
+                        canSendSupportForms && event.facility_status !== "approved";
+                      const canSendMarketingRequest =
+                        canSendSupportForms && event.marketing_status !== "approved";
+                      const canSendItRequest = canSendSupportForms && event.it_status !== "approved";
                       const canUploadReport = !isApprovalItem && statusValue === "completed";
                       const canCloseEvent =
                         !isApprovalItem && statusValue === "completed" && Boolean(event.report_file_id);
@@ -3434,6 +3751,16 @@ export default function App() {
                                 onClick={() => handleReportOpen(event)}
                               >
                                 {event.report_file_id ? "Replace Report" : "Upload Report"}
+                              </button>
+                            ) : null}
+                            {canSendSupportForms &&
+                            (canSendFacilityRequest || canSendMarketingRequest || canSendItRequest) ? (
+                              <button
+                                type="button"
+                                className="details-button invite"
+                                onClick={() => handleSendRequirements(event)}
+                              >
+                                Send your requirements
                               </button>
                             ) : null}
                             {event.report_file_id && event.status === "closed" ? (
@@ -3675,7 +4002,7 @@ export default function App() {
               <div className="approval-overlay" role="dialog" aria-modal="true">
                 <div className="approval-card">
                   <div className="approval-header">
-                    <h3>ADMIN</h3>
+                    <h3>REGISTRAR APPROVAL</h3>
                     <button type="button" className="modal-close" onClick={handleApprovalModalClose}>
                       &times;
                     </button>
@@ -3688,12 +4015,81 @@ export default function App() {
                       </label>
                       <label className="approval-field">
                         <span>To</span>
+                        <input type="text" value="Registrar (auto-routed)" readOnly />
+                      </label>
+                    </div>
+
+                    <div className="approval-summary">
+                      <p>
+                        <strong>Event:</strong> {pendingEvent?.name || eventForm.name || "Untitled event"}
+                      </p>
+                      <p>
+                        <strong>Date:</strong>{" "}
+                        {pendingEvent?.start_date || eventForm.start_date || "--"}{" "}
+                        {pendingEvent?.end_date
+                          ? `to ${pendingEvent.end_date}`
+                          : eventForm.end_date
+                            ? `to ${eventForm.end_date}`
+                            : ""}
+                      </p>
+                      <p>
+                        <strong>Time:</strong>{" "}
+                        {formatISTTime(pendingEvent?.start_time || eventForm.start_time) || "--"}{" "}
+                        {pendingEvent?.end_time
+                          ? `to ${formatISTTime(pendingEvent.end_time)}`
+                          : eventForm.end_time
+                            ? `to ${formatISTTime(eventForm.end_time)}`
+                            : ""}
+                      </p>
+                    </div>
+
+                    <p className="approval-note">
+                      Registrar will approve or reject this event. After approval, you can send requirements to Facility Manager, IT, and Marketing.
+                    </p>
+
+                    {approvalModal.status === "error" ? (
+                      <p className="form-error">{approvalModal.error}</p>
+                    ) : null}
+
+                    <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleApprovalModalClose}>
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="primary-action"
+                        disabled={approvalModal.status === "loading"}
+                      >
+                        {approvalModal.status === "loading" ? "Sending..." : "Send"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : null}
+
+            {facilityModal.open ? (
+              <div className="approval-overlay" role="dialog" aria-modal="true">
+                <div className="marketing-card">
+                  <div className="approval-header">
+                    <h3>FACILITY MANAGER REQUEST</h3>
+                    <button type="button" className="modal-close" onClick={handleFacilityModalClose}>
+                      &times;
+                    </button>
+                  </div>
+                  <form className="approval-form" onSubmit={submitFacilityRequest}>
+                    <div className="approval-grid">
+                      <label className="approval-field">
+                        <span>From</span>
+                        <input type="email" value={user?.email || ""} readOnly />
+                      </label>
+                      <label className="approval-field">
+                        <span>To</span>
                         <input
                           type="email"
-                          placeholder="admin@campus.edu"
-                          value={approvalForm.to}
-                          onChange={handleApprovalFieldChange("to")}
-                          required
+                          placeholder="facilitymanager@campus.edu"
+                          value={facilityForm.to}
+                          onChange={handleFacilityFieldChange("to")}
                         />
                       </label>
                     </div>
@@ -3727,16 +4123,16 @@ export default function App() {
                       <label>
                         <input
                           type="checkbox"
-                          checked={approvalForm.requirements.venue}
-                          onChange={handleApprovalRequirementChange("venue")}
+                          checked={facilityForm.venue_required}
+                          onChange={handleFacilityToggle("venue_required")}
                         />
-                        Venue
+                        Venue setup
                       </label>
                       <label>
                         <input
                           type="checkbox"
-                          checked={approvalForm.requirements.refreshments}
-                          onChange={handleApprovalRequirementChange("refreshments")}
+                          checked={facilityForm.refreshments}
+                          onChange={handleFacilityToggle("refreshments")}
                         />
                         Refreshments
                       </label>
@@ -3746,29 +4142,26 @@ export default function App() {
                       <span>Others</span>
                       <textarea
                         rows="4"
-                        placeholder="Add additional notes for the admin."
-                        value={approvalForm.other_notes}
-                        onChange={handleApprovalFieldChange("other_notes")}
+                        placeholder="Add additional notes for the facility manager."
+                        value={facilityForm.other_notes}
+                        onChange={handleFacilityFieldChange("other_notes")}
                       />
                     </label>
 
-                    {approvalModal.status === "error" ? (
-                      <p className="form-error">{approvalModal.error}</p>
+                    {facilityModal.status === "error" ? (
+                      <p className="form-error">{facilityModal.error}</p>
                     ) : null}
 
                     <div className="modal-actions">
-                      <button type="button" className="secondary-action" onClick={handleApprovalSkip}>
-                        Skip
-                      </button>
-                      <button type="button" className="secondary-action" onClick={handleApprovalModalClose}>
+                      <button type="button" className="secondary-action" onClick={handleFacilityModalClose}>
                         Cancel
                       </button>
                       <button
                         type="submit"
                         className="primary-action"
-                        disabled={approvalModal.status === "loading"}
+                        disabled={facilityModal.status === "loading"}
                       >
-                        {approvalModal.status === "loading" ? "Sending..." : "Send"}
+                        {facilityModal.status === "loading" ? "Sending..." : "Send"}
                       </button>
                     </div>
                   </form>
@@ -3843,7 +4236,7 @@ export default function App() {
               <div className="marketing-overlay" role="dialog" aria-modal="true">
                 <div className="marketing-card">
                   <div className="approval-header">
-                    <h3>MARKETING TEAM</h3>
+                    <h3>MARKETING REQUEST</h3>
                     <button type="button" className="modal-close" onClick={handleMarketingModalClose}>
                       &times;
                     </button>
@@ -3861,23 +4254,31 @@ export default function App() {
                           placeholder="marketing@campus.edu"
                           value={marketingForm.to}
                           onChange={handleMarketingFieldChange("to")}
-                          required
                         />
                       </label>
                     </div>
 
                     <div className="approval-summary">
                       <p>
-                        <strong>Event:</strong> {eventForm.name || "Untitled event"}
+                        <strong>Event:</strong> {pendingEvent?.name || eventForm.name || "Untitled event"}
                       </p>
                       <p>
                         <strong>Date:</strong>{" "}
-                        {eventForm.start_date || "--"} {eventForm.end_date ? `to ${eventForm.end_date}` : ""}
+                        {pendingEvent?.start_date || eventForm.start_date || "--"}{" "}
+                        {pendingEvent?.end_date
+                          ? `to ${pendingEvent.end_date}`
+                          : eventForm.end_date
+                            ? `to ${eventForm.end_date}`
+                            : ""}
                       </p>
                       <p>
                         <strong>Time:</strong>{" "}
-                        {formatISTTime(eventForm.start_time) || "--"}{" "}
-                        {eventForm.end_time ? `to ${formatISTTime(eventForm.end_time)}` : ""}
+                        {formatISTTime(pendingEvent?.start_time || eventForm.start_time) || "--"}{" "}
+                        {pendingEvent?.end_time
+                          ? `to ${formatISTTime(pendingEvent.end_time)}`
+                          : eventForm.end_time
+                            ? `to ${formatISTTime(eventForm.end_time)}`
+                            : ""}
                       </p>
                     </div>
 
@@ -3983,7 +4384,7 @@ export default function App() {
               <div className="marketing-overlay" role="dialog" aria-modal="true">
                 <div className="marketing-card">
                   <div className="approval-header">
-                    <h3>IT DEPARTMENT</h3>
+                    <h3>IT SUPPORT REQUEST</h3>
                     <button type="button" className="modal-close" onClick={handleItModalClose}>
                       &times;
                     </button>
@@ -4001,7 +4402,6 @@ export default function App() {
                           placeholder="it@campus.edu"
                           value={itForm.to}
                           onChange={handleItFieldChange("to")}
-                          required
                         />
                       </label>
                     </div>
@@ -4229,12 +4629,73 @@ export default function App() {
         );
       }
 
-      if (isApprovals) {
+      if (isApprovals || isRequirements) {
         return (
           <div className="primary-column">
+            {!showApprovalsOrRequirementsContent ? (
+              <div className="events-table-card">
+                <p className="table-message">
+                  {isApprovals ? "You do not have access to approvals." : "You do not have access to requirements."}
+                </p>
+              </div>
+            ) : null}
+            {showApprovalsOrRequirementsContent ? (
+            <>
+            <div className="approvals-tabs">
+              {isApproverRole ? (
+                <button
+                  type="button"
+                  className={`tab-button ${approvalsTab === "approval-requests" ? "active" : ""}`}
+                  onClick={() => setApprovalsTab("approval-requests")}
+                >
+                  Approval Requests
+                  {approvalsState.status === "ready" && approvalsState.items.filter((i) => i.status === "pending").length > 0 ? (
+                    <span className="tab-badge">{approvalsState.items.filter((i) => i.status === "pending").length}</span>
+                  ) : null}
+                </button>
+              ) : null}
+              {isFacilityManagerRole ? (
+                <button
+                  type="button"
+                  className={`tab-button ${approvalsTab === "facility" ? "active" : ""}`}
+                  onClick={() => setApprovalsTab("facility")}
+                >
+                  Facility Manager
+                  {facilityState.status === "ready" && facilityState.items.filter((i) => i.status === "pending").length > 0 ? (
+                    <span className="tab-badge">{facilityState.items.filter((i) => i.status === "pending").length}</span>
+                  ) : null}
+                </button>
+              ) : null}
+              {isMarketingRole ? (
+                <button
+                  type="button"
+                  className={`tab-button ${approvalsTab === "marketing" ? "active" : ""}`}
+                  onClick={() => setApprovalsTab("marketing")}
+                >
+                  Marketing
+                  {marketingState.status === "ready" && marketingState.items.filter((i) => i.status === "pending").length > 0 ? (
+                    <span className="tab-badge">{marketingState.items.filter((i) => i.status === "pending").length}</span>
+                  ) : null}
+                </button>
+              ) : null}
+              {isItRole ? (
+                <button
+                  type="button"
+                  className={`tab-button ${approvalsTab === "it" ? "active" : ""}`}
+                  onClick={() => setApprovalsTab("it")}
+                >
+                  IT
+                  {itState.status === "ready" && itState.items.filter((i) => i.status === "pending").length > 0 ? (
+                    <span className="tab-badge">{itState.items.filter((i) => i.status === "pending").length}</span>
+                  ) : null}
+                </button>
+              ) : null}
+            </div>
+            {isApproverRole && approvalsTab === "approval-requests" ? (
             <div className="events-table-card">
               <div className="table-header">
                 <h3>Approval Requests</h3>
+                <button type="button" className="secondary-action" onClick={loadApprovalsInbox}>Refresh</button>
               </div>
               <div className="events-table">
                 <div className="events-table-row header approvals">
@@ -4265,6 +4726,13 @@ export default function App() {
                           <span>{formatISTTime(item.start_time)}</span>
                           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                           <div className="approval-actions">
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => handleApprovalDetailsOpen(item)}
+                            >
+                              Details
+                            </button>
                             {item.status === "pending" ? (
                               <>
                                 <button
@@ -4290,10 +4758,85 @@ export default function App() {
                     : null}
               </div>
             </div>
+            ) : null}
 
+            {isFacilityManagerRole && approvalsTab === "facility" ? (
+            <div className="events-table-card">
+              <div className="table-header">
+                <h3>Facility Manager Requests</h3>
+                <button type="button" className="secondary-action" onClick={loadFacilityInbox}>Refresh</button>
+              </div>
+              <div className="events-table">
+                <div className="events-table-row header facility">
+                  <span>Event</span>
+                  <span>Requester</span>
+                  <span>Date</span>
+                  <span>Time</span>
+                  <span>Status</span>
+                  <span>Needs</span>
+                  <span>Action</span>
+                </div>
+                {facilityState.status === "loading" ? (
+                  <p className="table-message">Loading facility requests...</p>
+                ) : null}
+                {facilityState.status === "error" ? (
+                  <p className="table-message">{facilityState.error}</p>
+                ) : null}
+                {facilityState.status === "ready" && facilityState.items.length === 0 ? (
+                  <p className="table-message">No facility requests yet.</p>
+                ) : null}
+                {facilityState.status === "ready"
+                  ? facilityState.items.map((item) => {
+                      const needs = [];
+                      if (item.venue_required) {
+                        needs.push("Venue");
+                      }
+                      if (item.refreshments) {
+                        needs.push("Refreshments");
+                      }
+                      const needsLabel = needs.length ? needs.join(", ") : "None";
+                      const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                      return (
+                        <div key={item.id} className="events-table-row facility">
+                          <span>{item.event_name}</span>
+                          <span>{item.requester_email}</span>
+                          <span>{item.start_date}</span>
+                          <span>{formatISTTime(item.start_time)}</span>
+                          <span className={`status-pill ${item.status}`}>{statusLabel}</span>
+                          <span className="marketing-needs">{needsLabel}</span>
+                          <div className="approval-actions">
+                            {item.status === "pending" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="details-button"
+                                  onClick={() => handleFacilityDecision(item.id, "approved")}
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  className="details-button reject"
+                                  onClick={() => handleFacilityDecision(item.id, "rejected")}
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })
+                  : null}
+              </div>
+            </div>
+            ) : null}
+
+            {isMarketingRole && approvalsTab === "marketing" ? (
             <div className="events-table-card">
               <div className="table-header">
                 <h3>Marketing Requests</h3>
+                <button type="button" className="secondary-action" onClick={loadMarketingInbox}>Refresh</button>
               </div>
               <div className="events-table">
                 <div className="events-table-row header marketing">
@@ -4368,10 +4911,13 @@ export default function App() {
                   : null}
               </div>
             </div>
+            ) : null}
 
+            {isItRole && approvalsTab === "it" ? (
             <div className="events-table-card">
               <div className="table-header">
                 <h3>IT Requests</h3>
+                <button type="button" className="secondary-action" onClick={loadItInbox}>Refresh</button>
               </div>
               <div className="events-table">
                 <div className="events-table-row header it">
@@ -4437,6 +4983,9 @@ export default function App() {
                   : null}
               </div>
             </div>
+            ) : null}
+            </>
+            ) : null}
           </div>
         );
       }
@@ -4534,6 +5083,53 @@ export default function App() {
                   Connect Google
                 </button>
               </div>
+            </div>
+          </div>
+        ) : null}
+        {addUserModal.open ? (
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="modal-card">
+              <div className="modal-header">
+                <h3>Add User</h3>
+                <button type="button" className="modal-close" onClick={handleAddUserModalClose}>
+                  &times;
+                </button>
+              </div>
+              <form className="event-form" onSubmit={handleAddUserSubmit}>
+                <label className="form-field">
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    placeholder="user@example.edu"
+                    value={addUserModal.email}
+                    onChange={(e) => setAddUserModal((prev) => ({ ...prev, email: e.target.value }))}
+                    required
+                  />
+                </label>
+                <label className="form-field">
+                  <span>Role</span>
+                  <select
+                    value={addUserModal.role}
+                    onChange={(e) => setAddUserModal((prev) => ({ ...prev, role: e.target.value }))}
+                  >
+                    <option value="registrar">Registrar</option>
+                    <option value="facility_manager">Facility Manager</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="it">IT</option>
+                  </select>
+                </label>
+                {addUserModal.error ? (
+                  <p className="form-error">{addUserModal.error}</p>
+                ) : null}
+                <div className="modal-actions">
+                  <button type="button" className="secondary-action" onClick={handleAddUserModalClose}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="primary-action" disabled={addUserModal.status === "loading"}>
+                    {addUserModal.status === "loading" ? "Adding..." : "Add User"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         ) : null}
@@ -4649,6 +5245,88 @@ export default function App() {
             </div>
           </div>
         ) : null}
+        {approvalDetailsModal.open ? (
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="modal-card details-card">
+              <div className="modal-header">
+                <h3>Approval Request Details</h3>
+                <button type="button" className="modal-close" onClick={handleApprovalDetailsClose}>
+                  &times;
+                </button>
+              </div>
+              {approvalDetailsModal.request ? (
+                <div className="details-grid">
+                  <div>
+                    <p className="details-label">Event</p>
+                    <p className="details-value">{approvalDetailsModal.request.event_name || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="details-label">Requester</p>
+                    <p className="details-value">{approvalDetailsModal.request.requester_email || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="details-label">Requested To</p>
+                    <p className="details-value">{approvalDetailsModal.request.requested_to || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="details-label">Status</p>
+                    <p className="details-value">{approvalDetailsModal.request.status || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="details-label">Facilitator</p>
+                    <p className="details-value">{approvalDetailsModal.request.facilitator || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="details-label">Venue</p>
+                    <p className="details-value">{approvalDetailsModal.request.venue_name || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="details-label">Start</p>
+                    <p className="details-value">
+                      {approvalDetailsModal.request.start_date || "-"} ?{" "}
+                      {approvalDetailsModal.request.start_time
+                        ? formatISTTime(approvalDetailsModal.request.start_time)
+                        : "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="details-label">End</p>
+                    <p className="details-value">
+                      {approvalDetailsModal.request.end_date || "-"} ?{" "}
+                      {approvalDetailsModal.request.end_time
+                        ? formatISTTime(approvalDetailsModal.request.end_time)
+                        : "-"}
+                    </p>
+                  </div>
+                  <div className="details-wide">
+                    <p className="details-label">Requirements</p>
+                    <p className="details-value">
+                      {Array.isArray(approvalDetailsModal.request.requirements) &&
+                      approvalDetailsModal.request.requirements.length
+                        ? approvalDetailsModal.request.requirements.join(", ")
+                        : "None"}
+                    </p>
+                  </div>
+                  <div className="details-wide">
+                    <p className="details-label">Other Notes</p>
+                    <p className="details-value">{approvalDetailsModal.request.other_notes || "-"}</p>
+                  </div>
+                  <div className="details-wide">
+                    <p className="details-label">Description</p>
+                    <p className="details-value">{approvalDetailsModal.request.description || "-"}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="table-message">Approval request details not available.</p>
+              )}
+              <div className="modal-actions">
+                <button type="button" className="secondary-action" onClick={handleApprovalDetailsClose}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <aside className="sidebar">
           <div className="brand">
             <div className="brand-icon">
@@ -4712,9 +5390,11 @@ export default function App() {
                         ? "Calendar View"
                         : isApprovals
                           ? "Approvals"
-                          : isAdminView
-                            ? "Admin Console"
-                            : "Dashboard Overview"}
+                          : isRequirements
+                            ? "Requirements"
+                            : isAdminView
+                              ? "Admin Console"
+                              : "Dashboard Overview"}
               </p>
             </div>
             <div className="search-bar">

@@ -23,6 +23,18 @@ class User(Document):
         ]
 
 
+class PendingRoleAssignment(Document):
+    """Pre-assigned role for an email before first login. Applied when user signs in with Google."""
+    email: str = Field(unique=True)
+    role: str  # registrar, facility_manager, marketing, it
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_by: Optional[str] = None  # admin user id who added
+
+    class Settings:
+        name = "pending_role_assignments"
+        indexes = ["email"]
+
+
 class Venue(Document):
     name: Indexed(str, unique=True)
 
@@ -105,6 +117,28 @@ class MarketingRequest(Document):
 
     class Settings:
         name = "marketing_requests"
+
+
+class FacilityManagerRequest(Document):
+    requester_id: str
+    requester_email: str
+    requested_to: Optional[str] = None
+    event_id: Optional[str] = None
+    event_name: str
+    start_date: str
+    start_time: str
+    end_date: str
+    end_time: str
+    venue_required: bool = False
+    refreshments: bool = False
+    other_notes: Optional[str] = None
+    status: str = Field(default="pending")
+    decided_at: Optional[datetime] = None
+    decided_by: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "facility_manager_requests"
 
 
 class ItRequest(Document):

@@ -2,7 +2,8 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from models import MarketingRequest, User
+from auth import get_primary_email_by_role
+from models import ApprovalRequest, Event, MarketingRequest, User
 from routers.deps import get_current_user
 from schemas import MarketingDecision, MarketingRequestCreate, MarketingRequestResponse
 
@@ -14,11 +15,31 @@ async def create_marketing_request(
     payload: MarketingRequestCreate,
     user: User = Depends(get_current_user),
 ):
-    requested_to = (payload.requested_to or "").strip().lower()
+    if not payload.event_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Marketing request requires an approved event",
+        )
+
+    event = await Event.get(payload.event_id)
+    if not event or event.created_by != str(user.id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Event not found",
+        )
+
+    approval = await ApprovalRequest.find_one(ApprovalRequest.event_id == str(event.id))
+    if not approval or approval.status != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Registrar must approve the event before sending marketing request",
+        )
+
+    requested_to = (payload.requested_to or "").strip().lower() or await get_primary_email_by_role("marketing")
     if not requested_to:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Marketing recipient is required",
+            detail="Marketing email is required",
         )
 
     request_item = MarketingRequest(

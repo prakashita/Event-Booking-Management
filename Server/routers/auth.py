@@ -1,7 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from models import User
-from auth import REQUIRED_GOOGLE_SCOPES, ensure_google_access_token, verify_google_token, create_access_token, is_admin_email
+from models import PendingRoleAssignment, User
+from auth import (
+    REQUIRED_GOOGLE_SCOPES,
+    ensure_google_access_token,
+    verify_google_token,
+    create_access_token,
+    is_admin_email,
+)
 from routers.deps import get_current_user
 import requests
 
@@ -31,8 +37,15 @@ async def google_login(payload: TokenRequest):
             google_id=google_id
         )
         await user.insert()
+        # Apply pre-assigned role from Add User (pending role assignment)
+        pending = await PendingRoleAssignment.find_one(PendingRoleAssignment.email == email.lower().strip())
+        if pending and pending.role:
+            user.role = (pending.role or "").strip().lower()
+            await user.save()
+            await pending.delete()
 
-    if is_admin_email(email) and (user.role or "").strip().lower() != "admin":
+    normalized_role = (user.role or "").strip().lower()
+    if is_admin_email(email) and normalized_role != "admin":
         user.role = "admin"
         await user.save()
 

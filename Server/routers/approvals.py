@@ -1,15 +1,60 @@
-from datetime import datetime
+import base64
+import logging
 import re
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+import requests
 
-from models import ApprovalRequest, Event, ItRequest, MarketingRequest, User
+from auth import ensure_google_access_token
+from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, User
 from event_status import compute_event_status
 from routers.deps import get_current_user
 from routers.events import sync_event_to_google_calendar
 from schemas import ApprovalDecision, ApprovalRequestResponse
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
+logger = logging.getLogger("event-booking.approvals")
+
+
+def _build_raw_email(to_email: str, subject: str, body: str) -> str:
+    headers = [
+        f"To: {to_email}",
+        f"Subject: {subject}",
+        "Content-Type: text/plain; charset=\"UTF-8\"",
+    ]
+    return "\r\n".join(headers) + "\r\n\r\n" + body
+
+
+async def notify_requester_on_approval(
+    approver: User,
+    requester_email: str,
+    event_name: str,
+    event_id: str,
+) -> None:
+    """Send email to requester when registrar approves their event."""
+    try:
+        access_token = await ensure_google_access_token(approver)
+    except HTTPException:
+        logger.warning("Cannot notify requester: approver Google token not available")
+        return
+    subject = f"Event Approved: {event_name}"
+    body = (
+        f"Your event \"{event_name}\" has been approved by the registrar.\n\n"
+        "The event is now active. Please log in to the Event Booking portal and "
+        "submit your requirements to the Facility Manager, IT, and Marketing teams."
+    )
+    raw_message = _build_raw_email(requester_email, subject, body)
+    encoded_message = base64.urlsafe_b64encode(raw_message.encode("utf-8")).decode("utf-8")
+    response = requests.post(
+        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"raw": encoded_message},
+        timeout=15,
+    )
+    if response.status_code not in {200, 202}:
+        logger.warning("Failed to notify requester of approval: %s", response.text)
+
 
 def normalize_time(value: str | None) -> str:
     if not value:
@@ -99,7 +144,8 @@ async def decide_request(
     if not approval:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
 
-    if approval.requested_to and approval.requested_to != user.email:
+    approver_email = (user.email or "").strip().lower()
+    if approval.requested_to and approval.requested_to.strip().lower() != approver_email:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
     if approval.status == "pending":
@@ -162,6 +208,15 @@ async def decide_request(
                 approval_start = normalize_time(approval.start_time)
                 approval_end = normalize_time(approval.end_time)
 
+                facility_requests = await FacilityManagerRequest.find(matching_query).to_list()
+                for request_item in facility_requests:
+                    if (
+                        normalize_time(request_item.start_time) == approval_start
+                        and normalize_time(request_item.end_time) == approval_end
+                    ):
+                        request_item.event_id = approval.event_id
+                        await request_item.save()
+
                 marketing_requests = await MarketingRequest.find(matching_query).to_list()
                 for request_item in marketing_requests:
                     if (
@@ -179,6 +234,13 @@ async def decide_request(
                     ):
                         request_item.event_id = approval.event_id
                         await request_item.save()
+
+                try:
+                    await notify_requester_on_approval(
+                        user, requester.email, event.name, str(event.id)
+                    )
+                except Exception as exc:
+                    logger.warning("Requester approval notification failed: %s", exc)
             approval.status = "approved"
         else:
             approval.status = "rejected"

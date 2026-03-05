@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from models import ApprovalRequest, Event, Invite, ItRequest, MarketingRequest, Publication, User, Venue
+from models import ApprovalRequest, Event, FacilityManagerRequest, Invite, ItRequest, MarketingRequest, Publication, User, Venue
 from routers.deps import require_admin
 from schemas import (
     ApprovalRequestResponse,
     EventResponse,
+    FacilityManagerRequestResponse,
     InviteResponse,
     ItRequestResponse,
     MarketingRequestResponse,
@@ -89,6 +90,28 @@ def serialize_marketing(item: MarketingRequest) -> MarketingRequestResponse:
     )
 
 
+def serialize_facility(item: FacilityManagerRequest) -> FacilityManagerRequestResponse:
+    return FacilityManagerRequestResponse(
+        id=str(item.id),
+        requester_id=item.requester_id,
+        requester_email=item.requester_email,
+        requested_to=item.requested_to,
+        event_id=item.event_id,
+        event_name=item.event_name,
+        start_date=item.start_date,
+        start_time=item.start_time,
+        end_date=item.end_date,
+        end_time=item.end_time,
+        venue_required=item.venue_required,
+        refreshments=item.refreshments,
+        other_notes=item.other_notes,
+        status=item.status,
+        decided_at=item.decided_at,
+        decided_by=item.decided_by,
+        created_at=item.created_at,
+    )
+
+
 def serialize_it(item: ItRequest) -> ItRequestResponse:
     return ItRequestResponse(
         id=str(item.id),
@@ -146,6 +169,7 @@ async def admin_overview(admin: User = Depends(require_admin)):
         "venues": await Venue.find_all().count(),
         "events": await Event.find_all().count(),
         "approvals": await ApprovalRequest.find_all().count(),
+        "facility": await FacilityManagerRequest.find_all().count(),
         "marketing": await MarketingRequest.find_all().count(),
         "it": await ItRequest.find_all().count(),
         "invites": await Invite.find_all().count(),
@@ -163,6 +187,12 @@ async def list_all_events(admin: User = Depends(require_admin)):
 async def list_all_approvals(admin: User = Depends(require_admin)):
     items = await ApprovalRequest.find_all().sort("-created_at").to_list()
     return [serialize_approval(item) for item in items]
+
+
+@router.get("/facility", response_model=list[FacilityManagerRequestResponse])
+async def list_all_facility(admin: User = Depends(require_admin)):
+    items = await FacilityManagerRequest.find_all().sort("-created_at").to_list()
+    return [serialize_facility(item) for item in items]
 
 
 @router.get("/marketing", response_model=list[MarketingRequestResponse])
@@ -214,7 +244,19 @@ async def delete_event(event_id: str, admin: User = Depends(require_admin)):
         }
     ).delete()
     # Remove related marketing requests (by event_id or matching pending details)
+    await FacilityManagerRequest.find(FacilityManagerRequest.event_id == event_id).delete()
     await MarketingRequest.find(MarketingRequest.event_id == event_id).delete()
+    await FacilityManagerRequest.find(
+        {
+            "event_id": None,
+            "requester_id": item.created_by,
+            "event_name": item.name,
+            "start_date": item.start_date,
+            "start_time": item.start_time,
+            "end_date": item.end_date,
+            "end_time": item.end_time,
+        }
+    ).delete()
     await MarketingRequest.find(
         {
             "event_id": None,
@@ -260,6 +302,17 @@ async def delete_approval(request_id: str, admin: User = Depends(require_admin))
             await Invite.find(Invite.event_id == item.event_id).delete()
             await event.delete()
     # Remove related pending requests that match this approval details
+    await FacilityManagerRequest.find(
+        {
+            "event_id": None,
+            "requester_id": item.requester_id,
+            "event_name": item.event_name,
+            "start_date": item.start_date,
+            "start_time": item.start_time,
+            "end_date": item.end_date,
+            "end_time": item.end_time,
+        }
+    ).delete()
     await MarketingRequest.find(
         {
             "event_id": None,
@@ -282,6 +335,15 @@ async def delete_approval(request_id: str, admin: User = Depends(require_admin))
             "end_time": item.end_time,
         }
     ).delete()
+    await item.delete()
+    return {"status": "deleted", "id": request_id}
+
+
+@router.delete("/facility/{request_id}")
+async def delete_facility(request_id: str, admin: User = Depends(require_admin)):
+    item = await FacilityManagerRequest.get(request_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Facility request not found")
     await item.delete()
     return {"status": "deleted", "id": request_id}
 

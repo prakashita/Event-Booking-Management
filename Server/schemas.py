@@ -17,6 +17,11 @@ class UserRoleUpdate(BaseModel):
     role: str
 
 
+class AddUserRequest(BaseModel):
+    email: str = Field(..., min_length=1)
+    role: str = Field(..., min_length=1)
+
+
 class VenueCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
 
@@ -86,6 +91,43 @@ class ApprovalRequestResponse(BaseModel):
 
 
 class ApprovalDecision(BaseModel):
+    status: str
+
+
+class FacilityManagerRequestCreate(BaseModel):
+    requested_to: Optional[str] = Field(default=None, max_length=200)
+    event_id: Optional[str] = None
+    event_name: str = Field(..., min_length=1, max_length=160)
+    start_date: str
+    start_time: str
+    end_date: str
+    end_time: str
+    venue_required: bool = False
+    refreshments: bool = False
+    other_notes: Optional[str] = Field(default=None, max_length=2000)
+
+
+class FacilityManagerRequestResponse(BaseModel):
+    id: str
+    requester_id: str
+    requester_email: str
+    requested_to: Optional[str] = None
+    event_id: Optional[str] = None
+    event_name: str
+    start_date: str
+    start_time: str
+    end_date: str
+    end_time: str
+    venue_required: bool
+    refreshments: bool
+    other_notes: Optional[str] = None
+    status: str
+    decided_at: Optional[datetime] = None
+    decided_by: Optional[str] = None
+    created_at: datetime
+
+
+class FacilityManagerDecision(BaseModel):
     status: str
 
 
