@@ -180,13 +180,42 @@ class Invite(Document):
 class Publication(Document):
     name: str
     title: str
+    pub_type: Optional[str] = None  # webpage, journal_article, book, report, video, online_newspaper
     others: Optional[str] = None
-    file_id: str
-    file_name: str
+    file_id: Optional[str] = None
+    file_name: Optional[str] = None
     web_view_link: Optional[str] = None
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    uploaded_at: Optional[datetime] = None
     created_by: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    # Shared / common fields
+    author: Optional[str] = None
+    publication_date: Optional[str] = None
+    url: Optional[str] = None
+    # Journal Article
+    article_title: Optional[str] = None
+    journal_name: Optional[str] = None
+    volume: Optional[str] = None
+    issue: Optional[str] = None
+    pages: Optional[str] = None
+    doi: Optional[str] = None
+    year: Optional[str] = None
+    # Book
+    book_title: Optional[str] = None
+    publisher: Optional[str] = None
+    edition: Optional[str] = None
+    page_number: Optional[str] = None
+    # Report
+    organization: Optional[str] = None
+    report_title: Optional[str] = None
+    # Video
+    creator: Optional[str] = None
+    video_title: Optional[str] = None
+    platform: Optional[str] = None
+    # Online Newspaper / Webpage
+    newspaper_name: Optional[str] = None
+    website_name: Optional[str] = None
+    page_title: Optional[str] = None
 
     class Settings:
         name = "publications"

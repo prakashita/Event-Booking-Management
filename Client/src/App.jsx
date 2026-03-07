@@ -227,6 +227,7 @@ export default function App() {
   });
   const [eventDetailsModal, setEventDetailsModal] = useState({ open: false, event: null });
   const [approvalDetailsModal, setApprovalDetailsModal] = useState({ open: false, request: null });
+  const [publicationTypeModal, setPublicationTypeModal] = useState({ open: false });
   const [publicationModal, setPublicationModal] = useState({
     open: false,
     status: "idle",
@@ -235,9 +236,39 @@ export default function App() {
   const [publicationForm, setPublicationForm] = useState({
     name: "",
     title: "",
+    pubType: "",
     file: null,
-    others: ""
+    others: "",
+    // Shared
+    author: "",
+    publication_date: "",
+    url: "",
+    // Journal Article
+    article_title: "",
+    journal_name: "",
+    volume: "",
+    issue: "",
+    pages: "",
+    doi: "",
+    year: "",
+    // Book
+    book_title: "",
+    publisher: "",
+    edition: "",
+    page_number: "",
+    // Report
+    organization: "",
+    report_title: "",
+    // Video
+    creator: "",
+    video_title: "",
+    platform: "",
+    // Newspaper / Webpage
+    newspaper_name: "",
+    website_name: "",
+    page_title: ""
   });
+
   const [reportFile, setReportFile] = useState(null);
   const [calendarState, setCalendarState] = useState({
     status: "idle",
@@ -2145,14 +2176,50 @@ export default function App() {
     setReportFile(event.target.files?.[0] || null);
   };
 
-  const handlePublicationOpen = () => {
+  const handlePublicationTypeOpen = () => {
+    setPublicationTypeModal({ open: true });
+  };
+
+  const handlePublicationTypeClose = () => {
+    setPublicationTypeModal({ open: false });
+  };
+
+  const handlePublicationTypeSelect = (pubType) => {
+    setPublicationTypeModal({ open: false });
     setPublicationForm({
       name: "",
       title: "",
+      pubType,
       file: null,
-      others: ""
+      others: "",
+      author: "",
+      publication_date: "",
+      url: "",
+      article_title: "",
+      journal_name: "",
+      volume: "",
+      issue: "",
+      pages: "",
+      doi: "",
+      year: "",
+      book_title: "",
+      publisher: "",
+      edition: "",
+      page_number: "",
+      organization: "",
+      report_title: "",
+      creator: "",
+      video_title: "",
+      platform: "",
+      newspaper_name: "",
+      website_name: "",
+      page_title: ""
     });
     setPublicationModal({ open: true, status: "idle", error: "" });
+  };
+
+  const handlePublicationOpen = () => {
+    handlePublicationTypeOpen();
   };
 
   const handlePublicationClose = () => {
@@ -2171,21 +2238,34 @@ export default function App() {
     if (formEvent) {
       formEvent.preventDefault();
     }
-    if (!publicationForm.name || !publicationForm.title || !publicationForm.file) {
-      setPublicationModal({
-        open: true,
-        status: "error",
-        error: "Please fill name, title, and attach a file."
-      });
+    const f = publicationForm;
+    const pt = f.pubType;
+    // Validate required fields per type
+    let validationError = null;
+    if (!f.name) validationError = "Please provide a label/name for this record.";
+    else if (pt === "webpage" && (!f.author || !f.page_title || !f.website_name || !f.url)) validationError = "Please fill all required fields.";
+    else if (pt === "journal_article" && (!f.author || !f.article_title || !f.journal_name || !f.year)) validationError = "Please fill all required fields.";
+    else if (pt === "book" && (!f.author || !f.book_title || !f.publisher || !f.year)) validationError = "Please fill all required fields.";
+    else if (pt === "report" && (!f.organization || !f.report_title || !f.year || !f.publisher)) validationError = "Please fill all required fields.";
+    else if (pt === "video" && (!f.creator || !f.video_title || !f.platform || !f.publication_date || !f.url)) validationError = "Please fill all required fields.";
+    else if (pt === "online_newspaper" && (!f.author || !f.article_title || !f.newspaper_name || !f.publication_date || !f.url)) validationError = "Please fill all required fields.";
+    if (validationError) {
+      setPublicationModal({ open: true, status: "error", error: validationError });
       return;
     }
     setPublicationModal({ open: true, status: "loading", error: "" });
     try {
       const formData = new FormData();
-      formData.append("name", publicationForm.name);
-      formData.append("title", publicationForm.title);
-      formData.append("others", publicationForm.others || "");
-      formData.append("file", publicationForm.file);
+      formData.append("name", f.name);
+      formData.append("title", f.title || f.name);
+      formData.append("pub_type", pt);
+      if (f.others) formData.append("others", f.others);
+      if (f.file) formData.append("file", f.file);
+      // Append all optional fields if present
+      const optionals = ["author","publication_date","url","article_title","journal_name","volume","issue","pages","doi","year","book_title","publisher","edition","page_number","organization","report_title","creator","video_title","platform","newspaper_name","website_name","page_title"];
+      optionals.forEach((key) => {
+        if (f[key]) formData.append(key, f[key]);
+      });
       const res = await apiFetch(`${apiBaseUrl}/publications`, {
         method: "POST",
         body: formData
@@ -3386,14 +3466,18 @@ export default function App() {
                     <span>Uploaded</span>
                     <span>Action</span>
                   </div>
-                  {adminPublicationsState.items.map((pub) => (
+                  {adminPublicationsState.items.map((pub) => {
+                    const pubTypeAdminLabels = { webpage: "Webpage", journal_article: "Journal Article", book: "Book", report: "Report", video: "Video", online_newspaper: "Online Newspaper" };
+                    return (
                     <div className="admin-row events" key={pub.id}>
                       <div className="admin-cell">
                         <p className="admin-name">{pub.name}</p>
-                        <p className="admin-email">{pub.file_name}</p>
+                        <p className="admin-email">{pub.file_name || pub.url || "—"}</p>
                       </div>
-                      <div className="admin-cell">{pub.title}</div>
-                      <div className="admin-cell">{pub.uploaded_at?.slice(0, 10)}</div>
+                      <div className="admin-cell">
+                        <span className={`pub-type-badge pub-type-${pub.pub_type || "unknown"}`}>{pubTypeAdminLabels[pub.pub_type] || pub.pub_type || "—"}</span>
+                      </div>
+                      <div className="admin-cell">{pub.uploaded_at ? pub.uploaded_at.slice(0, 10) : pub.created_at?.slice(0, 10) || "—"}</div>
                       <div className="admin-cell">
                         <button
                           type="button"
@@ -3404,10 +3488,12 @@ export default function App() {
                         </button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   {adminPublicationsState.items.length === 0 && adminPublicationsState.status === "ready" ? (
                     <p className="table-message">No publications found.</p>
                   ) : null}
+
                 </div>
               </div>
             ) : null}
@@ -4522,6 +4608,56 @@ export default function App() {
       }
 
       if (isPublications) {
+        const PUB_META = {
+          webpage:          { icon: "🌐", label: "Webpage",           color: "#2c7a7b" },
+          journal_article:  { icon: "📄", label: "Journal Article",   color: "#553c9a" },
+          book:             { icon: "📚", label: "Book",              color: "#c05621" },
+          report:           { icon: "📊", label: "Report",           color: "#2b6cb0" },
+          video:            { icon: "🎬", label: "Video",             color: "#c53030" },
+          online_newspaper: { icon: "📰", label: "Online Newspaper",  color: "#276749" },
+        };
+
+        const getPubDetails = (item) => {
+          const pt = item.pub_type;
+          if (pt === "webpage") return [
+            item.author && `Author: ${item.author}`,
+            item.website_name && `Site: ${item.website_name}`,
+            item.publication_date && `Date: ${item.publication_date}`,
+          ].filter(Boolean);
+          if (pt === "journal_article") return [
+            item.author && `Author: ${item.author}`,
+            item.journal_name && `Journal: ${item.journal_name}`,
+            [item.volume && `Vol. ${item.volume}`, item.issue && `No. ${item.issue}`, item.pages && `pp. ${item.pages}`].filter(Boolean).join(", "),
+            item.year && `Year: ${item.year}`,
+            item.doi && `DOI: ${item.doi}`,
+          ].filter(Boolean);
+          if (pt === "book") return [
+            item.author && `Author: ${item.author}`,
+            item.publisher && `Publisher: ${item.publisher}`,
+            [item.edition && `${item.edition} Ed.`, item.year].filter(Boolean).join(", "),
+          ].filter(Boolean);
+          if (pt === "report") return [
+            item.organization && `Org: ${item.organization}`,
+            item.publisher && `Publisher: ${item.publisher}`,
+            item.year && `Year: ${item.year}`,
+          ].filter(Boolean);
+          if (pt === "video") return [
+            item.creator && `Creator: ${item.creator}`,
+            item.platform && `Platform: ${item.platform}`,
+            item.publication_date && `Date: ${item.publication_date}`,
+          ].filter(Boolean);
+          if (pt === "online_newspaper") return [
+            item.author && `Author: ${item.author}`,
+            item.newspaper_name && `Source: ${item.newspaper_name}`,
+            item.publication_date && `Date: ${item.publication_date}`,
+          ].filter(Boolean);
+          return [];
+        };
+
+        const getSubjectTitle = (item) =>
+          item.article_title || item.book_title || item.report_title ||
+          item.video_title || item.page_title || item.title || "Untitled";
+
         return (
           <div className="primary-column">
             <div className="events-actions">
@@ -4529,53 +4665,355 @@ export default function App() {
                 + New Publication
               </button>
             </div>
-            <div className="events-table-card">
-              <div className="table-header">
-                <h3>Publications</h3>
+
+            {/* ── Publications card grid ── */}
+            {publicationsState.status === "loading" ? (
+              <div className="pub-list-empty"><p>Loading publications…</p></div>
+            ) : publicationsState.status === "error" ? (
+              <div className="pub-list-empty"><p className="form-error">{publicationsState.error}</p></div>
+            ) : publicationsState.status === "ready" && publicationsState.items.length === 0 ? (
+              <div className="pub-list-empty">
+                <span className="pub-empty-icon">📭</span>
+                <p className="pub-empty-title">No publications yet</p>
+                <p className="pub-empty-sub">Click <strong>+ New Publication</strong> to add your first one.</p>
               </div>
-              <div className="events-table">
-                <div className="events-table-row header reports">
-                  <span>Name</span>
-                  <span>Title</span>
-                  <span>Action</span>
-                </div>
-                {publicationsState.status === "loading" ? (
-                  <p className="table-message">Loading publications...</p>
-                ) : null}
-                {publicationsState.status === "error" ? (
-                  <p className="table-message">{publicationsState.error}</p>
-                ) : null}
-                {publicationsState.status === "ready" && publicationsState.items.length === 0 ? (
-                  <p className="table-message">No publications submitted yet.</p>
-                ) : null}
-                {publicationsState.status === "ready"
-                  ? publicationsState.items.map((item) => (
-                      <div key={item.id} className="events-table-row reports">
-                        <span>{item.name}</span>
-                        <span>{item.title}</span>
-                        <div className="event-actions">
+            ) : (
+              <div className="pub-card-grid">
+                {publicationsState.items.map((item) => {
+                  const meta = PUB_META[item.pub_type] || { icon: "📋", label: item.pub_type || "Unknown", color: "#666" };
+                  const details = getPubDetails(item);
+                  const subject = getSubjectTitle(item);
+                  const linkUrl = item.web_view_link || item.url;
+                  const linkLabel = item.web_view_link ? "View File" : item.url ? "Visit URL" : null;
+                  return (
+                    <div key={item.id} className="pub-card">
+                      <div className="pub-card-top">
+                        <span className="pub-card-icon" style={{ color: meta.color }}>{meta.icon}</span>
+                        <span className={`pub-type-badge pub-type-${item.pub_type || "unknown"}`}>{meta.label}</span>
+                      </div>
+                      <div className="pub-card-body">
+                        <p className="pub-card-label">{item.name}</p>
+                        <h4 className="pub-card-title">{subject}</h4>
+                        {details.length > 0 && (
+                          <ul className="pub-card-meta">
+                            {details.map((d, i) => d && <li key={i}>{d}</li>)}
+                          </ul>
+                        )}
+                        {item.others && (
+                          <p className="pub-card-notes">{item.others}</p>
+                        )}
+                      </div>
+                      <div className="pub-card-footer">
+                        <span className="pub-card-date">{item.created_at ? new Date(item.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : ""}</span>
+                        {linkLabel ? (
                           <button
                             type="button"
-                            className="details-button invite"
-                            onClick={() => {
-                              if (item.web_view_link) {
-                                window.open(item.web_view_link, "_blank", "noopener,noreferrer");
-                              } else {
-                                setStatus({ type: "error", message: "Publication link unavailable." });
-                              }
-                            }}
+                            className="pub-card-action"
+                            onClick={() => window.open(linkUrl, "_blank", "noopener,noreferrer")}
                           >
-                            View File
+                            {linkLabel} →
                           </button>
-                        </div>
+                        ) : (
+                          <span className="no-link-text">No link</span>
+                        )}
                       </div>
-                    ))
-                  : null}
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            )}
+
+
+            {/* ── Publication type-selection modal ── */}
+            {publicationTypeModal.open ? (
+              <div className="modal-overlay pub-type-overlay" role="dialog" aria-modal="true">
+                <div className="modal-card pub-type-modal-card">
+                  <div className="modal-header">
+                    <div>
+                      <h3>Add New Publication</h3>
+                      <p className="pub-type-subtitle">Select the type of publication you want to add</p>
+                    </div>
+                    <button type="button" className="modal-close" onClick={handlePublicationTypeClose}>
+                      &times;
+                    </button>
+                  </div>
+                  <div className="pub-type-grid">
+                    {[
+                      { key: "webpage", icon: "🌐", label: "Webpage", desc: "Information from a specific page on a website" },
+                      { key: "journal_article", icon: "📄", label: "Journal Article", desc: "Peer-reviewed academic or scholarly journal articles" },
+                      { key: "book", icon: "📚", label: "Book", desc: "Printed book or e-book with publisher info" },
+                      { key: "report", icon: "📊", label: "Report", desc: "Research, policy or statistical reports by organizations" },
+                      { key: "video", icon: "🎬", label: "Video", desc: "Online videos from YouTube, Vimeo or platforms" },
+                      { key: "online_newspaper", icon: "📰", label: "Online Newspaper", desc: "Articles published in online news websites" }
+                    ].map((type) => (
+                      <button
+                        key={type.key}
+                        type="button"
+                        className="pub-type-card"
+                        onClick={() => handlePublicationTypeSelect(type.key)}
+                      >
+                        <span className="pub-type-icon" aria-hidden="true">{type.icon}</span>
+                        <span className="pub-type-card-label">{type.label}</span>
+                        <span className="pub-type-card-desc">{type.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* ── Publication form modal (type-specific) ── */}
+            {publicationModal.open ? (
+              <div className="modal-overlay" role="dialog" aria-modal="true">
+                <div className="modal-card pub-form-card">
+                  <div className="modal-header">
+                    <div>
+                      <h3>
+                        {{
+                          webpage: "🌐 Webpage Citation",
+                          journal_article: "📄 Journal Article Citation",
+                          book: "📚 Book Citation",
+                          report: "📊 Report Citation",
+                          video: "🎬 Video Citation",
+                          online_newspaper: "📰 Online Newspaper Citation"
+                        }[publicationForm.pubType] || "New Publication"}
+                      </h3>
+                    </div>
+                    <button type="button" className="modal-close" onClick={handlePublicationClose}>
+                      &times;
+                    </button>
+                  </div>
+                  <form className="pub-form" onSubmit={submitPublication}>
+                    {/* Common: Label */}
+                    <label className="form-field">
+                      <span>Record Label <span className="req">*</span></span>
+                      <input
+                        type="text"
+                        placeholder="Short identifier, e.g. Smith2024"
+                        value={publicationForm.name}
+                        onChange={handlePublicationChange("name")}
+                        required
+                      />
+                    </label>
+
+                    {/* ── WEBPAGE ── */}
+                    {publicationForm.pubType === "webpage" ? (
+                      <>
+                        <label className="form-field">
+                          <span>Author <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. John Smith" value={publicationForm.author} onChange={handlePublicationChange("author")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Page Title <span className="req">*</span></span>
+                          <input type="text" placeholder="Title of the specific page" value={publicationForm.page_title} onChange={handlePublicationChange("page_title")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Website Name <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. Wikipedia" value={publicationForm.website_name} onChange={handlePublicationChange("website_name")} />
+                        </label>
+                        <label className="form-field">
+                          <span>URL <span className="req">*</span></span>
+                          <input type="url" placeholder="https://..." value={publicationForm.url} onChange={handlePublicationChange("url")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Publication Date</span>
+                          <input type="text" placeholder="e.g. 15 Jan 2024" value={publicationForm.publication_date} onChange={handlePublicationChange("publication_date")} />
+                        </label>
+                      </>
+                    ) : null}
+
+                    {/* ── JOURNAL ARTICLE ── */}
+                    {publicationForm.pubType === "journal_article" ? (
+                      <>
+                        <label className="form-field">
+                          <span>Author(s) <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. Smith, J." value={publicationForm.author} onChange={handlePublicationChange("author")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Article Title <span className="req">*</span></span>
+                          <input type="text" placeholder="Full title of the article" value={publicationForm.article_title} onChange={handlePublicationChange("article_title")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Journal Name <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. Nature" value={publicationForm.journal_name} onChange={handlePublicationChange("journal_name")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Year <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. 2024" value={publicationForm.year} onChange={handlePublicationChange("year")} />
+                        </label>
+                        <div className="pub-form-row">
+                          <label className="form-field">
+                            <span>Volume</span>
+                            <input type="text" placeholder="e.g. 12" value={publicationForm.volume} onChange={handlePublicationChange("volume")} />
+                          </label>
+                          <label className="form-field">
+                            <span>Issue</span>
+                            <input type="text" placeholder="e.g. 3" value={publicationForm.issue} onChange={handlePublicationChange("issue")} />
+                          </label>
+                          <label className="form-field">
+                            <span>Pages</span>
+                            <input type="text" placeholder="e.g. 45–60" value={publicationForm.pages} onChange={handlePublicationChange("pages")} />
+                          </label>
+                        </div>
+                        <label className="form-field">
+                          <span>DOI</span>
+                          <input type="text" placeholder="e.g. 10.1000/xyz123" value={publicationForm.doi} onChange={handlePublicationChange("doi")} />
+                        </label>
+                        <label className="form-field">
+                          <span>PDF File (optional, max 10 MB)</span>
+                          <input type="file" accept=".pdf,application/pdf" onChange={handlePublicationChange("file")} />
+                        </label>
+                      </>
+                    ) : null}
+
+                    {/* ── BOOK ── */}
+                    {publicationForm.pubType === "book" ? (
+                      <>
+                        <label className="form-field">
+                          <span>Author(s) <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. Smith, J." value={publicationForm.author} onChange={handlePublicationChange("author")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Book Title <span className="req">*</span></span>
+                          <input type="text" placeholder="Full title of the book" value={publicationForm.book_title} onChange={handlePublicationChange("book_title")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Publisher <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. Oxford University Press" value={publicationForm.publisher} onChange={handlePublicationChange("publisher")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Year <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. 2022" value={publicationForm.year} onChange={handlePublicationChange("year")} />
+                        </label>
+                        <div className="pub-form-row">
+                          <label className="form-field">
+                            <span>Edition</span>
+                            <input type="text" placeholder="e.g. 3rd" value={publicationForm.edition} onChange={handlePublicationChange("edition")} />
+                          </label>
+                          <label className="form-field">
+                            <span>Page Number</span>
+                            <input type="text" placeholder="e.g. 142" value={publicationForm.page_number} onChange={handlePublicationChange("page_number")} />
+                          </label>
+                        </div>
+                        <label className="form-field">
+                          <span>PDF File (optional, max 10 MB)</span>
+                          <input type="file" accept=".pdf,application/pdf" onChange={handlePublicationChange("file")} />
+                        </label>
+                      </>
+                    ) : null}
+
+                    {/* ── REPORT ── */}
+                    {publicationForm.pubType === "report" ? (
+                      <>
+                        <label className="form-field">
+                          <span>Organization <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. WHO, UNESCO" value={publicationForm.organization} onChange={handlePublicationChange("organization")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Report Title <span className="req">*</span></span>
+                          <input type="text" placeholder="Full title of the report" value={publicationForm.report_title} onChange={handlePublicationChange("report_title")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Publisher <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. World Health Organization" value={publicationForm.publisher} onChange={handlePublicationChange("publisher")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Year <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. 2023" value={publicationForm.year} onChange={handlePublicationChange("year")} />
+                        </label>
+                        <label className="form-field">
+                          <span>PDF File (optional, max 10 MB)</span>
+                          <input type="file" accept=".pdf,application/pdf" onChange={handlePublicationChange("file")} />
+                        </label>
+                      </>
+                    ) : null}
+
+                    {/* ── VIDEO ── */}
+                    {publicationForm.pubType === "video" ? (
+                      <>
+                        <label className="form-field">
+                          <span>Creator / Uploader <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. Khan Academy" value={publicationForm.creator} onChange={handlePublicationChange("creator")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Video Title <span className="req">*</span></span>
+                          <input type="text" placeholder="Full title of the video" value={publicationForm.video_title} onChange={handlePublicationChange("video_title")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Platform <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. YouTube, Vimeo" value={publicationForm.platform} onChange={handlePublicationChange("platform")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Date <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. 5 March 2024" value={publicationForm.publication_date} onChange={handlePublicationChange("publication_date")} />
+                        </label>
+                        <label className="form-field">
+                          <span>URL <span className="req">*</span></span>
+                          <input type="url" placeholder="https://..." value={publicationForm.url} onChange={handlePublicationChange("url")} />
+                        </label>
+                      </>
+                    ) : null}
+
+                    {/* ── ONLINE NEWSPAPER ── */}
+                    {publicationForm.pubType === "online_newspaper" ? (
+                      <>
+                        <label className="form-field">
+                          <span>Author <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. Jane Doe" value={publicationForm.author} onChange={handlePublicationChange("author")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Article Title <span className="req">*</span></span>
+                          <input type="text" placeholder="Full title of the article" value={publicationForm.article_title} onChange={handlePublicationChange("article_title")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Newspaper Name <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. The Guardian" value={publicationForm.newspaper_name} onChange={handlePublicationChange("newspaper_name")} />
+                        </label>
+                        <label className="form-field">
+                          <span>Publication Date <span className="req">*</span></span>
+                          <input type="text" placeholder="e.g. 10 Feb 2024" value={publicationForm.publication_date} onChange={handlePublicationChange("publication_date")} />
+                        </label>
+                        <label className="form-field">
+                          <span>URL <span className="req">*</span></span>
+                          <input type="url" placeholder="https://..." value={publicationForm.url} onChange={handlePublicationChange("url")} />
+                        </label>
+                      </>
+                    ) : null}
+
+                    {/* Common: Notes */}
+                    <label className="form-field">
+                      <span>Additional Notes</span>
+                      <textarea
+                        rows="2"
+                        placeholder="Any extra details..."
+                        value={publicationForm.others}
+                        onChange={handlePublicationChange("others")}
+                      />
+                    </label>
+
+                    {publicationModal.status === "error" ? (
+                      <p className="form-error">{publicationModal.error}</p>
+                    ) : null}
+
+                    <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={() => { handlePublicationClose(); handlePublicationTypeOpen(); }}>
+                        ← Back
+                      </button>
+                      <button type="button" className="secondary-action" onClick={handlePublicationClose}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="primary-action" disabled={publicationModal.status === "loading"}>
+                        {publicationModal.status === "loading" ? "Submitting..." : "Submit"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : null}
           </div>
         );
       }
+
 
       if (isCalendar) {
         return (
@@ -5133,63 +5571,8 @@ export default function App() {
             </div>
           </div>
         ) : null}
-        {publicationModal.open ? (
-          <div className="modal-overlay" role="dialog" aria-modal="true">
-            <div className="modal-card">
-              <div className="modal-header">
-                <h3>New Publication</h3>
-                <button type="button" className="modal-close" onClick={handlePublicationClose}>
-                  &times;
-                </button>
-              </div>
-              <form className="event-form" onSubmit={submitPublication}>
-                <div className="form-grid">
-                  <label className="form-field">
-                    <span>Name</span>
-                    <input
-                      type="text"
-                      value={publicationForm.name}
-                      onChange={handlePublicationChange("name")}
-                      required
-                    />
-                  </label>
-                  <label className="form-field">
-                    <span>Title</span>
-                    <input
-                      type="text"
-                      value={publicationForm.title}
-                      onChange={handlePublicationChange("title")}
-                      required
-                    />
-                  </label>
-                </div>
-                <label className="form-field">
-                  <span>File</span>
-                  <input type="file" onChange={handlePublicationChange("file")} required />
-                </label>
-                <label className="form-field">
-                  <span>Others</span>
-                  <textarea
-                    value={publicationForm.others}
-                    onChange={handlePublicationChange("others")}
-                    placeholder="Additional details"
-                  />
-                </label>
-                {publicationModal.status === "error" ? (
-                  <p className="form-error">{publicationModal.error}</p>
-                ) : null}
-                <div className="modal-actions">
-                  <button type="button" className="secondary-action" onClick={handlePublicationClose}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="primary-action" disabled={publicationModal.status === "loading"}>
-                    {publicationModal.status === "loading" ? "Submitting..." : "Submit"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        ) : null}
+
+
         {eventDetailsModal.open ? (
           <div className="modal-overlay" role="dialog" aria-modal="true">
             <div className="modal-card details-card">
