@@ -3,6 +3,7 @@ import base64
 import logging
 from datetime import datetime
 
+from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 import requests
@@ -184,21 +185,70 @@ async def list_events(user: User = Depends(get_current_user)):
 @router.get("/{event_id}/details", response_model=EventDetailsResponse)
 async def get_event_details(event_id: str, user: User = Depends(get_current_user)):
     """Return full event details for the details modal: event, registrar approval, facility/marketing/IT requests and who approved, marketing deliverables."""
-    event = await Event.get(event_id)
+    if event_id.startswith("approval-"):
+        approval_id = event_id[len("approval-") :].strip()
+        try:
+            approval_object_id = PydanticObjectId(approval_id)
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+
+        approval = await ApprovalRequest.get(approval_object_id)
+        if not approval:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+        if approval.requester_id != str(user.id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to view this event")
+
+        if not approval.event_id:
+            return EventDetailsResponse(
+                event=EventResponse(
+                    id=event_id,
+                    name=approval.event_name,
+                    facilitator=approval.facilitator,
+                    description=approval.description,
+                    venue_name=approval.venue_name,
+                    start_date=approval.start_date,
+                    start_time=approval.start_time,
+                    end_date=approval.end_date,
+                    end_time=approval.end_time,
+                    created_by=approval.requester_id,
+                    status=approval.status,
+                    google_event_id=None,
+                    google_event_link=None,
+                    report_file_id=None,
+                    report_file_name=None,
+                    report_web_view_link=None,
+                    report_uploaded_at=None,
+                    created_at=approval.created_at,
+                ),
+                approval_request=serialize_approval(approval),
+                facility_requests=[],
+                marketing_requests=[],
+                it_requests=[],
+            )
+
+        event_id = approval.event_id
+
+    try:
+        event_object_id = PydanticObjectId(event_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+
+    event = await Event.get(event_object_id)
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
     if event.created_by != str(user.id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to view this event")
 
+    event_id_str = str(event.id)
     await sync_event_status(event)
-    approval_request = await ApprovalRequest.find_one(ApprovalRequest.event_id == event_id)
+    approval_request = await ApprovalRequest.find_one(ApprovalRequest.event_id == event_id_str)
     facility_requests = await FacilityManagerRequest.find(
-        FacilityManagerRequest.event_id == event_id
+        FacilityManagerRequest.event_id == event_id_str
     ).sort("-created_at").to_list()
     marketing_requests = await MarketingRequest.find(
-        MarketingRequest.event_id == event_id
+        MarketingRequest.event_id == event_id_str
     ).sort("-created_at").to_list()
-    it_requests = await ItRequest.find(ItRequest.event_id == event_id).sort("-created_at").to_list()
+    it_requests = await ItRequest.find(ItRequest.event_id == event_id_str).sort("-created_at").to_list()
 
     return EventDetailsResponse(
         event=serialize_event(event),

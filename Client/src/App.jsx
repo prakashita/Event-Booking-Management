@@ -1301,6 +1301,7 @@ export default function App() {
       const approvalItems = approvalsData
         .filter((item) => item.status !== "approved")
         .map((item) => ({
+          ...item,
           id: `approval-${item.id}`,
           name: item.event_name,
           start_date: item.start_date,
@@ -2083,6 +2084,10 @@ export default function App() {
 
   const handleEventDetailsOpen = async (eventItem) => {
     if (!eventItem?.id) return;
+    if (String(eventItem.id).startsWith("approval-")) {
+      setApprovalDetailsModal({ open: true, request: eventItem });
+      return;
+    }
     setEventDetailsModal({
       open: true,
       event: eventItem,
