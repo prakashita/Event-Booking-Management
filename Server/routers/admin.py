@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from models import ApprovalRequest, Event, FacilityManagerRequest, Invite, ItRequest, MarketingRequest, Publication, User, Venue
@@ -8,6 +10,7 @@ from schemas import (
     FacilityManagerRequestResponse,
     InviteResponse,
     ItRequestResponse,
+    MarketingDeliverableResponse,
     MarketingRequestResponse,
     PublicationResponse,
     VenueResponse,
@@ -63,7 +66,40 @@ def serialize_approval(item: ApprovalRequest) -> ApprovalRequestResponse:
     )
 
 
+def _deliverable_to_response(d):
+    if isinstance(d, dict):
+        file_id = d.get("file_id")
+        is_na = d.get("is_na", False)
+        if not file_id and not is_na:
+            return None
+        file_id = file_id or "na"
+        return MarketingDeliverableResponse(
+            deliverable_type=d.get("deliverable_type", "other"),
+            file_id=file_id,
+            file_name=d.get("file_name", "N/A" if is_na else ""),
+            web_view_link=d.get("web_view_link"),
+            uploaded_at=d.get("uploaded_at") or datetime.utcnow(),
+            is_na=is_na,
+        )
+    file_id = getattr(d, "file_id", None)
+    is_na = getattr(d, "is_na", False)
+    if not file_id and not is_na:
+        return None
+    file_id = file_id or "na"
+    return MarketingDeliverableResponse(
+        deliverable_type=getattr(d, "deliverable_type", "other"),
+        file_id=file_id,
+        file_name=getattr(d, "file_name", "N/A" if is_na else ""),
+        web_view_link=getattr(d, "web_view_link", None),
+        uploaded_at=getattr(d, "uploaded_at", None) or datetime.utcnow(),
+        is_na=is_na,
+    )
+
+
 def serialize_marketing(item: MarketingRequest) -> MarketingRequestResponse:
+    raw = getattr(item, "deliverables", None) or []
+    deliverables = [x for d in raw if (x := _deliverable_to_response(d))]
+
     return MarketingRequestResponse(
         id=str(item.id),
         requester_id=item.requester_id,
@@ -86,6 +122,7 @@ def serialize_marketing(item: MarketingRequest) -> MarketingRequestResponse:
         status=item.status,
         decided_at=item.decided_at,
         decided_by=item.decided_by,
+        deliverables=deliverables,
         created_at=item.created_at,
     )
 
@@ -124,6 +161,7 @@ def serialize_it(item: ItRequest) -> ItRequestResponse:
         start_time=item.start_time,
         end_date=item.end_date,
         end_time=item.end_time,
+        event_mode=getattr(item, "event_mode", None),
         pa_system=item.pa_system,
         projection=item.projection,
         other_notes=item.other_notes,

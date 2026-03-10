@@ -1,5 +1,5 @@
 from datetime import date, time, datetime
-from typing import Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -149,6 +149,15 @@ class MarketingRequestCreate(BaseModel):
     other_notes: Optional[str] = Field(default=None, max_length=2000)
 
 
+class MarketingDeliverableResponse(BaseModel):
+    deliverable_type: str
+    file_id: str
+    file_name: str
+    web_view_link: Optional[str] = None
+    uploaded_at: datetime
+    is_na: bool = False
+
+
 class MarketingRequestResponse(BaseModel):
     id: str
     requester_id: str
@@ -171,6 +180,7 @@ class MarketingRequestResponse(BaseModel):
     status: str
     decided_at: Optional[datetime] = None
     decided_by: Optional[str] = None
+    deliverables: List[MarketingDeliverableResponse] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -186,6 +196,7 @@ class ItRequestCreate(BaseModel):
     start_time: str
     end_date: str
     end_time: str
+    event_mode: Optional[Literal["online", "offline"]] = None
     pa_system: bool = False
     projection: bool = False
     other_notes: Optional[str] = Field(default=None, max_length=2000)
@@ -202,6 +213,7 @@ class ItRequestResponse(BaseModel):
     start_time: str
     end_date: str
     end_time: str
+    event_mode: Optional[str] = None
     pa_system: bool
     projection: bool
     other_notes: Optional[str] = None
@@ -219,6 +231,15 @@ class EventCreateResponse(BaseModel):
     status: str
     event: Optional[EventResponse] = None
     approval_request: Optional[ApprovalRequestResponse] = None
+
+
+class EventDetailsResponse(BaseModel):
+    """Full event details for the details modal: event + approval, facility, marketing (with deliverables), IT."""
+    event: EventResponse
+    approval_request: Optional[ApprovalRequestResponse] = None
+    facility_requests: List[FacilityManagerRequestResponse] = Field(default_factory=list)
+    marketing_requests: List[MarketingRequestResponse] = Field(default_factory=list)
+    it_requests: List[ItRequestResponse] = Field(default_factory=list)
 
 
 class EventStatusUpdate(BaseModel):

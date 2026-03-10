@@ -187,15 +187,13 @@ async def decide_request(
                     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requester not found")
                 try:
                     await sync_event_to_google_calendar(event, requester)
-                except HTTPException:
-                    await event.delete()
-                    raise
-                except Exception as exc:
-                    await event.delete()
-                    raise HTTPException(
-                        status_code=status.HTTP_502_BAD_GATEWAY,
-                        detail=f"Unable to sync event to Google Calendar: {exc}",
+                except (HTTPException, Exception) as exc:
+                    logger.warning(
+                        "Google Calendar sync skipped for approved event %s: %s",
+                        event.name,
+                        exc,
                     )
+                    # Proceed without calendar sync; event is created, requester can sync later
 
                 approval.event_id = str(event.id)
                 matching_query = {

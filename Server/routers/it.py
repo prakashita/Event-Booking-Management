@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from auth import get_primary_email_by_role
 from models import ApprovalRequest, Event, ItRequest, User
+from notifications import send_notification_email
 from routers.deps import get_current_user
 from schemas import ItDecision, ItRequestCreate, ItRequestResponse
 
@@ -52,11 +53,34 @@ async def create_it_request(
         start_time=payload.start_time,
         end_date=payload.end_date,
         end_time=payload.end_time,
+        event_mode=payload.event_mode,
         pa_system=payload.pa_system,
         projection=payload.projection,
         other_notes=payload.other_notes,
     )
     await request_item.insert()
+
+    subject = f"IT Request: {request_item.event_name}"
+    event_mode_line = f"Event mode: {request_item.event_mode}\n" if request_item.event_mode else ""
+    body = (
+        f"A new IT request has been submitted for your approval.\n\n"
+        f"Requester: {user.email}\n"
+        f"Event: {request_item.event_name}\n"
+        f"Date: {request_item.start_date} {request_item.start_time} - {request_item.end_date} {request_item.end_time}\n"
+        f"{event_mode_line}"
+        f"PA system: {'Yes' if request_item.pa_system else 'No'}\n"
+        f"Projection: {'Yes' if request_item.projection else 'No'}\n"
+    )
+    if request_item.other_notes:
+        body += f"\nAdditional notes: {request_item.other_notes}\n"
+    body += "\nPlease approve or reject this request from your dashboard."
+    await send_notification_email(
+        recipient_email=requested_to,
+        subject=subject,
+        body=body,
+        requester=user,
+        fallback_role="it",
+    )
 
     return ItRequestResponse(
         id=str(request_item.id),
@@ -69,6 +93,7 @@ async def create_it_request(
         start_time=request_item.start_time,
         end_date=request_item.end_date,
         end_time=request_item.end_time,
+        event_mode=getattr(request_item, "event_mode", None),
         pa_system=request_item.pa_system,
         projection=request_item.projection,
         other_notes=request_item.other_notes,
@@ -97,6 +122,7 @@ async def list_it_inbox(user: User = Depends(get_current_user)):
             start_time=item.start_time,
             end_date=item.end_date,
             end_time=item.end_time,
+            event_mode=getattr(item, "event_mode", None),
             pa_system=item.pa_system,
             projection=item.projection,
             other_notes=item.other_notes,
@@ -146,6 +172,7 @@ async def decide_it_request(
         start_time=request_item.start_time,
         end_date=request_item.end_date,
         end_time=request_item.end_time,
+        event_mode=getattr(request_item, "event_mode", None),
         pa_system=request_item.pa_system,
         projection=request_item.projection,
         other_notes=request_item.other_notes,
@@ -173,6 +200,7 @@ async def list_my_it_requests(user: User = Depends(get_current_user)):
             start_time=item.start_time,
             end_date=item.end_date,
             end_time=item.end_time,
+            event_mode=getattr(item, "event_mode", None),
             pa_system=item.pa_system,
             projection=item.projection,
             other_notes=item.other_notes,

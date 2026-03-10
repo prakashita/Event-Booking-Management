@@ -92,6 +92,16 @@ class ApprovalRequest(Document):
         name = "approval_requests"
 
 
+class MarketingDeliverable(BaseModel):
+    """A file uploaded by marketing for a request (poster, photo, video, etc.), or marked NA."""
+    deliverable_type: str  # poster, photography, video, recording, linkedin, other
+    file_id: str  # "na" when is_na=True
+    file_name: str  # "N/A" when is_na=True
+    web_view_link: Optional[str] = None
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    is_na: bool = False
+
+
 class MarketingRequest(Document):
     requester_id: str
     requester_email: str
@@ -113,6 +123,7 @@ class MarketingRequest(Document):
     status: str = Field(default="pending")
     decided_at: Optional[datetime] = None
     decided_by: Optional[str] = None
+    deliverables: List[MarketingDeliverable] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:
@@ -151,6 +162,7 @@ class ItRequest(Document):
     start_time: str
     end_date: str
     end_time: str
+    event_mode: Optional[str] = None  # "online" | "offline"
     pa_system: bool = False
     projection: bool = False
     other_notes: Optional[str] = None

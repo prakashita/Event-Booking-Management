@@ -3,139 +3,11 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
-
-const stats = [
-  { label: "Active Events", value: "128+" },
-  { label: "Attendees Managed", value: "24k" },
-  { label: "Automated Reminders", value: "98%" }
-];
-
-const menuItems = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "my-events", label: "My Events" },
-  { id: "event-reports", label: "Event Reports" },
-  { id: "calendar", label: "Calendar View" },
-  { id: "approvals", label: "Approvals" },
-  { id: "requirements", label: "Requirements" },
-  { id: "publications", label: "Publications" },
-  { id: "admin", label: "Admin Console" }
-];
-
-const preferenceItems = [
-  { id: "users", label: "User Management" },
-  { id: "settings", label: "Settings" }
-];
-
-const inboxItems = [
-  {
-    name: "Nur Azzahra",
-    time: "2 hours ago",
-    message: "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
-  },
-  {
-    name: "Nur Azzahra",
-    time: "2 hours ago",
-    message: "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
-  },
-  {
-    name: "Nur Azzahra",
-    time: "2 hours ago",
-    message: "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
-  }
-];
-
-const eventsTable = [
-  {
-    name: "Event 1",
-    date: "11 September 2025",
-    time: "9 am",
-    status: "In Progress"
-  },
-  {
-    name: "Event 2",
-    date: "12 September 2025",
-    time: "1 pm",
-    status: "Ready"
-  },
-  {
-    name: "Event 3",
-    date: "15 October 2025",
-    time: "2 pm",
-    status: "Pending"
-  },
-  {
-    name: "Event 4",
-    date: "18 September 2025",
-    time: "9 am",
-    status: "Ready"
-  },
-  {
-    name: "Event 5",
-    date: "22 September 2025",
-    time: "1 pm",
-    status: "Pending"
-  },
-  {
-    name: "Event 6",
-    date: "1 October 2025",
-    time: "2 pm",
-    status: "Pending"
-  },
-  {
-    name: "Event 7",
-    date: "18 September 2025",
-    time: "9 am",
-    status: "Ready"
-  },
-  {
-    name: "Event 8",
-    date: "22 September 2025",
-    time: "1 pm",
-    status: "Pending"
-  },
-  {
-    name: "Event 9",
-    date: "1 October 2025",
-    time: "2 pm",
-    status: "Pending"
-  }
-];
-
-const GoogleIcon = () => (
-  <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-    <path
-      fill="#EA4335"
-      d="M24 9.5c3.3 0 6.1 1.1 8.3 3.1l6-6C34.7 3.4 29.8 1.5 24 1.5 14.6 1.5 6.6 6.9 3.2 14.7l7.2 5.6C12.2 14 17.7 9.5 24 9.5z"
-    />
-    <path
-      fill="#FBBC05"
-      d="M46.5 24.5c0-1.6-.1-2.7-.4-4H24v7.6h12.7c-.5 2.6-2 6.4-5.2 9l8 6.2c4.7-4.3 7-10.7 7-18.8z"
-    />
-    <path
-      fill="#34A853"
-      d="M10.4 28.3a13.9 13.9 0 0 1-.7-4.3c0-1.5.3-3 .7-4.3l-7.2-5.6A23.6 23.6 0 0 0 1.5 24c0 3.9.9 7.5 2.7 10.9l6.2-6.6z"
-    />
-    <path
-      fill="#4285F4"
-      d="M24 46.5c6.4 0 11.7-2.1 15.6-5.8l-8-6.2c-2.2 1.5-5.1 2.6-7.6 2.6-6.3 0-11.7-4.2-13.6-10l-6.2 6.6C7.6 41.8 15.2 46.5 24 46.5z"
-    />
-  </svg>
-);
-
-const PlaceholderCard = () => (
-  <div className="image-card">
-    <div className="image-glow" />
-    <div className="image-placeholder">
-      <div className="image-icon" aria-hidden="true" />
-    </div>
-  </div>
-);
-
-const SimpleIcon = ({ path }) => (
-  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    <path d={path} />
-  </svg>
-);
+import { menuItems, preferenceItems, inboxItems, eventsTable, PUB_META } from "./constants";
+import { formatISTTime, parse24ToTimeParts, timePartsTo24 } from "./utils/format";
+import { GoogleIcon, SimpleIcon, PlaceholderCard } from "./components/icons";
+import { LoginPage, Sidebar } from "./components/layout";
+import { Modal, StatusMessage } from "./components/ui";
 
 export default function App() {
   const googleButtonRef = useRef(null);
@@ -204,6 +76,7 @@ export default function App() {
   const [itModal, setItModal] = useState({ open: false, status: "idle", error: "" });
   const [itForm, setItForm] = useState({
     to: "",
+    event_mode: "offline",
     pa_system: true,
     projection: false,
     other_notes: ""
@@ -225,7 +98,27 @@ export default function App() {
     eventName: "",
     hasReport: false
   });
-  const [eventDetailsModal, setEventDetailsModal] = useState({ open: false, event: null });
+  const REQUIREMENT_OPTIONS = [
+    { key: "poster_required", type: "poster", label: "Poster" },
+    { key: "video_required", type: "video", label: "Video" },
+    { key: "linkedin_post", type: "linkedin", label: "LinkedIn" },
+    { key: "photography", type: "photography", label: "Photography" },
+    { key: "recording", type: "recording", label: "Recording" }
+  ];
+  const [marketingDeliverableModal, setMarketingDeliverableModal] = useState({
+    open: false,
+    request: null,
+    requirements: {}, // { poster: { na: false, file: null }, ... }
+    status: "idle",
+    error: ""
+  });
+  const [eventDetailsModal, setEventDetailsModal] = useState({
+    open: false,
+    event: null,
+    details: null,
+    status: "idle",
+    error: ""
+  });
   const [approvalDetailsModal, setApprovalDetailsModal] = useState({ open: false, request: null });
   const [publicationTypeModal, setPublicationTypeModal] = useState({ open: false });
   const [publicationModal, setPublicationModal] = useState({
@@ -303,6 +196,10 @@ export default function App() {
     open: false,
     missing: []
   });
+  const [registrarEmail, setRegistrarEmail] = useState("");
+  const [facilityManagerEmail, setFacilityManagerEmail] = useState("");
+  const [marketingEmail, setMarketingEmail] = useState("");
+  const [itEmail, setItEmail] = useState("");
   const [chatUsers, setChatUsers] = useState([]);
   const [chatActiveUser, setChatActiveUser] = useState(null);
   const [chatConversationId, setChatConversationId] = useState("");
@@ -938,72 +835,6 @@ export default function App() {
       .toUpperCase();
   }, []);
 
-  const formatISTTime = useCallback((value) => {
-    if (!value) {
-      return "";
-    }
-    const raw = String(value).trim();
-    const timeMatch = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
-    if (timeMatch) {
-      const hours24 = Number(timeMatch[1]);
-      const minutes = timeMatch[2];
-      if (Number.isNaN(hours24) || hours24 > 23) {
-        return raw;
-      }
-      const period = hours24 >= 12 ? "PM" : "AM";
-      const hours12 = hours24 % 12 || 12;
-      return `${hours12}:${minutes} ${period}`;
-    }
-    const parsed = new Date(raw);
-    if (Number.isNaN(parsed.getTime())) {
-      return raw;
-    }
-    return parsed
-      .toLocaleTimeString("en-IN", {
-        timeZone: "Asia/Kolkata",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true
-      })
-      .toUpperCase();
-  }, []);
-
-  const parse24ToTimeParts = useCallback((value) => {
-    const raw = String(value || "").trim();
-    const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
-    if (!match) {
-      return { hour: "", minute: "", period: "AM" };
-    }
-    const hours24 = Number(match[1]);
-    if (Number.isNaN(hours24) || hours24 > 23) {
-      return { hour: "", minute: "", period: "AM" };
-    }
-    const minute = match[2];
-    const period = hours24 >= 12 ? "PM" : "AM";
-    const hour12 = hours24 % 12 || 12;
-    return { hour: String(hour12), minute, period };
-  }, []);
-
-  const timePartsTo24 = useCallback((parts) => {
-    if (!parts?.hour || !parts?.minute || !parts?.period) {
-      return "";
-    }
-    const hour12 = Number(parts.hour);
-    if (Number.isNaN(hour12) || hour12 < 1 || hour12 > 12) {
-      return "";
-    }
-    const minute = String(parts.minute).padStart(2, "0");
-    if (!/^\d{2}$/.test(minute)) {
-      return "";
-    }
-    const period = String(parts.period).toUpperCase();
-    let hour24 = hour12 % 12;
-    if (period === "PM") {
-      hour24 += 12;
-    }
-    return `${String(hour24).padStart(2, "0")}:${minute}`;
-  }, []);
-
   useEffect(() => {
     setEventTimeParts({
       start_time: parse24ToTimeParts(eventForm.start_time),
@@ -1502,10 +1333,18 @@ export default function App() {
       });
 
       const items = [...approvalItems, ...enrichedEvents];
+      const isPastEventCheck = (e) => {
+        if (!e?.end_date) return false;
+        const endTime = (e.end_time || "23:59:59").toString().trim();
+        const endStr = endTime.length <= 5 ? `${e.end_date}T${endTime}:00` : `${e.end_date}T${endTime}`;
+        const end = new Date(endStr);
+        return !Number.isNaN(end.getTime()) && end < new Date();
+      };
       const eventNeedingRequirements = enrichedEvents.find(
         (e) =>
           !String(e.id || "").startsWith("approval-") &&
           e.approval_status === "approved" &&
+          !isPastEventCheck(e) &&
           (e.facility_status !== "approved" || e.marketing_status !== "approved" || e.it_status !== "approved")
       );
       setEventsState({
@@ -1516,15 +1355,6 @@ export default function App() {
       if (eventNeedingRequirements && activeView === "my-events") {
         setRequirementsModal({ open: true, event: eventNeedingRequirements });
         setPendingEvent({ ...eventNeedingRequirements, event_id: eventNeedingRequirements.id });
-        if (eventNeedingRequirements.facility_status !== "approved") {
-          setFacilityModal({ open: true, status: "idle", error: "" });
-          setFacilityForm({
-            to: "",
-            venue_required: true,
-            refreshments: false,
-            other_notes: ""
-          });
-        }
       }
     } catch (err) {
       setEventsState({
@@ -1630,9 +1460,65 @@ export default function App() {
     }
   }, [apiBaseUrl]);
 
+  const loadRegistrarEmail = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/auth/registrar-email`);
+      if (res.ok) {
+        const data = await res.json();
+        setRegistrarEmail(data?.email || "");
+      }
+    } catch {
+      setRegistrarEmail("");
+    }
+  }, [apiBaseUrl, apiFetch]);
+
+  const loadFacilityManagerEmail = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/auth/facility-manager-email`);
+      if (res.ok) {
+        const data = await res.json();
+        setFacilityManagerEmail(data?.email || "");
+      }
+    } catch {
+      setFacilityManagerEmail("");
+    }
+  }, [apiBaseUrl, apiFetch]);
+
+  const loadMarketingEmail = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/auth/marketing-email`);
+      if (res.ok) {
+        const data = await res.json();
+        setMarketingEmail(data?.email || "");
+      }
+    } catch {
+      setMarketingEmail("");
+    }
+  }, [apiBaseUrl, apiFetch]);
+
+  const loadItEmail = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/auth/it-email`);
+      if (res.ok) {
+        const data = await res.json();
+        setItEmail(data?.email || "");
+      }
+    } catch {
+      setItEmail("");
+    }
+  }, [apiBaseUrl, apiFetch]);
+
   const checkGoogleScopes = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
-    if (!token) {
+    if (!token || !user?.id) {
       return;
     }
 
@@ -1643,15 +1529,32 @@ export default function App() {
       }
       const data = await res.json();
       const missing = data?.missing_scopes || [];
-      if (missing.length) {
-        setGoogleScopeModal({ open: true, missing });
+      const connected = data?.connected === true;
+
+      if (connected) {
+        // User has already granted permission; clear any prior prompt flag and never show modal
+        localStorage.removeItem(`google_connect_prompted_${user.id}`);
+        setGoogleScopeModal({ open: false, missing: [] });
+        return;
+      }
+
+      if (missing.length > 0) {
+        // Only show modal on first login (first time we detect missing scopes for this user)
+        const promptedKey = `google_connect_prompted_${user.id}`;
+        const alreadyPrompted = localStorage.getItem(promptedKey);
+        if (!alreadyPrompted) {
+          localStorage.setItem(promptedKey, "true");
+          setGoogleScopeModal({ open: true, missing });
+        } else {
+          setGoogleScopeModal({ open: false, missing: [] });
+        }
       } else {
         setGoogleScopeModal({ open: false, missing: [] });
       }
     } catch (err) {
       // Keep silent to avoid blocking the UI on a status check
     }
-  }, [apiBaseUrl, apiFetch]);
+  }, [apiBaseUrl, apiFetch, user?.id]);
 
   useEffect(() => {
     if (user) {
@@ -1717,6 +1620,31 @@ export default function App() {
       checkGoogleScopes();
     }
   }, [checkGoogleScopes, user]);
+
+  useEffect(() => {
+    if (user) {
+      loadRegistrarEmail();
+      loadFacilityManagerEmail();
+      loadMarketingEmail();
+      loadItEmail();
+    } else {
+      setRegistrarEmail("");
+      setFacilityManagerEmail("");
+      setMarketingEmail("");
+      setItEmail("");
+    }
+  }, [user, loadRegistrarEmail, loadFacilityManagerEmail, loadMarketingEmail, loadItEmail]);
+
+  useEffect(() => {
+    if (!user) return;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkGoogleScopes();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [user, checkGoogleScopes]);
 
   useEffect(() => {
     chatActiveConversationRef.current = chatConversationId;
@@ -2033,7 +1961,7 @@ export default function App() {
 
   const handleMarketingModalOpen = () => {
     setMarketingForm({
-      to: "",
+      to: marketingEmail,
       poster_required: true,
       poster_dimension: "",
       video_required: false,
@@ -2053,7 +1981,7 @@ export default function App() {
 
   const handleFacilityModalOpen = () => {
     setFacilityForm({
-      to: "",
+      to: facilityManagerEmail,
       venue_required: true,
       refreshments: false,
       other_notes: ""
@@ -2068,7 +1996,8 @@ export default function App() {
 
   const handleItModalOpen = () => {
     setItForm({
-      to: "",
+      to: itEmail,
+      event_mode: "offline",
       pa_system: true,
       projection: false,
       other_notes: ""
@@ -2128,6 +2057,7 @@ export default function App() {
   };
 
   const handleSendRequirements = (eventItem) => {
+    if (isPastEvent(eventItem)) return;
     setPendingEvent({ ...eventItem, event_id: eventItem?.id || eventItem?.event_id || "" });
     const queue = [];
     if (eventItem.facility_status !== "approved") queue.push("facility");
@@ -2151,20 +2081,134 @@ export default function App() {
     });
   };
 
-  const handleEventDetailsOpen = (eventItem) => {
-    setEventDetailsModal({ open: true, event: eventItem });
+  const handleEventDetailsOpen = async (eventItem) => {
+    if (!eventItem?.id) return;
+    setEventDetailsModal({
+      open: true,
+      event: eventItem,
+      details: null,
+      status: "loading",
+      error: ""
+    });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/events/${eventItem.id}/details`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.detail || "Failed to load event details");
+      }
+      const details = await res.json();
+      setEventDetailsModal((prev) => ({
+        ...prev,
+        details,
+        status: "ready",
+        error: ""
+      }));
+    } catch (err) {
+      setEventDetailsModal((prev) => ({
+        ...prev,
+        details: null,
+        status: "error",
+        error: err?.message || "Failed to load event details"
+      }));
+    }
   };
 
   const handleEventDetailsClose = () => {
-    setEventDetailsModal({ open: false, event: null });
+    setEventDetailsModal({
+      open: false,
+      event: null,
+      details: null,
+      status: "idle",
+      error: ""
+    });
   };
 
   const handleApprovalDetailsOpen = (requestItem) => {
     setApprovalDetailsModal({ open: true, request: requestItem });
   };
 
-  const handleApprovalDetailsClose = () => {
-    setApprovalDetailsModal({ open: false, request: null });
+    const handleApprovalDetailsClose = () => {
+      setApprovalDetailsModal({ open: false, request: null });
+    };
+
+  const openMarketingDeliverableModal = (request) => {
+    const requirements = {};
+    REQUIREMENT_OPTIONS.forEach(({ key, type }) => {
+      if (request[key]) {
+        const existing = request.deliverables?.find((d) => d.deliverable_type === type);
+        requirements[type] = {
+          na: !!existing?.is_na,
+          file: null
+        };
+      }
+    });
+    setMarketingDeliverableModal({
+      open: true,
+      request,
+      requirements,
+      status: "idle",
+      error: ""
+    });
+  };
+
+  const closeMarketingDeliverableModal = () => {
+    setMarketingDeliverableModal({
+      open: false,
+      request: null,
+      requirements: {},
+      status: "idle",
+      error: ""
+    });
+  };
+
+  const submitMarketingDeliverable = async (e) => {
+    e.preventDefault();
+    const { request, requirements } = marketingDeliverableModal;
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setMarketingDeliverableModal((prev) => ({ ...prev, status: "error", error: "Please sign in again." }));
+      return;
+    }
+    const hasAnyChoice = Object.values(requirements || {}).some((r) => r.na || r.file);
+    if (!request?.id || !hasAnyChoice) {
+      setMarketingDeliverableModal((prev) => ({
+        ...prev,
+        status: "error",
+        error: "For each requirement, select NA or upload a file."
+      }));
+      return;
+    }
+    setMarketingDeliverableModal((prev) => ({ ...prev, status: "loading", error: "" }));
+    try {
+      const formData = new FormData();
+      REQUIREMENT_OPTIONS.forEach(({ type }) => {
+        const r = requirements?.[type];
+        if (!r) return;
+        if (r.na) {
+          formData.append(`na_${type}`, "1");
+        } else if (r.file) {
+          formData.append(`file_${type}`, r.file);
+        }
+      });
+      const res = await apiFetch(`${apiBaseUrl}/marketing/requests/${request.id}/deliverables/batch`, {
+        method: "POST",
+        body: formData
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        const msg = data?.detail || "Unable to upload deliverables.";
+        throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+      }
+      closeMarketingDeliverableModal();
+      loadMarketingInbox();
+      setStatus({ type: "success", message: "Deliverables saved." });
+    } catch (err) {
+      setMarketingDeliverableModal((prev) => ({
+        ...prev,
+        status: "error",
+        error: err?.message || "Unable to upload deliverables."
+      }));
+    }
   };
 
   const handleReportClose = () => {
@@ -2288,7 +2332,7 @@ export default function App() {
   };
 
   const handleCloseEvent = async (eventItem) => {
-    if (!eventItem?.id) {
+    if (!eventItem?.id || isPastEvent(eventItem)) {
       return;
     }
     try {
@@ -2400,6 +2444,16 @@ export default function App() {
     const { statusLabel } = getEventStatusInfo(event);
     return (statusLabel || "").toLowerCase();
   };
+
+  /** True if event end date/time is in the past; used to disable actions on past events. */
+  const isPastEvent = (event) => {
+    if (!event || !event.end_date) return false;
+    const endTime = (event.end_time || "23:59:59").toString().trim();
+    const endStr = endTime.length <= 5 ? `${event.end_date}T${endTime}:00` : `${event.end_date}T${endTime}`;
+    const end = new Date(endStr);
+    return !Number.isNaN(end.getTime()) && end < new Date();
+  };
+
   const submitEvent = async (formEvent, override) => {
     if (formEvent) {
       formEvent.preventDefault();
@@ -2688,6 +2742,7 @@ export default function App() {
         start_time: eventPayload?.start_time || "",
         end_date: eventPayload?.end_date || "",
         end_time: eventPayload?.end_time || "",
+        event_mode: itForm.event_mode || "offline",
         pa_system: itForm.pa_system,
         projection: itForm.projection,
         other_notes: itForm.other_notes
@@ -2958,6 +3013,7 @@ export default function App() {
 
       const data = await res.json();
       if (data?.url) {
+        setGoogleScopeModal({ open: false, missing: [] });
         window.open(data.url, "_blank", "noopener,noreferrer");
       }
     } catch (err) {
@@ -3757,7 +3813,9 @@ export default function App() {
                         .replace(/\s+/g, "-");
                       const inviteSent = event.invite_status === "sent";
                       const isUpcomingEvent = getNormalizedEventStatus(event) === "upcoming";
+                      const eventIsPast = isPastEvent(event);
                       const canInvite =
+                        !eventIsPast &&
                         isUpcomingEvent &&
                         ((!event.approval_status && !event.facility_status && !event.marketing_status && !event.it_status) ||
                           (event.approval_status === "approved" &&
@@ -3767,6 +3825,7 @@ export default function App() {
                         !inviteSent;
                       const isApprovalItem = String(event.id || "").startsWith("approval-");
                       const canSendSupportForms =
+                        !eventIsPast &&
                         !isApprovalItem &&
                         event.approval_status === "approved";
                       const canSendFacilityRequest =
@@ -3774,9 +3833,12 @@ export default function App() {
                       const canSendMarketingRequest =
                         canSendSupportForms && event.marketing_status !== "approved";
                       const canSendItRequest = canSendSupportForms && event.it_status !== "approved";
-                      const canUploadReport = !isApprovalItem && statusValue === "completed";
+                      const canUploadReport = !eventIsPast && !isApprovalItem && statusValue === "completed";
                       const canCloseEvent =
-                        !isApprovalItem && statusValue === "completed" && Boolean(event.report_file_id);
+                        !eventIsPast &&
+                        !isApprovalItem &&
+                        statusValue === "completed" &&
+                        Boolean(event.report_file_id);
                       if (isReportsTab) {
                         return (
                           <div key={event.id} className="events-table-row reports">
@@ -4101,7 +4163,7 @@ export default function App() {
                       </label>
                       <label className="approval-field">
                         <span>To</span>
-                        <input type="text" value="Registrar (auto-routed)" readOnly />
+                        <input type="text" value={registrarEmail || "Registrar email"} readOnly />
                       </label>
                     </div>
 
@@ -4517,6 +4579,32 @@ export default function App() {
                     </div>
 
                     <div className="marketing-requirements">
+                      <p>Event mode</p>
+                      <div className="marketing-grid">
+                        <label>
+                          <input
+                            type="radio"
+                            name="it_event_mode"
+                            value="online"
+                            checked={itForm.event_mode === "online"}
+                            onChange={() => setItForm((prev) => ({ ...prev, event_mode: "online" }))}
+                          />
+                          Online
+                        </label>
+                        <label>
+                          <input
+                            type="radio"
+                            name="it_event_mode"
+                            value="offline"
+                            checked={itForm.event_mode === "offline"}
+                            onChange={() => setItForm((prev) => ({ ...prev, event_mode: "offline" }))}
+                          />
+                          Offline
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="marketing-requirements">
                       <p>Requirements:</p>
                       <div className="marketing-grid">
                         <label>
@@ -4608,15 +4696,6 @@ export default function App() {
       }
 
       if (isPublications) {
-        const PUB_META = {
-          webpage:          { icon: "🌐", label: "Webpage",           color: "#2c7a7b" },
-          journal_article:  { icon: "📄", label: "Journal Article",   color: "#553c9a" },
-          book:             { icon: "📚", label: "Book",              color: "#c05621" },
-          report:           { icon: "📊", label: "Report",           color: "#2b6cb0" },
-          video:            { icon: "🎬", label: "Video",             color: "#c53030" },
-          online_newspaper: { icon: "📰", label: "Online Newspaper",  color: "#276749" },
-        };
-
         const getPubDetails = (item) => {
           const pt = item.pub_type;
           if (pt === "webpage") return [
@@ -5324,6 +5403,13 @@ export default function App() {
                           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                           <span className="marketing-needs">{needsLabel}</span>
                           <div className="approval-actions">
+                            <button
+                              type="button"
+                              className="details-button upload"
+                              onClick={() => openMarketingDeliverableModal(item)}
+                            >
+                              Upload
+                            </button>
                             {item.status === "pending" ? (
                               <>
                                 <button
@@ -5452,11 +5538,23 @@ export default function App() {
               {eventsState.status === "ready" && eventsState.items.length === 0 ? (
                 <p className="table-message">No events yet. Create your first event.</p>
               ) : null}
-              {eventsState.status === "ready" && eventsState.items.length > 0 && !eventsState.items.some(eventMatchesSearch) ? (
-                <p className="table-message">No events match your search.</p>
-              ) : null}
+              {eventsState.status === "ready" && eventsState.items.length > 0 ? (() => {
+                const approvedOnly = eventsState.items.filter((e) => !String(e.id || "").startsWith("approval-") && e.approval_status === "approved");
+                const matching = approvedOnly.filter(eventMatchesSearch);
+                if (matching.length === 0) {
+                  return (
+                    <p className="table-message">
+                      {approvedOnly.length === 0 ? "No events approved by registrar yet." : "No events match your search."}
+                    </p>
+                  );
+                }
+                return null;
+              })() : null}
               {eventsState.status === "ready"
-                ? eventsState.items.filter(eventMatchesSearch).map((event) => {
+                ? eventsState.items
+                    .filter((e) => !String(e.id || "").startsWith("approval-") && e.approval_status === "approved")
+                    .filter(eventMatchesSearch)
+                    .map((event) => {
                     const { statusLabel, statusClass } = getEventStatusInfo(event);
                     return (
                       <article key={event.id} className="event-card">
@@ -5575,48 +5673,156 @@ export default function App() {
 
         {eventDetailsModal.open ? (
           <div className="modal-overlay" role="dialog" aria-modal="true">
-            <div className="modal-card details-card">
+            <div className="modal-card details-card event-details-modal">
               <div className="modal-header">
                 <h3>Event Details</h3>
                 <button type="button" className="modal-close" onClick={handleEventDetailsClose}>
                   &times;
                 </button>
               </div>
-              {eventDetailsModal.event ? (
-                <div className="details-grid">
-                  <div>
-                    <p className="details-label">Event</p>
-                    <p className="details-value">{eventDetailsModal.event.name}</p>
+              {eventDetailsModal.status === "loading" ? (
+                <p className="table-message">Loading event details...</p>
+              ) : eventDetailsModal.status === "error" ? (
+                <p className="form-error">{eventDetailsModal.error}</p>
+              ) : eventDetailsModal.details ? (
+                <>
+                  <div className="details-grid">
+                    <div>
+                      <p className="details-label">Event</p>
+                      <p className="details-value">{eventDetailsModal.details.event?.name || eventDetailsModal.event?.name}</p>
+                    </div>
+                    <div>
+                      <p className="details-label">Facilitator</p>
+                      <p className="details-value">{eventDetailsModal.details.event?.facilitator}</p>
+                    </div>
+                    <div>
+                      <p className="details-label">Venue</p>
+                      <p className="details-value">{eventDetailsModal.details.event?.venue_name}</p>
+                    </div>
+                    <div>
+                      <p className="details-label">Status</p>
+                      <p className="details-value">{eventDetailsModal.details.event?.status}</p>
+                    </div>
+                    <div>
+                      <p className="details-label">Start</p>
+                      <p className="details-value">
+                        {eventDetailsModal.details.event?.start_date && eventDetailsModal.details.event?.start_time
+                          ? `${eventDetailsModal.details.event.start_date} ${formatISTTime(eventDetailsModal.details.event.start_time)}`
+                          : "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="details-label">End</p>
+                      <p className="details-value">
+                        {eventDetailsModal.details.event?.end_date && eventDetailsModal.details.event?.end_time
+                          ? `${eventDetailsModal.details.event.end_date} ${formatISTTime(eventDetailsModal.details.event.end_time)}`
+                          : "—"}
+                      </p>
+                    </div>
+                    <div className="details-wide">
+                      <p className="details-label">Description</p>
+                      <p className="details-value">{eventDetailsModal.details.event?.description || "—"}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="details-label">Facilitator</p>
-                    <p className="details-value">{eventDetailsModal.event.facilitator}</p>
+
+                  <div className="event-details-section">
+                    <p className="details-label">Registrar approval</p>
+                    {eventDetailsModal.details.approval_request ? (
+                      <div className="details-subsection">
+                        <p className="details-value">
+                          Sent to: <strong>{eventDetailsModal.details.approval_request.requested_to || "—"}</strong>
+                        </p>
+                        <p className="details-value">
+                          Status: <span className={`status-pill ${eventDetailsModal.details.approval_request.status}`}>
+                            {eventDetailsModal.details.approval_request.status}
+                          </span>
+                        </p>
+                        {eventDetailsModal.details.approval_request.status === "approved" && eventDetailsModal.details.approval_request.decided_by ? (
+                          <p className="details-value">Approved by: <strong>{eventDetailsModal.details.approval_request.decided_by}</strong></p>
+                        ) : eventDetailsModal.details.approval_request.status === "pending" ? (
+                          <p className="details-value">Awaiting approval from registrar.</p>
+                        ) : eventDetailsModal.details.approval_request.decided_by ? (
+                          <p className="details-value">Decided by: <strong>{eventDetailsModal.details.approval_request.decided_by}</strong></p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="details-value">No approval request sent for this event.</p>
+                    )}
                   </div>
-                  <div>
-                    <p className="details-label">Venue</p>
-                    <p className="details-value">{eventDetailsModal.event.venue_name}</p>
+
+                  <div className="event-details-section">
+                    <p className="details-label">Requirements sent</p>
+                    {eventDetailsModal.details.facility_requests?.length > 0 ? (
+                      <div className="details-subsection">
+                        <p className="details-sublabel">Facility</p>
+                        {eventDetailsModal.details.facility_requests.map((r, i) => (
+                          <div key={r.id || i} className="details-row">
+                            <span>To: {r.requested_to || "—"}</span>
+                            <span className={`status-pill ${r.status}`}>{r.status}</span>
+                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {eventDetailsModal.details.marketing_requests?.length > 0 ? (
+                      <div className="details-subsection">
+                        <p className="details-sublabel">Marketing</p>
+                        {eventDetailsModal.details.marketing_requests.map((r, i) => (
+                          <div key={r.id || i} className="details-row">
+                            <span>To: {r.requested_to || "—"}</span>
+                            <span className={`status-pill ${r.status}`}>{r.status}</span>
+                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {eventDetailsModal.details.it_requests?.length > 0 ? (
+                      <div className="details-subsection">
+                        <p className="details-sublabel">IT</p>
+                        {eventDetailsModal.details.it_requests.map((r, i) => (
+                          <div key={r.id || i} className="details-row">
+                            <span>To: {r.requested_to || "—"}</span>
+                            <span className={`status-pill ${r.status}`}>{r.status}</span>
+                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {!(eventDetailsModal.details.facility_requests?.length || eventDetailsModal.details.marketing_requests?.length || eventDetailsModal.details.it_requests?.length) ? (
+                      <p className="details-value">No facility, marketing, or IT requests sent yet.</p>
+                    ) : null}
                   </div>
-                  <div>
-                    <p className="details-label">Status</p>
-                    <p className="details-value">{eventDetailsModal.event.status}</p>
-                  </div>
-                  <div>
-                    <p className="details-label">Start</p>
-                    <p className="details-value">
-                      {eventDetailsModal.event.start_date} ? {formatISTTime(eventDetailsModal.event.start_time)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="details-label">End</p>
-                    <p className="details-value">
-                      {eventDetailsModal.event.end_date} ? {formatISTTime(eventDetailsModal.event.end_time)}
-                    </p>
-                  </div>
-                  <div className="details-wide">
-                    <p className="details-label">Description</p>
-                    <p className="details-value">{eventDetailsModal.event.description || "?"}</p>
-                  </div>
-                </div>
+
+                  {eventDetailsModal.details.marketing_requests?.some((r) => r.deliverables?.length) ? (
+                    <div className="event-details-section">
+                      <p className="details-label">Files uploaded by marketing</p>
+                      {eventDetailsModal.details.marketing_requests.map((req, i) =>
+                        req.deliverables?.length ? (
+                          <div key={req.id || i} className="details-subsection">
+                            {eventDetailsModal.details.marketing_requests.length > 1 ? (
+                              <p className="details-sublabel">Request to {req.requested_to || "marketing"}</p>
+                            ) : null}
+                            <ul className="details-list">
+                              {req.deliverables.map((d, j) => (
+                                <li key={j}>
+                                  {d.is_na ? (
+                                    <span>{d.deliverable_type}: N/A</span>
+                                  ) : d.web_view_link ? (
+                                    <a href={d.web_view_link} target="_blank" rel="noreferrer">{d.file_name || d.deliverable_type}</a>
+                                  ) : (
+                                    <span>{d.file_name || d.deliverable_type}</span>
+                                  )}
+                                  {!d.is_na ? ` (${d.deliverable_type})` : null}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null
+                      )}
+                    </div>
+                  ) : null}
+
+                </>
               ) : (
                 <p className="table-message">Event details not available.</p>
               )}
@@ -5710,54 +5916,129 @@ export default function App() {
             </div>
           </div>
         ) : null}
-        <aside className="sidebar">
-          <div className="brand">
-            <div className="brand-icon">
-              <SimpleIcon path="M6 12a6 6 0 1 1 6 6H6v-6Z" />
+        {marketingDeliverableModal.open && marketingDeliverableModal.request ? (
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="modal-card modal-card-wide">
+              <div className="modal-header">
+                <h3>Upload Deliverables</h3>
+                <button type="button" className="modal-close" onClick={closeMarketingDeliverableModal}>
+                  &times;
+                </button>
+              </div>
+              <p className="details-value" style={{ marginBottom: "1rem" }}>
+                {marketingDeliverableModal.request.event_name || "Event"}
+              </p>
+              <p className="form-hint" style={{ marginBottom: "1rem" }}>
+                For each requirement, select NA or upload a file (max 25MB each).
+              </p>
+              <form className="event-form" onSubmit={submitMarketingDeliverable}>
+                {REQUIREMENT_OPTIONS.filter((opt) => marketingDeliverableModal.request?.[opt.key]).map((opt) => {
+                  const r = marketingDeliverableModal.requirements?.[opt.type] || { na: false, file: null };
+                  return (
+                    <div key={opt.type} className="form-field deliverable-row">
+                      <span className="deliverable-label">{opt.label}</span>
+                      <label className="deliverable-na">
+                        <input
+                          type="checkbox"
+                          checked={r.na}
+                          onChange={(e) => {
+                            setMarketingDeliverableModal((prev) => ({
+                              ...prev,
+                              requirements: {
+                                ...prev.requirements,
+                                [opt.type]: { na: e.target.checked, file: e.target.checked ? null : r.file }
+                              }
+                            }));
+                          }}
+                        />
+                        NA
+                      </label>
+                      <label className="deliverable-file">
+                        <input
+                          key={`${opt.type}-${r.na}`}
+                          type="file"
+                          accept="*/*"
+                          disabled={r.na}
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            setMarketingDeliverableModal((prev) => ({
+                              ...prev,
+                              requirements: {
+                                ...prev.requirements,
+                                [opt.type]: { na: r.na, file: f || null }
+                              }
+                            }));
+                          }}
+                        />
+                        {r.na ? "" : r.file ? r.file.name : "Choose file"}
+                      </label>
+                    </div>
+                  );
+                })}
+                {marketingDeliverableModal.request?.deliverables?.length ? (
+                  <div className="form-field" style={{ marginTop: "1rem", marginBottom: "1rem" }}>
+                    <span>Already uploaded / marked</span>
+                    <ul style={{ margin: 0, paddingLeft: "1.25rem" }}>
+                      {marketingDeliverableModal.request.deliverables.map((d, i) => (
+                        <li key={i}>
+                          {d.is_na ? (
+                            <span>{d.deliverable_type}: N/A</span>
+                          ) : d.web_view_link ? (
+                            <a href={d.web_view_link} target="_blank" rel="noreferrer">
+                              {d.file_name || d.deliverable_type}
+                            </a>
+                          ) : (
+                            <span>{d.file_name || d.deliverable_type}</span>
+                          )}
+                          {!d.is_na ? ` (${d.deliverable_type})` : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {marketingDeliverableModal.status === "error" ? (
+                  <p className="form-error">
+                    {marketingDeliverableModal.error}
+                    {marketingDeliverableModal.error === "Google not connected" ? (
+                      <>
+                        {" "}
+                        <button
+                          type="button"
+                          className="secondary-action"
+                          onClick={handleCalendarConnect}
+                          style={{ marginLeft: "0.5rem" }}
+                        >
+                          Connect Google
+                        </button>
+                      </>
+                    ) : null}
+                  </p>
+                ) : null}
+                <div className="modal-actions">
+                  <button type="button" className="secondary-action" onClick={closeMarketingDeliverableModal}>
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="primary-action"
+                    disabled={
+                      marketingDeliverableModal.status === "loading" ||
+                      !Object.values(marketingDeliverableModal.requirements || {}).some((r) => r.na || r.file)
+                    }
+                  >
+                    {marketingDeliverableModal.status === "loading" ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </form>
             </div>
-            <span>FACULTY</span>
           </div>
-
-          <div className="menu-block">
-            <p className="menu-title">Menu</p>
-            <nav className="menu-list">
-              {visibleMenuItems.map((item, index) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`menu-item ${activeView === item.id ? "active" : ""}`}
-                  onClick={() => setActiveView(item.id)}
-                >
-                  <span className="menu-icon">
-                    <SimpleIcon path="M3 10.5 12 3l9 7.5v9.5H3z" />
-                  </span>
-                  {item.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          <div className="menu-block">
-            <p className="menu-title">Preferences</p>
-            <nav className="menu-list">
-              {preferenceItems.map((item) => (
-                <button key={item.id} type="button" className="menu-item">
-                  <span className="menu-icon">
-                    <SimpleIcon path="M12 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Zm0 14c4.4 0 8 2 8 4v2H4v-2c0-2 3.6-4 8-4Z" />
-                  </span>
-                  {item.label}
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          <button type="button" className="menu-item logout" onClick={handleLogout}>
-            <span className="menu-icon">
-              <SimpleIcon path="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-4-4 4-4M6 13h12" />
-            </span>
-            Logout
-          </button>
-        </aside>
+        ) : null}
+        <Sidebar
+          visibleMenuItems={visibleMenuItems}
+          activeView={activeView}
+          onViewChange={setActiveView}
+          onLogout={handleLogout}
+        />
 
         <main className="dashboard-main">
           <header className="dashboard-header">
@@ -5996,60 +6277,6 @@ export default function App() {
     );
   }
 
-  return (
-    <div className="page">
-      <div className="orb orb-left" />
-      <div className="orb orb-right" />
-      <div className="container">
-        <section className="hero">
-          <PlaceholderCard />
-          <div className="hero-text">
-            <p className="eyebrow">Event Booking Management</p>
-            <h1>Run smarter events, from invites to attendance.</h1>
-            <p className="lead">
-              Organize every stage with a centralized workspace, automated
-              reminders, and real-time visibility that keeps teams aligned.
-            </p>
-            <div className="stats">
-              {stats.map((item) => (
-                <div key={item.label} className="stat">
-                  <span className="stat-value">{item.value}</span>
-                  <span className="stat-label">{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="login-panel">
-          <div className="panel-card">
-            <p className="panel-eyebrow">Welcome back</p>
-            <h2>Login to your account</h2>
-            <p className="panel-copy">
-              Sign in to continue scheduling, tracking, and refining every
-              event experience.
-            </p>
-
-            <div className="google-button google-render" ref={googleButtonRef}>
-              <span className="google-fallback" aria-hidden="true">
-                <span className="google-icon">
-                  <GoogleIcon />
-                </span>
-                Continue with Google
-              </span>
-            </div>
-
-            {status.message ? (
-              <p className={`status ${status.type}`}>{status.message}</p>
-            ) : null}
-
-            <p className="panel-footnote">
-              Use your institutional Google account to continue.
-            </p>
-          </div>
-        </section>
-      </div>
-    </div>
-  );
+  return <LoginPage googleButtonRef={googleButtonRef} status={status} />;
 }
 

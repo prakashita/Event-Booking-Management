@@ -4,6 +4,7 @@ from models import PendingRoleAssignment, User
 from auth import (
     REQUIRED_GOOGLE_SCOPES,
     ensure_google_access_token,
+    get_primary_email_by_role,
     verify_google_token,
     create_access_token,
     is_admin_email,
@@ -70,7 +71,11 @@ async def google_oauth_status(user: User = Depends(get_current_user)):
     try:
         access_token = await ensure_google_access_token(user)
     except HTTPException as exc:
-        if exc.status_code in {status.HTTP_403_FORBIDDEN, status.HTTP_401_UNAUTHORIZED}:
+        if exc.status_code in {
+            status.HTTP_403_FORBIDDEN,
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_502_BAD_GATEWAY,
+        }:
             return {"connected": False, "missing_scopes": REQUIRED_GOOGLE_SCOPES}
         raise
 
@@ -86,3 +91,31 @@ async def google_oauth_status(user: User = Depends(get_current_user)):
     granted_scopes = set((data.get("scope") or "").split())
     missing = [scope for scope in REQUIRED_GOOGLE_SCOPES if scope not in granted_scopes]
     return {"connected": len(missing) == 0, "missing_scopes": missing}
+
+
+@router.get("/registrar-email")
+async def get_registrar_email(user: User = Depends(get_current_user)):
+    """Return the registrar email for display in approval forms."""
+    email = await get_primary_email_by_role("registrar")
+    return {"email": email or ""}
+
+
+@router.get("/facility-manager-email")
+async def get_facility_manager_email(user: User = Depends(get_current_user)):
+    """Return the facility manager email for prefilling request forms."""
+    email = await get_primary_email_by_role("facility_manager")
+    return {"email": email or ""}
+
+
+@router.get("/marketing-email")
+async def get_marketing_email(user: User = Depends(get_current_user)):
+    """Return the marketing email for prefilling request forms."""
+    email = await get_primary_email_by_role("marketing")
+    return {"email": email or ""}
+
+
+@router.get("/it-email")
+async def get_it_email(user: User = Depends(get_current_user)):
+    """Return the IT email for prefilling request forms."""
+    email = await get_primary_email_by_role("it")
+    return {"email": email or ""}

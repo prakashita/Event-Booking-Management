@@ -660,6 +660,7 @@ body {
   place-items: center;
   padding: 24px;
   z-index: 1000;
+  overflow-y: auto;
 }
 
 .modal-card {
@@ -672,6 +673,49 @@ body {
   display: grid;
   gap: 18px;
   animation: riseIn 0.2s ease-out;
+}
+
+.modal-card-wide {
+  width: min(640px, calc(100vw - 48px));
+}
+
+.deliverable-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.deliverable-row .deliverable-label {
+  min-width: 100px;
+  font-weight: 600;
+}
+
+.deliverable-row .deliverable-na {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.deliverable-row .deliverable-na input {
+  margin: 0;
+  width: auto;
+}
+
+.deliverable-row .deliverable-file input[type="file"] {
+  font-size: 0.85rem;
+}
+
+.deliverable-row .deliverable-file {
+  flex: 1;
+  min-width: 140px;
+}
+
+.form-hint {
+  font-size: 0.9rem;
+  color: var(--ink-soft);
 }
 
 .approval-overlay {
@@ -1369,6 +1413,15 @@ body {
 .details-button.reject {
   border-color: #a9382a;
   color: #a9382a;
+}
+
+.details-button.upload {
+  border-color: #2a8a6e;
+  color: #2a8a6e;
+}
+
+.details-button.upload:hover {
+  background: rgba(42, 138, 110, 0.08);
 }
 
 .marketing-needs {
@@ -2285,6 +2338,13 @@ body {
   max-width: 680px;
 }
 
+.event-details-modal {
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .details-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2308,6 +2368,47 @@ body {
   color: #333333;
   margin-top: 6px;
   line-height: 1.5;
+}
+
+.event-details-modal .event-details-section {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.event-details-modal .details-subsection {
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.event-details-modal .details-subsection:last-child {
+  margin-bottom: 0;
+}
+
+.event-details-modal .details-sublabel {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-bottom: 0.35rem;
+}
+
+.event-details-modal .details-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  font-size: 0.9rem;
+  margin-top: 0.35rem;
+}
+
+.event-details-modal .details-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.event-details-modal .details-list li {
+  margin-top: 0.25rem;
 }
 
 @media (max-width: 720px) {

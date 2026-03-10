@@ -7,12 +7,20 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 import requests
 
-from auth import ensure_google_access_token, get_primary_email_by_role
+from auth import ensure_google_access_token, get_primary_email_by_role, get_user_by_role
 from drive import upload_report_file
 from event_status import sync_event_status
-from models import ApprovalRequest, Event, User
+from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, User
+from routers.admin import serialize_approval, serialize_event, serialize_facility, serialize_it, serialize_marketing
 from routers.deps import get_current_user
-from schemas import ApprovalRequestResponse, EventCreate, EventCreateResponse, EventResponse, EventStatusUpdate
+from schemas import (
+    ApprovalRequestResponse,
+    EventCreate,
+    EventCreateResponse,
+    EventDetailsResponse,
+    EventResponse,
+    EventStatusUpdate,
+)
 
 router = APIRouter(prefix="/events", tags=["Events"])
 logger = logging.getLogger("event-booking.events")
@@ -96,7 +104,7 @@ async def notify_registrar_for_approval(
     registrar_email: str,
     approval: ApprovalRequest,
 ) -> None:
-    access_token = await ensure_google_access_token(requester)
+    """Send email to registrar when a new event requires approval. Uses registrar's Gmail first, then requester's."""
     subject = f"Event Approval Request: {approval.event_name}"
     body = (
         f"A new event requires your approval.\n\n"
@@ -110,6 +118,23 @@ async def notify_registrar_for_approval(
     )
     raw_message = _build_raw_email(registrar_email, subject, body)
     encoded_message = base64.urlsafe_b64encode(raw_message.encode("utf-8")).decode("utf-8")
+
+    # Try registrar's Gmail first (they usually have it connected for approvals), then requester's
+    access_token = None
+    for sender_user in [await get_user_by_role("registrar"), requester]:
+        if not sender_user:
+            continue
+        try:
+            access_token = await ensure_google_access_token(sender_user)
+            break
+        except Exception:
+            continue
+
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Unable to send registrar notification: registrar or requester must connect Google.",
+        )
 
     response = requests.post(
         "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
@@ -154,6 +179,34 @@ async def list_events(user: User = Depends(get_current_user)):
     )
     for event in events
 ]
+
+
+@router.get("/{event_id}/details", response_model=EventDetailsResponse)
+async def get_event_details(event_id: str, user: User = Depends(get_current_user)):
+    """Return full event details for the details modal: event, registrar approval, facility/marketing/IT requests and who approved, marketing deliverables."""
+    event = await Event.get(event_id)
+    if not event:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    if event.created_by != str(user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to view this event")
+
+    await sync_event_status(event)
+    approval_request = await ApprovalRequest.find_one(ApprovalRequest.event_id == event_id)
+    facility_requests = await FacilityManagerRequest.find(
+        FacilityManagerRequest.event_id == event_id
+    ).sort("-created_at").to_list()
+    marketing_requests = await MarketingRequest.find(
+        MarketingRequest.event_id == event_id
+    ).sort("-created_at").to_list()
+    it_requests = await ItRequest.find(ItRequest.event_id == event_id).sort("-created_at").to_list()
+
+    return EventDetailsResponse(
+        event=serialize_event(event),
+        approval_request=serialize_approval(approval_request) if approval_request else None,
+        facility_requests=[serialize_facility(r) for r in facility_requests],
+        marketing_requests=[serialize_marketing(r) for r in marketing_requests],
+        it_requests=[serialize_it(r) for r in it_requests],
+    )
 
 
 @router.post("/conflicts")

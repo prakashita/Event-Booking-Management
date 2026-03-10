@@ -41,6 +41,12 @@ async def get_primary_email_by_role(role: str) -> str:
     return (user.email or "").strip().lower() if user else ""
 
 
+async def get_user_by_role(role: str):
+    """Get the User with the given role, or None."""
+    from models import User
+    return await User.find_one(User.role == role.lower())
+
+
 
 def verify_google_token(token: str):
     response = requests.get(GOOGLE_TOKEN_INFO_URL, params={"id_token": token})
@@ -127,8 +133,8 @@ async def ensure_google_access_token(user):
 
     if response.status_code != 200:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unable to refresh Google token",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Unable to refresh Google token. Please reconnect Google.",
         )
 
     data = response.json()
@@ -136,8 +142,8 @@ async def ensure_google_access_token(user):
     expires_in = data.get("expires_in", 3600)
     if not access_token:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Google token missing",
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Google token missing. Please reconnect Google.",
         )
 
     user.google_access_token = access_token

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from auth import get_primary_email_by_role
 from models import ApprovalRequest, Event, FacilityManagerRequest, User
+from notifications import send_notification_email
 from routers.deps import get_current_user
 from schemas import (
     FacilityManagerDecision,
@@ -69,6 +70,28 @@ async def create_facility_request(
         other_notes=payload.other_notes,
     )
     await request_item.insert()
+
+    subject = f"Facility Manager Request: {request_item.event_name}"
+    venue_line = f"Venue: {event.venue_name}" if event.venue_name else "Venue: Not specified"
+    body = (
+        f"A new facility request has been submitted for your approval.\n\n"
+        f"Requester: {user.email}\n"
+        f"Event: {request_item.event_name}\n"
+        f"Date: {request_item.start_date} {request_item.start_time} - {request_item.end_date} {request_item.end_time}\n"
+        f"{venue_line}\n"
+        f"Venue setup required: {'Yes' if request_item.venue_required else 'No'}\n"
+        f"Refreshments: {'Yes' if request_item.refreshments else 'No'}\n"
+    )
+    if request_item.other_notes:
+        body += f"\nAdditional notes: {request_item.other_notes}\n"
+    body += "\nPlease approve or reject this request from your dashboard."
+    await send_notification_email(
+        recipient_email=requested_to,
+        subject=subject,
+        body=body,
+        requester=user,
+        fallback_role="facility_manager",
+    )
 
     return FacilityManagerRequestResponse(
         id=str(request_item.id),
