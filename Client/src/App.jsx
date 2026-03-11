@@ -1346,7 +1346,9 @@ export default function App() {
           !String(e.id || "").startsWith("approval-") &&
           e.approval_status === "approved" &&
           !isEventStartedCheck(e) &&
-          (e.facility_status !== "approved" || e.marketing_status !== "approved" || e.it_status !== "approved")
+          ((e.facility_status !== "approved" && e.facility_status !== "pending") ||
+            (e.marketing_status !== "approved" && e.marketing_status !== "pending") ||
+            (e.it_status !== "approved" && e.it_status !== "pending"))
       );
       setEventsState({
         status: "ready",
@@ -1995,6 +1997,19 @@ export default function App() {
     setFacilityModal({ open: false, status: "idle", error: "" });
   };
 
+  const handleFacilitySkip = () => {
+    setFacilityModal({ open: false, status: "idle", error: "" });
+    const queue = requirementsFlowQueueRef.current;
+    if (queue[0] === "facility") {
+      requirementsFlowQueueRef.current = queue.slice(1);
+      const next = requirementsFlowQueueRef.current[0];
+      if (next === "it") handleItModalOpen();
+      else if (next === "marketing") handleMarketingModalOpen();
+    } else {
+      requirementsFlowQueueRef.current = [];
+    }
+  };
+
   const handleItModalOpen = () => {
     setItForm({
       to: itEmail,
@@ -2061,9 +2076,9 @@ export default function App() {
     if (isEventStarted(eventItem)) return;
     setPendingEvent({ ...eventItem, event_id: eventItem?.id || eventItem?.event_id || "" });
     const queue = [];
-    if (eventItem.facility_status !== "approved") queue.push("facility");
-    if (eventItem.it_status !== "approved") queue.push("it");
-    if (eventItem.marketing_status !== "approved") queue.push("marketing");
+    if (eventItem.facility_status !== "approved" && eventItem.facility_status !== "pending") queue.push("facility");
+    if (eventItem.it_status !== "approved" && eventItem.it_status !== "pending") queue.push("it");
+    if (eventItem.marketing_status !== "approved" && eventItem.marketing_status !== "pending") queue.push("marketing");
     requirementsFlowQueueRef.current = queue;
     if (queue[0] === "facility") handleFacilityModalOpen();
     else if (queue[0] === "it") handleItModalOpen();
@@ -2137,6 +2152,7 @@ export default function App() {
     };
 
   const openMarketingDeliverableModal = (request) => {
+    if (isEventStarted(request)) return;
     const requirements = {};
     REQUIREMENT_OPTIONS.forEach(({ key, type }) => {
       if (request[key]) {
@@ -3834,10 +3850,17 @@ export default function App() {
                         !isApprovalItem &&
                         event.approval_status === "approved";
                       const canSendFacilityRequest =
-                        canSendSupportForms && event.facility_status !== "approved";
+                        canSendSupportForms &&
+                        event.facility_status !== "approved" &&
+                        event.facility_status !== "pending";
                       const canSendMarketingRequest =
-                        canSendSupportForms && event.marketing_status !== "approved";
-                      const canSendItRequest = canSendSupportForms && event.it_status !== "approved";
+                        canSendSupportForms &&
+                        event.marketing_status !== "approved" &&
+                        event.marketing_status !== "pending";
+                      const canSendItRequest =
+                        canSendSupportForms &&
+                        event.it_status !== "approved" &&
+                        event.it_status !== "pending";
                       const canUploadReport = !eventHasStarted && !isApprovalItem && statusValue === "completed";
                       const canCloseEvent =
                         !eventHasStarted &&
@@ -4306,6 +4329,9 @@ export default function App() {
                     ) : null}
 
                     <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleFacilitySkip}>
+                        Skip
+                      </button>
                       <button type="button" className="secondary-action" onClick={handleFacilityModalClose}>
                         Cancel
                       </button>
@@ -5422,6 +5448,8 @@ export default function App() {
                             <button
                               type="button"
                               className="details-button upload"
+                              disabled={eventHasStarted}
+                              title={eventHasStarted ? "Event has already started" : ""}
                               onClick={() => openMarketingDeliverableModal(item)}
                             >
                               Upload

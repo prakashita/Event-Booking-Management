@@ -231,6 +231,12 @@ async def upload_marketing_deliverable(
                 detail="Only the marketing contact or users with the marketing role can upload deliverables",
             )
 
+        if event_has_started(request_item.start_date, request_item.start_time):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Event has already started; no actions allowed on this request.",
+            )
+
         if not file.filename:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File is required")
         contents = await file.read()
@@ -325,6 +331,12 @@ async def upload_marketing_deliverables_batch(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Only the marketing contact or users with the marketing role can upload deliverables",
+            )
+
+        if event_has_started(request_item.start_date, request_item.start_time):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Event has already started; no actions allowed on this request.",
             )
 
         folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
