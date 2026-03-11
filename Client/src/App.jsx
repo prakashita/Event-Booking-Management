@@ -3670,20 +3670,26 @@ export default function App() {
       if (isMyEvents || isReportsView) {
         const isReportsTab = myEventsTab === "closed";
         const getNormalizedStatus = (event) => getNormalizedEventStatus(event);
+        /** Backend lifecycle status (upcoming, ongoing, completed, closed) for tab filtering. Approval items have no lifecycle. */
+        const getLifecycleStatus = (event) => {
+          if (String(event.id || "").startsWith("approval-")) return null;
+          return (event.status || "").toLowerCase();
+        };
         const filteredEvents = eventsState.items.filter((event) => {
+          const lifecycle = getLifecycleStatus(event);
           const statusMatches = isReportsView
-            ? getNormalizedStatus(event) === "closed"
+            ? lifecycle === "closed"
             : myEventsTab === "all"
               ? true
               : myEventsTab === "pending"
                 ? getNormalizedStatus(event) === "pending"
                 : myEventsTab === "upcoming"
-                  ? getNormalizedStatus(event) === "upcoming"
+                  ? lifecycle === "upcoming"
                   : myEventsTab === "ongoing"
-                  ? getNormalizedStatus(event) === "ongoing"
+                  ? lifecycle === "ongoing"
                   : myEventsTab === "completed"
-                      ? getNormalizedStatus(event) === "completed"
-                      : getNormalizedStatus(event) === "closed"
+                      ? lifecycle === "completed"
+                      : lifecycle === "closed";
           return statusMatches && eventMatchesSearch(event);
         });
         const completedUnclosedCount = eventsState.items.filter((event) => {
@@ -3691,7 +3697,7 @@ export default function App() {
           if (isApprovalItem) {
             return false;
           }
-          return getNormalizedStatus(event) === "completed";
+          return getLifecycleStatus(event) === "completed";
         }).length;
         const limitReached = completedUnclosedCount >= 5;
         const warnThresholdReached = completedUnclosedCount >= 3 && completedUnclosedCount < 5;
@@ -3799,7 +3805,19 @@ export default function App() {
                 ) : null}
                 {eventsState.status === "ready" && filteredEvents.length === 0 ? (
                   <p className="table-message">
-                    {isReportsTab ? "No closed events yet." : "No events yet. Create your first event."}
+                    {isReportsTab
+                      ? "No closed events yet."
+                      : myEventsTab === "completed"
+                        ? "No completed events yet."
+                        : myEventsTab === "upcoming"
+                          ? "No upcoming events."
+                          : myEventsTab === "ongoing"
+                            ? "No ongoing events."
+                            : myEventsTab === "closed"
+                              ? "No closed events yet."
+                              : myEventsTab === "pending"
+                                ? "No pending events."
+                                : "No events yet. Create your first event."}
                   </p>
                 ) : null}
                 {eventsState.status === "ready"
