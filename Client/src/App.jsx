@@ -3845,7 +3845,7 @@ export default function App() {
                         .toLowerCase()
                         .replace(/\s+/g, "-");
                       const inviteSent = event.invite_status === "sent";
-                      const isUpcomingEvent = getNormalizedEventStatus(event) === "upcoming";
+                      const isUpcomingEvent = (statusValue || "").toLowerCase() === "upcoming";
                       const eventHasStarted = isEventStarted(event);
                       const canInvite =
                         !eventHasStarted &&
