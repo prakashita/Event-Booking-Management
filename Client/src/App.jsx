@@ -1334,18 +1334,18 @@ export default function App() {
       });
 
       const items = [...approvalItems, ...enrichedEvents];
-      const isPastEventCheck = (e) => {
-        if (!e?.end_date) return false;
-        const endTime = (e.end_time || "23:59:59").toString().trim();
-        const endStr = endTime.length <= 5 ? `${e.end_date}T${endTime}:00` : `${e.end_date}T${endTime}`;
-        const end = new Date(endStr);
-        return !Number.isNaN(end.getTime()) && end < new Date();
+      const isEventStartedCheck = (e) => {
+        if (!e?.start_date) return false;
+        const startTime = (e.start_time || "00:00:00").toString().trim();
+        const startStr = startTime.length <= 5 ? `${e.start_date}T${startTime}:00` : `${e.start_date}T${startTime}`;
+        const start = new Date(startStr);
+        return !Number.isNaN(start.getTime()) && start <= new Date();
       };
       const eventNeedingRequirements = enrichedEvents.find(
         (e) =>
           !String(e.id || "").startsWith("approval-") &&
           e.approval_status === "approved" &&
-          !isPastEventCheck(e) &&
+          !isEventStartedCheck(e) &&
           (e.facility_status !== "approved" || e.marketing_status !== "approved" || e.it_status !== "approved")
       );
       setEventsState({
@@ -2058,7 +2058,7 @@ export default function App() {
   };
 
   const handleSendRequirements = (eventItem) => {
-    if (isPastEvent(eventItem)) return;
+    if (isEventStarted(eventItem)) return;
     setPendingEvent({ ...eventItem, event_id: eventItem?.id || eventItem?.event_id || "" });
     const queue = [];
     if (eventItem.facility_status !== "approved") queue.push("facility");
@@ -2337,7 +2337,7 @@ export default function App() {
   };
 
   const handleCloseEvent = async (eventItem) => {
-    if (!eventItem?.id || isPastEvent(eventItem)) {
+    if (!eventItem?.id || isEventStarted(eventItem)) {
       return;
     }
     try {
@@ -2450,13 +2450,13 @@ export default function App() {
     return (statusLabel || "").toLowerCase();
   };
 
-  /** True if event end date/time is in the past; used to disable actions on past events. */
-  const isPastEvent = (event) => {
-    if (!event || !event.end_date) return false;
-    const endTime = (event.end_time || "23:59:59").toString().trim();
-    const endStr = endTime.length <= 5 ? `${event.end_date}T${endTime}:00` : `${event.end_date}T${endTime}`;
-    const end = new Date(endStr);
-    return !Number.isNaN(end.getTime()) && end < new Date();
+  /** True if event start date/time is in the past (event has started); no actions allowed once started. */
+  const isEventStarted = (event) => {
+    if (!event || !event.start_date) return false;
+    const startTime = (event.start_time || "00:00:00").toString().trim();
+    const startStr = startTime.length <= 5 ? `${event.start_date}T${startTime}:00` : `${event.start_date}T${startTime}`;
+    const start = new Date(startStr);
+    return !Number.isNaN(start.getTime()) && start <= new Date();
   };
 
   const submitEvent = async (formEvent, override) => {
@@ -3818,9 +3818,9 @@ export default function App() {
                         .replace(/\s+/g, "-");
                       const inviteSent = event.invite_status === "sent";
                       const isUpcomingEvent = getNormalizedEventStatus(event) === "upcoming";
-                      const eventIsPast = isPastEvent(event);
+                      const eventHasStarted = isEventStarted(event);
                       const canInvite =
-                        !eventIsPast &&
+                        !eventHasStarted &&
                         isUpcomingEvent &&
                         ((!event.approval_status && !event.facility_status && !event.marketing_status && !event.it_status) ||
                           (event.approval_status === "approved" &&
@@ -3830,7 +3830,7 @@ export default function App() {
                         !inviteSent;
                       const isApprovalItem = String(event.id || "").startsWith("approval-");
                       const canSendSupportForms =
-                        !eventIsPast &&
+                        !eventHasStarted &&
                         !isApprovalItem &&
                         event.approval_status === "approved";
                       const canSendFacilityRequest =
@@ -3838,9 +3838,9 @@ export default function App() {
                       const canSendMarketingRequest =
                         canSendSupportForms && event.marketing_status !== "approved";
                       const canSendItRequest = canSendSupportForms && event.it_status !== "approved";
-                      const canUploadReport = !eventIsPast && !isApprovalItem && statusValue === "completed";
+                      const canUploadReport = !eventHasStarted && !isApprovalItem && statusValue === "completed";
                       const canCloseEvent =
-                        !eventIsPast &&
+                        !eventHasStarted &&
                         !isApprovalItem &&
                         statusValue === "completed" &&
                         Boolean(event.report_file_id);
@@ -5240,6 +5240,7 @@ export default function App() {
                 {approvalsState.status === "ready"
                     ? approvalsState.items.map((item) => {
                         const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                        const eventHasStarted = isEventStarted(item);
                         return (
                           <div key={item.id} className="events-table-row approvals">
                             <span>{item.event_name}</span>
@@ -5260,6 +5261,8 @@ export default function App() {
                                 <button
                                   type="button"
                                   className="details-button"
+                                  disabled={eventHasStarted}
+                                  title={eventHasStarted ? "Event has already started" : ""}
                                   onClick={() => handleApprovalDecision(item.id, "approved")}
                                 >
                                   Approve
@@ -5267,6 +5270,8 @@ export default function App() {
                                 <button
                                   type="button"
                                   className="details-button reject"
+                                  disabled={eventHasStarted}
+                                  title={eventHasStarted ? "Event has already started" : ""}
                                   onClick={() => handleApprovalDecision(item.id, "rejected")}
                                 >
                                   Reject
@@ -5318,6 +5323,7 @@ export default function App() {
                       }
                       const needsLabel = needs.length ? needs.join(", ") : "None";
                       const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                      const eventHasStarted = isEventStarted(item);
                       return (
                         <div key={item.id} className="events-table-row facility">
                           <span>{item.event_name}</span>
@@ -5332,6 +5338,8 @@ export default function App() {
                                 <button
                                   type="button"
                                   className="details-button"
+                                  disabled={eventHasStarted}
+                                  title={eventHasStarted ? "Event has already started" : ""}
                                   onClick={() => handleFacilityDecision(item.id, "approved")}
                                 >
                                   Approve
@@ -5339,6 +5347,8 @@ export default function App() {
                                 <button
                                   type="button"
                                   className="details-button reject"
+                                  disabled={eventHasStarted}
+                                  title={eventHasStarted ? "Event has already started" : ""}
                                   onClick={() => handleFacilityDecision(item.id, "rejected")}
                                 >
                                   Reject
@@ -5399,6 +5409,7 @@ export default function App() {
                       }
                       const needsLabel = needs.length ? needs.join(", ") : "None";
                       const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                      const eventHasStarted = isEventStarted(item);
                       return (
                         <div key={item.id} className="events-table-row marketing">
                           <span>{item.event_name}</span>
@@ -5420,6 +5431,8 @@ export default function App() {
                                 <button
                                   type="button"
                                   className="details-button"
+                                  disabled={eventHasStarted}
+                                  title={eventHasStarted ? "Event has already started" : ""}
                                   onClick={() => handleMarketingDecision(item.id, "approved")}
                                 >
                                   Approve
@@ -5427,6 +5440,8 @@ export default function App() {
                                 <button
                                   type="button"
                                   className="details-button reject"
+                                  disabled={eventHasStarted}
+                                  title={eventHasStarted ? "Event has already started" : ""}
                                   onClick={() => handleMarketingDecision(item.id, "rejected")}
                                 >
                                   Reject
@@ -5478,6 +5493,7 @@ export default function App() {
                       }
                       const needsLabel = needs.length ? needs.join(", ") : "None";
                       const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                      const eventHasStarted = isEventStarted(item);
                       return (
                         <div key={item.id} className="events-table-row it">
                           <span>{item.event_name}</span>
@@ -5492,6 +5508,8 @@ export default function App() {
                                 <button
                                   type="button"
                                   className="details-button"
+                                  disabled={eventHasStarted}
+                                  title={eventHasStarted ? "Event has already started" : ""}
                                   onClick={() => handleItDecision(item.id, "approved")}
                                 >
                                   Approve
@@ -5499,6 +5517,8 @@ export default function App() {
                                 <button
                                   type="button"
                                   className="details-button reject"
+                                  disabled={eventHasStarted}
+                                  title={eventHasStarted ? "Event has already started" : ""}
                                   onClick={() => handleItDecision(item.id, "rejected")}
                                 >
                                   Reject

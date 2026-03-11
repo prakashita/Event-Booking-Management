@@ -8,7 +8,7 @@ import requests
 
 from auth import ensure_google_access_token
 from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, User
-from event_status import compute_event_status
+from event_status import compute_event_status, event_has_started
 from routers.deps import get_current_user
 from routers.events import sync_event_to_google_calendar
 from schemas import ApprovalDecision, ApprovalRequestResponse
@@ -143,6 +143,12 @@ async def decide_request(
     approval = await ApprovalRequest.get(request_id)
     if not approval:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+
+    if event_has_started(approval.start_date, approval.start_time):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Event has already started; approval or rejection is no longer allowed.",
+        )
 
     approver_email = (user.email or "").strip().lower()
     if approval.requested_to and approval.requested_to.strip().lower() != approver_email:

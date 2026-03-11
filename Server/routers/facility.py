@@ -4,6 +4,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from auth import get_primary_email_by_role
+from event_status import event_has_started
 from models import ApprovalRequest, Event, FacilityManagerRequest, User
 from notifications import send_notification_email
 from routers.deps import get_current_user
@@ -39,6 +40,12 @@ async def create_facility_request(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Event not found",
+        )
+
+    if event_has_started(event.start_date, event.start_time):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Event has already started; cannot send facility request.",
         )
 
     approval = await ApprovalRequest.find_one(ApprovalRequest.event_id == str(event.id))
@@ -161,6 +168,12 @@ async def decide_facility_request(
     request_item = await FacilityManagerRequest.get(request_id)
     if not request_item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+
+    if event_has_started(request_item.start_date, request_item.start_time):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Event has already started; approval or rejection is no longer allowed.",
+        )
 
     approver_email = (user.email or "").strip().lower()
     if request_item.requested_to and request_item.requested_to.strip().lower() != approver_email:

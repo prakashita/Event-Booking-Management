@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 from auth import ensure_google_access_token, get_primary_email_by_role
 from drive import upload_report_file
+from event_status import event_has_started
 from models import ApprovalRequest, Event, MarketingDeliverable, MarketingRequest, User
 from notifications import send_notification_email
 from routers.deps import get_current_user
@@ -92,6 +93,12 @@ async def create_marketing_request(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Event not found",
+        )
+
+    if event_has_started(event.start_date, event.start_time):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Event has already started; cannot send marketing request.",
         )
 
     approval = await ApprovalRequest.find_one(ApprovalRequest.event_id == str(event.id))
@@ -180,6 +187,12 @@ async def decide_marketing_request(
     request_item = await MarketingRequest.get(request_id)
     if not request_item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+
+    if event_has_started(request_item.start_date, request_item.start_time):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Event has already started; approval or rejection is no longer allowed.",
+        )
 
     if request_item.requested_to and request_item.requested_to != (user.email or "").strip().lower():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")

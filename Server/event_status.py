@@ -9,6 +9,22 @@ def combine_datetime(date_value: str, time_value: str) -> datetime:
     return datetime.fromisoformat(f"{date_value}T{time_value}")
 
 
+def event_has_started(start_date: str, start_time: str, now: datetime | None = None) -> bool:
+    """True if the event start datetime is in the past. Use to block actions on started events."""
+    if not start_date:
+        return False
+    if now is None:
+        now = datetime.now()
+    try:
+        time_str = (start_time or "00:00:00").strip()
+        if len(time_str) <= 5:  # HH:MM
+            time_str = f"{time_str}:00"
+        start_dt = combine_datetime(start_date, time_str)
+        return now >= start_dt
+    except (ValueError, TypeError):
+        return False
+
+
 def compute_event_status(start_dt: datetime, end_dt: datetime, now: datetime | None = None) -> str:
     if now is None:
         now = datetime.now()
