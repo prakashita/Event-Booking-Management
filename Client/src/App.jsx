@@ -3877,7 +3877,6 @@ export default function App() {
                         event.it_status !== "pending";
                       const canUploadReport = !isApprovalItem && statusValue === "completed";
                       const canCloseEvent =
-                        !eventHasStarted &&
                         !isApprovalItem &&
                         statusValue === "completed" &&
                         Boolean(event.report_file_id);
