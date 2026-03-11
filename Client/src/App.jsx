@@ -4,7 +4,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import { menuItems, preferenceItems, inboxItems, eventsTable, PUB_META } from "./constants";
-import { formatISTTime, parse24ToTimeParts, timePartsTo24 } from "./utils/format";
+import { formatISTTime, normalizeTimeToHHMMSS, parse24ToTimeParts, timePartsTo24 } from "./utils/format";
 import { GoogleIcon, SimpleIcon, PlaceholderCard } from "./components/icons";
 import { LoginPage, Sidebar } from "./components/layout";
 import { Modal, StatusMessage } from "./components/ui";
@@ -1336,8 +1336,7 @@ export default function App() {
       const items = [...approvalItems, ...enrichedEvents];
       const isEventStartedCheck = (e) => {
         if (!e?.start_date) return false;
-        const startTime = (e.start_time || "00:00:00").toString().trim();
-        const startStr = startTime.length <= 5 ? `${e.start_date}T${startTime}:00` : `${e.start_date}T${startTime}`;
+        const startStr = `${e.start_date}T${normalizeTimeToHHMMSS(e.start_time)}`;
         const start = new Date(startStr);
         return !Number.isNaN(start.getTime()) && start <= new Date();
       };
@@ -2469,8 +2468,7 @@ export default function App() {
   /** True if event start date/time is in the past (event has started); no actions allowed once started. */
   const isEventStarted = (event) => {
     if (!event || !event.start_date) return false;
-    const startTime = (event.start_time || "00:00:00").toString().trim();
-    const startStr = startTime.length <= 5 ? `${event.start_date}T${startTime}:00` : `${event.start_date}T${startTime}`;
+    const startStr = `${event.start_date}T${normalizeTimeToHHMMSS(event.start_time)}`;
     const start = new Date(startStr);
     return !Number.isNaN(start.getTime()) && start <= new Date();
   };

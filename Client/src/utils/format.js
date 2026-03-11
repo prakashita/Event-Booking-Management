@@ -46,6 +46,21 @@ export function parse24ToTimeParts(value) {
 }
 
 /**
+ * Normalize a time string to HH:mm:ss for consistent ISO datetime parsing.
+ * Accepts "HH:mm" or "HH:mm:ss" (with optional leading zero).
+ */
+export function normalizeTimeToHHMMSS(value) {
+  if (value == null || value === "") return "00:00:00";
+  const raw = String(value).trim();
+  const match = raw.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return "00:00:00";
+  const h = String(parseInt(match[1], 10)).padStart(2, "0");
+  const m = match[2];
+  const s = (match[3] || "00").padStart(2, "0");
+  return `${h}:${m}:${s}`;
+}
+
+/**
  * Convert time parts to 24h string.
  */
 export function timePartsTo24(parts) {

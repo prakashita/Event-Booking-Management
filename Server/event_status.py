@@ -1,12 +1,57 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from models import Event
 
 
+def _normalize_time_for_iso(time_value: str | None) -> str:
+    """Return time as HH:MM:SS so fromisoformat parses reliably. Handles HH:MM and HH:MM:SS."""
+    if not time_value:
+        return "00:00:00"
+    s = str(time_value).strip()
+    if not s:
+        return "00:00:00"
+    # Match H?H:MM or H?H:MM:SS (optional seconds)
+    m = re.match(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?$", s)
+    if m:
+        h, mi, sec = m.group(1), m.group(2), m.group(3) or "00"
+        return f"{int(h):02d}:{mi}:{sec}"
+    return "00:00:00"
+
+
+def _normalize_date_for_iso(date_value: str | None) -> str | None:
+    """Return date as YYYY-MM-DD, or None if unparseable."""
+    if not date_value:
+        return None
+    s = str(date_value).strip()
+    if not s:
+        return None
+    # Already ISO-like (YYYY-MM-DD or YYYY-M-D)
+    if re.match(r"^\d{4}-\d{1,2}-\d{1,2}$", s):
+        try:
+            dt = datetime.fromisoformat(s + "T00:00:00")
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    # DD-MM-YYYY or DD/MM/YYYY
+    for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            dt = datetime.strptime(s, fmt)
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return None
+
+
 def combine_datetime(date_value: str, time_value: str) -> datetime:
-    return datetime.fromisoformat(f"{date_value}T{time_value}")
+    """Parse date and time into a datetime. Uses normalized time (HH:MM:SS) and optional date normalization."""
+    time_str = _normalize_time_for_iso(time_value)
+    date_str = _normalize_date_for_iso(date_value)
+    if not date_str:
+        raise ValueError(f"Invalid date format: {date_value!r}")
+    return datetime.fromisoformat(f"{date_str}T{time_str}")
 
 
 def event_has_started(start_date: str, start_time: str, now: datetime | None = None) -> bool:
@@ -41,7 +86,7 @@ async def sync_event_status(event: Event, now: datetime | None = None) -> str:
     try:
         start_dt = combine_datetime(event.start_date, event.start_time)
         end_dt = combine_datetime(event.end_date, event.end_time)
-    except ValueError:
+    except (ValueError, TypeError):
         return event.status
     status = compute_event_status(start_dt, end_dt, now=now)
     if event.status != status:

@@ -10,7 +10,7 @@ import requests
 
 from auth import ensure_google_access_token, get_primary_email_by_role, get_user_by_role
 from drive import upload_report_file
-from event_status import sync_event_status
+from event_status import combine_datetime, sync_event_status
 from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, User
 from routers.admin import serialize_approval, serialize_event, serialize_facility, serialize_it, serialize_marketing
 from routers.deps import get_current_user
@@ -74,10 +74,6 @@ async def sync_event_to_google_calendar(event: Event, user: User) -> None:
     event.google_event_id = google_event_id
     event.google_event_link = data.get("htmlLink")
     await event.save()
-
-def combine_datetime(date_value: str, time_value: str) -> datetime:
-    return datetime.fromisoformat(f"{date_value}T{time_value}")
-
 
 def serialize_conflict(event: Event) -> dict:
     return {

@@ -8,7 +8,7 @@ import requests
 
 from auth import ensure_google_access_token
 from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, User
-from event_status import compute_event_status, event_has_started
+from event_status import combine_datetime, compute_event_status, event_has_started
 from routers.deps import get_current_user
 from routers.events import sync_event_to_google_calendar
 from schemas import ApprovalDecision, ApprovalRequestResponse
@@ -158,8 +158,8 @@ async def decide_request(
         if normalized_status == "approved":
             if not approval.event_id:
                 # Check for conflicts before creating the event
-                start_dt = datetime.fromisoformat(f"{approval.start_date}T{approval.start_time}")
-                end_dt = datetime.fromisoformat(f"{approval.end_date}T{approval.end_time}")
+                start_dt = combine_datetime(approval.start_date, approval.start_time)
+                end_dt = combine_datetime(approval.end_date, approval.end_time)
                 if end_dt < start_dt:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -167,8 +167,8 @@ async def decide_request(
                     )
                 existing_events = await Event.find_all().to_list()
                 for existing in existing_events:
-                    existing_start = datetime.fromisoformat(f"{existing.start_date}T{existing.start_time}")
-                    existing_end = datetime.fromisoformat(f"{existing.end_date}T{existing.end_time}")
+                    existing_start = combine_datetime(existing.start_date, existing.start_time)
+                    existing_end = combine_datetime(existing.end_date, existing.end_time)
                     if start_dt < existing_end and end_dt > existing_start and existing.venue_name == approval.venue_name:
                         raise HTTPException(
                             status_code=status.HTTP_409_CONFLICT,
