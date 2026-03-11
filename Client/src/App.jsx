@@ -2352,9 +2352,7 @@ export default function App() {
   };
 
   const handleCloseEvent = async (eventItem) => {
-    if (!eventItem?.id || isEventStarted(eventItem)) {
-      return;
-    }
+    if (!eventItem?.id) return;
     try {
       const res = await apiFetch(`${apiBaseUrl}/events/${eventItem.id}/status`, {
         method: "PATCH",
