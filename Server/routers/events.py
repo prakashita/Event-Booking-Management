@@ -312,6 +312,18 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
                 },
             )
 
+    # Block creation if 5+ completed events have report upload pending
+    user_completed = await Event.find(
+        Event.created_by == str(user.id),
+        Event.status == "completed",
+    ).to_list()
+    completed_without_report = sum(1 for e in user_completed if not e.report_file_id)
+    if completed_without_report >= 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Upload reports for at least some completed events (5 or more have report pending) before creating a new one.",
+        )
+
     registrar_email = await get_primary_email_by_role("registrar")
     if not registrar_email:
         raise HTTPException(

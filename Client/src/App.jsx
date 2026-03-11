@@ -2477,17 +2477,16 @@ export default function App() {
     if (formEvent) {
       formEvent.preventDefault();
     }
-    const completedUnclosedCount = eventsState.items.filter((event) => {
+    const completedWithReportPendingCount = eventsState.items.filter((event) => {
       const isApprovalItem = String(event.id || "").startsWith("approval-");
-      if (isApprovalItem) {
-        return false;
-      }
-      return getNormalizedEventStatus(event) === "completed";
+      if (isApprovalItem) return false;
+      if ((event.status || "").toLowerCase() !== "completed") return false;
+      return !event.report_file_id;
     }).length;
-    if (completedUnclosedCount >= 5) {
+    if (completedWithReportPendingCount >= 5) {
       setEventFormStatus({
         status: "error",
-        error: "Submit reports for completed events before creating a new one."
+        error: "Upload reports for at least some completed events (5 or more have report pending) before creating a new one."
       });
       return;
     }
@@ -3690,15 +3689,14 @@ export default function App() {
                       : lifecycle === "closed";
           return statusMatches && eventMatchesSearch(event);
         });
-        const completedUnclosedCount = eventsState.items.filter((event) => {
+        const completedWithReportPendingCount = eventsState.items.filter((event) => {
           const isApprovalItem = String(event.id || "").startsWith("approval-");
-          if (isApprovalItem) {
-            return false;
-          }
-          return getLifecycleStatus(event) === "completed";
+          if (isApprovalItem) return false;
+          if (getLifecycleStatus(event) !== "completed") return false;
+          return !event.report_file_id;
         }).length;
-        const limitReached = completedUnclosedCount >= 5;
-        const warnThresholdReached = completedUnclosedCount >= 3 && completedUnclosedCount < 5;
+        const limitReached = completedWithReportPendingCount >= 5;
+        const warnThresholdReached = completedWithReportPendingCount >= 3 && completedWithReportPendingCount < 5;
         const createTooltip = limitReached
           ? "Submit reports of completed events before creating a new one."
           : warnThresholdReached
@@ -3877,7 +3875,7 @@ export default function App() {
                         canSendSupportForms &&
                         event.it_status !== "approved" &&
                         event.it_status !== "pending";
-                      const canUploadReport = !eventHasStarted && !isApprovalItem && statusValue === "completed";
+                      const canUploadReport = !isApprovalItem && statusValue === "completed";
                       const canCloseEvent =
                         !eventHasStarted &&
                         !isApprovalItem &&
