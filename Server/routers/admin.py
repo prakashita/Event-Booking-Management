@@ -221,6 +221,13 @@ async def list_all_events(admin: User = Depends(require_admin)):
     return [serialize_event(item) for item in items]
 
 
+@router.get("/event-reports", response_model=list[EventResponse])
+async def list_event_reports(admin: User = Depends(require_admin)):
+    """All closed events with uploaded reports (admin and registrar only)."""
+    items = await Event.find(Event.status == "closed").sort("-created_at").to_list()
+    return [serialize_event(item) for item in items]
+
+
 @router.get("/approvals", response_model=list[ApprovalRequestResponse])
 async def list_all_approvals(admin: User = Depends(require_admin)):
     items = await ApprovalRequest.find_all().sort("-created_at").to_list()

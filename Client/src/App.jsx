@@ -1222,6 +1222,18 @@ export default function App() {
 
     setEventsState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
+      const role = (user?.role || "").toLowerCase();
+      const isAdminOrRegistrar = role === "admin" || role === "registrar";
+      if (activeView === "event-reports" && user && isAdminOrRegistrar) {
+        const reportsRes = await apiFetch(`${apiBaseUrl}/admin/event-reports`);
+        if (!reportsRes.ok) {
+          throw new Error("Unable to load event reports.");
+        }
+        const reportsData = await reportsRes.json();
+        setEventsState({ status: "ready", items: reportsData, error: "" });
+        return;
+      }
+
       const [eventsRes, approvalsRes, facilityRes, marketingRes, itRes, invitesRes] = await Promise.all([
         apiFetch(`${apiBaseUrl}/events`),
         apiFetch(`${apiBaseUrl}/approvals/me`),
@@ -1365,7 +1377,7 @@ export default function App() {
         error: err?.message || "Unable to load events."
       });
     }
-  }, [apiBaseUrl, apiFetch, activeView]);
+  }, [apiBaseUrl, apiFetch, activeView, user]);
 
   const loadApprovalsInbox = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
@@ -1810,7 +1822,10 @@ export default function App() {
   }, [chatMessages, chatConversationId, sendReadReceipts, user]);
 
   useEffect(() => {
-    if (!user || (activeView !== "my-events" && activeView !== "dashboard")) {
+    if (
+      !user ||
+      (activeView !== "my-events" && activeView !== "dashboard" && activeView !== "event-reports")
+    ) {
       return;
     }
     loadEvents();
@@ -1861,10 +1876,14 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    if ((activeView === "approvals" && !canAccessApprovals) || (activeView === "requirements" && !canAccessRequirements)) {
+    if (
+      (activeView === "approvals" && !canAccessApprovals) ||
+      (activeView === "requirements" && !canAccessRequirements) ||
+      (activeView === "event-reports" && !isAdmin && !isRegistrar)
+    ) {
       setActiveView("dashboard");
     }
-  }, [activeView, canAccessApprovals, canAccessRequirements]);
+  }, [activeView, canAccessApprovals, canAccessRequirements, isAdmin, isRegistrar]);
 
   useEffect(() => {
     const showApprovalsOrRequirements =
@@ -3079,6 +3098,9 @@ export default function App() {
     const isAdminView = activeView === "admin";
     const visibleMenuItems = menuItems.filter((item) => {
       if (item.id === "admin" && !canAccessAdminConsole) {
+        return false;
+      }
+      if (item.id === "event-reports" && !isAdmin && !isRegistrar) {
         return false;
       }
       if (item.id === "approvals" && !canAccessApprovals) {
