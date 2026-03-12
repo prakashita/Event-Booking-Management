@@ -347,6 +347,7 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
         end_time=payload.end_time.isoformat(),
         requirements=[],
         other_notes=None,
+        override_conflict=payload.override_conflict,
     )
     await approval.insert()
 

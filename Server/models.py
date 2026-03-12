@@ -87,6 +87,7 @@ class ApprovalRequest(Document):
     decided_at: Optional[datetime] = None
     decided_by: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    override_conflict: bool = Field(default=False)
 
     class Settings:
         name = "approval_requests"

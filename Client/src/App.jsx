@@ -2600,7 +2600,8 @@ export default function App() {
       const payload = {
         ...eventForm,
         requirements: [],
-        other_notes: ""
+        other_notes: "",
+        override_conflict: overrideConflict
       };
 
       const res = await apiFetch(`${apiBaseUrl}/events`, {
@@ -2611,11 +2612,22 @@ export default function App() {
         body: JSON.stringify(payload)
       });
 
+      if (res.status === 409) {
+        const data = await res.json().catch(() => ({}));
+        setApprovalModal({
+          open: true,
+          status: "error",
+          error: "Schedule conflict detected. Try rescheduling or choose Override in the conflict dialog."
+        });
+        return;
+      }
+
       if (!res.ok) {
         throw new Error("Unable to send approval request.");
       }
 
       setApprovalModal({ open: false, status: "idle", error: "" });
+      setOverrideConflict(false);
       resetEventFormState();
       setIsEventModalOpen(false);
       setConflictState({ open: false, items: [] });

@@ -157,7 +157,6 @@ async def decide_request(
     if approval.status == "pending":
         if normalized_status == "approved":
             if not approval.event_id:
-                # Check for conflicts before creating the event
                 start_dt = combine_datetime(approval.start_date, approval.start_time)
                 end_dt = combine_datetime(approval.end_date, approval.end_time)
                 if end_dt < start_dt:
@@ -165,15 +164,16 @@ async def decide_request(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="End datetime must be after start datetime",
                     )
-                existing_events = await Event.find_all().to_list()
-                for existing in existing_events:
-                    existing_start = combine_datetime(existing.start_date, existing.start_time)
-                    existing_end = combine_datetime(existing.end_date, existing.end_time)
-                    if start_dt < existing_end and end_dt > existing_start and existing.venue_name == approval.venue_name:
-                        raise HTTPException(
-                            status_code=status.HTTP_409_CONFLICT,
-                            detail="Schedule conflict detected for the venue",
-                        )
+                if not getattr(approval, "override_conflict", False):
+                    existing_events = await Event.find_all().to_list()
+                    for existing in existing_events:
+                        existing_start = combine_datetime(existing.start_date, existing.start_time)
+                        existing_end = combine_datetime(existing.end_date, existing.end_time)
+                        if start_dt < existing_end and end_dt > existing_start and existing.venue_name == approval.venue_name:
+                            raise HTTPException(
+                                status_code=status.HTTP_409_CONFLICT,
+                                detail="Schedule conflict detected for the venue",
+                            )
                 event = Event(
                     name=approval.event_name,
                     facilitator=approval.facilitator,
