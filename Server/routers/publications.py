@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status, Form
-from typing import Optional
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status, Form
+from typing import Literal, Optional
 
 from auth import ensure_google_access_token
 from drive import upload_report_file
@@ -170,6 +170,17 @@ async def upload_publication(
 
 
 @router.get("", response_model=list[PublicationResponse])
-async def list_publications(user: User = Depends(get_current_user)):
-    items = await Publication.find_all().sort("-created_at").to_list()
+async def list_publications(
+    user: User = Depends(get_current_user),
+    sort: Literal["title", "date"] = Query("date", description="Sort by title (A-Z) or date added"),
+    order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
+):
+    role = (user.role or "").strip().lower()
+    if role in ("admin", "registrar"):
+        query = Publication.find_all()
+    else:
+        query = Publication.find(Publication.created_by == str(user.id))
+
+    sort_key = "-created_at" if sort == "date" and order == "desc" else "+created_at" if sort == "date" else "-title" if sort == "title" and order == "desc" else "+title"
+    items = await query.sort(sort_key).to_list()
     return [_to_response(item) for item in items]

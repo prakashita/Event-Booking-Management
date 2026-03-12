@@ -173,6 +173,7 @@ export default function App() {
     items: [],
     error: ""
   });
+  const [publicationSort, setPublicationSort] = useState("date_desc");
 
   const [adminTab, setAdminTab] = useState("users");
   const [adminOverview, setAdminOverview] = useState({ status: "idle", data: null, error: "" });
@@ -297,7 +298,9 @@ export default function App() {
     }
     setPublicationsState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
-      const res = await apiFetch(`${apiBaseUrl}/publications`);
+      const [sortBy, order] = publicationSort.split("_");
+      const params = new URLSearchParams({ sort: sortBy, order: order || "desc" });
+      const res = await apiFetch(`${apiBaseUrl}/publications?${params.toString()}`);
       if (!res.ok) {
         throw new Error("Unable to load publications.");
       }
@@ -310,7 +313,7 @@ export default function App() {
         error: err?.message || "Unable to load publications."
       });
     }
-  }, [apiBaseUrl, apiFetch]);
+  }, [apiBaseUrl, apiFetch, publicationSort]);
 
   const loadAdminOverview = useCallback(async () => {
     if (!canAccessAdminConsole) {
@@ -4807,6 +4810,20 @@ export default function App() {
               <button type="button" className="primary-action" onClick={handlePublicationOpen}>
                 + New Publication
               </button>
+              <label className="publication-sort-label">
+                Sort:
+                <select
+                  value={publicationSort}
+                  onChange={(e) => setPublicationSort(e.target.value)}
+                  className="publication-sort-select"
+                  aria-label="Sort publications"
+                >
+                  <option value="date_desc">Date added (newest first)</option>
+                  <option value="date_asc">Date added (oldest first)</option>
+                  <option value="title_asc">Title (A–Z)</option>
+                  <option value="title_desc">Title (Z–A)</option>
+                </select>
+              </label>
             </div>
 
             {/* ── Publications card grid ── */}
