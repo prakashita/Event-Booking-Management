@@ -5993,6 +5993,16 @@ export default function App() {
                     <p className="details-value">{approvalDetailsModal.request.requester_email || "-"}</p>
                   </div>
                   <div>
+                    <p className="details-label">Budget (Rs)</p>
+                    <p className="details-value">
+                      {approvalDetailsModal.request.budget != null &&
+                      approvalDetailsModal.request.budget !== "" &&
+                      !isNaN(Number(approvalDetailsModal.request.budget))
+                        ? `Rs ${Number(approvalDetailsModal.request.budget).toLocaleString()}`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div>
                     <p className="details-label">Requested To</p>
                     <p className="details-value">{approvalDetailsModal.request.requested_to || "-"}</p>
                   </div>
@@ -6007,14 +6017,6 @@ export default function App() {
                   <div>
                     <p className="details-label">Venue</p>
                     <p className="details-value">{approvalDetailsModal.request.venue_name || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="details-label">Budget (Rs)</p>
-                    <p className="details-value">
-                      {approvalDetailsModal.request.budget != null && approvalDetailsModal.request.budget !== ""
-                        ? `Rs ${Number(approvalDetailsModal.request.budget).toLocaleString()}`
-                        : "-"}
-                    </p>
                   </div>
                   <div>
                     <p className="details-label">Start</p>
