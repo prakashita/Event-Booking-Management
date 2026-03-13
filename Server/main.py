@@ -146,19 +146,21 @@ async def handle_unexpected_exception(request: Request, exc: Exception):
         },
     )
 
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(admin.router)
-app.include_router(calendar.router)
-app.include_router(venues.router)
-app.include_router(events.router)
-app.include_router(approvals.router)
-app.include_router(facility.router)
-app.include_router(marketing.router)
-app.include_router(it.router)
-app.include_router(invites.router)
-app.include_router(chat.router)
-app.include_router(publications.router)
+# API v1 prefix for versioned, stable endpoints
+API_PREFIX = "/api/v1"
+app.include_router(auth.router, prefix=API_PREFIX)
+app.include_router(users.router, prefix=API_PREFIX)
+app.include_router(admin.router, prefix=API_PREFIX)
+app.include_router(calendar.router, prefix=API_PREFIX)
+app.include_router(venues.router, prefix=API_PREFIX)
+app.include_router(events.router, prefix=API_PREFIX)
+app.include_router(approvals.router, prefix=API_PREFIX)
+app.include_router(facility.router, prefix=API_PREFIX)
+app.include_router(marketing.router, prefix=API_PREFIX)
+app.include_router(it.router, prefix=API_PREFIX)
+app.include_router(invites.router, prefix=API_PREFIX)
+app.include_router(chat.router, prefix=API_PREFIX)
+app.include_router(publications.router, prefix=API_PREFIX)
 
 @app.get("/")
 def home():

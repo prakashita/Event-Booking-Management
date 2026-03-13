@@ -111,7 +111,10 @@ Notes:
   - Messages via `GET /chat/conversations/{id}/messages` and `POST /chat/messages`
   - WebSocket: `/chat/ws`
 
-## API Overview
+## API versioning
+All API routes are prefixed with **`/api/v1`**. The client uses this base (e.g. `VITE_API_BASE_URL` + `/api/v1`) for all requests. Keep v1 stable; introduce `/api/v2` for breaking changes.
+
+## API Overview (base path: `/api/v1`)
 Auth
 - `POST /auth/google`
 

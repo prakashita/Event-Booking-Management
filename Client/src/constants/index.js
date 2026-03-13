@@ -2,6 +2,35 @@
  * Shared constants for the Event Booking application.
  */
 
+/** Route paths (React Router). Used for navigation and deep-linking. */
+export const ROUTES = {
+  DASHBOARD: "/",
+  MY_EVENTS: "/events",
+  EVENT_REPORTS: "/event-reports",
+  CALENDAR: "/calendar",
+  APPROVALS: "/approvals",
+  REQUIREMENTS: "/requirements",
+  PUBLICATIONS: "/publications",
+  ADMIN: "/admin",
+};
+
+/** Map route path -> legacy activeView id for compatibility. */
+export const PATH_TO_VIEW = {
+  [ROUTES.DASHBOARD]: "dashboard",
+  [ROUTES.MY_EVENTS]: "my-events",
+  [ROUTES.EVENT_REPORTS]: "event-reports",
+  [ROUTES.CALENDAR]: "calendar",
+  [ROUTES.APPROVALS]: "approvals",
+  [ROUTES.REQUIREMENTS]: "requirements",
+  [ROUTES.PUBLICATIONS]: "publications",
+  [ROUTES.ADMIN]: "admin",
+};
+
+/** Map legacy activeView id -> route path. */
+export const VIEW_TO_PATH = Object.fromEntries(
+  Object.entries(PATH_TO_VIEW).map(([path, view]) => [view, path])
+);
+
 export const stats = [
   { label: "Active Events", value: "128+" },
   { label: "Attendees Managed", value: "24k" },

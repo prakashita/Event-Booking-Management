@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import { menuItems, preferenceItems, inboxItems, eventsTable, PUB_META } from "./constants";
+import { menuItems, preferenceItems, inboxItems, eventsTable, PUB_META, PATH_TO_VIEW, ROUTES } from "./constants";
 import { formatISTTime, normalizeTimeToHHMMSS, parse24ToTimeParts, timePartsTo24 } from "./utils/format";
 import { GoogleIcon, SimpleIcon, PlaceholderCard } from "./components/icons";
 import { LoginPage, Sidebar } from "./components/layout";
 import { Modal, StatusMessage } from "./components/ui";
+import api from "./services/api";
 
 export default function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activeView = PATH_TO_VIEW[location.pathname] ?? "dashboard";
+
   const googleButtonRef = useRef(null);
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeView, setActiveView] = useState("dashboard");
   const [myEventsTab, setMyEventsTab] = useState("all");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [venuesState, setVenuesState] = useState({ status: "idle", items: [], error: "" });
@@ -245,7 +250,6 @@ export default function App() {
   const canAccessRequirements = isFacilityManagerRole || isMarketingRole || isItRole;
   const defaultFacilitator = (user?.name || "").trim();
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
   const googleClientId =
     import.meta.env.VITE_GOOGLE_CLIENT_ID ||
     "947113013769-dsal8c7k52irs6eokfnvl6o1a6v2rvea.apps.googleusercontent.com";
@@ -260,35 +264,35 @@ export default function App() {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
     setUser(null);
-    setActiveView("dashboard");
+    navigate(ROUTES.DASHBOARD);
     setStatus({ type: "error", message: "Session expired. Please log in again." });
-  }, []);
+  }, [navigate]);
 
-  const apiFetch = useCallback(
-    async (input, init = {}) => {
-      const token = localStorage.getItem("auth_token");
-      if (!token) {
-        handleSessionExpired();
-        throw new Error("Missing auth token.");
-      }
+  useEffect(() => {
+    const onUnauthorized = () => handleSessionExpired();
+    window.addEventListener(api.UNAUTHORIZED_EVENT, onUnauthorized);
+    return () => window.removeEventListener(api.UNAUTHORIZED_EVENT, onUnauthorized);
+  }, [handleSessionExpired]);
 
-      const headers = {
-        ...(init.headers || {}),
-        Authorization: `Bearer ${token}`
-      };
+  const apiBaseUrl = api.getBaseUrl();
 
-      const res = await fetch(input, {
-        ...init,
-        headers,
-        credentials: "include"
-      });
-      if (res.status === 401) {
-        handleSessionExpired();
-      }
-      return res;
-    },
-    [handleSessionExpired]
-  );
+  const apiFetch = useCallback(async (input, init = {}) => {
+    const token = api.getToken();
+    if (!token) {
+      handleSessionExpired();
+      throw new Error("Missing auth token.");
+    }
+    const url = typeof input === "string" ? input : input.url;
+    const base = api.getBaseUrl();
+    const path = url.startsWith(base) ? url.slice(base.length) || "/" : url.replace(/^https?:\/\/[^/]+/, "") || "/";
+    const method = (init.method || "GET").toUpperCase();
+    const body = init.body;
+    if (method === "GET") return api.get(path);
+    if (method === "POST") return api.post(path, body);
+    if (method === "PATCH") return api.patch(path, body);
+    if (method === "DELETE") return api.delete(path);
+    return api.get(path);
+  }, [handleSessionExpired]);
 
   const loadPublications = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
@@ -1121,7 +1125,7 @@ export default function App() {
         localStorage.setItem("auth_token", data.access_token);
         localStorage.setItem("auth_user", JSON.stringify(data.user));
         setUser(data.user);
-        setActiveView("dashboard");
+        navigate(ROUTES.DASHBOARD);
         setStatus({ type: "success", message: "Signed in successfully." });
       } catch (err) {
         setStatus({
@@ -1884,9 +1888,9 @@ export default function App() {
       (activeView === "requirements" && !canAccessRequirements) ||
       (activeView === "event-reports" && !isAdmin && !isRegistrar)
     ) {
-      setActiveView("dashboard");
+      navigate(ROUTES.DASHBOARD);
     }
-  }, [activeView, canAccessApprovals, canAccessRequirements, isAdmin, isRegistrar]);
+  }, [activeView, canAccessApprovals, canAccessRequirements, isAdmin, isRegistrar, navigate]);
 
   useEffect(() => {
     const showApprovalsOrRequirements =
@@ -6150,8 +6154,6 @@ export default function App() {
         ) : null}
         <Sidebar
           visibleMenuItems={visibleMenuItems}
-          activeView={activeView}
-          onViewChange={setActiveView}
           onLogout={handleLogout}
         />
 

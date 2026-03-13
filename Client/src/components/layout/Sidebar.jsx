@@ -1,12 +1,13 @@
-import { preferenceItems } from "../../constants";
+import { NavLink, useNavigate } from "react-router-dom";
+import { preferenceItems, VIEW_TO_PATH } from "../../constants";
 import { SimpleIcon } from "../icons";
 
 export default function Sidebar({
   visibleMenuItems,
-  activeView,
-  onViewChange,
   onLogout
 }) {
+  const navigate = useNavigate();
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -19,19 +20,21 @@ export default function Sidebar({
       <div className="menu-block">
         <p className="menu-title">Menu</p>
         <nav className="menu-list">
-          {visibleMenuItems.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`menu-item ${activeView === item.id ? "active" : ""}`}
-              onClick={() => onViewChange(item.id)}
-            >
-              <span className="menu-icon">
-                <SimpleIcon path="M3 10.5 12 3l9 7.5v9.5H3z" />
-              </span>
-              {item.label}
-            </button>
-          ))}
+          {visibleMenuItems.map((item) => {
+            const path = VIEW_TO_PATH[item.id] ?? "/";
+            return (
+              <NavLink
+                key={item.id}
+                to={path}
+                className={({ isActive }) => `menu-item ${isActive ? "active" : ""}`}
+              >
+                <span className="menu-icon">
+                  <SimpleIcon path="M3 10.5 12 3l9 7.5v9.5H3z" />
+                </span>
+                {item.label}
+              </NavLink>
+            );
+          })}
         </nav>
       </div>
 
@@ -49,7 +52,7 @@ export default function Sidebar({
         </nav>
       </div>
 
-      <button type="button" className="menu-item logout" onClick={onLogout}>
+      <button type="button" className="menu-item logout" onClick={() => { onLogout(); navigate("/"); }}>
         <span className="menu-icon">
           <SimpleIcon path="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-4-4 4-4M6 13h12" />
         </span>
