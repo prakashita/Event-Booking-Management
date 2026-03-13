@@ -1,7 +1,7 @@
 from datetime import date, time, datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class UserAdminResponse(BaseModel):
@@ -36,6 +36,20 @@ class EventCreate(BaseModel):
     facilitator: str = Field(..., min_length=1, max_length=120)
     description: Optional[str] = Field(default=None, max_length=2000)
     venue_name: str = Field(..., min_length=1, max_length=120)
+    budget: Optional[float] = Field(default=None, ge=0)  # Event budget in Rs
+
+    @field_validator("budget", mode="before")
+    @classmethod
+    def coerce_budget(cls, v):
+        if v is None or v == "":
+            return None
+        if isinstance(v, str):
+            try:
+                return float(v) if v.strip() else None
+            except ValueError:
+                return None
+        return v
+
     start_date: date
     start_time: time
     end_date: date
@@ -53,6 +67,7 @@ class EventResponse(BaseModel):
     facilitator: str
     description: Optional[str] = None
     venue_name: str
+    budget: Optional[float] = None
     start_date: str
     start_time: str
     end_date: str
@@ -76,6 +91,7 @@ class ApprovalRequestResponse(BaseModel):
     requested_to: Optional[str] = None
     event_name: str
     facilitator: str
+    budget: Optional[float] = None
     description: Optional[str] = None
     venue_name: str
     start_date: str

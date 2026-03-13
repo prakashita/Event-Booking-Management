@@ -103,12 +103,14 @@ async def notify_registrar_for_approval(
 ) -> None:
     """Send email to registrar when a new event requires approval. Uses registrar's Gmail first, then requester's."""
     subject = f"Event Approval Request: {approval.event_name}"
+    budget_line = f"Budget: Rs {approval.budget:,.0f}\n" if getattr(approval, "budget", None) is not None else ""
     body = (
         f"A new event requires your approval.\n\n"
         f"Requester: {approval.requester_email}\n"
         f"Event: {approval.event_name}\n"
         f"Facilitator: {approval.facilitator}\n"
         f"Venue: {approval.venue_name}\n"
+        f"{budget_line}"
         f"Start: {approval.start_date} {approval.start_time}\n"
         f"End: {approval.end_date} {approval.end_time}\n"
         f"\nPlease approve or reject this event from your dashboard."
@@ -160,6 +162,7 @@ async def list_events(user: User = Depends(get_current_user)):
         facilitator=event.facilitator,
         description=event.description,
         venue_name=event.venue_name,
+        budget=getattr(event, "budget", None),
         start_date=event.start_date,
         start_time=event.start_time,
         end_date=event.end_date,
@@ -202,6 +205,7 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
                     facilitator=approval.facilitator,
                     description=approval.description,
                     venue_name=approval.venue_name,
+                    budget=getattr(approval, "budget", None),
                     start_date=approval.start_date,
                     start_time=approval.start_time,
                     end_date=approval.end_date,
@@ -341,6 +345,7 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
         facilitator=payload.facilitator,
         description=payload.description,
         venue_name=payload.venue_name,
+        budget=payload.budget,
         start_date=payload.start_date.isoformat(),
         start_time=payload.start_time.isoformat(),
         end_date=payload.end_date.isoformat(),
@@ -368,6 +373,7 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
             requested_to=approval.requested_to,
             event_name=approval.event_name,
             facilitator=approval.facilitator,
+            budget=getattr(approval, "budget", None),
             description=approval.description,
             venue_name=approval.venue_name,
             start_date=approval.start_date,
@@ -453,6 +459,7 @@ async def upload_event_report(
         facilitator=event.facilitator,
         description=event.description,
         venue_name=event.venue_name,
+        budget=getattr(event, "budget", None),
         start_date=event.start_date,
         start_time=event.start_time,
         end_date=event.end_date,
@@ -503,6 +510,7 @@ async def update_event_status(
         facilitator=event.facilitator,
         description=event.description,
         venue_name=event.venue_name,
+        budget=getattr(event, "budget", None),
         start_date=event.start_date,
         start_time=event.start_time,
         end_date=event.end_date,

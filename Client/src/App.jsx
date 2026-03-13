@@ -36,7 +36,8 @@ export default function App() {
     name: "",
     facilitator: "",
     venue_name: "",
-    description: ""
+    description: "",
+    budget: ""
   });
   const [eventTimeParts, setEventTimeParts] = useState({
     start_time: { hour: "", minute: "", period: "AM" },
@@ -2057,7 +2058,8 @@ export default function App() {
       name: "",
       facilitator: defaultFacilitator,
       venue_name: "",
-      description: ""
+      description: "",
+      budget: ""
     });
   };
 
@@ -2523,9 +2525,11 @@ export default function App() {
         });
         return;
       }
+      const budgetVal = eventForm.budget && !isNaN(parseFloat(eventForm.budget)) && parseFloat(eventForm.budget) >= 0
+        ? parseFloat(eventForm.budget) : null;
       const payload = override
-        ? { ...eventForm, start_time: parsedStart, end_time: parsedEnd, override_conflict: true }
-        : { ...eventForm, start_time: parsedStart, end_time: parsedEnd };
+        ? { ...eventForm, start_time: parsedStart, end_time: parsedEnd, override_conflict: true, budget: budgetVal }
+        : { ...eventForm, start_time: parsedStart, end_time: parsedEnd, budget: budgetVal };
       const res = await apiFetch(`${apiBaseUrl}/events`, {
         method: "POST",
         headers: {
@@ -2557,7 +2561,8 @@ export default function App() {
         name: "",
         facilitator: defaultFacilitator,
         venue_name: "",
-        description: ""
+        description: "",
+        budget: ""
       });
       setEventTimeParts({
         start_time: { hour: "", minute: "", period: "AM" },
@@ -2592,8 +2597,11 @@ export default function App() {
 
     try {
       // Registrar receives only event details. Requirements go to Facility Manager after approval.
+      const budgetVal = eventForm.budget && !isNaN(parseFloat(eventForm.budget)) && parseFloat(eventForm.budget) >= 0
+        ? parseFloat(eventForm.budget) : null;
       const payload = {
         ...eventForm,
+        budget: budgetVal,
         requirements: [],
         other_notes: "",
         override_conflict: overrideConflict
@@ -4150,6 +4158,17 @@ export default function App() {
                         onChange={handleEventFieldChange("description")}
                       />
                     </label>
+                    <label className="form-field">
+                      <span>Budget (Rs)</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="e.g. 50000"
+                        value={eventForm.budget}
+                        onChange={handleEventFieldChange("budget")}
+                      />
+                    </label>
                     {eventFormStatus.status === "error" ? (
                       <p className="form-error">{eventFormStatus.error}</p>
                     ) : null}
@@ -5306,6 +5325,7 @@ export default function App() {
                 <div className="events-table-row header approvals">
                   <span>Event</span>
                   <span>Requester</span>
+                  <span>Budget</span>
                   <span>Date</span>
                   <span>Time</span>
                   <span>Status</span>
@@ -5328,7 +5348,8 @@ export default function App() {
                           <div key={item.id} className="events-table-row approvals">
                             <span>{item.event_name}</span>
                             <span>{item.requester_email}</span>
-                          <span>{item.start_date}</span>
+                            <span>{item.budget != null ? `Rs ${Number(item.budget).toLocaleString()}` : "—"}</span>
+                            <span>{item.start_date}</span>
                           <span>{formatISTTime(item.start_time)}</span>
                           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                           <div className="approval-actions">
@@ -5810,6 +5831,14 @@ export default function App() {
                       <p className="details-value">{eventDetailsModal.details.event?.venue_name}</p>
                     </div>
                     <div>
+                      <p className="details-label">Budget (Rs)</p>
+                      <p className="details-value">
+                        {eventDetailsModal.details.event?.budget != null
+                          ? `Rs ${Number(eventDetailsModal.details.event.budget).toLocaleString()}`
+                          : "—"}
+                      </p>
+                    </div>
+                    <div>
                       <p className="details-label">Status</p>
                       <p className="details-value">{eventDetailsModal.details.event?.status}</p>
                     </div>
@@ -5978,6 +6007,14 @@ export default function App() {
                   <div>
                     <p className="details-label">Venue</p>
                     <p className="details-value">{approvalDetailsModal.request.venue_name || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="details-label">Budget (Rs)</p>
+                    <p className="details-value">
+                      {approvalDetailsModal.request.budget != null && approvalDetailsModal.request.budget !== ""
+                        ? `Rs ${Number(approvalDetailsModal.request.budget).toLocaleString()}`
+                        : "-"}
+                    </p>
                   </div>
                   <div>
                     <p className="details-label">Start</p>

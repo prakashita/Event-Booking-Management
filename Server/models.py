@@ -50,6 +50,7 @@ class Event(Document):
     facilitator: str
     description: Optional[str] = None
     venue_name: str
+    budget: Optional[float] = None  # Event budget in Rs
     start_date: str
     start_time: str
     end_date: str
@@ -74,6 +75,7 @@ class ApprovalRequest(Document):
     requested_to: Optional[str] = None
     event_name: str
     facilitator: str
+    budget: Optional[float] = None  # Event budget in Rs
     description: Optional[str] = None
     venue_name: str
     start_date: str
