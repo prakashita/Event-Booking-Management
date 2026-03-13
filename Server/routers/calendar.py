@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 import requests
 
@@ -12,7 +12,8 @@ from auth import (
     decode_oauth_state,
     ensure_google_access_token,
 )
-from models import User
+from event_status import combine_datetime
+from models import Event, User
 from routers.deps import get_current_user
 
 router = APIRouter(prefix="/calendar", tags=["Calendar"])
@@ -107,12 +108,72 @@ async def oauth_callback(code: str, state: str):
     )
 
 
+def _event_to_calendar_item(event: Event) -> dict | None:
+    """Convert an Event to a FullCalendar-friendly dict. Returns None if date/time invalid."""
+    try:
+        start_dt = combine_datetime(event.start_date, event.start_time)
+        end_dt = combine_datetime(event.end_date, event.end_time)
+    except (ValueError, TypeError):
+        return None
+    return {
+        "id": str(event.id),
+        "summary": event.name or "Untitled event",
+        "start": start_dt.isoformat(),
+        "end": end_dt.isoformat(),
+        "location": event.venue_name,
+        "htmlLink": event.google_event_link,
+    }
+
+
+@router.get("/app-events")
+async def get_app_calendar_events(
+    start: str | None = Query(None, description="ISO datetime for calendar range start"),
+    end: str | None = Query(None, description="ISO datetime for calendar range end"),
+    user: User = Depends(get_current_user),
+):
+    """
+    Return all approved events from the app (Event collection) in calendar format.
+    All events in the DB are approved (created only after registrar approval).
+    Optional start/end filter by visible calendar range.
+    """
+    all_events = await Event.find_all().sort("start_date", "start_time").to_list()
+    events_payload = []
+
+    try:
+        range_start = datetime.fromisoformat(start.replace("Z", "+00:00")) if start else None
+    except (ValueError, AttributeError):
+        range_start = None
+    try:
+        range_end = datetime.fromisoformat(end.replace("Z", "+00:00")) if end else None
+    except (ValueError, AttributeError):
+        range_end = None
+
+    for event in all_events:
+        item = _event_to_calendar_item(event)
+        if not item:
+            continue
+        if range_start is not None or range_end is not None:
+            try:
+                ev_start = combine_datetime(event.start_date, event.start_time)
+                ev_end = combine_datetime(event.end_date, event.end_time)
+            except (ValueError, TypeError):
+                continue
+            if range_start is not None and ev_end < range_start:
+                continue
+            if range_end is not None and ev_start > range_end:
+                continue
+        events_payload.append(item)
+
+    return {"events": events_payload}
+
+
 @router.get("/events")
 async def get_calendar_events(
     start: str | None = None,
     end: str | None = None,
     user: User = Depends(get_current_user),
 ):
+    """Fetch from Google Calendar API (user's personal calendar). Use /app-events for all approved app events."""
     access_token = await ensure_google_access_token(user)
     time_min = start or datetime.now(timezone.utc).isoformat()
     time_max = end or (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
@@ -139,14 +200,14 @@ async def get_calendar_events(
     items = response.json().get("items", [])
     events = []
     for item in items:
-        start = item.get("start", {}).get("dateTime") or item.get("start", {}).get("date")
-        end = item.get("end", {}).get("dateTime") or item.get("end", {}).get("date")
+        start_val = item.get("start", {}).get("dateTime") or item.get("start", {}).get("date")
+        end_val = item.get("end", {}).get("dateTime") or item.get("end", {}).get("date")
         events.append(
             {
                 "id": item.get("id"),
                 "summary": item.get("summary"),
-                "start": start,
-                "end": end,
+                "start": start_val,
+                "end": end_val,
                 "location": item.get("location"),
                 "htmlLink": item.get("htmlLink"),
             }

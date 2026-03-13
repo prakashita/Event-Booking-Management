@@ -1178,18 +1178,9 @@ export default function App() {
       }
       const query = params.toString();
       const url = query
-        ? `${apiBaseUrl}/calendar/events?${query}`
-        : `${apiBaseUrl}/calendar/events`;
+        ? `${apiBaseUrl}/calendar/app-events?${query}`
+        : `${apiBaseUrl}/calendar/app-events`;
       const res = await apiFetch(url);
-
-      if (res.status === 403) {
-        setCalendarState({
-          status: "needs_auth",
-          events: [],
-          error: "Connect your Google Calendar to load events."
-        });
-        return;
-      }
 
       if (!res.ok) {
         throw new Error("Unable to load events.");
@@ -5197,8 +5188,8 @@ export default function App() {
             <div className="calendar-card">
               <div className="calendar-toolbar">
                 <div>
-                  <h3>Google Calendar</h3>
-                  <p className="calendar-subtitle">Your upcoming events</p>
+                  <h3>Calendar</h3>
+                  <p className="calendar-subtitle">All approved events</p>
                 </div>
                 <div className="calendar-actions">
                   <button type="button" className="secondary-action" onClick={() => fetchCalendarEvents()}>
