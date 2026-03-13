@@ -76,7 +76,6 @@ export default function App() {
     video_dimension: "",
     linkedin_post: false,
     photography: false,
-    recording: false,
     other_notes: ""
   });
   const [itModal, setItModal] = useState({ open: false, status: "idle", error: "" });
@@ -108,8 +107,7 @@ export default function App() {
     { key: "poster_required", type: "poster", label: "Poster" },
     { key: "video_required", type: "video", label: "Video" },
     { key: "linkedin_post", type: "linkedin", label: "LinkedIn" },
-    { key: "photography", type: "photography", label: "Photography" },
-    { key: "recording", type: "recording", label: "Recording" }
+    { key: "photography", type: "photography", label: "Photography" }
   ];
   const [marketingDeliverableModal, setMarketingDeliverableModal] = useState({
     open: false,
@@ -1988,7 +1986,6 @@ export default function App() {
       video_dimension: "",
       linkedin_post: false,
       photography: false,
-      recording: false,
       other_notes: ""
     });
     setMarketingModal({ open: true, status: "idle", error: "" });
@@ -2740,7 +2737,6 @@ export default function App() {
         video_dimension: marketingForm.video_dimension,
         linkedin_post: marketingForm.linkedin_post,
         photography: marketingForm.photography,
-        recording: marketingForm.recording,
         other_notes: marketingForm.other_notes
       };
 
@@ -4576,14 +4572,6 @@ export default function App() {
                           />
                           Photography
                         </label>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={marketingForm.recording}
-                            onChange={handleMarketingToggle("recording")}
-                          />
-                          Recording
-                        </label>
                       </div>
                     </div>
 
@@ -5507,9 +5495,6 @@ export default function App() {
                       }
                       if (item.photography) {
                         needs.push("Photography");
-                      }
-                      if (item.recording) {
-                        needs.push("Recording");
                       }
                       const needsLabel = needs.length ? needs.join(", ") : "None";
                       const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
