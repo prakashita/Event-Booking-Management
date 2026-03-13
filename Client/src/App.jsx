@@ -2065,7 +2065,16 @@ export default function App() {
   };
 
   const handleItSkip = () => {
-    handleItModalClose();
+    setItModal({ open: false, status: "idle", error: "" });
+    const queue = requirementsFlowQueueRef.current;
+    if (queue[0] === "it") {
+      requirementsFlowQueueRef.current = queue.slice(1);
+      const next = requirementsFlowQueueRef.current[0];
+      if (next === "marketing") handleMarketingModalOpen();
+      else requirementsFlowQueueRef.current = [];
+    } else {
+      requirementsFlowQueueRef.current = [];
+    }
   };
 
   const handleRequirementsModalClose = () => {
@@ -5425,6 +5434,15 @@ export default function App() {
                           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                           <span className="marketing-needs">{needsLabel}</span>
                           <div className="approval-actions">
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
+                              title={item.event_id ? "View event details" : "Event details available after approval"}
+                              disabled={!item.event_id}
+                            >
+                              Details
+                            </button>
                             {item.status === "pending" ? (
                               <>
                                 <button
@@ -5434,7 +5452,7 @@ export default function App() {
                                   title={eventHasStarted ? "Event has already started" : ""}
                                   onClick={() => handleFacilityDecision(item.id, "approved")}
                                 >
-                                  Approve
+                                  Accept
                                 </button>
                                 <button
                                   type="button"
@@ -5510,6 +5528,15 @@ export default function App() {
                           <div className="approval-actions">
                             <button
                               type="button"
+                              className="details-button"
+                              onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
+                              title={item.event_id ? "View event details" : "Event details available after approval"}
+                              disabled={!item.event_id}
+                            >
+                              Details
+                            </button>
+                            <button
+                              type="button"
                               className="details-button upload"
                               disabled={eventHasStarted}
                               title={eventHasStarted ? "Event has already started" : ""}
@@ -5526,7 +5553,7 @@ export default function App() {
                                   title={eventHasStarted ? "Event has already started" : ""}
                                   onClick={() => handleMarketingDecision(item.id, "approved")}
                                 >
-                                  Approve
+                                  Accept
                                 </button>
                                 <button
                                   type="button"
@@ -5594,6 +5621,15 @@ export default function App() {
                           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                           <span className="marketing-needs">{needsLabel}</span>
                           <div className="approval-actions">
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
+                              title={item.event_id ? "View event details" : "Event details available after approval"}
+                              disabled={!item.event_id}
+                            >
+                              Details
+                            </button>
                             {item.status === "pending" ? (
                               <>
                                 <button
@@ -5603,7 +5639,7 @@ export default function App() {
                                   title={eventHasStarted ? "Event has already started" : ""}
                                   onClick={() => handleItDecision(item.id, "approved")}
                                 >
-                                  Approve
+                                  Accept
                                 </button>
                                 <button
                                   type="button"
