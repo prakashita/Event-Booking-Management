@@ -1,12 +1,13 @@
 """Idempotency support for critical mutations. Uses Idempotency-Key header and MongoDB storage."""
-import json
 import re
 import uuid
 from datetime import datetime
 
+import pymongo
 from beanie import Document
 from fastapi import Request
 from pydantic import Field
+from pymongo import IndexModel
 
 
 # UUID v4 regex for validation
@@ -29,8 +30,10 @@ class IdempotencyRecord(Document):
     class Settings:
         name = "idempotency_keys"
         indexes = [
-            # TTL: expire documents 24h after creation
-            ({"created_at": 1}, {"expireAfterSeconds": IDEMPOTENCY_TTL_HOURS * 3600}),
+            IndexModel(
+                [("created_at", pymongo.ASCENDING)],
+                expireAfterSeconds=IDEMPOTENCY_TTL_HOURS * 3600,
+            ),
         ]
 
 
