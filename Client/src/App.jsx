@@ -1247,8 +1247,14 @@ export default function App() {
         throw new Error("Unable to load approval requests.");
       }
 
-      const eventsData = await eventsRes.json();
-      const approvalsData = await approvalsRes.json();
+      const eventsPayload = await eventsRes.json();
+      const eventsData = Array.isArray(eventsPayload)
+        ? eventsPayload
+        : (eventsPayload?.items ?? []);
+      const approvalsPayload = await approvalsRes.json();
+      const approvalsData = Array.isArray(approvalsPayload)
+        ? approvalsPayload
+        : (approvalsPayload?.items ?? []);
       const facilityData = facilityRes.ok ? await facilityRes.json() : [];
       const marketingData = marketingRes.ok ? await marketingRes.json() : [];
       const itData = itRes.ok ? await itRes.json() : [];
