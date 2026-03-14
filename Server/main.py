@@ -1,3 +1,4 @@
+import asyncio
 import os
 import logging
 import time
@@ -32,13 +33,16 @@ logger = logging.getLogger("event-booking.api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Initialize MongoDB connection
+    # Startup: Keep minimal for fast cold start (Vercel serverless has ~10s timeout)
     logger.info("Starting API in %s environment", settings.app_env)
     await init_db()
-    try:
-        await update_event_statuses()
-    except Exception as e:
-        logger.warning("update_event_statuses failed on startup (non-fatal): %s", e)
+    # Defer status update to avoid blocking; scheduler will run it every 5 min
+    async def _deferred_update():
+        try:
+            await update_event_statuses()
+        except Exception as e:
+            logger.warning("update_event_statuses failed: %s", e)
+    asyncio.create_task(_deferred_update())
     scheduler = AsyncIOScheduler()
     scheduler.add_job(update_event_statuses, "interval", minutes=5)
     scheduler.start()
