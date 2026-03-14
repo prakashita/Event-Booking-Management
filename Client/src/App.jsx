@@ -286,12 +286,15 @@ export default function App() {
     const path = url.startsWith(base) ? url.slice(base.length) || "/" : url.replace(/^https?:\/\/[^/]+/, "") || "/";
     const method = (init.method || "GET").toUpperCase();
     const body = init.body;
-    if (method === "GET") return api.get(path);
-    if (method === "POST") return api.post(path, body);
-    if (method === "PATCH") return api.patch(path, body);
-    if (method === "DELETE") return api.delete(path);
-    return api.get(path);
+    const options = init.headers ? { headers: init.headers } : {};
+    if (method === "GET") return api.get(path, options);
+    if (method === "POST") return api.post(path, body, options);
+    if (method === "PATCH") return api.patch(path, body, options);
+    if (method === "DELETE") return api.delete(path, options);
+    return api.get(path, options);
   }, [handleSessionExpired]);
+
+  const generateIdempotencyKey = () => (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : "";
 
   const loadPublications = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
@@ -2542,10 +2545,12 @@ export default function App() {
       const payload = override
         ? { ...eventForm, start_time: parsedStart, end_time: parsedEnd, override_conflict: true, budget: budgetVal }
         : { ...eventForm, start_time: parsedStart, end_time: parsedEnd, budget: budgetVal };
+      const idemKey = generateIdempotencyKey();
       const res = await apiFetch(`${apiBaseUrl}/events`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...(idemKey && { "Idempotency-Key": idemKey })
         },
         body: JSON.stringify(payload)
       });
@@ -2619,10 +2624,12 @@ export default function App() {
         override_conflict: overrideConflict
       };
 
+      const idemKey = generateIdempotencyKey();
       const res = await apiFetch(`${apiBaseUrl}/events`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...(idemKey && { "Idempotency-Key": idemKey })
         },
         body: JSON.stringify(payload)
       });
@@ -3150,10 +3157,12 @@ export default function App() {
       }
 
       try {
+        const idemKey = generateIdempotencyKey();
         const res = await apiFetch(`${apiBaseUrl}/approvals/${requestId}`, {
           method: "PATCH",
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            ...(idemKey && { "Idempotency-Key": idemKey })
           },
           body: JSON.stringify({ status: decision })
         });
