@@ -67,11 +67,6 @@ class Event(Document):
 
     class Settings:
         name = "events"
-        indexes = [
-            "created_by",
-            "status",
-            [("created_by", -1), ("created_at", -1)],  # list by user, sort desc
-        ]
 
 
 class ApprovalRequest(Document):
@@ -98,14 +93,6 @@ class ApprovalRequest(Document):
 
     class Settings:
         name = "approval_requests"
-        indexes = [
-            "requester_id",
-            "requested_to",
-            "status",
-            "event_id",
-            [("requester_id", -1), ("created_at", -1)],
-            [("requested_to", -1), ("created_at", -1)],
-        ]
 
 
 class MarketingDeliverable(BaseModel):
@@ -144,10 +131,6 @@ class MarketingRequest(Document):
 
     class Settings:
         name = "marketing_requests"
-        indexes = [
-            "event_id",
-            [("event_id", -1), ("created_at", -1)],
-        ]
 
 
 class FacilityManagerRequest(Document):
@@ -170,10 +153,6 @@ class FacilityManagerRequest(Document):
 
     class Settings:
         name = "facility_manager_requests"
-        indexes = [
-            "event_id",
-            [("event_id", -1), ("created_at", -1)],
-        ]
 
 
 class ItRequest(Document):
@@ -197,10 +176,6 @@ class ItRequest(Document):
 
     class Settings:
         name = "it_requests"
-        indexes = [
-            "event_id",
-            [("event_id", -1), ("created_at", -1)],
-        ]
 
 
 class Invite(Document):
@@ -215,7 +190,6 @@ class Invite(Document):
 
     class Settings:
         name = "invites"
-        indexes = ["event_id"]
 
 
 class Publication(Document):
@@ -260,10 +234,6 @@ class Publication(Document):
 
     class Settings:
         name = "publications"
-        indexes = [
-            "created_by",
-            [("created_by", -1), ("created_at", -1)],
-        ]
 
 
 class ChatAttachment(BaseModel):
@@ -294,7 +264,3 @@ class ChatMessage(Document):
 
     class Settings:
         name = "chat_messages"
-        indexes = [
-            "conversation_id",
-            [("conversation_id", 1), ("created_at", 1)],
-        ]
