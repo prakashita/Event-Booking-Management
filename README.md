@@ -224,3 +224,34 @@ npm run dev
 ```
 
 Open `http://localhost:5173` in your browser.
+
+## Troubleshooting CORS and 500 Errors
+
+If the frontend shows "Failed to fetch" and the Network tab reports CORS or 500 errors:
+
+1. **Verify backend is reachable**  
+   Open `https://your-backend-url/api/v1/health` in a browser. If it returns `{"status":"ok"}`, the API and CORS are working for that origin.
+
+2. **Set `VITE_API_BASE_URL`**  
+   The client must point to your backend. In Netlify, add an env var: `VITE_API_BASE_URL=https://your-backend.railway.app` (or Render, etc.).
+
+3. **Set CORS in production**  
+   Ensure your backend host (Railway, Render, etc.) has:
+   - `CORS_ORIGINS` including your frontend URL, e.g. `https://event-booking-management.netlify.app`
+   - Or `CORS_ORIGIN_REGEX=^https:\/\/[a-z0-9-]+\.netlify\.app$` for Netlify domains
+
+4. **Check backend logs for 500s**  
+   500 errors usually mean DB connection failure (e.g. MongoDB Atlas IP allowlist, wrong `MONGODB_URL`), missing `SECRET_KEY`, or an unhandled exception. Fix the underlying error; CORS often appears because failed requests don't include proper headers.
+
+## "Application startup failed" on Vercel
+
+If Vercel logs show `Application startup failed. Exiting.` with 500s:
+
+1. **Required env vars** – In Vercel → Project → Settings → Environment Variables, set:
+   - `MONGODB_URL` (or `DATABASE_URL`) – MongoDB connection string
+   - `SECRET_KEY` – Long random string (not `CHANGE_ME_LATER` in production)
+   - `CORS_ORIGINS` – e.g. `https://event-booking-management.netlify.app`
+
+2. **MongoDB Atlas** – Allow access from Vercel: Network Access → Add IP → `0.0.0.0/0` (or Vercel's IP ranges). Serverless uses dynamic IPs.
+
+3. **Platform fit** – FastAPI + MongoDB + scheduler suits a long-running process (Railway, Render, Fly.io). Vercel is serverless; cold starts and timeouts can cause startup failures. Consider moving the API to Railway or Render if Vercel keeps failing.

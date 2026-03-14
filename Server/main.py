@@ -35,7 +35,10 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize MongoDB connection
     logger.info("Starting API in %s environment", settings.app_env)
     await init_db()
-    await update_event_statuses()
+    try:
+        await update_event_statuses()
+    except Exception as e:
+        logger.warning("update_event_statuses failed on startup (non-fatal): %s", e)
     scheduler = AsyncIOScheduler()
     scheduler.add_job(update_event_statuses, "interval", minutes=5)
     scheduler.start()
@@ -93,6 +96,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=600,  # Cache preflight for 10 min
 )
 
 
@@ -201,4 +205,10 @@ def home():
 
 @app.get("/health")
 def health():
+    return {"status": "ok"}
+
+
+@app.get(f"{API_PREFIX}/health")
+def api_health():
+    """Lightweight health check (no DB, no auth). Use to verify connectivity and CORS."""
     return {"status": "ok"}
