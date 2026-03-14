@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from models import ApprovalRequest, Event, FacilityManagerRequest, Invite, ItRequest, MarketingRequest, Publication, User, Venue
 from routers.deps import require_admin
@@ -12,11 +12,15 @@ from schemas import (
     ItRequestResponse,
     MarketingDeliverableResponse,
     MarketingRequestResponse,
+    PaginatedResponse,
     PublicationResponse,
     VenueResponse,
 )
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
+DEFAULT_LIMIT = 50
+MAX_LIMIT = 100
 
 
 def serialize_event(event: Event) -> EventResponse:
@@ -217,53 +221,157 @@ async def admin_overview(admin: User = Depends(require_admin)):
     }
 
 
-@router.get("/events", response_model=list[EventResponse])
-async def list_all_events(admin: User = Depends(require_admin)):
-    items = await Event.find_all().sort("-created_at").to_list()
-    return [serialize_event(item) for item in items]
+@router.get("/events", response_model=PaginatedResponse[EventResponse])
+async def list_all_events(
+    admin: User = Depends(require_admin),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    query = Event.find_all().sort("-created_at")
+    total = await query.count()
+    items = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[EventResponse](
+        items=[serialize_event(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
 
 
-@router.get("/event-reports", response_model=list[EventResponse])
-async def list_event_reports(admin: User = Depends(require_admin)):
+@router.get("/event-reports", response_model=PaginatedResponse[EventResponse])
+async def list_event_reports(
+    admin: User = Depends(require_admin),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
     """All closed events with uploaded reports (admin and registrar only)."""
-    items = await Event.find(Event.status == "closed").sort("-created_at").to_list()
-    return [serialize_event(item) for item in items]
+    query = Event.find(Event.status == "closed").sort("-created_at")
+    total = await query.count()
+    items = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[EventResponse](
+        items=[serialize_event(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
 
 
-@router.get("/approvals", response_model=list[ApprovalRequestResponse])
-async def list_all_approvals(admin: User = Depends(require_admin)):
-    items = await ApprovalRequest.find_all().sort("-created_at").to_list()
-    return [serialize_approval(item) for item in items]
+@router.get("/approvals", response_model=PaginatedResponse[ApprovalRequestResponse])
+async def list_all_approvals(
+    admin: User = Depends(require_admin),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    query = ApprovalRequest.find_all().sort("-created_at")
+    total = await query.count()
+    items = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[ApprovalRequestResponse](
+        items=[serialize_approval(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
 
 
-@router.get("/facility", response_model=list[FacilityManagerRequestResponse])
-async def list_all_facility(admin: User = Depends(require_admin)):
-    items = await FacilityManagerRequest.find_all().sort("-created_at").to_list()
-    return [serialize_facility(item) for item in items]
+@router.get("/facility", response_model=PaginatedResponse[FacilityManagerRequestResponse])
+async def list_all_facility(
+    admin: User = Depends(require_admin),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    query = FacilityManagerRequest.find_all().sort("-created_at")
+    total = await query.count()
+    items = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[FacilityManagerRequestResponse](
+        items=[serialize_facility(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
 
 
-@router.get("/marketing", response_model=list[MarketingRequestResponse])
-async def list_all_marketing(admin: User = Depends(require_admin)):
-    items = await MarketingRequest.find_all().sort("-created_at").to_list()
-    return [serialize_marketing(item) for item in items]
+@router.get("/marketing", response_model=PaginatedResponse[MarketingRequestResponse])
+async def list_all_marketing(
+    admin: User = Depends(require_admin),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    query = MarketingRequest.find_all().sort("-created_at")
+    total = await query.count()
+    items = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[MarketingRequestResponse](
+        items=[serialize_marketing(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
 
 
-@router.get("/it", response_model=list[ItRequestResponse])
-async def list_all_it(admin: User = Depends(require_admin)):
-    items = await ItRequest.find_all().sort("-created_at").to_list()
-    return [serialize_it(item) for item in items]
+@router.get("/it", response_model=PaginatedResponse[ItRequestResponse])
+async def list_all_it(
+    admin: User = Depends(require_admin),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    query = ItRequest.find_all().sort("-created_at")
+    total = await query.count()
+    items = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[ItRequestResponse](
+        items=[serialize_it(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
 
 
-@router.get("/invites", response_model=list[InviteResponse])
-async def list_all_invites(admin: User = Depends(require_admin)):
-    items = await Invite.find_all().sort("-created_at").to_list()
-    return [serialize_invite(item) for item in items]
+@router.get("/invites", response_model=PaginatedResponse[InviteResponse])
+async def list_all_invites(
+    admin: User = Depends(require_admin),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    query = Invite.find_all().sort("-created_at")
+    total = await query.count()
+    items = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[InviteResponse](
+        items=[serialize_invite(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
 
 
-@router.get("/publications", response_model=list[PublicationResponse])
-async def list_all_publications(admin: User = Depends(require_admin)):
-    items = await Publication.find_all().sort("-created_at").to_list()
-    return [serialize_publication(item) for item in items]
+@router.get("/publications", response_model=PaginatedResponse[PublicationResponse])
+async def list_all_publications(
+    admin: User = Depends(require_admin),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    query = Publication.find_all().sort("-created_at")
+    total = await query.count()
+    items = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[PublicationResponse](
+        items=[serialize_publication(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
 
 
 @router.get("/venues", response_model=list[VenueResponse])

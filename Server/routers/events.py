@@ -4,12 +4,16 @@ import logging
 from datetime import datetime
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+
+from rate_limit import limiter
 from fastapi.responses import JSONResponse
 import requests
 
 from auth import ensure_google_access_token, get_primary_email_by_role, get_user_by_role
 from drive import upload_report_file
+from errors import error_payload
+from idempotency import get_cached_response, get_idempotency_key, store_response
 from event_status import combine_datetime, sync_event_status
 from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, User
 from routers.admin import serialize_approval, serialize_event, serialize_facility, serialize_it, serialize_marketing
@@ -21,6 +25,7 @@ from schemas import (
     EventDetailsResponse,
     EventResponse,
     EventStatusUpdate,
+    PaginatedResponse,
 )
 
 router = APIRouter(prefix="/events", tags=["Events"])
@@ -150,12 +155,24 @@ async def notify_registrar_for_approval(
             pass
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=detail)
 
-@router.get("", response_model=list[EventResponse])
-async def list_events(user: User = Depends(get_current_user)):
-    events = await Event.find(Event.created_by == str(user.id)).sort("-created_at").to_list()
+DEFAULT_LIMIT = 50
+MAX_LIMIT = 100
+
+
+@router.get("", response_model=PaginatedResponse[EventResponse])
+async def list_events(
+    user: User = Depends(get_current_user),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    query = Event.find(Event.created_by == str(user.id)).sort("-created_at")
+    total = await query.count()
+    events = await query.skip(offset).limit(limit).to_list()
     for event in events:
         await sync_event_status(event)
-    return [
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[EventResponse](
+        items=[
     EventResponse(
         id=str(event.id),
         name=event.name,
@@ -178,7 +195,12 @@ async def list_events(user: User = Depends(get_current_user)):
         created_at=event.created_at,
     )
     for event in events
-]
+],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
 
 
 @router.get("/{event_id}/details", response_model=EventDetailsResponse)
@@ -285,7 +307,14 @@ async def check_conflicts(payload: EventCreate, user: User = Depends(get_current
 
 
 @router.post("", response_model=EventCreateResponse, status_code=status.HTTP_201_CREATED)
-async def create_event(payload: EventCreate, user: User = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def create_event(request: Request, payload: EventCreate, user: User = Depends(get_current_user)):
+    idem_key = get_idempotency_key(request)
+    if idem_key:
+        cached = await get_cached_response(idem_key)
+        if cached:
+            return JSONResponse(status_code=cached[0], content=cached[1])
+
     start_dt = datetime.combine(payload.start_date, payload.start_time)
     end_dt = datetime.combine(payload.end_date, payload.end_time)
     if end_dt < start_dt:
@@ -308,12 +337,15 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
                 conflicts.append(serialize_conflict(existing))
 
         if conflicts:
+            request_id = getattr(request.state, "request_id", "")
             return JSONResponse(
                 status_code=status.HTTP_409_CONFLICT,
-                content={
-                    "detail": "Schedule conflict detected",
-                    "conflicts": conflicts,
-                },
+                content=error_payload(
+                    detail="Schedule conflict detected",
+                    code="CONFLICT",
+                    request_id=request_id,
+                    conflicts=conflicts,
+                ),
             )
 
     # Block creation if 5+ completed events have report upload pending
@@ -363,7 +395,7 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
         logger.warning("Registrar email notification failed approval_id=%s error=%s", str(approval.id), exc)
         status_label = "pending_registrar_approval_email_failed"
 
-    return EventCreateResponse(
+    response_body = EventCreateResponse(
         status=status_label,
         approval_request=ApprovalRequestResponse(
             id=str(approval.id),
@@ -388,10 +420,15 @@ async def create_event(payload: EventCreate, user: User = Depends(get_current_us
             created_at=approval.created_at,
         ),
     )
+    if idem_key:
+        await store_response(idem_key, status.HTTP_201_CREATED, response_body.model_dump(mode="json"))
+    return response_body
 
 
 @router.post("/{event_id}/report", response_model=EventResponse)
+@limiter.limit("30/minute")
 async def upload_event_report(
+    request: Request,
     event_id: str,
     file: UploadFile = File(...),
     user: User = Depends(get_current_user),

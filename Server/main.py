@@ -5,6 +5,10 @@ import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from slowapi.errors import RateLimitExceeded
+
+from errors import STATUS_TO_CODE, error_payload
+from rate_limit import limiter
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,6 +48,20 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Event Booking Management API", version="1.0.0", lifespan=lifespan)
+app.state.limiter = limiter
+
+def handle_rate_limit_exceeded(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content=error_payload(
+            detail=getattr(exc, "detail", "Rate limit exceeded"),
+            code="RATE_LIMIT_EXCEEDED",
+            request_id=_request_id(request),
+        ),
+    )
+
+
+app.add_exception_handler(RateLimitExceeded, handle_rate_limit_exceeded)
 
 def resolve_uploads_dir() -> str:
     env_dir = os.getenv("UPLOADS_DIR")
@@ -83,6 +101,16 @@ def _request_id(request: Request) -> str:
 
 
 @app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    # Content-Security-Policy: restrict script sources to mitigate XSS
+    csp = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com; frame-src https://accounts.google.com"
+    response.headers["Content-Security-Policy"] = csp
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@app.middleware("http")
 async def request_context_middleware(request: Request, call_next):
     request_id = request.headers.get(settings.request_id_header) or uuid.uuid4().hex
     request.state.request_id = request_id
@@ -114,12 +142,14 @@ async def request_context_middleware(request: Request, call_next):
 
 @app.exception_handler(HTTPException)
 async def handle_http_exception(request: Request, exc: HTTPException):
+    code = STATUS_TO_CODE.get(exc.status_code, "ERROR")
     return JSONResponse(
         status_code=exc.status_code,
-        content={
-            "detail": exc.detail,
-            "request_id": _request_id(request),
-        },
+        content=error_payload(
+            detail=exc.detail,
+            code=code,
+            request_id=_request_id(request),
+        ),
     )
 
 
@@ -127,11 +157,12 @@ async def handle_http_exception(request: Request, exc: HTTPException):
 async def handle_validation_exception(request: Request, exc: RequestValidationError):
     return JSONResponse(
         status_code=422,
-        content={
-            "detail": "Validation error",
-            "errors": exc.errors(),
-            "request_id": _request_id(request),
-        },
+        content=error_payload(
+            detail="Validation error",
+            code="VALIDATION_ERROR",
+            request_id=_request_id(request),
+            errors=exc.errors(),
+        ),
     )
 
 
@@ -140,10 +171,11 @@ async def handle_unexpected_exception(request: Request, exc: Exception):
     logger.exception("Unhandled exception rid=%s", _request_id(request))
     return JSONResponse(
         status_code=500,
-        content={
-            "detail": "Internal server error",
-            "request_id": _request_id(request),
-        },
+        content=error_payload(
+            detail="Internal server error",
+            code="INTERNAL_ERROR",
+            request_id=_request_id(request),
+        ),
     )
 
 # API v1 prefix for versioned, stable endpoints

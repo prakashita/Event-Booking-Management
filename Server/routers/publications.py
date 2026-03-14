@@ -1,14 +1,16 @@
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status, Form
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
+
+from rate_limit import limiter
 from typing import Literal, Optional
 
 from auth import ensure_google_access_token
 from drive import upload_report_file
 from models import Publication, User
 from routers.deps import get_current_user
-from schemas import PublicationResponse
+from schemas import PaginatedResponse, PublicationResponse
 
 router = APIRouter(prefix="/publications", tags=["Publications"])
 
@@ -53,7 +55,9 @@ def _to_response(pub: Publication) -> PublicationResponse:
 
 
 @router.post("", response_model=PublicationResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")
 async def upload_publication(
+    request: Request,
     name: str = Form(...),
     title: str = Form(...),
     pub_type: str = Form(...),
@@ -169,11 +173,17 @@ async def upload_publication(
     return _to_response(publication)
 
 
-@router.get("", response_model=list[PublicationResponse])
+DEFAULT_LIMIT = 50
+MAX_LIMIT = 100
+
+
+@router.get("", response_model=PaginatedResponse[PublicationResponse])
 async def list_publications(
     user: User = Depends(get_current_user),
     sort: Literal["title", "date"] = Query("date", description="Sort by title (A-Z) or date added"),
     order: Literal["asc", "desc"] = Query("desc", description="Sort order"),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
 ):
     role = (user.role or "").strip().lower()
     if role in ("admin", "registrar"):
@@ -182,5 +192,13 @@ async def list_publications(
         query = Publication.find(Publication.created_by == str(user.id))
 
     sort_key = "-created_at" if sort == "date" and order == "desc" else "+created_at" if sort == "date" else "-title" if sort == "title" and order == "desc" else "+title"
-    items = await query.sort(sort_key).to_list()
-    return [_to_response(item) for item in items]
+    total = await query.count()
+    items = await query.sort(sort_key).skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[PublicationResponse](
+        items=[_to_response(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )

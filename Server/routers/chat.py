@@ -5,7 +5,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect, status
+
+from rate_limit import limiter
 from fastapi.responses import JSONResponse
 
 from auth import decode_access_token
@@ -258,7 +260,9 @@ async def mark_read(
 
 
 @router.post("/upload", response_model=ChatUploadResponse)
+@limiter.limit("30/minute")
 async def upload_attachment(
+    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
 ):

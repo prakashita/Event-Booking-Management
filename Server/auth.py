@@ -15,7 +15,10 @@ _access_minutes = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(_access_minutes) if _access_minutes.isdigit() else (60 * 24 * 7)
 
 GOOGLE_TOKEN_INFO_URL = "https://oauth2.googleapis.com/tokeninfo"
-ALLOWED_DOMAIN = ["@srmap.edu.in", "@vidyashilp.edu.in","@gmail.com"]
+# Comma-separated allowed email domains (e.g. srmap.edu.in,vidyashilp.edu.in,gmail.com)
+# Emails must end with @<domain> (e.g. user@vidyashilp.edu.in)
+_allowed = os.getenv("ALLOWED_EMAIL_DOMAINS", "srmap.edu.in,vidyashilp.edu.in,gmail.com")
+ALLOWED_DOMAIN = [f"@{d.strip()}" if d.strip() and not d.strip().startswith("@") else d.strip() for d in _allowed.split(",") if d.strip()]
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -57,7 +60,7 @@ def verify_google_token(token: str):
     data = response.json()
 
     email = data.get("email")
-    if not any(email.endswith(domain) for domain in ALLOWED_DOMAIN):
+    if not ALLOWED_DOMAIN or not any(email.endswith(d) for d in ALLOWED_DOMAIN):
         raise HTTPException(
             status_code=403,
             detail="Only Vidyashilp accounts allowed"

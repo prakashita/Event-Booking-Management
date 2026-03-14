@@ -3,7 +3,9 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+
+from rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +209,9 @@ async def decide_marketing_request(
 
 
 @router.post("/requests/{request_id}/deliverable", response_model=MarketingRequestResponse)
+@limiter.limit("30/minute")
 async def upload_marketing_deliverable(
+    request: Request,
     request_id: str,
     file: UploadFile = File(...),
     deliverable_type: str = Form(..., pattern="^(poster|photography|video|recording|other)$"),
@@ -302,7 +306,9 @@ _REQUIREMENT_MAP = [
 
 
 @router.post("/requests/{request_id}/deliverables/batch", response_model=MarketingRequestResponse)
+@limiter.limit("30/minute")
 async def upload_marketing_deliverables_batch(
+    request: Request,
     request_id: str,
     user: User = Depends(get_current_user),
     na_poster: Optional[str] = Form(None),

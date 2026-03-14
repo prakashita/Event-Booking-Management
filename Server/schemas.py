@@ -1,7 +1,18 @@
 from datetime import date, time, datetime
-from typing import List, Literal, Optional
+from typing import Generic, List, Literal, Optional, TypeVar
 
 from pydantic import BaseModel, Field, field_validator
+
+T = TypeVar("T")
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    """Standard paginated list response."""
+    items: List[T]
+    total: int
+    limit: int
+    offset: int
+    next_offset: Optional[int] = None  # None if no more items
 
 
 class UserAdminResponse(BaseModel):

@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+
+from rate_limit import limiter
 from models import PendingRoleAssignment, User
 from auth import (
     REQUIRED_GOOGLE_SCOPES,
@@ -20,7 +22,8 @@ class TokenRequest(BaseModel):
 
 
 @router.post("/google")
-async def google_login(payload: TokenRequest):
+@limiter.limit("10/minute")
+async def google_login(request: Request, payload: TokenRequest):
     google_data = verify_google_token(payload.token)
 
     google_id = google_data["sub"]

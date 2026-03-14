@@ -3,15 +3,16 @@ import logging
 import re
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 import requests
 
 from auth import ensure_google_access_token
+from idempotency import get_cached_response, get_idempotency_key, store_response
 from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, User
 from event_status import combine_datetime, compute_event_status, event_has_started
 from routers.deps import get_current_user
 from routers.events import sync_event_to_google_calendar
-from schemas import ApprovalDecision, ApprovalRequestResponse
+from schemas import ApprovalDecision, ApprovalRequestResponse, PaginatedResponse
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
 logger = logging.getLogger("event-booking.approvals")
@@ -63,12 +64,22 @@ def normalize_time(value: str | None) -> str:
     return ":".join(parts[:2])
 
 
-@router.get("/me", response_model=list[ApprovalRequestResponse])
-async def list_my_requests(user: User = Depends(get_current_user)):
-    requests = await ApprovalRequest.find(
-        ApprovalRequest.requester_id == str(user.id)
-    ).sort("-created_at").to_list()
-    return [
+DEFAULT_LIMIT = 50
+MAX_LIMIT = 100
+
+
+@router.get("/me", response_model=PaginatedResponse[ApprovalRequestResponse])
+async def list_my_requests(
+    user: User = Depends(get_current_user),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    query = ApprovalRequest.find(ApprovalRequest.requester_id == str(user.id)).sort("-created_at")
+    total = await query.count()
+    requests = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[ApprovalRequestResponse](
+        items=[
         ApprovalRequestResponse(
             id=str(item.id),
             status=item.status,
@@ -92,17 +103,28 @@ async def list_my_requests(user: User = Depends(get_current_user)):
             created_at=item.created_at,
         )
         for item in requests
-    ]
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
 
 
-@router.get("/inbox", response_model=list[ApprovalRequestResponse])
-async def list_inbox(user: User = Depends(get_current_user)):
+@router.get("/inbox", response_model=PaginatedResponse[ApprovalRequestResponse])
+async def list_inbox(
+    user: User = Depends(get_current_user),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
     email = (user.email or "").strip()
     regex = re.compile(f"^{re.escape(email)}$", re.IGNORECASE)
-    requests = await ApprovalRequest.find(
-        {"requested_to": {"$regex": regex}}
-    ).sort("-created_at").to_list()
-    return [
+    query = ApprovalRequest.find({"requested_to": {"$regex": regex}}).sort("-created_at")
+    total = await query.count()
+    requests = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[ApprovalRequestResponse](
+        items=[
         ApprovalRequestResponse(
             id=str(item.id),
             status=item.status,
@@ -126,15 +148,28 @@ async def list_inbox(user: User = Depends(get_current_user)):
             created_at=item.created_at,
         )
         for item in requests
-    ]
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
 
 
 @router.patch("/{request_id}", response_model=ApprovalRequestResponse)
 async def decide_request(
+    request: Request,
     request_id: str,
     payload: ApprovalDecision,
     user: User = Depends(get_current_user),
 ):
+    idem_key = get_idempotency_key(request)
+    if idem_key:
+        cached = await get_cached_response(idem_key)
+        if cached:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=cached[0], content=cached[1])
+
     normalized_status = payload.status.strip().lower()
     if normalized_status not in {"approved", "rejected"}:
         raise HTTPException(
@@ -255,7 +290,7 @@ async def decide_request(
         approval.decided_at = datetime.utcnow()
         await approval.save()
 
-    return ApprovalRequestResponse(
+    response_body = ApprovalRequestResponse(
         id=str(approval.id),
         status=approval.status,
         requester_id=approval.requester_id,
@@ -277,3 +312,6 @@ async def decide_request(
         decided_by=approval.decided_by,
         created_at=approval.created_at,
     )
+    if idem_key:
+        await store_response(idem_key, 200, response_body.model_dump(mode="json"))
+    return response_body
