@@ -1,16 +1,7 @@
 /**
  * Shared API client for the Event Booking app.
- * Base URL includes /api/v1.
- * - On 401: dispatches 'auth:unauthorized' for session-expired handling.
- * - On 5xx: dispatches 'api:server_error' for global error banner.
- * - On fetch failure (network error): dispatches 'api:network_error'.
+ * Base URL includes /api/v1. On 401, dispatches 'auth:unauthorized' for the app to handle.
  */
-
-export const API_EVENTS = {
-  UNAUTHORIZED: "auth:unauthorized",
-  SERVER_ERROR: "api:server_error",
-  NETWORK_ERROR: "api:network_error",
-};
 
 const getBaseUrl = () => {
   const base = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
@@ -19,7 +10,7 @@ const getBaseUrl = () => {
 
 const getToken = () => localStorage.getItem("auth_token");
 
-const UNAUTHORIZED_EVENT = API_EVENTS.UNAUTHORIZED;
+const UNAUTHORIZED_EVENT = "auth:unauthorized";
 
 function getHeaders(init = {}) {
   const token = getToken();
@@ -39,29 +30,15 @@ async function request(method, path, body = undefined, options = {}) {
   }
   const bodyPayload =
     body instanceof FormData ? body : isJson && typeof body !== "string" ? JSON.stringify(body) : body;
-  let res;
-  try {
-    res = await fetch(url, {
-      ...options,
-      method,
-      headers,
-      credentials: "include",
-      body: bodyPayload,
-    });
-  } catch (err) {
-    window.dispatchEvent(
-      new CustomEvent(API_EVENTS.NETWORK_ERROR, { detail: { message: err?.message || "Network error" } })
-    );
-    throw err;
-  }
+  const res = await fetch(url, {
+    ...options,
+    method,
+    headers,
+    credentials: "include",
+    body: bodyPayload,
+  });
   if (res.status === 401) {
     window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
-  } else if (res.status >= 500) {
-    window.dispatchEvent(
-      new CustomEvent(API_EVENTS.SERVER_ERROR, {
-        detail: { status: res.status, message: `Server error (${res.status})` },
-      })
-    );
   }
   return res;
 }
@@ -80,7 +57,6 @@ export const api = {
   getBaseUrl,
   getToken,
   UNAUTHORIZED_EVENT,
-  API_EVENTS,
 
   async get(path, options = {}) {
     return request("GET", path, undefined, options);
