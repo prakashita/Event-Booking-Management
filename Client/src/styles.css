@@ -644,6 +644,7 @@ body {
   gap: 10px;
 }
 
+.publication-filter-label,
 .publication-sort-label {
   display: inline-flex;
   align-items: center;
@@ -736,6 +737,106 @@ body {
 .form-hint {
   font-size: 0.9rem;
   color: var(--ink-soft);
+}
+
+.report-format-guide {
+  padding: 12px 14px;
+  background: var(--bg-soft, #f5f6f8);
+  border-radius: 14px;
+  border: 1px solid var(--border, #e8eaed);
+}
+
+.report-format-guide span {
+  margin-bottom: 4px;
+}
+
+.report-format-list {
+  margin: 8px 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft, #4a5568);
+  line-height: 1.5;
+}
+
+.report-format-list li {
+  margin-bottom: 6px;
+}
+
+.report-format-list li:last-child {
+  margin-bottom: 0;
+}
+
+.report-form .form-field textarea {
+  min-height: 80px;
+}
+
+.report-form .form-field em {
+  font-weight: normal;
+  font-size: 0.85em;
+  color: var(--ink-soft, #6b7280);
+}
+
+.report-cover-info .form-hint {
+  margin-top: 4px;
+}
+
+.report-save-hint {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg-soft, #f5f6f8);
+  border-radius: 10px;
+}
+
+.report-appendix-file-input {
+  margin-top: 6px;
+  font-size: 0.85rem;
+}
+
+.report-appendix-photos {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-appendix-photos li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-soft, #f5f6f8);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+}
+
+.report-appendix-photo-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-appendix-photo-remove {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  color: #333;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.report-appendix-photo-remove:hover {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.modal-card--report {
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .approval-overlay {
@@ -2726,7 +2827,60 @@ body {
   font-style: italic;
 }
 
-/* ── Publication Card Grid ── */
+/* ── Publication list (MLA style) ── */
+
+.pub-mla-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0 0 1.5rem;
+}
+
+.pub-mla-list-item {
+  margin-bottom: 1.25rem;
+}
+
+.pub-mla-citation {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--ink, #1a202c);
+  padding-left: 1rem;
+  text-indent: -1rem;
+}
+
+.pub-mla-citation .mla-italic {
+  font-style: italic;
+}
+
+.pub-mla-notes {
+  margin: 0.35rem 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft, #6b7280);
+  font-style: italic;
+}
+
+.pub-mla-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.pub-mla-link {
+  border: none;
+  background: transparent;
+  color: var(--accent-blue, #2563eb);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.pub-mla-link:hover {
+  text-decoration: none;
+}
+
+/* ── Publication Card Grid (legacy / admin) ── */
 
 .pub-card-grid {
   display: grid;

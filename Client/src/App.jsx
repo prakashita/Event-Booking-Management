@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { jsPDF } from "jspdf";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -101,6 +102,9 @@ export default function App() {
     error: "",
     eventId: "",
     eventName: "",
+    startDate: "",
+    eventVenue: "",
+    eventFacilitator: "",
     hasReport: false
   });
   const REQUIREMENT_OPTIONS = [
@@ -166,7 +170,15 @@ export default function App() {
     page_title: ""
   });
 
-  const [reportFile, setReportFile] = useState(null);
+  const [reportForm, setReportForm] = useState({
+    executiveSummary: "",
+    attendance: "",
+    programAgenda: "",
+    outcomesLearnings: "",
+    followUp: "",
+    appendix: ""
+  });
+  const [reportAppendixPhotos, setReportAppendixPhotos] = useState([]);
   const [calendarState, setCalendarState] = useState({
     status: "idle",
     events: [],
@@ -178,6 +190,7 @@ export default function App() {
     error: ""
   });
   const [publicationSort, setPublicationSort] = useState("date_desc");
+  const [publicationTypeFilter, setPublicationTypeFilter] = useState("");
 
   const [adminTab, setAdminTab] = useState("users");
   const [adminOverview, setAdminOverview] = useState({ status: "idle", data: null, error: "" });
@@ -311,7 +324,8 @@ export default function App() {
         throw new Error("Unable to load publications.");
       }
       const data = await res.json();
-      setPublicationsState({ status: "ready", items: data, error: "" });
+      const items = Array.isArray(data) ? data : (data.items ?? []);
+      setPublicationsState({ status: "ready", items, error: "" });
     } catch (err) {
       setPublicationsState({
         status: "error",
@@ -2118,14 +2132,34 @@ export default function App() {
     else if (queue[0] === "marketing") handleMarketingModalOpen();
   };
 
+  const getExpectedReportFilename = (eventName, startDate) => {
+    const sanitized = (eventName || "Event")
+      .replace(/[^\w\s-]/g, "")
+      .replace(/\s+/g, "_")
+      .trim() || "Event";
+    const datePart = (startDate || "").trim() || "0000-00-00";
+    return `${sanitized}_${datePart}_Report.pdf`;
+  };
+
   const handleReportOpen = (eventItem) => {
-    setReportFile(null);
+    setReportForm({
+      executiveSummary: "",
+      attendance: "",
+      programAgenda: "",
+      outcomesLearnings: "",
+      followUp: "",
+      appendix: ""
+    });
+    setReportAppendixPhotos([]);
     setReportModal({
       open: true,
       status: "idle",
       error: "",
       eventId: eventItem.id,
       eventName: eventItem.name,
+      startDate: eventItem.start_date || "",
+      eventVenue: eventItem.venue_name || "",
+      eventFacilitator: eventItem.facilitator || "",
       hasReport: Boolean(eventItem.report_file_id)
     });
   };
@@ -2266,12 +2300,132 @@ export default function App() {
   };
 
   const handleReportClose = () => {
-    setReportFile(null);
-    setReportModal({ open: false, status: "idle", error: "", eventId: "", eventName: "", hasReport: false });
+    setReportForm({
+      executiveSummary: "",
+      attendance: "",
+      programAgenda: "",
+      outcomesLearnings: "",
+      followUp: "",
+      appendix: ""
+    });
+    setReportAppendixPhotos([]);
+    setReportModal({ open: false, status: "idle", error: "", eventId: "", eventName: "", startDate: "", eventVenue: "", eventFacilitator: "", hasReport: false });
   };
 
-  const handleReportFileChange = (event) => {
-    setReportFile(event.target.files?.[0] || null);
+  const handleAppendixPhotosChange = (e) => {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+    setReportAppendixPhotos((prev) => [...prev, ...imageFiles]);
+    e.target.value = "";
+  };
+
+  const removeAppendixPhoto = (index) => {
+    setReportAppendixPhotos((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleReportFormChange = (field) => (e) => {
+    setReportForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const buildReportPdf = (eventInfo, form) => {
+    const doc = new jsPDF({ format: "a4", unit: "mm" });
+    const margin = 20;
+    const pageW = doc.internal.pageSize.getWidth();
+    const maxW = pageW - margin * 2;
+    let y = margin;
+    const lineHeight = 5;
+    const sectionGap = 10;
+
+    const wrapText = (text, maxWidth) => {
+      if (typeof doc.splitTextToSize === "function") {
+        return doc.splitTextToSize(String(text).trim(), maxWidth);
+      }
+      const charsPerLine = Math.floor(maxWidth / 3.5);
+      const words = String(text).trim().split(/\s+/);
+      const lines = [];
+      let line = "";
+      for (const word of words) {
+        if (line.length + word.length + 1 <= charsPerLine) {
+          line += (line ? " " : "") + word;
+        } else {
+          if (line) lines.push(line);
+          line = word;
+        }
+      }
+      if (line) lines.push(line);
+      return lines;
+    };
+
+    const addSection = (title, text, isSubsection = false) => {
+      if (y > 270) {
+        doc.addPage();
+        y = margin;
+      }
+      doc.setFontSize(isSubsection ? 10 : 12);
+      doc.setFont("helvetica", isSubsection ? "normal" : "bold");
+      doc.text(title, margin, y);
+      y += lineHeight + 2;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      if (text && String(text).trim()) {
+        const lines = wrapText(text, maxW);
+        doc.text(lines, margin, y);
+        y += lines.length * lineHeight;
+      }
+      y += sectionGap;
+    };
+
+    const reportDate = new Date().toISOString().slice(0, 10);
+
+    addSection("Cover", "");
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Event: ${eventInfo.eventName || "—"}`, margin, y); y += lineHeight;
+    doc.text(`Date: ${eventInfo.startDate || "—"}`, margin, y); y += lineHeight;
+    doc.text(`Venue: ${eventInfo.eventVenue || "—"}`, margin, y); y += lineHeight;
+    doc.text(`Facilitator: ${eventInfo.eventFacilitator || "—"}`, margin, y); y += lineHeight;
+    doc.text(`Report submitted on: ${reportDate}`, margin, y); y += sectionGap + lineHeight;
+
+    addSection("Executive Summary", form.executiveSummary);
+    addSection("Attendance", form.attendance);
+    addSection("Program / Agenda", form.programAgenda);
+    addSection("Outcomes and Learnings", form.outcomesLearnings);
+    if (form.followUp && form.followUp.trim()) addSection("Follow-up", form.followUp);
+    const hasAppendixText = form.appendix && form.appendix.trim();
+    const appendixImages = eventInfo.appendixImages || [];
+    if (hasAppendixText || appendixImages.length > 0) {
+      addSection("Appendix", form.appendix || "");
+      if (appendixImages.length > 0) {
+        const imgMaxW = maxW;
+        const imgMaxH = 60;
+        const pxToMm = 25.4 / 96;
+        for (let i = 0; i < appendixImages.length; i++) {
+          if (y > 270) {
+            doc.addPage();
+            y = margin;
+          }
+          const { dataUrl, width: pw, height: ph } = appendixImages[i];
+          const format = dataUrl.startsWith("data:image/png") ? "PNG" : dataUrl.startsWith("data:image/webp") ? "WEBP" : dataUrl.startsWith("data:image/gif") ? "GIF" : "JPEG";
+          try {
+            let wMm = pw * pxToMm;
+            let hMm = ph * pxToMm;
+            if (wMm > imgMaxW || hMm > imgMaxH) {
+              const r = Math.min(imgMaxW / wMm, imgMaxH / hMm);
+              wMm = wMm * r;
+              hMm = hMm * r;
+            }
+            doc.addImage(dataUrl, format, margin, y, wMm, hMm);
+            y += hMm + sectionGap;
+          } catch (_) {
+            doc.setFontSize(9);
+            doc.text(`[Image ${i + 1} could not be embedded]`, margin, y);
+            y += lineHeight + 4;
+          }
+        }
+      }
+    }
+
+    return doc.output("blob");
   };
 
   const handlePublicationTypeOpen = () => {
@@ -2423,11 +2577,18 @@ export default function App() {
     if (formEvent) {
       formEvent.preventDefault();
     }
-    if (!reportFile) {
+    const required = [
+      { key: "executiveSummary", label: "Executive summary" },
+      { key: "attendance", label: "Attendance" },
+      { key: "programAgenda", label: "Program / agenda" },
+      { key: "outcomesLearnings", label: "Outcomes and learnings" }
+    ];
+    const missing = required.find((r) => !reportForm[r.key] || !String(reportForm[r.key]).trim());
+    if (missing) {
       setReportModal((prev) => ({
         ...prev,
         status: "error",
-        error: "Please select a PDF report."
+        error: `Please fill in: ${missing.label}`
       }));
       return;
     }
@@ -2435,8 +2596,36 @@ export default function App() {
     setReportModal((prev) => ({ ...prev, status: "loading", error: "" }));
 
     try {
+      const appendixImages = [];
+      for (const file of reportAppendixPhotos) {
+        const dataUrl = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+        const { width, height } = await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+          img.onerror = reject;
+          img.src = dataUrl;
+        });
+        appendixImages.push({ dataUrl, width, height });
+      }
+      const blob = buildReportPdf(
+        {
+          eventName: reportModal.eventName,
+          startDate: reportModal.startDate,
+          eventVenue: reportModal.eventVenue,
+          eventFacilitator: reportModal.eventFacilitator,
+          appendixImages
+        },
+        reportForm
+      );
+      const expectedName = getExpectedReportFilename(reportModal.eventName, reportModal.startDate);
+      const file = new File([blob], expectedName, { type: "application/pdf" });
       const formData = new FormData();
-      formData.append("file", reportFile);
+      formData.append("file", file);
       const res = await apiFetch(`${apiBaseUrl}/events/${reportModal.eventId}/report`, {
         method: "POST",
         body: formData
@@ -4763,23 +4952,108 @@ export default function App() {
 
             {reportModal.open ? (
               <div className="modal-overlay" role="dialog" aria-modal="true">
-                <div className="modal-card">
+                <div className="modal-card modal-card--report">
                   <div className="modal-header">
-                    <h3>{reportModal.hasReport ? "Replace Report" : "Upload Report"}</h3>
+                    <h3>{reportModal.hasReport ? "Replace Report" : "Submit Event Report"}</h3>
                     <button type="button" className="modal-close" onClick={handleReportClose}>
                       &times;
                     </button>
                   </div>
-                  <form className="event-form" onSubmit={submitReport}>
+                  <form className="event-form report-form" onSubmit={submitReport}>
+                    <div className="form-field report-cover-info">
+                      <span>Event (cover details)</span>
+                      <p className="form-hint">
+                        {reportModal.eventName || "Event"} · {reportModal.startDate || "—"} · {reportModal.eventVenue || "—"} · {reportModal.eventFacilitator || "—"}
+                      </p>
+                    </div>
                     <label className="form-field">
-                      <span>Event</span>
-                      <input type="text" value={reportModal.eventName || "Event"} readOnly />
+                      <span>Executive summary <em>(required)</em></span>
+                      <p className="form-hint">Brief overview, goal, and main outcome</p>
+                      <textarea
+                        value={reportForm.executiveSummary}
+                        onChange={handleReportFormChange("executiveSummary")}
+                        placeholder="e.g. The workshop aimed to… and achieved…"
+                        rows={3}
+                      />
                     </label>
                     <label className="form-field">
-                      <span>Report (PDF, max 10MB)</span>
-                      <input type="file" accept=".pdf,application/pdf" onChange={handleReportFileChange} />
+                      <span>Attendance <em>(required)</em></span>
+                      <p className="form-hint">Total attendees and breakdown if relevant</p>
+                      <textarea
+                        value={reportForm.attendance}
+                        onChange={handleReportFormChange("attendance")}
+                        placeholder="e.g. 45 participants (30 staff, 15 external)"
+                        rows={2}
+                      />
                     </label>
-
+                    <label className="form-field">
+                      <span>Program / agenda <em>(required)</em></span>
+                      <p className="form-hint">Sessions or activities with times</p>
+                      <textarea
+                        value={reportForm.programAgenda}
+                        onChange={handleReportFormChange("programAgenda")}
+                        placeholder="e.g. 10:00–10:30 Intro, 10:30–12:00 Session 1…"
+                        rows={4}
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Outcomes and learnings <em>(required)</em></span>
+                      <p className="form-hint">Key takeaways and feedback highlights</p>
+                      <textarea
+                        value={reportForm.outcomesLearnings}
+                        onChange={handleReportFormChange("outcomesLearnings")}
+                        placeholder="e.g. Participants reported… Next steps include…"
+                        rows={4}
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Follow-up <em>(optional)</em></span>
+                      <p className="form-hint">Action items or next steps</p>
+                      <textarea
+                        value={reportForm.followUp}
+                        onChange={handleReportFormChange("followUp")}
+                        placeholder="e.g. Send follow-up survey by…"
+                        rows={2}
+                      />
+                    </label>
+                    <div className="form-field">
+                      <span>Appendix <em>(optional)</em></span>
+                      <p className="form-hint">Any additional notes, photos summary, or supporting material</p>
+                      <textarea
+                        value={reportForm.appendix}
+                        onChange={handleReportFormChange("appendix")}
+                        placeholder="e.g. Key photos uploaded separately; feedback quotes…"
+                        rows={2}
+                      />
+                      <p className="form-hint" style={{ marginTop: "8px" }}>Upload photos to include in the report PDF</p>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        multiple
+                        onChange={handleAppendixPhotosChange}
+                        className="report-appendix-file-input"
+                      />
+                      {reportAppendixPhotos.length > 0 ? (
+                        <ul className="report-appendix-photos">
+                          {reportAppendixPhotos.map((file, index) => (
+                            <li key={index}>
+                              <span className="report-appendix-photo-name">{file.name}</span>
+                              <button
+                                type="button"
+                                className="report-appendix-photo-remove"
+                                onClick={() => removeAppendixPhoto(index)}
+                                aria-label={`Remove ${file.name}`}
+                              >
+                                ×
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                    <p className="form-hint report-save-hint">
+                      Report will be saved as PDF: <strong>{getExpectedReportFilename(reportModal.eventName, reportModal.startDate)}</strong>
+                    </p>
                     {reportModal.status === "error" ? (
                       <p className="form-error">{reportModal.error}</p>
                     ) : null}
@@ -4789,7 +5063,7 @@ export default function App() {
                         Cancel
                       </button>
                       <button type="submit" className="primary-action" disabled={reportModal.status === "loading"}>
-                        {reportModal.status === "loading" ? "Uploading..." : "Upload"}
+                        {reportModal.status === "loading" ? "Generating & uploading…" : "Generate PDF & upload"}
                       </button>
                     </div>
                   </form>
@@ -4801,46 +5075,109 @@ export default function App() {
       }
 
       if (isPublications) {
-        const getPubDetails = (item) => {
+        /** Format a single publication as MLA-style citation. Uses *asterisks* for italicized container titles. */
+        const formatPublicationMLA = (item) => {
           const pt = item.pub_type;
-          if (pt === "webpage") return [
-            item.author && `Author: ${item.author}`,
-            item.website_name && `Site: ${item.website_name}`,
-            item.publication_date && `Date: ${item.publication_date}`,
-          ].filter(Boolean);
-          if (pt === "journal_article") return [
-            item.author && `Author: ${item.author}`,
-            item.journal_name && `Journal: ${item.journal_name}`,
-            [item.volume && `Vol. ${item.volume}`, item.issue && `No. ${item.issue}`, item.pages && `pp. ${item.pages}`].filter(Boolean).join(", "),
-            item.year && `Year: ${item.year}`,
-            item.doi && `DOI: ${item.doi}`,
-          ].filter(Boolean);
-          if (pt === "book") return [
-            item.author && `Author: ${item.author}`,
-            item.publisher && `Publisher: ${item.publisher}`,
-            [item.edition && `${item.edition} Ed.`, item.year].filter(Boolean).join(", "),
-          ].filter(Boolean);
-          if (pt === "report") return [
-            item.organization && `Org: ${item.organization}`,
-            item.publisher && `Publisher: ${item.publisher}`,
-            item.year && `Year: ${item.year}`,
-          ].filter(Boolean);
-          if (pt === "video") return [
-            item.creator && `Creator: ${item.creator}`,
-            item.platform && `Platform: ${item.platform}`,
-            item.publication_date && `Date: ${item.publication_date}`,
-          ].filter(Boolean);
-          if (pt === "online_newspaper") return [
-            item.author && `Author: ${item.author}`,
-            item.newspaper_name && `Source: ${item.newspaper_name}`,
-            item.publication_date && `Date: ${item.publication_date}`,
-          ].filter(Boolean);
-          return [];
+          const author = item.author?.trim();
+          const addPeriod = (s) => (s && !/\.$/.test(s) ? `${s}.` : s || "");
+
+          if (pt === "webpage") {
+            const pageTitle = item.page_title?.trim();
+            const site = item.website_name?.trim();
+            const date = item.publication_date?.trim();
+            const url = item.url?.trim();
+            const parts = [];
+            if (author) parts.push(addPeriod(author));
+            if (pageTitle) parts.push(`"${addPeriod(pageTitle).replace(/\.$/, "")}"`);
+            if (site) parts.push(`*${addPeriod(site).replace(/\.$/, "")}*`);
+            if (date) parts.push(date);
+            if (url) parts.push(url);
+            return parts.join(", ");
+          }
+          if (pt === "journal_article") {
+            const artTitle = item.article_title?.trim();
+            const journal = item.journal_name?.trim();
+            const vol = item.volume?.trim();
+            const no = item.issue?.trim();
+            const year = item.year?.trim();
+            const pp = item.pages?.trim();
+            const doi = item.doi?.trim();
+            const parts = [];
+            if (author) parts.push(addPeriod(author));
+            if (artTitle) parts.push(`"${addPeriod(artTitle).replace(/\.$/, "")}"`);
+            if (journal) parts.push(`*${addPeriod(journal).replace(/\.$/, "")}*`);
+            const volNo = [vol && `vol. ${vol}`, no && `no. ${no}`].filter(Boolean).join(", ");
+            if (volNo) parts.push(volNo);
+            if (year) parts.push(year);
+            if (pp) parts.push(`pp. ${pp}`);
+            if (doi) parts.push(`https://doi.org/${doi.replace(/^https?:\/\/doi\.org\/?/i, "")}`);
+            return parts.join(", ");
+          }
+          if (pt === "book") {
+            const title = item.book_title?.trim();
+            const pub = item.publisher?.trim();
+            const year = item.year?.trim();
+            const ed = item.edition?.trim();
+            const parts = [];
+            if (author) parts.push(addPeriod(author));
+            if (title) parts.push(`*${addPeriod(title).replace(/\.$/, "")}*`);
+            if (ed) parts.push(`${ed} ed.`);
+            if (pub) parts.push(pub);
+            if (year) parts.push(year);
+            return parts.join(", ");
+          }
+          if (pt === "report") {
+            const org = item.organization?.trim();
+            const title = item.report_title?.trim();
+            const pub = item.publisher?.trim();
+            const year = item.year?.trim();
+            const parts = [];
+            if (org) parts.push(addPeriod(org));
+            if (title) parts.push(`*${addPeriod(title).replace(/\.$/, "")}*`);
+            if (pub) parts.push(pub);
+            if (year) parts.push(year);
+            return parts.join(", ");
+          }
+          if (pt === "video") {
+            const creator = item.creator?.trim();
+            const title = item.video_title?.trim();
+            const platform = item.platform?.trim();
+            const date = item.publication_date?.trim();
+            const url = item.url?.trim();
+            const parts = [];
+            if (creator) parts.push(addPeriod(creator));
+            if (title) parts.push(`"${addPeriod(title).replace(/\.$/, "")}"`);
+            if (platform) parts.push(`*${addPeriod(platform).replace(/\.$/, "")}*`);
+            if (date) parts.push(date);
+            if (url) parts.push(url);
+            return parts.join(", ");
+          }
+          if (pt === "online_newspaper") {
+            const artTitle = item.article_title?.trim() || item.title?.trim();
+            const paper = item.newspaper_name?.trim();
+            const date = item.publication_date?.trim();
+            const url = item.url?.trim();
+            const parts = [];
+            if (author) parts.push(addPeriod(author));
+            if (artTitle) parts.push(`"${addPeriod(artTitle).replace(/\.$/, "")}"`);
+            if (paper) parts.push(`*${addPeriod(paper).replace(/\.$/, "")}*`);
+            if (date) parts.push(date);
+            if (url) parts.push(url);
+            return parts.join(", ");
+          }
+          return item.title || item.name || "Untitled";
         };
 
-        const getSubjectTitle = (item) =>
-          item.article_title || item.book_title || item.report_title ||
-          item.video_title || item.page_title || item.title || "Untitled";
+        const renderMlaCitation = (citation) => {
+          if (!citation) return null;
+          return citation.split(/(\*[^*]+\*)/g).map((seg, i) =>
+            seg.startsWith("*") && seg.endsWith("*") ? (
+              <em key={i} className="mla-italic">{seg.slice(1, -1)}</em>
+            ) : (
+              <span key={i}>{seg}</span>
+            )
+          );
+        };
 
         return (
           <div className="primary-column">
@@ -4848,6 +5185,20 @@ export default function App() {
               <button type="button" className="primary-action" onClick={handlePublicationOpen}>
                 + New Publication
               </button>
+              <label className="publication-filter-label">
+                Type:
+                <select
+                  value={publicationTypeFilter}
+                  onChange={(e) => setPublicationTypeFilter(e.target.value)}
+                  className="publication-sort-select"
+                  aria-label="Filter by publication type"
+                >
+                  <option value="">All types</option>
+                  {Object.entries(PUB_META).map(([key, { label }]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </label>
               <label className="publication-sort-label">
                 Sort:
                 <select
@@ -4864,62 +5215,60 @@ export default function App() {
               </label>
             </div>
 
-            {/* ── Publications card grid ── */}
+            {/* ── Publications list (MLA style) ── */}
             {publicationsState.status === "loading" ? (
               <div className="pub-list-empty"><p>Loading publications…</p></div>
             ) : publicationsState.status === "error" ? (
               <div className="pub-list-empty"><p className="form-error">{publicationsState.error}</p></div>
-            ) : publicationsState.status === "ready" && publicationsState.items.length === 0 ? (
+            ) : publicationsState.status === "ready" && (!Array.isArray(publicationsState.items) || publicationsState.items.length === 0) ? (
               <div className="pub-list-empty">
                 <span className="pub-empty-icon">📭</span>
                 <p className="pub-empty-title">No publications yet</p>
                 <p className="pub-empty-sub">Click <strong>+ New Publication</strong> to add your first one.</p>
               </div>
-            ) : (
-              <div className="pub-card-grid">
-                {publicationsState.items.map((item) => {
+            ) : (() => {
+              const allItems = Array.isArray(publicationsState.items) ? publicationsState.items : [];
+              const filteredItems = !publicationTypeFilter
+                ? allItems
+                : allItems.filter((item) => (item.pub_type || "") === publicationTypeFilter);
+              return filteredItems.length === 0 && allItems.length > 0 ? (
+                <div className="pub-list-empty">
+                  <p className="pub-empty-title">No publications of this type</p>
+                  <p className="pub-empty-sub">Try selecting &quot;All types&quot; or another type.</p>
+                </div>
+              ) : (
+              <ul className="pub-mla-list" aria-label="Publications">
+                {filteredItems.map((item) => {
                   const meta = PUB_META[item.pub_type] || { icon: "📋", label: item.pub_type || "Unknown", color: "#666" };
-                  const details = getPubDetails(item);
-                  const subject = getSubjectTitle(item);
+                  const citation = formatPublicationMLA(item);
                   const linkUrl = item.web_view_link || item.url;
-                  const linkLabel = item.web_view_link ? "View File" : item.url ? "Visit URL" : null;
+                  const linkLabel = item.web_view_link ? "View file" : item.url ? "Visit URL" : null;
                   return (
-                    <div key={item.id} className="pub-card">
-                      <div className="pub-card-top">
-                        <span className="pub-card-icon" style={{ color: meta.color }}>{meta.icon}</span>
+                    <li key={item.id} className="pub-mla-list-item">
+                      <div className="pub-mla-citation">
+                        {renderMlaCitation(citation)}
+                      </div>
+                      {item.others?.trim() && (
+                        <p className="pub-mla-notes">{item.others}</p>
+                      )}
+                      <div className="pub-mla-meta">
                         <span className={`pub-type-badge pub-type-${item.pub_type || "unknown"}`}>{meta.label}</span>
-                      </div>
-                      <div className="pub-card-body">
-                        <p className="pub-card-label">{item.name}</p>
-                        <h4 className="pub-card-title">{subject}</h4>
-                        {details.length > 0 && (
-                          <ul className="pub-card-meta">
-                            {details.map((d, i) => d && <li key={i}>{d}</li>)}
-                          </ul>
-                        )}
-                        {item.others && (
-                          <p className="pub-card-notes">{item.others}</p>
-                        )}
-                      </div>
-                      <div className="pub-card-footer">
-                        <span className="pub-card-date">{item.created_at ? new Date(item.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : ""}</span>
-                        {linkLabel ? (
+                        {linkLabel && (
                           <button
                             type="button"
-                            className="pub-card-action"
+                            className="pub-mla-link"
                             onClick={() => window.open(linkUrl, "_blank", "noopener,noreferrer")}
                           >
                             {linkLabel} →
                           </button>
-                        ) : (
-                          <span className="no-link-text">No link</span>
                         )}
                       </div>
-                    </div>
+                    </li>
                   );
                 })}
-              </div>
-            )}
+              </ul>
+              );
+            })()}
 
 
             {/* ── Publication type-selection modal ── */}

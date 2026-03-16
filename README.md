@@ -87,6 +87,9 @@ Notes:
 - Event closure:
   - When a completed event has a report uploaded, user can close it
   - `PATCH /events/{event_id}/status` sets status to `closed`
+- Event report:
+  - Users fill a form (Executive summary, Attendance, Program/agenda, Outcomes and learnings, optional Follow-up and Appendix); the app generates a PDF and uploads it with the required filename `{EventName}_{StartDate}_Report.pdf`.
+  - Cover (event name, date, venue, facilitator, report date) is auto-filled from the event.
 - Approval workflow:
   - Client submits event with `submit_for_approval` -> `POST /events`
   - Server creates `approval_requests` entry (status `pending`)

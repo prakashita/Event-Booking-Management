@@ -1,4 +1,5 @@
 import os
+import re
 import base64
 import logging
 from datetime import datetime
@@ -30,6 +31,26 @@ from schemas import (
 
 router = APIRouter(prefix="/events", tags=["Events"])
 logger = logging.getLogger("event-booking.events")
+
+# Report filename format: {SanitizedEventName}_{StartDate}_Report.pdf
+REPORT_FILENAME_SUFFIX = "_Report.pdf"
+
+
+def _sanitize_for_report_filename(name: str) -> str:
+    """Sanitize event name for report filename: alphanumeric, spaces, hyphens only; spaces -> underscores."""
+    if not name or not name.strip():
+        return "Event"
+    # Keep letters, digits, spaces, hyphens; replace other chars with space
+    cleaned = re.sub(r"[^\w\s-]", "", name, flags=re.IGNORECASE)
+    cleaned = re.sub(r"[\s]+", "_", cleaned.strip())
+    return cleaned or "Event"
+
+
+def get_expected_report_filename(event_name: str, start_date: str) -> str:
+    """Return the required report filename for an event: EventName_YYYY-MM-DD_Report.pdf"""
+    sanitized = _sanitize_for_report_filename(event_name or "Event")
+    date_part = (start_date or "").strip() or "0000-00-00"
+    return f"{sanitized}_{date_part}{REPORT_FILENAME_SUFFIX}"
 
 
 async def sync_event_to_google_calendar(event: Event, user: User) -> None:
@@ -450,6 +471,13 @@ async def upload_event_report(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
     if file.content_type not in {"application/pdf"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
+
+    expected_name = get_expected_report_filename(event.name, event.start_date)
+    if file.filename.strip() != expected_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Report filename must be exactly: {expected_name}",
+        )
 
     contents = await file.read()
     max_size = 10 * 1024 * 1024
