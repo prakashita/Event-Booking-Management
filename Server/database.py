@@ -120,13 +120,13 @@ async def init_db():
     )
     
     # Import models here to avoid circular imports
-    from models import ApprovalRequest, ChatConversation, ChatMessage, Event, FacilityManagerRequest, Invite, ItRequest, MarketingRequest, PendingRoleAssignment, Publication, User, Venue
+    from models import ApprovalRequest, ChatConversation, ChatMessage, Event, FacilityManagerRequest, Invite, IQACFile, ItRequest, MarketingRequest, PendingRoleAssignment, Publication, User, Venue
     from idempotency import IdempotencyRecord
 
     # Initialize Beanie with the database and document models
     await init_beanie(
         database=client[DB_NAME],
-        document_models=[User, Venue, Event, ApprovalRequest, FacilityManagerRequest, MarketingRequest, ItRequest, Invite, Publication, PendingRoleAssignment, ChatConversation, ChatMessage, IdempotencyRecord]
+        document_models=[User, Venue, Event, ApprovalRequest, FacilityManagerRequest, MarketingRequest, ItRequest, Invite, Publication, PendingRoleAssignment, ChatConversation, ChatMessage, IQACFile, IdempotencyRecord]
     )
 
 async def close_db():

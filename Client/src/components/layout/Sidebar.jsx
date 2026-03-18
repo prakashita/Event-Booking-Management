@@ -22,6 +22,7 @@ export default function Sidebar({
         <nav className="menu-list">
           {visibleMenuItems.map((item) => {
             const path = VIEW_TO_PATH[item.id] ?? "/";
+            const iconPath = item.icon || "M3 10.5 12 3l9 7.5v9.5H3z";
             return (
               <NavLink
                 key={item.id}
@@ -29,7 +30,7 @@ export default function Sidebar({
                 className={({ isActive }) => `menu-item ${isActive ? "active" : ""}`}
               >
                 <span className="menu-icon">
-                  <SimpleIcon path="M3 10.5 12 3l9 7.5v9.5H3z" />
+                  <SimpleIcon path={iconPath} />
                 </span>
                 {item.label}
               </NavLink>

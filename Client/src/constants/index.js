@@ -11,6 +11,7 @@ export const ROUTES = {
   APPROVALS: "/approvals",
   REQUIREMENTS: "/requirements",
   PUBLICATIONS: "/publications",
+  IQAC_DATA: "/iqac-data",
   ADMIN: "/admin",
 };
 
@@ -23,6 +24,7 @@ export const PATH_TO_VIEW = {
   [ROUTES.APPROVALS]: "approvals",
   [ROUTES.REQUIREMENTS]: "requirements",
   [ROUTES.PUBLICATIONS]: "publications",
+  [ROUTES.IQAC_DATA]: "iqac-data",
   [ROUTES.ADMIN]: "admin",
 };
 
@@ -37,6 +39,15 @@ export const stats = [
   { label: "Automated Reminders", value: "98%" }
 ];
 
+/** Folder/archive icon path for IQAC (folder with doc). */
+export const MENU_ICON_IQAC = "M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm2 0v4h12V5H6zm0 6v8h12v-8H6z";
+
+/**
+ * Roles that can access IQAC Data Collection (menu + all APIs).
+ * Must match Server/routers/deps.py IQAC_ALLOWED_ROLES.
+ */
+export const ROLES_WITH_IQAC_ACCESS = ["iqac", "admin", "registrar"];
+
 export const menuItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "my-events", label: "My Events" },
@@ -45,6 +56,7 @@ export const menuItems = [
   { id: "approvals", label: "Approvals" },
   { id: "requirements", label: "Requirements" },
   { id: "publications", label: "Publications" },
+  { id: "iqac-data", label: "IQAC Data Collection", icon: MENU_ICON_IQAC },
   { id: "admin", label: "Admin Console" }
 ];
 

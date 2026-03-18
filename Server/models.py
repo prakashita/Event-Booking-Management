@@ -264,3 +264,25 @@ class ChatMessage(Document):
 
     class Settings:
         name = "chat_messages"
+
+
+class IQACFile(Document):
+    """File uploaded under IQAC data collection (criterion / subfolder / item)."""
+    criterion: int  # 1-7
+    sub_folder: str  # e.g. "1.1", "1.2"
+    item: str  # e.g. "1.1.1", "1.1.2"
+    file_name: str
+    file_path: str  # path relative to uploads root or absolute
+    uploaded_by: str  # user id
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    description: Optional[str] = None
+    size: int = 0  # bytes
+
+    class Settings:
+        name = "iqac_files"
+        indexes = [
+            "criterion",
+            "sub_folder",
+            "item",
+            ("criterion", "sub_folder", "item"),
+        ]

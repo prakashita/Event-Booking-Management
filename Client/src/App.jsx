@@ -5,17 +5,33 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import { menuItems, preferenceItems, inboxItems, eventsTable, PUB_META, PATH_TO_VIEW, ROUTES } from "./constants";
+import { menuItems, preferenceItems, inboxItems, eventsTable, PUB_META, PATH_TO_VIEW, ROUTES, ROLES_WITH_IQAC_ACCESS } from "./constants";
 import { formatISTTime, normalizeTimeToHHMMSS, parse24ToTimeParts, timePartsTo24 } from "./utils/format";
 import { GoogleIcon, SimpleIcon, PlaceholderCard } from "./components/icons";
 import { LoginPage, Sidebar } from "./components/layout";
 import { Modal, StatusMessage } from "./components/ui";
+import IqacDataPage from "./components/IqacDataPage";
 import api from "./services/api";
+
+/** Normalize path so "/event reports" or "/event%20reports" map to canonical routes. */
+function normalizePathname(pathname) {
+  if (!pathname || typeof pathname !== "string") return pathname;
+  const decoded = decodeURIComponent(pathname);
+  if (decoded === "/event reports") return ROUTES.EVENT_REPORTS;
+  return pathname;
+}
 
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
-  const activeView = PATH_TO_VIEW[location.pathname] ?? "dashboard";
+  const pathname = normalizePathname(location.pathname);
+  const activeView = PATH_TO_VIEW[pathname] ?? "dashboard";
+
+  useEffect(() => {
+    if (pathname !== location.pathname && PATH_TO_VIEW[pathname]) {
+      navigate(pathname, { replace: true });
+    }
+  }, [pathname, location.pathname, navigate]);
 
   const googleButtonRef = useRef(null);
   const [status, setStatus] = useState({ type: "idle", message: "" });
@@ -260,6 +276,7 @@ export default function App() {
   const canAccessAdminConsole = isAdmin || isRegistrar;
   const canAccessApprovals = isRegistrar;
   const canAccessRequirements = isFacilityManagerRole || isMarketingRole || isItRole;
+  const canAccessIqac = ROLES_WITH_IQAC_ACCESS.includes(normalizedUserRole);
   const defaultFacilitator = (user?.name || "").trim();
 
   const googleClientId =
@@ -367,7 +384,8 @@ export default function App() {
         throw new Error("Unable to load users.");
       }
       const data = await res.json();
-      setAdminUsersState({ status: "ready", items: data, error: "" });
+      const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+      setAdminUsersState({ status: "ready", items, error: "" });
     } catch (err) {
       setAdminUsersState({ status: "error", items: [], error: err?.message || "Unable to load users." });
     }
@@ -384,7 +402,8 @@ export default function App() {
         throw new Error("Unable to load venues.");
       }
       const data = await res.json();
-      setAdminVenuesState({ status: "ready", items: data, error: "" });
+      const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+      setAdminVenuesState({ status: "ready", items, error: "" });
     } catch (err) {
       setAdminVenuesState({ status: "error", items: [], error: err?.message || "Unable to load venues." });
     }
@@ -401,7 +420,8 @@ export default function App() {
         throw new Error("Unable to load events.");
       }
       const data = await res.json();
-      setAdminEventsState({ status: "ready", items: data, error: "" });
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setAdminEventsState({ status: "ready", items, error: "" });
     } catch (err) {
       setAdminEventsState({ status: "error", items: [], error: err?.message || "Unable to load events." });
     }
@@ -418,7 +438,8 @@ export default function App() {
         throw new Error("Unable to load approvals.");
       }
       const data = await res.json();
-      setAdminApprovalsState({ status: "ready", items: data, error: "" });
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setAdminApprovalsState({ status: "ready", items, error: "" });
     } catch (err) {
       setAdminApprovalsState({ status: "error", items: [], error: err?.message || "Unable to load approvals." });
     }
@@ -435,7 +456,8 @@ export default function App() {
         throw new Error("Unable to load marketing requests.");
       }
       const data = await res.json();
-      setAdminMarketingState({ status: "ready", items: data, error: "" });
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setAdminMarketingState({ status: "ready", items, error: "" });
     } catch (err) {
       setAdminMarketingState({ status: "error", items: [], error: err?.message || "Unable to load marketing requests." });
     }
@@ -452,7 +474,8 @@ export default function App() {
         throw new Error("Unable to load IT requests.");
       }
       const data = await res.json();
-      setAdminItState({ status: "ready", items: data, error: "" });
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setAdminItState({ status: "ready", items, error: "" });
     } catch (err) {
       setAdminItState({ status: "error", items: [], error: err?.message || "Unable to load IT requests." });
     }
@@ -469,7 +492,8 @@ export default function App() {
         throw new Error("Unable to load invites.");
       }
       const data = await res.json();
-      setAdminInvitesState({ status: "ready", items: data, error: "" });
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setAdminInvitesState({ status: "ready", items, error: "" });
     } catch (err) {
       setAdminInvitesState({ status: "error", items: [], error: err?.message || "Unable to load invites." });
     }
@@ -486,7 +510,8 @@ export default function App() {
         throw new Error("Unable to load publications.");
       }
       const data = await res.json();
-      setAdminPublicationsState({ status: "ready", items: data, error: "" });
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setAdminPublicationsState({ status: "ready", items, error: "" });
     } catch (err) {
       setAdminPublicationsState({ status: "error", items: [], error: err?.message || "Unable to load publications." });
     }
@@ -1161,7 +1186,8 @@ export default function App() {
         throw new Error("Unable to load venues.");
       }
       const data = await res.json();
-      setVenuesState({ status: "ready", items: data, error: "" });
+      const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+      setVenuesState({ status: "ready", items, error: "" });
     } catch (err) {
       setVenuesState({
         status: "error",
@@ -1244,7 +1270,8 @@ export default function App() {
           throw new Error("Unable to load event reports.");
         }
         const reportsData = await reportsRes.json();
-        setEventsState({ status: "ready", items: reportsData, error: "" });
+        const items = Array.isArray(reportsData?.items) ? reportsData.items : [];
+        setEventsState({ status: "ready", items, error: "" });
         return;
       }
 
@@ -1413,7 +1440,8 @@ export default function App() {
         throw new Error("Unable to load approvals.");
       }
       const data = await res.json();
-      setApprovalsState({ status: "ready", items: data, error: "" });
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setApprovalsState({ status: "ready", items, error: "" });
     } catch (err) {
       setApprovalsState({
         status: "error",
@@ -1899,11 +1927,12 @@ export default function App() {
     if (
       (activeView === "approvals" && !canAccessApprovals) ||
       (activeView === "requirements" && !canAccessRequirements) ||
-      (activeView === "event-reports" && !isAdmin && !isRegistrar)
+      (activeView === "event-reports" && !isAdmin && !isRegistrar) ||
+      (activeView === "iqac-data" && !canAccessIqac)
     ) {
       navigate(ROUTES.DASHBOARD);
     }
-  }, [activeView, canAccessApprovals, canAccessRequirements, isAdmin, isRegistrar, navigate]);
+  }, [activeView, canAccessApprovals, canAccessRequirements, canAccessIqac, isAdmin, isRegistrar, navigate]);
 
   useEffect(() => {
     const showApprovalsOrRequirements =
@@ -3321,6 +3350,7 @@ export default function App() {
       (isApprovals && canAccessApprovals) || (isRequirements && canAccessRequirements);
     const isPublications = activeView === "publications";
     const isAdminView = activeView === "admin";
+    const isIqacData = activeView === "iqac-data";
     const visibleMenuItems = menuItems.filter((item) => {
       if (item.id === "admin" && !canAccessAdminConsole) {
         return false;
@@ -3332,6 +3362,9 @@ export default function App() {
         return false;
       }
       if (item.id === "requirements" && !canAccessRequirements) {
+        return false;
+      }
+      if (item.id === "iqac-data" && !canAccessIqac) {
         return false;
       }
       return true;
@@ -3599,6 +3632,7 @@ export default function App() {
                             <option value="facility_manager">Facility Manager</option>
                             <option value="marketing">Marketing</option>
                             <option value="it">IT</option>
+                            <option value="iqac">IQAC</option>
                           </select>
                         </div>
                         <div className="admin-cell">
@@ -5074,6 +5108,17 @@ export default function App() {
         );
       }
 
+      if (isIqacData) {
+        if (!canAccessIqac) {
+          return (
+            <div className="admin-empty">
+              <p>IQAC access required.</p>
+            </div>
+          );
+        }
+        return <IqacDataPage />;
+      }
+
       if (isPublications) {
         /** Format a single publication as MLA-style citation. Uses *asterisks* for italicized container titles. */
         const formatPublicationMLA = (item) => {
@@ -6168,6 +6213,7 @@ export default function App() {
                     <option value="facility_manager">Facility Manager</option>
                     <option value="marketing">Marketing</option>
                     <option value="it">IT</option>
+                    <option value="iqac">IQAC</option>
                   </select>
                 </label>
                 {addUserModal.error ? (
@@ -6582,15 +6628,17 @@ export default function App() {
                     ? "Event Reports"
                     : isPublications
                       ? "Publications"
-                      : isCalendar
-                        ? "Calendar View"
-                        : isApprovals
-                          ? "Approvals"
-                          : isRequirements
-                            ? "Requirements"
-                            : isAdminView
-                              ? "Admin Console"
-                              : "Dashboard Overview"}
+                      : isIqacData
+                        ? "IQAC Data Collection"
+                        : isCalendar
+                          ? "Calendar View"
+                          : isApprovals
+                            ? "Approvals"
+                            : isRequirements
+                              ? "Requirements"
+                              : isAdminView
+                                ? "Admin Console"
+                                : "Dashboard Overview"}
               </p>
             </div>
             <div className="search-bar">

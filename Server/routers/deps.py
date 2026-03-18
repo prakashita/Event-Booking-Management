@@ -50,3 +50,17 @@ async def require_admin(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Admin access required')
     return user
 
+
+# Roles that may access IQAC Data Collection (criteria, upload/list/download/delete).
+# Frontend must mirror this for sidebar visibility and route guard (see ROLES_WITH_IQAC_ACCESS in Client).
+IQAC_ALLOWED_ROLES = frozenset({"iqac", "admin", "registrar"})
+
+
+async def require_iqac(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> User:
+    user = await get_current_user(credentials)
+    if (user.role or '').strip().lower() not in IQAC_ALLOWED_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='IQAC access required')
+    return user
+
