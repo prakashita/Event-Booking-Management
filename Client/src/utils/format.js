@@ -78,3 +78,14 @@ export function timePartsTo24(parts) {
   }
   return `${String(h).padStart(2, "0")}:${m}`;
 }
+
+/**
+ * Facility / marketing / IT requests use status "approved" in the API; show "accepted" in the UI.
+ * Registrar approval keeps the raw "approved" label elsewhere.
+ */
+export function formatRequirementDecisionStatusLabel(status) {
+  if (status == null || status === "") return "";
+  const s = String(status).trim().toLowerCase();
+  if (s === "approved" || s === "accepted") return "accepted";
+  return String(status).trim();
+}

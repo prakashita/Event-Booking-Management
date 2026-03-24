@@ -26,11 +26,24 @@ from schemas import (
     EventDetailsResponse,
     EventResponse,
     EventStatusUpdate,
+    FacilityManagerRequestResponse,
+    ItRequestResponse,
+    MarketingRequestResponse,
     PaginatedResponse,
 )
 
 router = APIRouter(prefix="/events", tags=["Events"])
 logger = logging.getLogger("event-booking.events")
+
+
+def _requirement_status_for_event_details(
+    row: FacilityManagerRequestResponse | MarketingRequestResponse | ItRequestResponse,
+) -> FacilityManagerRequestResponse | MarketingRequestResponse | ItRequestResponse:
+    """Event details UI shows 'accepted' for facility/marketing/IT; registrar stays 'approved'."""
+    if (row.status or "").strip() == "approved":
+        return row.model_copy(update={"status": "accepted"})
+    return row
+
 
 # Report filename format: {SanitizedEventName}_{StartDate}_Report.pdf
 REPORT_FILENAME_SUFFIX = "_Report.pdf"
@@ -296,9 +309,13 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
     return EventDetailsResponse(
         event=serialize_event(event),
         approval_request=serialize_approval(approval_request) if approval_request else None,
-        facility_requests=[serialize_facility(r) for r in facility_requests],
-        marketing_requests=[serialize_marketing(r) for r in marketing_requests],
-        it_requests=[serialize_it(r) for r in it_requests],
+        facility_requests=[
+            _requirement_status_for_event_details(serialize_facility(r)) for r in facility_requests
+        ],
+        marketing_requests=[
+            _requirement_status_for_event_details(serialize_marketing(r)) for r in marketing_requests
+        ],
+        it_requests=[_requirement_status_for_event_details(serialize_it(r)) for r in it_requests],
     )
 
 

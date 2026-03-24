@@ -6,7 +6,13 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import { menuItems, preferenceItems, inboxItems, eventsTable, PUB_META, PATH_TO_VIEW, ROUTES, ROLES_WITH_IQAC_ACCESS } from "./constants";
-import { formatISTTime, normalizeTimeToHHMMSS, parse24ToTimeParts, timePartsTo24 } from "./utils/format";
+import {
+  formatISTTime,
+  formatRequirementDecisionStatusLabel,
+  normalizeTimeToHHMMSS,
+  parse24ToTimeParts,
+  timePartsTo24
+} from "./utils/format";
 import { GoogleIcon, SimpleIcon, PlaceholderCard } from "./components/icons";
 import { LoginPage, Sidebar } from "./components/layout";
 import { Modal, StatusMessage } from "./components/ui";
@@ -6328,7 +6334,9 @@ export default function App() {
                         {eventDetailsModal.details.facility_requests.map((r, i) => (
                           <div key={r.id || i} className="details-row">
                             <span>To: {r.requested_to || "—"}</span>
-                            <span className={`status-pill ${r.status}`}>{r.status}</span>
+                            <span className={`status-pill ${r.status}`}>
+                              {formatRequirementDecisionStatusLabel(r.status)}
+                            </span>
                             {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
                           </div>
                         ))}
@@ -6340,7 +6348,9 @@ export default function App() {
                         {eventDetailsModal.details.marketing_requests.map((r, i) => (
                           <div key={r.id || i} className="details-row">
                             <span>To: {r.requested_to || "—"}</span>
-                            <span className={`status-pill ${r.status}`}>{r.status}</span>
+                            <span className={`status-pill ${r.status}`}>
+                              {formatRequirementDecisionStatusLabel(r.status)}
+                            </span>
                             {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
                           </div>
                         ))}
@@ -6352,7 +6362,9 @@ export default function App() {
                         {eventDetailsModal.details.it_requests.map((r, i) => (
                           <div key={r.id || i} className="details-row">
                             <span>To: {r.requested_to || "—"}</span>
-                            <span className={`status-pill ${r.status}`}>{r.status}</span>
+                            <span className={`status-pill ${r.status}`}>
+                              {formatRequirementDecisionStatusLabel(r.status)}
+                            </span>
                             {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
                           </div>
                         ))}
