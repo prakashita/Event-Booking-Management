@@ -247,9 +247,14 @@ class ChatConversation(Document):
     participants: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+    # "direct" = 1:1 thread; "event" = group for one event (registrar + creator + acceptors)
+    thread_kind: str = Field(default="direct")
+    event_id: Optional[str] = None
+    title: Optional[str] = None
 
     class Settings:
         name = "chat_conversations"
+        indexes = ["event_id"]
 
 
 class ChatMessage(Document):

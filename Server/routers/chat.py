@@ -15,6 +15,7 @@ from models import ChatAttachment, ChatConversation, ChatMessage, User
 from routers.deps import get_current_user
 from schemas import (
     ChatConversationCreate,
+    ChatConversationListItem,
     ChatConversationResponse,
     ChatMessageCreate,
     ChatMessageResponse,
@@ -42,10 +43,16 @@ except OSError:
     os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
-def serialize_message(message: ChatMessage) -> ChatMessageResponse:
+def serialize_message(
+    message: ChatMessage,
+    conversation: Optional[ChatConversation] = None,
+) -> ChatMessageResponse:
     created_at = message.created_at
     if created_at and created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=timezone.utc)
+    thread_kind = None
+    if conversation is not None:
+        thread_kind = getattr(conversation, "thread_kind", None) or "direct"
     return ChatMessageResponse(
         id=str(message.id),
         conversation_id=message.conversation_id,
@@ -56,6 +63,7 @@ def serialize_message(message: ChatMessage) -> ChatMessageResponse:
         attachments=message.attachments,
         read_by=message.read_by,
         created_at=created_at,
+        conversation_thread_kind=thread_kind,
     )
 
 
@@ -64,6 +72,9 @@ def serialize_conversation(conversation: ChatConversation) -> ChatConversationRe
         id=str(conversation.id),
         participants=conversation.participants,
         updated_at=conversation.updated_at,
+        thread_kind=getattr(conversation, "thread_kind", None) or "direct",
+        event_id=getattr(conversation, "event_id", None),
+        title=getattr(conversation, "title", None),
     )
 
 
@@ -145,9 +156,44 @@ async def get_or_create_conversation(user_a: str, user_b: str) -> ChatConversati
         {"participants": {"$all": participants, "$size": 2}}
     ).sort("-updated_at").first_or_none()
     if not conversation:
-        conversation = ChatConversation(participants=participants)
+        conversation = ChatConversation(participants=participants, thread_kind="direct")
         await conversation.insert()
     return conversation
+
+
+@router.get("/conversations/me", response_model=list[ChatConversationListItem])
+async def list_my_conversations(current_user: User = Depends(get_current_user)):
+    uid = str(current_user.id)
+    convs = await ChatConversation.find({"participants": uid}).sort("-updated_at").to_list()
+    items: List[ChatConversationListItem] = []
+    for conv in convs:
+        kind = getattr(conv, "thread_kind", None) or "direct"
+        other = None
+        if kind == "direct" and len(conv.participants) == 2:
+            other_id = next((p for p in conv.participants if p != uid), None)
+            if other_id:
+                ou = await User.get(other_id)
+                if ou:
+                    other = ChatUserResponse(
+                        id=str(ou.id),
+                        name=ou.name,
+                        email=ou.email,
+                        role=ou.role,
+                        online=manager.is_online(str(ou.id)),
+                        last_seen=ou.last_seen,
+                    )
+        items.append(
+            ChatConversationListItem(
+                id=str(conv.id),
+                thread_kind=kind,
+                participants=list(conv.participants),
+                updated_at=conv.updated_at,
+                title=getattr(conv, "title", None),
+                event_id=getattr(conv, "event_id", None),
+                other_user=other,
+            )
+        )
+    return items
 
 
 @router.get("/users", response_model=list[ChatUserResponse])
@@ -196,7 +242,7 @@ async def get_messages(
         )
     messages = await query.sort("-created_at").limit(limit).to_list()
     messages.reverse()
-    return [serialize_message(msg) for msg in messages]
+    return [serialize_message(msg, conversation) for msg in messages]
 
 
 @router.post("/messages", response_model=ChatMessageResponse)
@@ -222,7 +268,7 @@ async def create_message(
     await message.insert()
     conversation.updated_at = datetime.now(timezone.utc)
     await conversation.save()
-    data = serialize_message(message)
+    data = serialize_message(message, conversation)
     await manager.send_to_users(conversation.participants, {"type": "message", "message": data.model_dump()})
     return data
 
@@ -326,7 +372,7 @@ async def websocket_chat(websocket: WebSocket, token: Optional[str] = Query(defa
                 await message.insert()
                 conversation.updated_at = datetime.now(timezone.utc)
                 await conversation.save()
-                message_payload = serialize_message(message).model_dump()
+                message_payload = serialize_message(message, conversation).model_dump()
                 if client_id:
                     message_payload["client_id"] = client_id
                 await manager.send_to_users(

@@ -249,6 +249,9 @@ export default function App() {
   const [chatFiles, setChatFiles] = useState([]);
   const [chatTypingUser, setChatTypingUser] = useState(null);
   const [chatUnreadByUser, setChatUnreadByUser] = useState({});
+  const [chatUnreadByConversation, setChatUnreadByConversation] = useState({});
+  const [chatEventThreads, setChatEventThreads] = useState([]);
+  const [chatActiveEventThread, setChatActiveEventThread] = useState(null);
   const [chatHasMore, setChatHasMore] = useState(true);
   const [chatLoadingMore, setChatLoadingMore] = useState(false);
   const chatWsRef = useRef(null);
@@ -256,6 +259,7 @@ export default function App() {
   const chatTypingTimeoutRef = useRef(null);
   const chatActiveConversationRef = useRef("");
   const chatActiveUserRef = useRef(null);
+  const chatEventConversationIdsRef = useRef(new Set());
   const loadConversationMessagesRef = useRef(null);
   const loadEventsRef = useRef(null);
   const requirementsFlowQueueRef = useRef([]);
@@ -942,6 +946,26 @@ export default function App() {
     }
   }, [apiBaseUrl, apiFetch, chatUnreadByUser, user]);
 
+  const loadChatThreads = useCallback(async () => {
+    if (!user) {
+      return;
+    }
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/chat/conversations/me`);
+      if (!res.ok) {
+        return;
+      }
+      const data = await res.json();
+      setChatEventThreads(Array.isArray(data) ? data.filter((item) => item.thread_kind === "event") : []);
+    } catch {
+      /* ignore */
+    }
+  }, [apiBaseUrl, apiFetch, user]);
+
+  useEffect(() => {
+    chatEventConversationIdsRef.current = new Set((chatEventThreads || []).map((t) => t.id));
+  }, [chatEventThreads]);
+
   const loadConversationMessages = useCallback(
     async (conversationId, before) => {
       if (!conversationId) {
@@ -980,11 +1004,31 @@ export default function App() {
     [apiBaseUrl, apiFetch]
   );
 
+  const openEventThread = useCallback(
+    async (thread) => {
+      if (!thread?.id) {
+        return;
+      }
+      setChatActiveUser(null);
+      setChatActiveEventThread(thread);
+      setChatTypingUser(null);
+      setChatMessages([]);
+      setChatHasMore(true);
+      setChatLoadingMore(false);
+      setChatStatus({ status: "loading", error: "" });
+      setChatConversationId(thread.id);
+      setChatUnreadByConversation((prev) => ({ ...prev, [thread.id]: 0 }));
+      await loadConversationMessages(thread.id);
+    },
+    [loadConversationMessages]
+  );
+
   const startConversation = useCallback(
     async (targetUser) => {
       if (!targetUser) {
         return;
       }
+      setChatActiveEventThread(null);
       setChatActiveUser(targetUser);
       setChatTypingUser(null);
       setChatMessages([]);
@@ -1056,8 +1100,8 @@ export default function App() {
       if (!trimmed && chatFiles.length === 0) {
         return;
       }
-      if (!chatConversationId) {
-        setChatStatus({ status: "error", error: "Select a user to start chatting." });
+      if (!chatConversationId || (!chatActiveUser && !chatActiveEventThread)) {
+        setChatStatus({ status: "error", error: "Select a chat to message." });
         return;
       }
       const clientId =
@@ -1110,7 +1154,17 @@ export default function App() {
         setChatStatus({ status: "error", error: err?.message || "Unable to send message." });
       }
     },
-    [apiBaseUrl, apiFetch, chatConversationId, chatFiles, chatInput, uploadChatAttachment, user]
+    [
+      apiBaseUrl,
+      apiFetch,
+      chatActiveEventThread,
+      chatActiveUser,
+      chatConversationId,
+      chatFiles,
+      chatInput,
+      uploadChatAttachment,
+      user
+    ]
   );
 
   const handleChatInputChange = useCallback(
@@ -1743,10 +1797,14 @@ export default function App() {
       setChatStatus({ status: "idle", error: "" });
       setChatTypingUser(null);
       setChatUnreadByUser({});
+      setChatUnreadByConversation({});
+      setChatEventThreads([]);
+      setChatActiveEventThread(null);
       return;
     }
 
     loadChatUsers();
+    loadChatThreads();
 
     const token = localStorage.getItem("auth_token");
     if (!token) {
@@ -1763,7 +1821,6 @@ export default function App() {
         if (data.type === "message" && data.message) {
           const incoming = data.message;
           const activeConversation = chatActiveConversationRef.current;
-          const activeUserId = chatActiveUserRef.current;
           if (incoming.conversation_id === activeConversation) {
             if (incoming.client_id) {
               setChatMessages((prev) => {
@@ -1776,24 +1833,27 @@ export default function App() {
             } else {
               setChatMessages((prev) => [...prev, incoming]);
             }
-          } else if (activeUserId && incoming.sender_id === activeUserId) {
-            setChatConversationId(incoming.conversation_id);
-            setChatMessages((prev) => [...prev, incoming]);
-            if (loadConversationMessagesRef.current) {
-              loadConversationMessagesRef.current(incoming.conversation_id);
-            }
-          } else if (incoming.sender_id) {
-            setChatUnreadByUser((prev) => ({
+          } else {
+            setChatUnreadByConversation((prev) => ({
               ...prev,
-              [incoming.sender_id]: (prev[incoming.sender_id] || 0) + 1
+              [incoming.conversation_id]: (prev[incoming.conversation_id] || 0) + 1
             }));
-            setChatUsers((prev) =>
-              prev.map((item) =>
-                item.id === incoming.sender_id
-                  ? { ...item, unread: (item.unread || 0) + 1 }
-                  : item
-              )
-            );
+            const isEventConv =
+              incoming.conversation_thread_kind === "event" ||
+              chatEventConversationIdsRef.current.has(incoming.conversation_id);
+            if (!isEventConv && incoming.sender_id) {
+              setChatUnreadByUser((prev) => ({
+                ...prev,
+                [incoming.sender_id]: (prev[incoming.sender_id] || 0) + 1
+              }));
+              setChatUsers((prev) =>
+                prev.map((item) =>
+                  item.id === incoming.sender_id
+                    ? { ...item, unread: (item.unread || 0) + 1 }
+                    : item
+                )
+              );
+            }
           }
           return;
         }
@@ -1844,7 +1904,7 @@ export default function App() {
     return () => {
       ws.close();
     };
-  }, [apiBaseUrl, loadChatUsers, user]);
+  }, [apiBaseUrl, loadChatUsers, loadChatThreads, user]);
 
   useEffect(() => {
     if (!chatListRef.current) {
@@ -6704,18 +6764,52 @@ export default function App() {
               <div className="chat-header">
                 <div>
                   <p className="chat-title">Messages</p>
-                  <p className="chat-subtitle">Select a user to start chatting</p>
+                  <p className="chat-subtitle">Event chats and direct messages</p>
                 </div>
                 <button
                   type="button"
                   className="icon-button chat-refresh"
-                  onClick={() => loadChatUsers()}
-                  aria-label="Refresh users"
+                  onClick={() => {
+                    loadChatUsers();
+                    loadChatThreads();
+                  }}
+                  aria-label="Refresh chats"
                 >
                   <SimpleIcon path="M12 5a7 7 0 1 1-6.3 4H3l3-3 3 3H7.3A4.7 4.7 0 1 0 12 7v2l3-3-3-3v2Z" />
                 </button>
               </div>
               <div className="chat-users">
+                {chatEventThreads.length > 0 ? (
+                  <>
+                    <p className="chat-section-label">Event chats</p>
+                    {chatEventThreads.map((thread) => {
+                      const tname = thread.title || "Event";
+                      const avatarLabel = tname.trim().charAt(0).toUpperCase() || "E";
+                      const unread = chatUnreadByConversation[thread.id] || 0;
+                      const n = thread.participants?.length ?? 0;
+                      return (
+                        <button
+                          key={thread.id}
+                          type="button"
+                          className={`chat-user chat-user-event ${chatActiveEventThread?.id === thread.id ? "active" : ""}`}
+                          onClick={() => openEventThread(thread)}
+                        >
+                          <span className="chat-avatar chat-avatar-event" aria-hidden="true">
+                            {avatarLabel}
+                          </span>
+                          <div className="chat-user-text">
+                            <p className="chat-user-name">
+                              {tname}
+                              {unread ? <span className="chat-unread">{unread}</span> : null}
+                            </p>
+                            <p className="chat-event-meta">{n} in chat</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </>
+                ) : null}
+                <p className="chat-section-label">People</p>
                 {chatUsers.map((chatUser) => {
                   const name = chatUser.name || "Unknown";
                   const avatarLabel = name.trim().charAt(0).toUpperCase() || "?";
@@ -6742,17 +6836,29 @@ export default function App() {
                 {chatUsers.length === 0 ? <p className="chat-note">No users found.</p> : null}
               </div>
             </aside>
-            {chatActiveUser ? (
-              <div className="chat-window" role="dialog" aria-label={`Chat with ${chatActiveUser.name}`}>
+            {chatActiveUser || chatActiveEventThread ? (
+              <div
+                className="chat-window"
+                role="dialog"
+                aria-label={
+                  chatActiveEventThread
+                    ? `Event chat: ${chatActiveEventThread.title || "Event"}`
+                    : `Chat with ${chatActiveUser.name}`
+                }
+              >
                 <div className="chat-window-header">
                   <div>
-                    <p className="chat-thread-name">{chatActiveUser.name}</p>
+                    <p className="chat-thread-name">
+                      {chatActiveEventThread ? chatActiveEventThread.title || "Event chat" : chatActiveUser.name}
+                    </p>
                     <p className="chat-thread-status">
-                      {chatActiveUser.online
-                        ? "Online"
-                        : chatActiveUser.last_seen
-                          ? `Last seen ${formatChatTime(chatActiveUser.last_seen)}`
-                          : "Last seen unknown"}
+                      {chatActiveEventThread
+                        ? `Group chat · ${chatActiveEventThread.participants?.length ?? 0} people`
+                        : chatActiveUser.online
+                          ? "Online"
+                          : chatActiveUser.last_seen
+                            ? `Last seen ${formatChatTime(chatActiveUser.last_seen)}`
+                            : "Last seen unknown"}
                     </p>
                   </div>
                   <button
@@ -6760,6 +6866,7 @@ export default function App() {
                     className="chat-window-close"
                     onClick={() => {
                       setChatActiveUser(null);
+                      setChatActiveEventThread(null);
                       setChatConversationId("");
                       setChatMessages([]);
                       setChatTypingUser(null);
@@ -6784,7 +6891,13 @@ export default function App() {
                   {chatStatus.status === "error" ? <p className="chat-note">{chatStatus.error}</p> : null}
                   {chatMessages.map((message) => {
                     const isOwn = message.sender_id === user.id;
-                    const isRead = chatActiveUser && message.read_by.includes(chatActiveUser.id);
+                    let isRead = false;
+                    if (chatActiveEventThread?.participants?.length) {
+                      const others = chatActiveEventThread.participants.filter((pid) => pid !== user.id);
+                      isRead = others.some((pid) => message.read_by.includes(pid));
+                    } else if (chatActiveUser) {
+                      isRead = message.read_by.includes(chatActiveUser.id);
+                    }
                     return (
                       <div key={message.id} className={`chat-message ${isOwn ? "own" : ""}`}>
                         <div className="chat-bubble">
@@ -6841,7 +6954,12 @@ export default function App() {
                   ) : null}
                   <div className="chat-input-row">
                     <label className="chat-attach">
-                      <input type="file" multiple onChange={handleChatFiles} disabled={!chatActiveUser} />
+                      <input
+                        type="file"
+                        multiple
+                        onChange={handleChatFiles}
+                        disabled={!chatActiveUser && !chatActiveEventThread}
+                      />
                       <span>+</span>
                     </label>
                     <textarea

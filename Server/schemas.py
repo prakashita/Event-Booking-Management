@@ -315,6 +315,7 @@ class ChatMessageResponse(BaseModel):
     attachments: list[ChatAttachment]
     read_by: list[str]
     created_at: datetime
+    conversation_thread_kind: Optional[str] = None
 
 
 class ChatReadReceipt(BaseModel):
@@ -338,6 +339,21 @@ class ChatConversationResponse(BaseModel):
     id: str
     participants: list[str]
     updated_at: datetime
+    thread_kind: str = "direct"
+    event_id: Optional[str] = None
+    title: Optional[str] = None
+
+
+class ChatConversationListItem(BaseModel):
+    """Row for GET /chat/conversations/me — direct threads and event group chats."""
+
+    id: str
+    thread_kind: str
+    participants: list[str]
+    updated_at: datetime
+    title: Optional[str] = None
+    event_id: Optional[str] = None
+    other_user: Optional[ChatUserResponse] = None
 
 
 class ChatUploadResponse(BaseModel):

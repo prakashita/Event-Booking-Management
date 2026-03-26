@@ -283,6 +283,18 @@ async def decide_request(
                     )
                 except Exception as exc:
                     logger.warning("Requester approval notification failed: %s", exc)
+
+                try:
+                    from event_chat_service import ensure_event_group_chat
+
+                    await ensure_event_group_chat(
+                        str(event.id),
+                        event.name,
+                        approval.requester_id,
+                        str(user.id),
+                    )
+                except Exception as exc:
+                    logger.warning("Event group chat creation failed: %s", exc)
             approval.status = "approved"
         else:
             approval.status = "rejected"

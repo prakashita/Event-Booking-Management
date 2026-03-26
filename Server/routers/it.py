@@ -173,6 +173,13 @@ async def decide_it_request(
         request_item.decided_by = user.email
         request_item.decided_at = datetime.utcnow()
         await request_item.save()
+        if normalized_status == "approved" and request_item.event_id:
+            try:
+                from event_chat_service import add_participant_to_event_chat
+
+                await add_participant_to_event_chat(request_item.event_id, str(user.id))
+            except Exception:
+                pass
 
     return ItRequestResponse(
         id=str(request_item.id),
