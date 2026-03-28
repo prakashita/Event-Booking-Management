@@ -47,6 +47,7 @@ class EventCreate(BaseModel):
     facilitator: str = Field(..., min_length=1, max_length=120)
     description: Optional[str] = Field(default=None, max_length=2000)
     venue_name: str = Field(..., min_length=1, max_length=120)
+    intendedAudience: Optional[Literal["Students", "Faculty", "PhD Scholars", "Staffs", "Everyone at VU"]] = None
     budget: Optional[float] = Field(default=None, ge=0)  # Event budget in Rs
 
     @field_validator("budget", mode="before")
@@ -78,6 +79,7 @@ class EventResponse(BaseModel):
     facilitator: str
     description: Optional[str] = None
     venue_name: str
+    intendedAudience: Optional[str] = None
     budget: Optional[float] = None
     start_date: str
     start_time: str
@@ -105,6 +107,7 @@ class ApprovalRequestResponse(BaseModel):
     budget: Optional[float] = None
     description: Optional[str] = None
     venue_name: str
+    intendedAudience: Optional[str] = None
     start_date: str
     start_time: str
     end_date: str
@@ -158,6 +161,28 @@ class FacilityManagerDecision(BaseModel):
     status: str
 
 
+class MarketingRequirementsPreEvent(BaseModel):
+    poster: bool = False
+    social_media: bool = False
+
+
+class MarketingRequirementsDuringEvent(BaseModel):
+    photo: bool = False
+    video: bool = False
+
+
+class MarketingRequirementsPostEvent(BaseModel):
+    social_media: bool = False
+    photo_upload: bool = False
+    video: bool = False
+
+
+class MarketingRequirements(BaseModel):
+    pre_event: MarketingRequirementsPreEvent = Field(default_factory=MarketingRequirementsPreEvent)
+    during_event: MarketingRequirementsDuringEvent = Field(default_factory=MarketingRequirementsDuringEvent)
+    post_event: MarketingRequirementsPostEvent = Field(default_factory=MarketingRequirementsPostEvent)
+
+
 class MarketingRequestCreate(BaseModel):
     requested_to: Optional[str] = Field(default=None, max_length=200)
     event_id: Optional[str] = None
@@ -166,6 +191,7 @@ class MarketingRequestCreate(BaseModel):
     start_time: str
     end_date: str
     end_time: str
+    marketing_requirements: Optional[MarketingRequirements] = None
     poster_required: bool = False
     poster_dimension: Optional[str] = Field(default=None, max_length=120)
     video_required: bool = False
@@ -196,6 +222,7 @@ class MarketingRequestResponse(BaseModel):
     start_time: str
     end_date: str
     end_time: str
+    marketing_requirements: MarketingRequirements = Field(default_factory=MarketingRequirements)
     poster_required: bool
     poster_dimension: Optional[str] = None
     video_required: bool
@@ -373,6 +400,8 @@ class PublicationResponse(BaseModel):
     created_at: datetime
     # Shared
     author: Optional[str] = None
+    author_first_name: Optional[str] = None
+    author_last_name: Optional[str] = None
     publication_date: Optional[str] = None
     url: Optional[str] = None
     # Journal Article

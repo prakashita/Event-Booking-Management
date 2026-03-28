@@ -30,6 +30,7 @@ def serialize_event(event: Event) -> EventResponse:
         facilitator=event.facilitator,
         description=event.description,
         venue_name=event.venue_name,
+        intendedAudience=getattr(event, "intendedAudience", None),
         budget=getattr(event, "budget", None),
         start_date=event.start_date,
         start_time=event.start_time,
@@ -59,6 +60,7 @@ def serialize_approval(item: ApprovalRequest) -> ApprovalRequestResponse:
         budget=getattr(item, "budget", None),
         description=item.description,
         venue_name=item.venue_name,
+        intendedAudience=getattr(item, "intendedAudience", None),
         start_date=item.start_date,
         start_time=item.start_time,
         end_date=item.end_date,
@@ -102,9 +104,50 @@ def _deliverable_to_response(d):
     )
 
 
+def _as_bool(value) -> bool:
+    return bool(value) if value is not None else False
+
+
+def _nested_flag(raw, section: str, key: str) -> bool:
+    if raw is None:
+        return False
+    section_obj = raw.get(section) if isinstance(raw, dict) else getattr(raw, section, None)
+    if section_obj is None:
+        return False
+    return _as_bool(section_obj.get(key) if isinstance(section_obj, dict) else getattr(section_obj, key, False))
+
+
+def _normalize_marketing_requirements(item: MarketingRequest):
+    raw = getattr(item, "marketing_requirements", None)
+    normalized = {
+        "pre_event": {
+            "poster": _nested_flag(raw, "pre_event", "poster") or _as_bool(getattr(item, "poster_required", False)),
+            "social_media": _nested_flag(raw, "pre_event", "social_media") or _as_bool(getattr(item, "linkedin_post", False)),
+        },
+        "during_event": {
+            "photo": _nested_flag(raw, "during_event", "photo") or _as_bool(getattr(item, "photography", False)),
+            "video": _nested_flag(raw, "during_event", "video") or _as_bool(getattr(item, "video_required", False)),
+        },
+        "post_event": {
+            "social_media": _nested_flag(raw, "post_event", "social_media"),
+            "photo_upload": _nested_flag(raw, "post_event", "photo_upload"),
+            "video": _nested_flag(raw, "post_event", "video") or _as_bool(getattr(item, "recording", False)),
+        },
+    }
+    flags = {
+        "poster_required": normalized["pre_event"]["poster"],
+        "video_required": normalized["during_event"]["video"],
+        "linkedin_post": normalized["pre_event"]["social_media"] or normalized["post_event"]["social_media"],
+        "photography": normalized["during_event"]["photo"] or normalized["post_event"]["photo_upload"],
+        "recording": normalized["post_event"]["video"],
+    }
+    return normalized, flags
+
+
 def serialize_marketing(item: MarketingRequest) -> MarketingRequestResponse:
     raw = getattr(item, "deliverables", None) or []
     deliverables = [x for d in raw if (x := _deliverable_to_response(d))]
+    normalized_requirements, flags = _normalize_marketing_requirements(item)
 
     return MarketingRequestResponse(
         id=str(item.id),
@@ -117,13 +160,14 @@ def serialize_marketing(item: MarketingRequest) -> MarketingRequestResponse:
         start_time=item.start_time,
         end_date=item.end_date,
         end_time=item.end_time,
-        poster_required=item.poster_required,
+        marketing_requirements=normalized_requirements,
+        poster_required=flags["poster_required"],
         poster_dimension=item.poster_dimension,
-        video_required=item.video_required,
+        video_required=flags["video_required"],
         video_dimension=item.video_dimension,
-        linkedin_post=item.linkedin_post,
-        photography=item.photography,
-        recording=item.recording,
+        linkedin_post=flags["linkedin_post"],
+        photography=flags["photography"],
+        recording=flags["recording"],
         other_notes=item.other_notes,
         status=item.status,
         decided_at=item.decided_at,

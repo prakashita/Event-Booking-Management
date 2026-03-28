@@ -20,6 +20,62 @@ from schemas import MarketingDecision, MarketingRequestCreate, MarketingRequestR
 router = APIRouter(prefix="/marketing", tags=["Marketing"])
 
 
+def _as_bool(value) -> bool:
+    return bool(value) if value is not None else False
+
+
+def _nested_flag(raw, section: str, key: str) -> bool:
+    if raw is None:
+        return False
+    section_obj = raw.get(section) if isinstance(raw, dict) else getattr(raw, section, None)
+    if section_obj is None:
+        return False
+    return _as_bool(section_obj.get(key) if isinstance(section_obj, dict) else getattr(section_obj, key, False))
+
+
+def _normalize_marketing_requirements(
+    marketing_requirements,
+    *,
+    poster_required: bool = False,
+    video_required: bool = False,
+    linkedin_post: bool = False,
+    photography: bool = False,
+    recording: bool = False,
+):
+    pre_event_poster = _nested_flag(marketing_requirements, "pre_event", "poster") or _as_bool(poster_required)
+    pre_event_social = _nested_flag(marketing_requirements, "pre_event", "social_media") or _as_bool(linkedin_post)
+    during_event_photo = _nested_flag(marketing_requirements, "during_event", "photo") or _as_bool(photography)
+    during_event_video = _nested_flag(marketing_requirements, "during_event", "video") or _as_bool(video_required)
+    post_event_social = _nested_flag(marketing_requirements, "post_event", "social_media")
+    post_event_photo_upload = _nested_flag(marketing_requirements, "post_event", "photo_upload")
+    post_event_video = _nested_flag(marketing_requirements, "post_event", "video") or _as_bool(recording)
+
+    normalized = {
+        "pre_event": {
+            "poster": pre_event_poster,
+            "social_media": pre_event_social,
+        },
+        "during_event": {
+            "photo": during_event_photo,
+            "video": during_event_video,
+        },
+        "post_event": {
+            "social_media": post_event_social,
+            "photo_upload": post_event_photo_upload,
+            "video": post_event_video,
+        },
+    }
+
+    flags = {
+        "poster_required": normalized["pre_event"]["poster"],
+        "video_required": normalized["during_event"]["video"],
+        "linkedin_post": normalized["pre_event"]["social_media"] or normalized["post_event"]["social_media"],
+        "photography": normalized["during_event"]["photo"] or normalized["post_event"]["photo_upload"],
+        "recording": normalized["post_event"]["video"],
+    }
+    return normalized, flags
+
+
 def _deliverable_field(d, key: str, default=None):
     if isinstance(d, dict):
         return d.get(key, default)
@@ -52,6 +108,14 @@ def _serialize_deliverables(deliverables_list):
 
 
 def _serialize_marketing_response(item: MarketingRequest) -> MarketingRequestResponse:
+    normalized_requirements, flags = _normalize_marketing_requirements(
+        getattr(item, "marketing_requirements", None),
+        poster_required=getattr(item, "poster_required", False),
+        video_required=getattr(item, "video_required", False),
+        linkedin_post=getattr(item, "linkedin_post", False),
+        photography=getattr(item, "photography", False),
+        recording=getattr(item, "recording", False),
+    )
     return MarketingRequestResponse(
         id=str(item.id),
         requester_id=item.requester_id,
@@ -63,13 +127,14 @@ def _serialize_marketing_response(item: MarketingRequest) -> MarketingRequestRes
         start_time=item.start_time,
         end_date=item.end_date,
         end_time=item.end_time,
-        poster_required=item.poster_required,
+        marketing_requirements=normalized_requirements,
+        poster_required=flags["poster_required"],
         poster_dimension=item.poster_dimension,
-        video_required=item.video_required,
+        video_required=flags["video_required"],
         video_dimension=item.video_dimension,
-        linkedin_post=item.linkedin_post,
-        photography=item.photography,
-        recording=item.recording,
+        linkedin_post=flags["linkedin_post"],
+        photography=flags["photography"],
+        recording=flags["recording"],
         other_notes=item.other_notes,
         status=item.status,
         decided_at=item.decided_at,
@@ -117,6 +182,15 @@ async def create_marketing_request(
             detail="Marketing email is required",
         )
 
+    normalized_requirements, flags = _normalize_marketing_requirements(
+        payload.marketing_requirements,
+        poster_required=payload.poster_required,
+        video_required=payload.video_required,
+        linkedin_post=payload.linkedin_post,
+        photography=payload.photography,
+        recording=payload.recording,
+    )
+
     request_item = MarketingRequest(
         requester_id=str(user.id),
         requester_email=user.email,
@@ -127,13 +201,14 @@ async def create_marketing_request(
         start_time=payload.start_time,
         end_date=payload.end_date,
         end_time=payload.end_time,
-        poster_required=payload.poster_required,
+        marketing_requirements=normalized_requirements,
+        poster_required=flags["poster_required"],
         poster_dimension=payload.poster_dimension,
-        video_required=payload.video_required,
+        video_required=flags["video_required"],
         video_dimension=payload.video_dimension,
-        linkedin_post=payload.linkedin_post,
-        photography=payload.photography,
-        recording=payload.recording,
+        linkedin_post=flags["linkedin_post"],
+        photography=flags["photography"],
+        recording=flags["recording"],
         other_notes=payload.other_notes,
     )
     await request_item.insert()

@@ -431,6 +431,7 @@ body {
 .menu-list {
   display: grid;
   gap: 10px;
+  width: 100%;
 }
 
 .menu-item {
@@ -446,10 +447,22 @@ body {
   cursor: pointer;
   position: relative;
   transition: background 0.2s ease;
+  text-decoration: none;
+  justify-content: flex-start;
+  text-align: left;
+  width: 100%;
 }
 
 .menu-item:hover {
   background: var(--sidebar-bg-active);
+  text-decoration: none;
+}
+
+.menu-item:visited,
+.menu-item:focus,
+.menu-item:active {
+  text-decoration: none;
+  color: #ffffff;
 }
 
 .menu-item.active {
@@ -3079,6 +3092,297 @@ body {
   font-size: 0.9rem;
   color: var(--ink-soft);
   margin: 0;
+}
+
+/* ---- Responsive refinements (safe, frontend-only) ---- */
+.events-actions > * {
+  min-width: 0;
+}
+
+.events-actions .primary-action {
+  flex-shrink: 0;
+}
+
+.publication-filter-label,
+.publication-sort-label {
+  background: #ffffff;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 6px 10px;
+  line-height: 1.2;
+}
+
+.publication-sort-select {
+  min-width: 150px;
+  max-width: 100%;
+}
+
+/* Publications: cleaner visual hierarchy without changing data/render logic */
+.pub-mla-list {
+  display: grid;
+  gap: 14px;
+}
+
+.pub-mla-list-item {
+  margin: 0;
+  background: #ffffff;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  padding: 14px 16px;
+  box-shadow: 0 10px 24px rgba(9, 24, 46, 0.06);
+  display: grid;
+  gap: 10px;
+}
+
+.pub-mla-citation {
+  font-size: 0.96rem;
+  line-height: 1.7;
+  padding-left: 0;
+  text-indent: 0;
+  overflow-wrap: anywhere;
+}
+
+.pub-mla-notes {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid var(--border-soft);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.pub-mla-meta {
+  margin-top: 0;
+  justify-content: space-between;
+}
+
+.pub-mla-link {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+/* Global layout polish on medium/small screens */
+@media (max-width: 1024px) {
+  .dashboard-main {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .dashboard-header {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    justify-content: space-between;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .profile {
+    flex: 1 1 260px;
+  }
+
+  .events-actions {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .modal-overlay {
+    padding: 14px;
+    align-items: center;
+  }
+
+  .modal-card,
+  .modal-card-wide,
+  .pub-type-modal-card,
+  .pub-form-card {
+    width: min(100%, calc(100vw - 20px));
+    max-height: calc(100vh - 24px);
+    border-radius: 18px;
+    padding: 16px;
+  }
+
+  .events-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .events-actions .primary-action {
+    width: 100%;
+  }
+
+  .publication-filter-label,
+  .publication-sort-label {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .publication-sort-select {
+    min-width: 0;
+    width: 58%;
+  }
+
+  .pub-mla-list-item {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .pub-mla-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 430px) {
+  .dashboard-main {
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 16px;
+  }
+
+  .search-bar {
+    padding: 7px 8px 7px 12px;
+    gap: 8px;
+  }
+
+  .search-button {
+    padding: 8px 12px;
+    font-size: 0.76rem;
+  }
+
+  .profile {
+    padding: 7px 10px;
+    border-radius: 14px;
+  }
+
+  .profile-name {
+    font-size: 0.88rem;
+  }
+
+  .profile-role {
+    font-size: 0.68rem;
+  }
+
+  .pub-mla-citation {
+    font-size: 0.92rem;
+  }
+}
+
+/* Mobile nav drawer (keeps desktop/tablet behavior unchanged) */
+.mobile-nav-header,
+.mobile-nav-overlay {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-nav-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: #ffffff;
+    border: 1px solid var(--border-soft);
+    border-radius: 14px;
+    padding: 8px 10px;
+    box-shadow: 0 10px 24px rgba(9, 24, 46, 0.08);
+  }
+
+  .mobile-nav-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: 0.03em;
+  }
+
+  .mobile-nav-brand .brand-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 10px;
+    background: var(--sidebar-bg);
+  }
+
+  .mobile-nav-toggle {
+    border: 1px solid var(--border-soft);
+    background: #ffffff;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    color: var(--accent-blue);
+    box-shadow: 0 8px 20px rgba(9, 24, 46, 0.08);
+  }
+
+  .mobile-nav-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+  }
+
+  .dashboard-page {
+    grid-template-columns: 1fr;
+    position: relative;
+  }
+
+  .dashboard-page .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(82vw, 320px);
+    max-width: 320px;
+    z-index: 1200;
+    transform: translateX(-105%);
+    transition: transform 0.2s ease;
+    overflow-y: auto;
+    box-shadow: 0 20px 50px rgba(9, 24, 46, 0.35);
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .dashboard-page .sidebar .menu-block,
+  .dashboard-page .sidebar .menu-item.logout {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  .dashboard-page .sidebar .menu-list {
+    width: 100%;
+  }
+
+  .dashboard-page .sidebar .menu-list .menu-item,
+  .dashboard-page .sidebar .menu-item.logout {
+    width: 100%;
+    margin: 0;
+  }
+
+  .dashboard-page .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .dashboard-page .sidebar .menu-item.logout {
+    margin-top: 0;
+  }
+
+  .mobile-nav-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1190;
+    border: none;
+    background: rgba(15, 24, 40, 0.45);
+  }
 }
 
 /* ── IQAC Data Collection ── */
