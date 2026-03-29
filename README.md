@@ -139,7 +139,7 @@ The sections **[Feature reference](#feature-reference)** and **[Workflow referen
 
 **Details:**
 
-- **Connect:** `GET /calendar/connect-url` returns an OAuth URL; callback is `GET /calendar/oauth/callback` (redirect URI must match Google Cloud and `.env`).
+- **Connect:** `GET /api/v1/calendar/connect-url` returns an OAuth URL; callback is **`GET /calendar/oauth/callback`** (no `/api/v1` prefix) or **`GET /api/v1/calendar/oauth/callback`**. `GOOGLE_REDIRECT_URI` and Google Cloud **Authorized redirect URIs** must match **the deployed API host** exactly (not the static frontend URL if the API is separate).
 - **`GET /calendar/app-events`:** Reads **`Event`** documents from MongoDB and returns FullCalendar-friendly items (optional start/end window). This is the **institutional schedule** after approvals.
 - **`GET /calendar/events`:** Calls **Google Calendar API** with the user’s token (personal calendar view).
 - Approved events may get a **Google Calendar event** created for the requester when the registrar approves (best effort; failures are logged and the DB event still exists).
@@ -243,8 +243,8 @@ End-to-end processes as implemented today. Steps mention **UI** (what users do) 
 ### Workflow 2: Connect Google (Calendar / Gmail / Drive)
 
 1. Authenticated user starts “Connect Google” (or similar) in the UI.
-2. Client calls **`GET /calendar/connect-url`** and opens the returned URL.
-3. User consents in Google; browser hits **`GET /calendar/oauth/callback`** with `code` and `state`.
+2. Client calls **`GET /api/v1/calendar/connect-url`** and opens the returned URL.
+3. User consents in Google; browser hits the **callback URL** from `GOOGLE_REDIRECT_URI` (typically **`https://<api-host>/calendar/oauth/callback`**) with `code` and `state`.
 4. Server exchanges the code, saves **refresh/access tokens** on the **`users`** document.
 5. User returns to the app; **`GET /auth/google/status`** (or UI state) can reflect connected capabilities.
 
@@ -609,7 +609,7 @@ Copy `Server/.env.example` to `Server/.env` and fill in values.
 | `DB_NAME` | Database name (default `eventdb`) |
 | `SECRET_KEY` | JWT signing secret (**required**; must not stay default in staging/production) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
-| `GOOGLE_REDIRECT_URI` | Must match Google Cloud console (e.g. `http://localhost:8000/calendar/oauth/callback`) |
+| `GOOGLE_REDIRECT_URI` | Full URL of the **API** callback, matching Google Cloud (e.g. `http://localhost:8000/calendar/oauth/callback` or `https://your-api.example.com/calendar/oauth/callback`). If the frontend is on Vercel but the API is elsewhere, this must be the **API** URL, not the Vercel app URL. |
 | `GOOGLE_DRIVE_FOLDER_ID` | Drive folder for **event reports** |
 | `PUBLICATIONS_DRIVE_FOLDER_ID` | Drive folder for **publications** |
 | `ADMIN_EMAILS` | Comma-separated emails → **admin** on first login |
@@ -633,7 +633,7 @@ VITE_GOOGLE_CLIENT_ID=your_google_client_id.apps.googleusercontent.com
 
 ## Google Cloud setup
 
-1. Create an **OAuth 2.0 Client ID** (Web application). Authorized JavaScript origins: your frontend URL(s). Authorized redirect URI: same as `GOOGLE_REDIRECT_URI` on the **backend** (calendar callback).
+1. Create an **OAuth 2.0 Client ID** (Web application). Authorized JavaScript origins: your frontend URL(s). Authorized redirect URI: **exactly** the same as `GOOGLE_REDIRECT_URI` on the **backend** (the host must be wherever FastAPI runs, e.g. `/calendar/oauth/callback` on that host).
 2. Enable APIs: **Google Calendar**, **Gmail**, **Google Drive** (as used by `auth.py` scopes).
 3. For invites, reports, publications, and marketing deliverables, users (or your policy) must complete the OAuth consent flow so refresh tokens are stored.
 4. Share the target Drive folders with the Google accounts that will own uploads, or use a service account strategy if you change the implementation (current code uses user OAuth).
