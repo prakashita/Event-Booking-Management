@@ -5,7 +5,17 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import { menuItems, preferenceItems, inboxItems, eventsTable, PUB_META, PATH_TO_VIEW, ROUTES, ROLES_WITH_IQAC_ACCESS } from "./constants";
+import {
+  menuItems,
+  preferenceItems,
+  inboxItems,
+  eventsTable,
+  PUB_META,
+  PATH_TO_VIEW,
+  ROUTES,
+  ROLES_WITH_IQAC_ACCESS,
+  ROLES_WITH_IQAC_DELETE_ACCESS
+} from "./constants";
 import {
   formatISTTime,
   formatRequirementDecisionStatusLabel,
@@ -246,6 +256,13 @@ export default function App() {
     appendix: ""
   });
   const [reportAppendixPhotos, setReportAppendixPhotos] = useState([]);
+  const [reportIqacCriteria, setReportIqacCriteria] = useState({ status: "idle", items: [], error: "" });
+  const [reportIqacSelection, setReportIqacSelection] = useState({
+    criterionId: "",
+    subFolderId: "",
+    itemId: "",
+    description: ""
+  });
   const [calendarState, setCalendarState] = useState({
     status: "idle",
     events: [],
@@ -332,6 +349,7 @@ export default function App() {
   const canAccessApprovals = isRegistrar;
   const canAccessRequirements = isFacilityManagerRole || isMarketingRole || isItRole;
   const canAccessIqac = ROLES_WITH_IQAC_ACCESS.includes(normalizedUserRole);
+  const canDeleteIqacFiles = ROLES_WITH_IQAC_DELETE_ACCESS.includes(normalizedUserRole);
   const defaultFacilitator = (user?.name || "").trim();
 
   const googleClientId =
@@ -2287,6 +2305,10 @@ export default function App() {
       appendix: ""
     });
     setReportAppendixPhotos([]);
+    setReportIqacSelection({ criterionId: "", subFolderId: "", itemId: "", description: "" });
+    setReportIqacCriteria(
+      canAccessIqac ? { status: "loading", items: [], error: "" } : { status: "idle", items: [], error: "" }
+    );
     setReportModal({
       open: true,
       status: "idle",
@@ -2298,6 +2320,29 @@ export default function App() {
       eventFacilitator: eventItem.facilitator || "",
       hasReport: Boolean(eventItem.report_file_id)
     });
+    if (canAccessIqac) {
+      (async () => {
+        try {
+          const res = await apiFetch(`${apiBaseUrl}/iqac/criteria`);
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data?.detail || "Could not load IQAC criteria.");
+          }
+          const data = await res.json();
+          setReportIqacCriteria({
+            status: "ready",
+            items: Array.isArray(data) ? data : [],
+            error: ""
+          });
+        } catch (err) {
+          setReportIqacCriteria({
+            status: "error",
+            items: [],
+            error: err?.message || "Could not load IQAC criteria."
+          });
+        }
+      })();
+    }
   };
 
   const handleEventDetailsOpen = async (eventItem) => {
@@ -2501,6 +2546,8 @@ export default function App() {
       appendix: ""
     });
     setReportAppendixPhotos([]);
+    setReportIqacSelection({ criterionId: "", subFolderId: "", itemId: "", description: "" });
+    setReportIqacCriteria({ status: "idle", items: [], error: "" });
     setReportModal({ open: false, status: "idle", error: "", eventId: "", eventName: "", startDate: "", eventVenue: "", eventFacilitator: "", hasReport: false });
   };
 
@@ -2517,6 +2564,28 @@ export default function App() {
 
   const handleReportFormChange = (field) => (e) => {
     setReportForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handleReportIqacCriterionChange = (e) => {
+    const v = e.target.value;
+    setReportIqacSelection((prev) => ({
+      criterionId: v,
+      subFolderId: "",
+      itemId: "",
+      description: prev.description
+    }));
+  };
+
+  const handleReportIqacSubChange = (e) => {
+    setReportIqacSelection((prev) => ({ ...prev, subFolderId: e.target.value, itemId: "" }));
+  };
+
+  const handleReportIqacItemChange = (e) => {
+    setReportIqacSelection((prev) => ({ ...prev, itemId: e.target.value }));
+  };
+
+  const handleReportIqacDescChange = (e) => {
+    setReportIqacSelection((prev) => ({ ...prev, description: e.target.value }));
   };
 
   const buildReportPdf = (eventInfo, form) => {
@@ -2788,6 +2857,17 @@ export default function App() {
       return;
     }
 
+    const sel = reportIqacSelection;
+    const iqacComplete = Boolean(sel.criterionId && sel.subFolderId && sel.itemId);
+    if ((sel.criterionId || sel.subFolderId || sel.itemId) && !iqacComplete) {
+      setReportModal((prev) => ({
+        ...prev,
+        status: "error",
+        error: "Select IQAC criterion, sub-criterion, and evidence item, or clear the IQAC dropdown to skip."
+      }));
+      return;
+    }
+
     setReportModal((prev) => ({ ...prev, status: "loading", error: "" }));
 
     try {
@@ -2821,6 +2901,14 @@ export default function App() {
       const file = new File([blob], expectedName, { type: "application/pdf" });
       const formData = new FormData();
       formData.append("file", file);
+      if (iqacComplete) {
+        formData.append("iqac_criterion", String(sel.criterionId));
+        formData.append("iqac_sub_folder", sel.subFolderId);
+        formData.append("iqac_item", sel.itemId);
+        if (sel.description.trim()) {
+          formData.append("iqac_description", sel.description.trim());
+        }
+      }
       const res = await apiFetch(`${apiBaseUrl}/events/${reportModal.eventId}/report`, {
         method: "POST",
         body: formData
@@ -5233,6 +5321,76 @@ export default function App() {
                         </ul>
                       ) : null}
                     </div>
+                    {canAccessIqac ? (
+                      <div className="form-field report-iqac-section">
+                        <span>IQAC Data Collection (optional)</span>
+                        <p className="form-hint">
+                          Choose criterion, then sub-criterion, then evidence item to store a copy of this report in IQAC Data Collection.
+                        </p>
+                        {reportIqacCriteria.status === "loading" ? (
+                          <p className="form-hint">Loading IQAC structure…</p>
+                        ) : null}
+                        {reportIqacCriteria.status === "error" ? (
+                          <p className="form-error">{reportIqacCriteria.error}</p>
+                        ) : null}
+                        {reportIqacCriteria.status === "ready" ? (
+                          <>
+                            <label className="form-field report-iqac-row">
+                              <span>Criterion</span>
+                              <select value={reportIqacSelection.criterionId} onChange={handleReportIqacCriterionChange}>
+                                <option value="">— Do not file to IQAC —</option>
+                                {reportIqacCriteria.items.map((c) => (
+                                  <option key={c.id} value={String(c.id)}>
+                                    {c.id}. {c.title}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            {reportIqacSelection.criterionId ? (
+                              <label className="form-field report-iqac-row">
+                                <span>Sub-criterion</span>
+                                <select value={reportIqacSelection.subFolderId} onChange={handleReportIqacSubChange}>
+                                  <option value="">— Select —</option>
+                                  {(reportIqacCriteria.items.find((c) => String(c.id) === reportIqacSelection.criterionId)?.subFolders || []).map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                      {s.id} {s.title}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : null}
+                            {reportIqacSelection.criterionId && reportIqacSelection.subFolderId ? (
+                              <label className="form-field report-iqac-row">
+                                <span>Evidence item</span>
+                                <select value={reportIqacSelection.itemId} onChange={handleReportIqacItemChange}>
+                                  <option value="">— Select —</option>
+                                  {(
+                                    reportIqacCriteria.items
+                                      .find((c) => String(c.id) === reportIqacSelection.criterionId)
+                                      ?.subFolders?.find((s) => s.id === reportIqacSelection.subFolderId)?.items || []
+                                  ).map((it) => (
+                                    <option key={it.id} value={it.id}>
+                                      {it.id} {it.title}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ) : null}
+                            {reportIqacSelection.criterionId && reportIqacSelection.subFolderId && reportIqacSelection.itemId ? (
+                              <label className="form-field report-iqac-row">
+                                <span>IQAC note (optional)</span>
+                                <input
+                                  type="text"
+                                  value={reportIqacSelection.description}
+                                  onChange={handleReportIqacDescChange}
+                                  placeholder="Additional note stored with the file in IQAC"
+                                />
+                              </label>
+                            ) : null}
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <p className="form-hint report-save-hint">
                       Report will be saved as PDF: <strong>{getExpectedReportFilename(reportModal.eventName, reportModal.startDate)}</strong>
                     </p>
@@ -5264,7 +5422,7 @@ export default function App() {
             </div>
           );
         }
-        return <IqacDataPage />;
+        return <IqacDataPage canDeleteIqacFiles={canDeleteIqacFiles} />;
       }
 
       if (isPublications) {

@@ -30,7 +30,7 @@ const FOLDER_PATH = "M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 
 // Document icon for item tiles
 const DOC_PATH = "M7 2h6l4 4v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 2v14h10V8h-4V4H7zm2 2h4v2H9V6z";
 
-export default function IqacDataPage() {
+export default function IqacDataPage({ canDeleteIqacFiles = false }) {
   const [criteria, setCriteria] = useState([]);
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -167,6 +167,7 @@ export default function IqacDataPage() {
   };
 
   const handleDelete = async (fileId) => {
+    if (!canDeleteIqacFiles) return;
     if (!window.confirm("Delete this file?")) return;
     try {
       const res = await api.delete(`/iqac/files/${fileId}`);
@@ -361,7 +362,10 @@ export default function IqacDataPage() {
             {panel.step === "files" && (
               <div className="iqac-files-view">
                 {panel.readOnly && (
-                  <p className="iqac-readonly-hint">You are viewing in read-only mode. Use <strong>Open</strong> on the card to upload or delete files.</p>
+                  <p className="iqac-readonly-hint">
+                    You are viewing in read-only mode. Use <strong>Open</strong> on the card to upload files.
+                    {canDeleteIqacFiles ? " You can delete files from there." : ""}
+                  </p>
                 )}
                 {!panel.readOnly && (
                   <form className="iqac-upload-form" onSubmit={handleUpload}>
@@ -410,7 +414,7 @@ export default function IqacDataPage() {
                           <button type="button" className="details-button" onClick={() => handleDownload(f.id, f.fileName)}>
                             Download
                           </button>
-                          {!panel.readOnly && (
+                          {!panel.readOnly && canDeleteIqacFiles && (
                             <button type="button" className="details-button reject" onClick={() => handleDelete(f.id)}>
                               Delete
                             </button>

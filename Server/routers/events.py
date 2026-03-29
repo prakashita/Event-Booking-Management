@@ -3,22 +3,24 @@ import re
 import base64
 import logging
 from datetime import datetime
+from typing import Optional
 
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 
 from rate_limit import limiter
 from fastapi.responses import JSONResponse
 import requests
 
 from auth import ensure_google_access_token, get_primary_email_by_role, get_user_by_role
-from drive import upload_report_file
+from drive import delete_drive_file, upload_report_file
 from errors import error_payload
 from idempotency import get_cached_response, get_idempotency_key, store_response
 from event_status import combine_datetime, sync_event_status
 from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, User
 from routers.admin import serialize_approval, serialize_event, serialize_facility, serialize_it, serialize_marketing
-from routers.deps import get_current_user
+from routers.deps import IQAC_ALLOWED_ROLES, get_current_user
+from routers.iqac import persist_iqac_upload, validate_iqac_path
 from schemas import (
     ApprovalRequestResponse,
     EventCreate,
@@ -473,6 +475,10 @@ async def upload_event_report(
     request: Request,
     event_id: str,
     file: UploadFile = File(...),
+    iqac_criterion: Optional[int] = Form(None),
+    iqac_sub_folder: Optional[str] = Form(None),
+    iqac_item: Optional[str] = Form(None),
+    iqac_description: Optional[str] = Form(None),
     user: User = Depends(get_current_user),
 ):
     event = await Event.get(event_id)
@@ -505,6 +511,25 @@ async def upload_event_report(
     if len(contents) > max_size:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 10MB)")
 
+    sub_s = (iqac_sub_folder or "").strip()
+    item_s = (iqac_item or "").strip()
+    iqac_requested = iqac_criterion is not None or bool(sub_s) or bool(item_s)
+    iqac_sub_norm: Optional[str] = None
+    iqac_item_norm: Optional[str] = None
+    if iqac_requested:
+        if iqac_criterion is None or not sub_s or not item_s:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="IQAC filing requires criterion, sub-criterion, and item together, or leave IQAC fields empty.",
+            )
+        role = (user.role or "").strip().lower()
+        if role not in IQAC_ALLOWED_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your role cannot file documents under IQAC Data Collection.",
+            )
+        iqac_sub_norm, iqac_item_norm = validate_iqac_path(iqac_criterion, sub_s, item_s)
+
     folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
     if not folder_id:
         raise HTTPException(
@@ -512,6 +537,8 @@ async def upload_event_report(
             detail="Google Drive folder not configured",
         )
 
+    access_token = None
+    drive_file = None
     try:
         access_token = await ensure_google_access_token(user)
         drive_file = upload_report_file(
@@ -532,6 +559,30 @@ async def upload_event_report(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unable to upload report: {exc}",
         )
+
+    if iqac_requested and iqac_criterion is not None and iqac_sub_norm and iqac_item_norm:
+        desc_bits = [f"Event report: {event.name} (event id {event.id})"]
+        extra = (iqac_description or "").strip()
+        if extra:
+            desc_bits.append(extra)
+        iqac_full_desc = " · ".join(desc_bits)
+        try:
+            await persist_iqac_upload(
+                user,
+                iqac_criterion,
+                iqac_sub_norm,
+                iqac_item_norm,
+                file.filename or "Report.pdf",
+                contents,
+                iqac_full_desc,
+            )
+        except Exception as exc:
+            if drive_file and drive_file.get("id") and access_token:
+                delete_drive_file(access_token, drive_file.get("id"))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Report was not saved: could not add a copy to IQAC Data Collection ({exc}).",
+            ) from exc
 
     event.report_file_id = drive_file.get("id")
     event.report_file_name = drive_file.get("name")

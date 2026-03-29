@@ -847,6 +847,18 @@ body {
   background: rgba(0, 0, 0, 0.14);
 }
 
+.report-iqac-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft, #e5e7eb);
+}
+
+.report-iqac-row select,
+.report-iqac-row input[type="text"] {
+  width: 100%;
+  margin-top: 6px;
+}
+
 .modal-card--report {
   max-height: 90vh;
   overflow-y: auto;

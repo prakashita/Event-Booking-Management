@@ -53,7 +53,9 @@ async def require_admin(
 
 # Roles that may access IQAC Data Collection (criteria, upload/list/download/delete).
 # Frontend must mirror this for sidebar visibility and route guard (see ROLES_WITH_IQAC_ACCESS in Client).
-IQAC_ALLOWED_ROLES = frozenset({"iqac", "admin", "registrar"})
+IQAC_ALLOWED_ROLES = frozenset({"iqac", "faculty", "admin", "registrar"})
+# Faculty may upload and view but not delete; must match Client ROLES_WITH_IQAC_DELETE_ACCESS.
+IQAC_DELETE_ALLOWED_ROLES = frozenset({"iqac", "admin", "registrar"})
 
 
 async def require_iqac(

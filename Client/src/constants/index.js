@@ -46,7 +46,10 @@ export const MENU_ICON_IQAC = "M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14a2 2 0 0 1-
  * Roles that can access IQAC Data Collection (menu + all APIs).
  * Must match Server/routers/deps.py IQAC_ALLOWED_ROLES.
  */
-export const ROLES_WITH_IQAC_ACCESS = ["iqac", "admin", "registrar"];
+export const ROLES_WITH_IQAC_ACCESS = ["iqac", "faculty", "admin", "registrar"];
+
+/** Roles that may delete IQAC uploads. Must match Server IQAC_DELETE_ALLOWED_ROLES. */
+export const ROLES_WITH_IQAC_DELETE_ACCESS = ["iqac", "admin", "registrar"];
 
 export const menuItems = [
   { id: "dashboard", label: "Dashboard" },

@@ -54,3 +54,18 @@ def upload_report_file(
         raise RuntimeError(response.text)
 
     return response.json()
+
+
+def delete_drive_file(access_token: str, file_id: str | None) -> None:
+    """Best-effort delete of a Drive file (e.g. rollback after a dependent step fails)."""
+    if not file_id:
+        return
+    try:
+        requests.delete(
+            f"{DRIVE_FILES_URL}/{file_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={"supportsAllDrives": "true"},
+            timeout=15,
+        )
+    except Exception:
+        pass

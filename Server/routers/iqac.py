@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.responses import FileResponse
 
 from models import IQACFile, User
-from routers.deps import require_iqac
+from routers.deps import IQAC_DELETE_ALLOWED_ROLES, require_iqac
 
 router = APIRouter(prefix="/iqac", tags=["iqac"])
 
@@ -46,6 +46,16 @@ IQAC_UPLOADS_DIR = resolve_iqac_uploads_dir()
 
 
 # NAAC IQAC 7-criteria structure: criterion title → sub-criteria (1.1, 1.2, …) → items (1.1.1, 1.1.2, …)
+CRITERION_ORDER = (
+    "Curricular Aspects",
+    "Teaching-Learning & Evaluation",
+    "Research, Innovations & Extension",
+    "Infrastructure & Learning Resources",
+    "Student Support & Progression",
+    "Governance, Leadership & Management",
+    "Institutional Values & Best Practices",
+)
+
 NAAC_CRITERIA = {
     "Curricular Aspects": {
         "1.1": {
@@ -171,17 +181,8 @@ NAAC_CRITERIA = {
 
 def _criteria_structure() -> List[Dict[str, Any]]:
     """Build API response: list of criteria with id, title, description, subFolders (each with id, title, items)."""
-    criterion_order = [
-        "Curricular Aspects",
-        "Teaching-Learning & Evaluation",
-        "Research, Innovations & Extension",
-        "Infrastructure & Learning Resources",
-        "Student Support & Progression",
-        "Governance, Leadership & Management",
-        "Institutional Values & Best Practices",
-    ]
     out = []
-    for idx, criterion_title in enumerate(criterion_order, start=1):
+    for idx, criterion_title in enumerate(CRITERION_ORDER, start=1):
         raw = NAAC_CRITERIA.get(criterion_title, {})
         subfolders = []
         for sub_id, sub_data in raw.items():
@@ -230,6 +231,22 @@ def _safe_segment(name: str) -> str:
     return name
 
 
+def validate_iqac_path(criterion: int, subfolder: str, item: str) -> tuple[str, str]:
+    """Return normalized sub_folder and item_id. Raises HTTPException if invalid."""
+    if not 1 <= criterion <= 7:
+        raise HTTPException(status_code=400, detail="Criterion must be 1-7")
+    sub_folder = _safe_segment(subfolder.strip())
+    item_id = _safe_segment(item.strip())
+    title = CRITERION_ORDER[criterion - 1]
+    raw = NAAC_CRITERIA.get(title, {})
+    if sub_folder not in raw:
+        raise HTTPException(status_code=400, detail="Invalid IQAC sub-criterion")
+    items_dict = raw[sub_folder].get("items") or {}
+    if item_id not in items_dict:
+        raise HTTPException(status_code=400, detail="Invalid IQAC item")
+    return sub_folder, item_id
+
+
 @router.get("/folders/{criterion:int}/{subfolder}/{item}/files")
 async def list_files(
     criterion: int,
@@ -267,54 +284,53 @@ async def list_files(
     return result
 
 
-def _allowed_file(file: UploadFile) -> tuple[bool, str]:
-    if not file.filename:
+def _allowed_filename(filename: str) -> tuple[bool, str]:
+    if not filename:
         return False, "Missing filename"
-    ext = os.path.splitext(file.filename)[1].lower()
+    ext = os.path.splitext(filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         return False, f"Allowed types: PDF, DOC, DOCX (got {ext})"
     return True, ""
 
 
-@router.post("/folders/{criterion:int}/{subfolder}/{item}/files")
-async def upload_file(
+def _allowed_file(file: UploadFile) -> tuple[bool, str]:
+    return _allowed_filename(file.filename or "")
+
+
+async def persist_iqac_upload(
+    current_user: User,
     criterion: int,
-    subfolder: str,
-    item: str,
-    file: UploadFile = File(...),
-    description: str = Form(""),
-    current_user: User = Depends(require_iqac),
-):
-    """Upload a file for the given criterion/subfolder/item. Multipart form: file, optional description."""
-    if not 1 <= criterion <= 7:
-        raise HTTPException(status_code=400, detail="Criterion must be 1-7")
-    sub_folder = _safe_segment(subfolder.strip())
-    item_id = _safe_segment(item.strip())
-    ok, err = _allowed_file(file)
+    sub_folder: str,
+    item_id: str,
+    original_filename: str,
+    content: bytes,
+    description: str | None,
+) -> dict:
+    """Write IQAC file bytes to disk and insert IQACFile. Returns the same shape as the upload endpoint."""
+    ok, err = _allowed_filename(original_filename)
     if not ok:
         raise HTTPException(status_code=400, detail=err)
-    content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File size must not exceed 10MB")
+    base_name = os.path.basename(original_filename) or "file"
     dir_path = os.path.join(IQAC_UPLOADS_DIR, str(criterion), sub_folder, item_id)
     try:
         os.makedirs(dir_path, exist_ok=True)
     except OSError as e:
         raise HTTPException(status_code=500, detail="Could not create upload directory") from e
-    safe_name = f"{uuid.uuid4().hex}_{file.filename}"
+    safe_name = f"{uuid.uuid4().hex}_{base_name}"
     file_path = os.path.join(dir_path, safe_name)
     try:
         with open(file_path, "wb") as out:
             out.write(content)
     except OSError as e:
         raise HTTPException(status_code=500, detail="Could not save file") from e
-    # Store relative path from IQAC_UPLOADS_DIR for portability
     relative_path = os.path.join("iqac", str(criterion), sub_folder, item_id, safe_name)
     doc = IQACFile(
         criterion=criterion,
         sub_folder=sub_folder,
         item=item_id,
-        file_name=file.filename or safe_name,
+        file_name=original_filename or safe_name,
         file_path=relative_path,
         uploaded_by=str(current_user.id),
         description=(description or "").strip() or None,
@@ -338,12 +354,44 @@ async def upload_file(
     }
 
 
+@router.post("/folders/{criterion:int}/{subfolder}/{item}/files")
+async def upload_file(
+    criterion: int,
+    subfolder: str,
+    item: str,
+    file: UploadFile = File(...),
+    description: str = Form(""),
+    current_user: User = Depends(require_iqac),
+):
+    """Upload a file for the given criterion/subfolder/item. Multipart form: file, optional description."""
+    sub_folder, item_id = validate_iqac_path(criterion, subfolder, item)
+    ok, err = _allowed_file(file)
+    if not ok:
+        raise HTTPException(status_code=400, detail=err)
+    content = await file.read()
+    return await persist_iqac_upload(
+        current_user,
+        criterion,
+        sub_folder,
+        item_id,
+        file.filename or "file",
+        content,
+        (description or "").strip() or None,
+    )
+
+
 @router.delete("/files/{file_id}")
 async def delete_file(
     file_id: str,
     current_user: User = Depends(require_iqac),
 ):
-    """Delete file record and the stored file."""
+    """Delete file record and the stored file (not allowed for faculty)."""
+    role = (current_user.role or "").strip().lower()
+    if role not in IQAC_DELETE_ALLOWED_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="IQAC file deletion is not allowed for your role",
+        )
     from beanie import PydanticObjectId
     try:
         oid = PydanticObjectId(file_id)
