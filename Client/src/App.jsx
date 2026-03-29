@@ -39,10 +39,15 @@ export default function App() {
     }
   }, [pathname, location.pathname, navigate]);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   const googleButtonRef = useRef(null);
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [myEventsTab, setMyEventsTab] = useState("all");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [venuesState, setVenuesState] = useState({ status: "idle", items: [], error: "" });
@@ -59,6 +64,7 @@ export default function App() {
     name: "",
     facilitator: "",
     venue_name: "",
+    intendedAudience: "",
     description: "",
     budget: ""
   });
@@ -91,14 +97,24 @@ export default function App() {
   });
   const [pendingEvent, setPendingEvent] = useState(null);
   const [marketingModal, setMarketingModal] = useState({ open: false, status: "idle", error: "" });
+  const defaultMarketingRequirements = () => ({
+    pre_event: {
+      poster: true,
+      social_media: false
+    },
+    during_event: {
+      photo: false,
+      video: false
+    },
+    post_event: {
+      social_media: false,
+      photo_upload: false,
+      video: false
+    }
+  });
   const [marketingForm, setMarketingForm] = useState({
     to: "",
-    poster_required: true,
-    poster_dimension: "",
-    video_required: false,
-    video_dimension: "",
-    linkedin_post: false,
-    photography: false,
+    marketing_requirements: defaultMarketingRequirements(),
     other_notes: ""
   });
   const [itModal, setItModal] = useState({ open: false, status: "idle", error: "" });
@@ -132,8 +148,36 @@ export default function App() {
   const REQUIREMENT_OPTIONS = [
     { key: "poster_required", type: "poster", label: "Poster" },
     { key: "video_required", type: "video", label: "Video" },
-    { key: "linkedin_post", type: "linkedin", label: "LinkedIn" },
-    { key: "photography", type: "photography", label: "Photography" }
+    { key: "linkedin_post", type: "linkedin", label: "Social Media" },
+    { key: "photography", type: "photography", label: "Photo" },
+    { key: "recording", type: "recording", label: "Post-Event Video" }
+  ];
+  const MARKETING_REQUIREMENT_GROUPS = [
+    {
+      key: "pre_event",
+      title: "Pre-Event",
+      fields: [
+        { key: "poster", label: "Poster" },
+        { key: "social_media", label: "Social Media" }
+      ]
+    },
+    {
+      key: "during_event",
+      title: "During Event",
+      fields: [
+        { key: "photo", label: "Photo" },
+        { key: "video", label: "Video" }
+      ]
+    },
+    {
+      key: "post_event",
+      title: "Post-Event",
+      fields: [
+        { key: "social_media", label: "Social Media" },
+        { key: "photo_upload", label: "Photo Upload" },
+        { key: "video", label: "Video" }
+      ]
+    }
   ];
   const [marketingDeliverableModal, setMarketingDeliverableModal] = useState({
     open: false,
@@ -163,7 +207,8 @@ export default function App() {
     file: null,
     others: "",
     // Shared
-    author: "",
+    author_first_name: "",
+    author_last_name: "",
     publication_date: "",
     url: "",
     // Journal Article
@@ -2098,12 +2143,7 @@ export default function App() {
   const handleMarketingModalOpen = () => {
     setMarketingForm({
       to: marketingEmail,
-      poster_required: true,
-      poster_dimension: "",
-      video_required: false,
-      video_dimension: "",
-      linkedin_post: false,
-      photography: false,
+      marketing_requirements: defaultMarketingRequirements(),
       other_notes: ""
     });
     setMarketingModal({ open: true, status: "idle", error: "" });
@@ -2173,6 +2213,7 @@ export default function App() {
       name: "",
       facilitator: defaultFacilitator,
       venue_name: "",
+      intendedAudience: "",
       description: "",
       budget: ""
     });
@@ -2313,11 +2354,67 @@ export default function App() {
       setApprovalDetailsModal({ open: false, request: null });
     };
 
+  const normalizeMarketingRequirements = (request) => {
+    const req = request?.marketing_requirements || {};
+    const pre = req.pre_event || {};
+    const during = req.during_event || {};
+    const post = req.post_event || {};
+    return {
+      pre_event: {
+        poster: Boolean(pre.poster ?? request?.poster_required),
+        social_media: Boolean(pre.social_media ?? request?.linkedin_post)
+      },
+      during_event: {
+        photo: Boolean(during.photo ?? request?.photography),
+        video: Boolean(during.video ?? request?.video_required)
+      },
+      post_event: {
+        social_media: Boolean(post.social_media),
+        photo_upload: Boolean(post.photo_upload),
+        video: Boolean(post.video ?? request?.recording)
+      }
+    };
+  };
+
+  const getMarketingRequirementFlags = (request) => {
+    const normalized = normalizeMarketingRequirements(request);
+    return {
+      poster_required: normalized.pre_event.poster,
+      video_required: normalized.during_event.video,
+      linkedin_post: normalized.pre_event.social_media || normalized.post_event.social_media,
+      photography: normalized.during_event.photo || normalized.post_event.photo_upload,
+      recording: normalized.post_event.video
+    };
+  };
+
+  const getMarketingNeedsLabel = (request) => {
+    const req = normalizeMarketingRequirements(request);
+    const sections = [];
+    const pre = [];
+    if (req.pre_event.poster) pre.push("Poster");
+    if (req.pre_event.social_media) pre.push("Social Media");
+    if (pre.length) sections.push(`Pre-Event: ${pre.join(", ")}`);
+
+    const during = [];
+    if (req.during_event.photo) during.push("Photo");
+    if (req.during_event.video) during.push("Video");
+    if (during.length) sections.push(`During Event: ${during.join(", ")}`);
+
+    const post = [];
+    if (req.post_event.social_media) post.push("Social Media");
+    if (req.post_event.photo_upload) post.push("Photo Upload");
+    if (req.post_event.video) post.push("Video");
+    if (post.length) sections.push(`Post-Event: ${post.join(", ")}`);
+
+    return sections.length ? sections.join(" | ") : "None";
+  };
+
   const openMarketingDeliverableModal = (request) => {
     if (isEventStarted(request)) return;
+    const requirementFlags = getMarketingRequirementFlags(request);
     const requirements = {};
     REQUIREMENT_OPTIONS.forEach(({ key, type }) => {
-      if (request[key]) {
+      if (requirementFlags[key]) {
         const existing = request.deliverables?.find((d) => d.deliverable_type === type);
         requirements[type] = {
           na: !!existing?.is_na,
@@ -2539,7 +2636,8 @@ export default function App() {
       pubType,
       file: null,
       others: "",
-      author: "",
+      author_first_name: "",
+      author_last_name: "",
       publication_date: "",
       url: "",
       article_title: "",
@@ -2590,12 +2688,12 @@ export default function App() {
     // Validate required fields per type
     let validationError = null;
     if (!f.name) validationError = "Please provide a label/name for this record.";
-    else if (pt === "webpage" && (!f.author || !f.page_title || !f.website_name || !f.url)) validationError = "Please fill all required fields.";
-    else if (pt === "journal_article" && (!f.author || !f.article_title || !f.journal_name || !f.year)) validationError = "Please fill all required fields.";
-    else if (pt === "book" && (!f.author || !f.book_title || !f.publisher || !f.year)) validationError = "Please fill all required fields.";
+    else if (pt === "webpage" && (!f.author_first_name || !f.author_last_name || !f.page_title || !f.website_name || !f.url)) validationError = "Please fill all required fields.";
+    else if (pt === "journal_article" && (!f.author_first_name || !f.author_last_name || !f.article_title || !f.journal_name || !f.year)) validationError = "Please fill all required fields.";
+    else if (pt === "book" && (!f.author_first_name || !f.author_last_name || !f.book_title || !f.publisher || !f.year)) validationError = "Please fill all required fields.";
     else if (pt === "report" && (!f.organization || !f.report_title || !f.year || !f.publisher)) validationError = "Please fill all required fields.";
     else if (pt === "video" && (!f.creator || !f.video_title || !f.platform || !f.publication_date || !f.url)) validationError = "Please fill all required fields.";
-    else if (pt === "online_newspaper" && (!f.author || !f.article_title || !f.newspaper_name || !f.publication_date || !f.url)) validationError = "Please fill all required fields.";
+    else if (pt === "online_newspaper" && (!f.author_first_name || !f.author_last_name || !f.article_title || !f.newspaper_name || !f.publication_date || !f.url)) validationError = "Please fill all required fields.";
     if (validationError) {
       setPublicationModal({ open: true, status: "error", error: validationError });
       return;
@@ -2608,8 +2706,10 @@ export default function App() {
       formData.append("pub_type", pt);
       if (f.others) formData.append("others", f.others);
       if (f.file) formData.append("file", f.file);
+      const derivedAuthor = [f.author_first_name, f.author_last_name].map((v) => (v || "").trim()).filter(Boolean).join(" ");
+      if (derivedAuthor) formData.append("author", derivedAuthor);
       // Append all optional fields if present
-      const optionals = ["author","publication_date","url","article_title","journal_name","volume","issue","pages","doi","year","book_title","publisher","edition","page_number","organization","report_title","creator","video_title","platform","newspaper_name","website_name","page_title"];
+      const optionals = ["author_first_name","author_last_name","publication_date","url","article_title","journal_name","volume","issue","pages","doi","year","book_title","publisher","edition","page_number","organization","report_title","creator","video_title","platform","newspaper_name","website_name","page_title"];
       optionals.forEach((key) => {
         if (f[key]) formData.append(key, f[key]);
       });
@@ -2862,6 +2962,7 @@ export default function App() {
         name: "",
         facilitator: defaultFacilitator,
         venue_name: "",
+        intendedAudience: "",
         description: "",
         budget: ""
       });
@@ -3037,12 +3138,7 @@ export default function App() {
         start_time: eventPayload?.start_time || "",
         end_date: eventPayload?.end_date || "",
         end_time: eventPayload?.end_time || "",
-        poster_required: marketingForm.poster_required,
-        poster_dimension: marketingForm.poster_dimension,
-        video_required: marketingForm.video_required,
-        video_dimension: marketingForm.video_dimension,
-        linkedin_post: marketingForm.linkedin_post,
-        photography: marketingForm.photography,
+        marketing_requirements: marketingForm.marketing_requirements,
         other_notes: marketingForm.other_notes
       };
 
@@ -3327,10 +3423,16 @@ export default function App() {
     }));
   };
 
-  const handleMarketingToggle = (field) => (event) => {
+  const handleMarketingToggle = (group, field) => (event) => {
     setMarketingForm((prev) => ({
       ...prev,
-      [field]: event.target.checked
+      marketing_requirements: {
+        ...prev.marketing_requirements,
+        [group]: {
+          ...(prev.marketing_requirements?.[group] || {}),
+          [field]: event.target.checked
+        }
+      }
     }));
   };
 
@@ -4459,6 +4561,21 @@ export default function App() {
                       ) : null}
                     </label>
                     <label className="form-field">
+                      <span>Intended Audience</span>
+                      <select
+                        value={eventForm.intendedAudience}
+                        onChange={handleEventFieldChange("intendedAudience")}
+                        required
+                      >
+                        <option value="">Select intended audience</option>
+                        <option value="Students">Students</option>
+                        <option value="Faculty">Faculty</option>
+                        <option value="PhD Scholars">PhD Scholars</option>
+                        <option value="Staffs">Staffs</option>
+                        <option value="Everyone at VU">Everyone at VU</option>
+                      </select>
+                    </label>
+                    <label className="form-field">
                       <span>Description</span>
                       <textarea
                         rows="3"
@@ -4834,58 +4951,23 @@ export default function App() {
 
                     <div className="marketing-requirements">
                       <p>Requirements:</p>
-                      <div className="marketing-grid">
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={marketingForm.poster_required}
-                            onChange={handleMarketingToggle("poster_required")}
-                          />
-                          Poster
-                          <select
-                            value={marketingForm.poster_dimension}
-                            onChange={handleMarketingFieldChange("poster_dimension")}
-                          >
-                            <option value="">Dimension</option>
-                            <option value="A4">A4</option>
-                            <option value="A3">A3</option>
-                            <option value="1080x1080">1080x1080</option>
-                          </select>
-                        </label>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={marketingForm.video_required}
-                            onChange={handleMarketingToggle("video_required")}
-                          />
-                          Video
-                          <select
-                            value={marketingForm.video_dimension}
-                            onChange={handleMarketingFieldChange("video_dimension")}
-                          >
-                            <option value="">Dimension</option>
-                            <option value="1920x1080">1920x1080</option>
-                            <option value="1080x1920">1080x1920</option>
-                            <option value="1280x720">1280x720</option>
-                          </select>
-                        </label>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={marketingForm.linkedin_post}
-                            onChange={handleMarketingToggle("linkedin_post")}
-                          />
-                          Linkedin Post
-                        </label>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={marketingForm.photography}
-                            onChange={handleMarketingToggle("photography")}
-                          />
-                          Photography
-                        </label>
-                      </div>
+                      {MARKETING_REQUIREMENT_GROUPS.map((group) => (
+                        <div key={group.key} className="marketing-group">
+                          <p className="form-hint">{group.title}</p>
+                          <div className="marketing-grid">
+                            {group.fields.map((field) => (
+                              <label key={`${group.key}-${field.key}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={Boolean(marketingForm.marketing_requirements?.[group.key]?.[field.key])}
+                                  onChange={handleMarketingToggle(group.key, field.key)}
+                                />
+                                {field.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
 
                     <label className="approval-field">
@@ -5189,7 +5271,10 @@ export default function App() {
         /** Format a single publication as MLA-style citation. Uses *asterisks* for italicized container titles. */
         const formatPublicationMLA = (item) => {
           const pt = item.pub_type;
-          const author = item.author?.trim();
+          const author =
+            item.author_last_name && item.author_first_name
+              ? `${item.author_last_name} ${item.author_first_name}`.trim()
+              : item.author?.trim();
           const addPeriod = (s) => (s && !/\.$/.test(s) ? `${s}.` : s || "");
 
           if (pt === "webpage") {
@@ -5457,10 +5542,16 @@ export default function App() {
                     {/* ── WEBPAGE ── */}
                     {publicationForm.pubType === "webpage" ? (
                       <>
-                        <label className="form-field">
-                          <span>Author <span className="req">*</span></span>
-                          <input type="text" placeholder="e.g. John Smith" value={publicationForm.author} onChange={handlePublicationChange("author")} />
-                        </label>
+                        <div className="pub-form-row">
+                          <label className="form-field">
+                            <span>Author First Name <span className="req">*</span></span>
+                            <input type="text" placeholder="e.g. John" value={publicationForm.author_first_name} onChange={handlePublicationChange("author_first_name")} />
+                          </label>
+                          <label className="form-field">
+                            <span>Author Last Name <span className="req">*</span></span>
+                            <input type="text" placeholder="e.g. Smith" value={publicationForm.author_last_name} onChange={handlePublicationChange("author_last_name")} />
+                          </label>
+                        </div>
                         <label className="form-field">
                           <span>Page Title <span className="req">*</span></span>
                           <input type="text" placeholder="Title of the specific page" value={publicationForm.page_title} onChange={handlePublicationChange("page_title")} />
@@ -5483,10 +5574,16 @@ export default function App() {
                     {/* ── JOURNAL ARTICLE ── */}
                     {publicationForm.pubType === "journal_article" ? (
                       <>
-                        <label className="form-field">
-                          <span>Author(s) <span className="req">*</span></span>
-                          <input type="text" placeholder="e.g. Smith, J." value={publicationForm.author} onChange={handlePublicationChange("author")} />
-                        </label>
+                        <div className="pub-form-row">
+                          <label className="form-field">
+                            <span>Author First Name <span className="req">*</span></span>
+                            <input type="text" placeholder="e.g. John" value={publicationForm.author_first_name} onChange={handlePublicationChange("author_first_name")} />
+                          </label>
+                          <label className="form-field">
+                            <span>Author Last Name <span className="req">*</span></span>
+                            <input type="text" placeholder="e.g. Smith" value={publicationForm.author_last_name} onChange={handlePublicationChange("author_last_name")} />
+                          </label>
+                        </div>
                         <label className="form-field">
                           <span>Article Title <span className="req">*</span></span>
                           <input type="text" placeholder="Full title of the article" value={publicationForm.article_title} onChange={handlePublicationChange("article_title")} />
@@ -5527,10 +5624,16 @@ export default function App() {
                     {/* ── BOOK ── */}
                     {publicationForm.pubType === "book" ? (
                       <>
-                        <label className="form-field">
-                          <span>Author(s) <span className="req">*</span></span>
-                          <input type="text" placeholder="e.g. Smith, J." value={publicationForm.author} onChange={handlePublicationChange("author")} />
-                        </label>
+                        <div className="pub-form-row">
+                          <label className="form-field">
+                            <span>Author First Name <span className="req">*</span></span>
+                            <input type="text" placeholder="e.g. John" value={publicationForm.author_first_name} onChange={handlePublicationChange("author_first_name")} />
+                          </label>
+                          <label className="form-field">
+                            <span>Author Last Name <span className="req">*</span></span>
+                            <input type="text" placeholder="e.g. Smith" value={publicationForm.author_last_name} onChange={handlePublicationChange("author_last_name")} />
+                          </label>
+                        </div>
                         <label className="form-field">
                           <span>Book Title <span className="req">*</span></span>
                           <input type="text" placeholder="Full title of the book" value={publicationForm.book_title} onChange={handlePublicationChange("book_title")} />
@@ -5615,10 +5718,16 @@ export default function App() {
                     {/* ── ONLINE NEWSPAPER ── */}
                     {publicationForm.pubType === "online_newspaper" ? (
                       <>
-                        <label className="form-field">
-                          <span>Author <span className="req">*</span></span>
-                          <input type="text" placeholder="e.g. Jane Doe" value={publicationForm.author} onChange={handlePublicationChange("author")} />
-                        </label>
+                        <div className="pub-form-row">
+                          <label className="form-field">
+                            <span>Author First Name <span className="req">*</span></span>
+                            <input type="text" placeholder="e.g. Jane" value={publicationForm.author_first_name} onChange={handlePublicationChange("author_first_name")} />
+                          </label>
+                          <label className="form-field">
+                            <span>Author Last Name <span className="req">*</span></span>
+                            <input type="text" placeholder="e.g. Doe" value={publicationForm.author_last_name} onChange={handlePublicationChange("author_last_name")} />
+                          </label>
+                        </div>
                         <label className="form-field">
                           <span>Article Title <span className="req">*</span></span>
                           <input type="text" placeholder="Full title of the article" value={publicationForm.article_title} onChange={handlePublicationChange("article_title")} />
@@ -5976,20 +6085,7 @@ export default function App() {
                 ) : null}
                 {marketingState.status === "ready"
                   ? marketingState.items.map((item) => {
-                      const needs = [];
-                      if (item.poster_required) {
-                        needs.push("Poster");
-                      }
-                      if (item.video_required) {
-                        needs.push("Video");
-                      }
-                      if (item.linkedin_post) {
-                        needs.push("LinkedIn");
-                      }
-                      if (item.photography) {
-                        needs.push("Photography");
-                      }
-                      const needsLabel = needs.length ? needs.join(", ") : "None";
+                      const needsLabel = getMarketingNeedsLabel(item);
                       const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
                       const eventHasStarted = isEventStarted(item);
                       return (
@@ -6209,7 +6305,7 @@ export default function App() {
     };
 
     return (
-      <div className="dashboard-page">
+      <div className={`dashboard-page ${mobileMenuOpen ? "mobile-menu-open" : ""}`}>
         {googleScopeModal.open ? (
           <div className="modal-overlay" role="dialog" aria-modal="true">
             <div className="modal-card">
@@ -6408,6 +6504,7 @@ export default function App() {
                         {eventDetailsModal.details.marketing_requests.map((r, i) => (
                           <div key={r.id || i} className="details-row">
                             <span>To: {r.requested_to || "—"}</span>
+                            <span>{getMarketingNeedsLabel(r)}</span>
                             <span className={`status-pill ${r.status}`}>
                               {formatRequirementDecisionStatusLabel(r.status)}
                             </span>
@@ -6584,7 +6681,7 @@ export default function App() {
                 For each requirement, select NA or upload a file (max 25MB each).
               </p>
               <form className="event-form" onSubmit={submitMarketingDeliverable}>
-                {REQUIREMENT_OPTIONS.filter((opt) => marketingDeliverableModal.request?.[opt.key]).map((opt) => {
+                {REQUIREMENT_OPTIONS.filter((opt) => getMarketingRequirementFlags(marketingDeliverableModal.request || {})[opt.key]).map((opt) => {
                   const r = marketingDeliverableModal.requirements?.[opt.type] || { na: false, file: null };
                   return (
                     <div key={opt.type} className="form-field deliverable-row">
@@ -6688,9 +6785,36 @@ export default function App() {
         <Sidebar
           visibleMenuItems={visibleMenuItems}
           onLogout={handleLogout}
+          className={mobileMenuOpen ? "mobile-open" : ""}
+          onNavigate={() => setMobileMenuOpen(false)}
         />
+        {mobileMenuOpen ? (
+          <button
+            type="button"
+            className="mobile-nav-overlay"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close navigation menu"
+          />
+        ) : null}
 
         <main className="dashboard-main">
+          <header className="mobile-nav-header">
+            <div className="mobile-nav-brand">
+              <div className="brand-icon" aria-hidden="true">
+                <SimpleIcon path="M6 12a6 6 0 1 1 6 6H6v-6Z" />
+              </div>
+              <span>FACULTY</span>
+            </div>
+            <button
+              type="button"
+              className="mobile-nav-toggle"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-label="Open navigation menu"
+              aria-expanded={mobileMenuOpen}
+            >
+              <SimpleIcon path="M12 5a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm0 7a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm0 7a2 2 0 1 1 0 4 2 2 0 0 1 0-4Z" />
+            </button>
+          </header>
           <header className="dashboard-header">
             <div>
               <p className="dashboard-title">

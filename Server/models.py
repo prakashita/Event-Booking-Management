@@ -50,6 +50,7 @@ class Event(Document):
     facilitator: str
     description: Optional[str] = None
     venue_name: str
+    intendedAudience: Optional[str] = None
     budget: Optional[float] = None  # Event budget in Rs
     start_date: str
     start_time: str
@@ -78,6 +79,7 @@ class ApprovalRequest(Document):
     budget: Optional[float] = None  # Event budget in Rs
     description: Optional[str] = None
     venue_name: str
+    intendedAudience: Optional[str] = None
     start_date: str
     start_time: str
     end_date: str
@@ -105,6 +107,28 @@ class MarketingDeliverable(BaseModel):
     is_na: bool = False
 
 
+class MarketingRequirementsPreEvent(BaseModel):
+    poster: bool = False
+    social_media: bool = False
+
+
+class MarketingRequirementsDuringEvent(BaseModel):
+    photo: bool = False
+    video: bool = False
+
+
+class MarketingRequirementsPostEvent(BaseModel):
+    social_media: bool = False
+    photo_upload: bool = False
+    video: bool = False
+
+
+class MarketingRequirements(BaseModel):
+    pre_event: MarketingRequirementsPreEvent = Field(default_factory=MarketingRequirementsPreEvent)
+    during_event: MarketingRequirementsDuringEvent = Field(default_factory=MarketingRequirementsDuringEvent)
+    post_event: MarketingRequirementsPostEvent = Field(default_factory=MarketingRequirementsPostEvent)
+
+
 class MarketingRequest(Document):
     requester_id: str
     requester_email: str
@@ -115,6 +139,7 @@ class MarketingRequest(Document):
     start_time: str
     end_date: str
     end_time: str
+    marketing_requirements: Optional[MarketingRequirements] = None
     poster_required: bool = False
     poster_dimension: Optional[str] = None
     video_required: bool = False
@@ -205,6 +230,8 @@ class Publication(Document):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     # Shared / common fields
     author: Optional[str] = None
+    author_first_name: Optional[str] = None
+    author_last_name: Optional[str] = None
     publication_date: Optional[str] = None
     url: Optional[str] = None
     # Journal Article

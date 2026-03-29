@@ -30,6 +30,8 @@ def _to_response(pub: Publication) -> PublicationResponse:
         uploaded_at=pub.uploaded_at,
         created_at=pub.created_at,
         author=pub.author,
+        author_first_name=getattr(pub, "author_first_name", None),
+        author_last_name=getattr(pub, "author_last_name", None),
         publication_date=pub.publication_date,
         url=pub.url,
         article_title=pub.article_title,
@@ -65,6 +67,8 @@ async def upload_publication(
     file: Optional[UploadFile] = File(default=None),
     # Shared
     author: Optional[str] = Form(default=None),
+    author_first_name: Optional[str] = Form(default=None),
+    author_last_name: Optional[str] = Form(default=None),
     publication_date: Optional[str] = Form(default=None),
     url: Optional[str] = Form(default=None),
     # Journal Article
@@ -145,7 +149,9 @@ async def upload_publication(
         web_view_link=web_view_link,
         uploaded_at=uploaded_at,
         created_by=str(user.id),
-        author=author,
+        author=(author or " ".join([(author_first_name or "").strip(), (author_last_name or "").strip()]).strip() or None),
+        author_first_name=author_first_name,
+        author_last_name=author_last_name,
         publication_date=publication_date,
         url=url,
         article_title=article_title,

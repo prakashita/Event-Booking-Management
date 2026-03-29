@@ -4,12 +4,14 @@ import { SimpleIcon } from "../icons";
 
 export default function Sidebar({
   visibleMenuItems,
-  onLogout
+  onLogout,
+  className = "",
+  onNavigate
 }) {
   const navigate = useNavigate();
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${className}`.trim()}>
       <div className="brand">
         <div className="brand-icon">
           <SimpleIcon path="M6 12a6 6 0 1 1 6 6H6v-6Z" />
@@ -28,6 +30,7 @@ export default function Sidebar({
                 key={item.id}
                 to={path}
                 className={({ isActive }) => `menu-item ${isActive ? "active" : ""}`}
+                onClick={() => onNavigate?.()}
               >
                 <span className="menu-icon">
                   <SimpleIcon path={iconPath} />
@@ -53,7 +56,15 @@ export default function Sidebar({
         </nav>
       </div>
 
-      <button type="button" className="menu-item logout" onClick={() => { onLogout(); navigate("/"); }}>
+      <button
+        type="button"
+        className="menu-item logout"
+        onClick={() => {
+          onLogout();
+          onNavigate?.();
+          navigate("/");
+        }}
+      >
         <span className="menu-icon">
           <SimpleIcon path="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-4-4 4-4M6 13h12" />
         </span>
