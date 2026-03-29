@@ -22,7 +22,6 @@ from routers.admin import serialize_approval, serialize_event, serialize_facilit
 from routers.deps import IQAC_ALLOWED_ROLES, get_current_user
 from routers.iqac import persist_iqac_upload, validate_iqac_path
 from schemas import (
-    ApprovalRequestResponse,
     EventCreate,
     EventCreateResponse,
     EventDetailsResponse,
@@ -49,6 +48,7 @@ def _requirement_status_for_event_details(
 
 # Report filename format: {SanitizedEventName}_{StartDate}_Report.pdf
 REPORT_FILENAME_SUFFIX = "_Report.pdf"
+BUDGET_BREAKDOWN_FILENAME_SUFFIX = "_BudgetBreakdown.pdf"
 
 
 def _sanitize_for_report_filename(name: str) -> str:
@@ -66,6 +66,13 @@ def get_expected_report_filename(event_name: str, start_date: str) -> str:
     sanitized = _sanitize_for_report_filename(event_name or "Event")
     date_part = (start_date or "").strip() or "0000-00-00"
     return f"{sanitized}_{date_part}{REPORT_FILENAME_SUFFIX}"
+
+
+def get_expected_budget_breakdown_filename(event_name: str, start_date: str) -> str:
+    """Required budget breakdown PDF name: EventName_YYYY-MM-DD_BudgetBreakdown.pdf"""
+    sanitized = _sanitize_for_report_filename(event_name or "Event")
+    date_part = (start_date or "").strip() or "0000-00-00"
+    return f"{sanitized}_{date_part}{BUDGET_BREAKDOWN_FILENAME_SUFFIX}"
 
 
 async def sync_event_to_google_calendar(event: Event, user: User) -> None:
@@ -208,31 +215,7 @@ async def list_events(
         await sync_event_status(event)
     next_offset = offset + limit if offset + limit < total else None
     return PaginatedResponse[EventResponse](
-        items=[
-    EventResponse(
-        id=str(event.id),
-        name=event.name,
-        facilitator=event.facilitator,
-        description=event.description,
-        venue_name=event.venue_name,
-        intendedAudience=getattr(event, "intendedAudience", None),
-        budget=getattr(event, "budget", None),
-        start_date=event.start_date,
-        start_time=event.start_time,
-        end_date=event.end_date,
-        end_time=event.end_time,
-        created_by=event.created_by,
-        status=event.status,
-        google_event_id=event.google_event_id,
-        google_event_link=event.google_event_link,
-        report_file_id=event.report_file_id,
-        report_file_name=event.report_file_name,
-        report_web_view_link=event.report_web_view_link,
-        report_uploaded_at=event.report_uploaded_at,
-        created_at=event.created_at,
-    )
-    for event in events
-],
+        items=[serialize_event(event) for event in events],
         total=total,
         limit=limit,
         offset=offset,
@@ -266,6 +249,10 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
                     venue_name=approval.venue_name,
                     intendedAudience=getattr(approval, "intendedAudience", None),
                     budget=getattr(approval, "budget", None),
+                    budget_breakdown_file_id=getattr(approval, "budget_breakdown_file_id", None),
+                    budget_breakdown_file_name=getattr(approval, "budget_breakdown_file_name", None),
+                    budget_breakdown_web_view_link=getattr(approval, "budget_breakdown_web_view_link", None),
+                    budget_breakdown_uploaded_at=getattr(approval, "budget_breakdown_uploaded_at", None),
                     start_date=approval.start_date,
                     start_time=approval.start_time,
                     end_date=approval.end_date,
@@ -440,29 +427,7 @@ async def create_event(request: Request, payload: EventCreate, user: User = Depe
 
     response_body = EventCreateResponse(
         status=status_label,
-        approval_request=ApprovalRequestResponse(
-            id=str(approval.id),
-            status=approval.status,
-            requester_id=approval.requester_id,
-            requester_email=approval.requester_email,
-            requested_to=approval.requested_to,
-            event_name=approval.event_name,
-            facilitator=approval.facilitator,
-            budget=getattr(approval, "budget", None),
-            description=approval.description,
-            venue_name=approval.venue_name,
-            intendedAudience=getattr(approval, "intendedAudience", None),
-            start_date=approval.start_date,
-            start_time=approval.start_time,
-            end_date=approval.end_date,
-            end_time=approval.end_time,
-            requirements=approval.requirements,
-            other_notes=approval.other_notes,
-            event_id=approval.event_id,
-            decided_at=approval.decided_at,
-            decided_by=approval.decided_by,
-            created_at=approval.created_at,
-        ),
+        approval_request=serialize_approval(approval),
     )
     if idem_key:
         await store_response(idem_key, status.HTTP_201_CREATED, response_body.model_dump(mode="json"))
@@ -590,28 +555,7 @@ async def upload_event_report(
     event.report_uploaded_at = datetime.utcnow()
     await event.save()
 
-    return EventResponse(
-        id=str(event.id),
-        name=event.name,
-        facilitator=event.facilitator,
-        description=event.description,
-        venue_name=event.venue_name,
-        intendedAudience=getattr(event, "intendedAudience", None),
-        budget=getattr(event, "budget", None),
-        start_date=event.start_date,
-        start_time=event.start_time,
-        end_date=event.end_date,
-        end_time=event.end_time,
-        created_by=event.created_by,
-        status=event.status,
-        google_event_id=event.google_event_id,
-        google_event_link=event.google_event_link,
-        report_file_id=event.report_file_id,
-        report_file_name=event.report_file_name,
-        report_web_view_link=event.report_web_view_link,
-        report_uploaded_at=event.report_uploaded_at,
-        created_at=event.created_at,
-    )
+    return serialize_event(event)
 
 
 @router.patch("/{event_id}/status", response_model=EventResponse)
@@ -642,25 +586,4 @@ async def update_event_status(
 
     event.status = "closed"
     await event.save()
-    return EventResponse(
-        id=str(event.id),
-        name=event.name,
-        facilitator=event.facilitator,
-        description=event.description,
-        venue_name=event.venue_name,
-        intendedAudience=getattr(event, "intendedAudience", None),
-        budget=getattr(event, "budget", None),
-        start_date=event.start_date,
-        start_time=event.start_time,
-        end_date=event.end_date,
-        end_time=event.end_time,
-        created_by=event.created_by,
-        status=event.status,
-        google_event_id=event.google_event_id,
-        google_event_link=event.google_event_link,
-        report_file_id=event.report_file_id,
-        report_file_name=event.report_file_name,
-        report_web_view_link=event.report_web_view_link,
-        report_uploaded_at=event.report_uploaded_at,
-        created_at=event.created_at,
-    )
+    return serialize_event(event)

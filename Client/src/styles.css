@@ -859,6 +859,15 @@ body {
   margin-top: 6px;
 }
 
+.budget-breakdown-file-input {
+  margin-top: 6px;
+  font-size: 0.85rem;
+}
+
+.budget-breakdown-picked {
+  margin-top: 4px;
+}
+
 .modal-card--report {
   max-height: 90vh;
   overflow-y: auto;
@@ -2545,6 +2554,24 @@ body {
   color: #333333;
   margin-top: 6px;
   line-height: 1.5;
+}
+
+.details-budget-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 6px;
+}
+
+.details-budget-row .details-budget-amount {
+  font-size: 0.98rem;
+  color: #333333;
+  line-height: 1.5;
+}
+
+.details-budget-row .details-button {
+  flex-shrink: 0;
 }
 
 .event-details-modal .event-details-section {

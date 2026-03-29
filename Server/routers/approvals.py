@@ -1,17 +1,21 @@
 import base64
 import logging
+import os
 import re
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 import requests
 
 from auth import ensure_google_access_token
+from drive import upload_report_file
 from idempotency import get_cached_response, get_idempotency_key, store_response
 from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, User
 from event_status import combine_datetime, compute_event_status, event_has_started
+from rate_limit import limiter
+from routers.admin import serialize_approval
 from routers.deps import get_current_user
-from routers.events import sync_event_to_google_calendar
+from routers.events import get_expected_budget_breakdown_filename, sync_event_to_google_calendar
 from schemas import ApprovalDecision, ApprovalRequestResponse, PaginatedResponse
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
@@ -79,32 +83,7 @@ async def list_my_requests(
     requests = await query.skip(offset).limit(limit).to_list()
     next_offset = offset + limit if offset + limit < total else None
     return PaginatedResponse[ApprovalRequestResponse](
-        items=[
-        ApprovalRequestResponse(
-            id=str(item.id),
-            status=item.status,
-            requester_id=item.requester_id,
-            requester_email=item.requester_email,
-            requested_to=item.requested_to,
-            event_name=item.event_name,
-            facilitator=item.facilitator,
-            budget=getattr(item, "budget", None),
-            description=item.description,
-            venue_name=item.venue_name,
-            intendedAudience=getattr(item, "intendedAudience", None),
-            start_date=item.start_date,
-            start_time=item.start_time,
-            end_date=item.end_date,
-            end_time=item.end_time,
-            requirements=item.requirements,
-            other_notes=item.other_notes,
-            event_id=item.event_id,
-            decided_at=item.decided_at,
-            decided_by=item.decided_by,
-            created_at=item.created_at,
-        )
-        for item in requests
-        ],
+        items=[serialize_approval(item) for item in requests],
         total=total,
         limit=limit,
         offset=offset,
@@ -125,37 +104,78 @@ async def list_inbox(
     requests = await query.skip(offset).limit(limit).to_list()
     next_offset = offset + limit if offset + limit < total else None
     return PaginatedResponse[ApprovalRequestResponse](
-        items=[
-        ApprovalRequestResponse(
-            id=str(item.id),
-            status=item.status,
-            requester_id=item.requester_id,
-            requester_email=item.requester_email,
-            requested_to=item.requested_to,
-            event_name=item.event_name,
-            facilitator=item.facilitator,
-            budget=getattr(item, "budget", None),
-            description=item.description,
-            venue_name=item.venue_name,
-            intendedAudience=getattr(item, "intendedAudience", None),
-            start_date=item.start_date,
-            start_time=item.start_time,
-            end_date=item.end_date,
-            end_time=item.end_time,
-            requirements=item.requirements,
-            other_notes=item.other_notes,
-            event_id=item.event_id,
-            decided_at=item.decided_at,
-            decided_by=item.decided_by,
-            created_at=item.created_at,
-        )
-        for item in requests
-        ],
+        items=[serialize_approval(item) for item in requests],
         total=total,
         limit=limit,
         offset=offset,
         next_offset=next_offset,
     )
+
+
+@router.post("/{request_id}/budget-breakdown", response_model=ApprovalRequestResponse)
+@limiter.limit("30/minute")
+async def upload_budget_breakdown(
+    request: Request,
+    request_id: str,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+):
+    """Upload PDF budget breakdown to Drive; stored on the pending approval until the event is created."""
+    approval = await ApprovalRequest.get(request_id)
+    if not approval:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    if approval.requester_id != str(user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+    if approval.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Budget breakdown can only be uploaded or replaced while the request is pending",
+        )
+
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
+
+    contents = await file.read()
+    max_size = 10 * 1024 * 1024
+    if len(contents) > max_size:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 10MB)")
+
+    folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
+    if not folder_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google Drive folder not configured",
+        )
+
+    drive_display_name = get_expected_budget_breakdown_filename(approval.event_name, approval.start_date)
+    try:
+        access_token = await ensure_google_access_token(user)
+        drive_file = upload_report_file(
+            access_token=access_token,
+            file_name=drive_display_name,
+            file_bytes=contents,
+            mime_type="application/pdf",
+            folder_id=folder_id,
+            replace_file_id=getattr(approval, "budget_breakdown_file_id", None),
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unable to upload file: {exc}",
+        )
+
+    approval.budget_breakdown_file_id = drive_file.get("id")
+    approval.budget_breakdown_file_name = drive_file.get("name")
+    approval.budget_breakdown_web_view_link = drive_file.get("webViewLink")
+    approval.budget_breakdown_uploaded_at = datetime.utcnow()
+    await approval.save()
+
+    return serialize_approval(approval)
 
 
 @router.patch("/{request_id}", response_model=ApprovalRequestResponse)
@@ -195,6 +215,11 @@ async def decide_request(
 
     if approval.status == "pending":
         if normalized_status == "approved":
+            if not getattr(approval, "budget_breakdown_file_id", None):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A budget breakdown PDF must be uploaded before this request can be approved.",
+                )
             if not approval.event_id:
                 start_dt = combine_datetime(approval.start_date, approval.start_time)
                 end_dt = combine_datetime(approval.end_date, approval.end_time)
@@ -220,6 +245,10 @@ async def decide_request(
                     venue_name=approval.venue_name,
                     intendedAudience=getattr(approval, "intendedAudience", None),
                     budget=getattr(approval, "budget", None),
+                    budget_breakdown_file_id=getattr(approval, "budget_breakdown_file_id", None),
+                    budget_breakdown_file_name=getattr(approval, "budget_breakdown_file_name", None),
+                    budget_breakdown_web_view_link=getattr(approval, "budget_breakdown_web_view_link", None),
+                    budget_breakdown_uploaded_at=getattr(approval, "budget_breakdown_uploaded_at", None),
                     start_date=approval.start_date,
                     start_time=approval.start_time,
                     end_date=approval.end_date,
@@ -305,29 +334,7 @@ async def decide_request(
         approval.decided_at = datetime.utcnow()
         await approval.save()
 
-    response_body = ApprovalRequestResponse(
-        id=str(approval.id),
-        status=approval.status,
-        requester_id=approval.requester_id,
-        requester_email=approval.requester_email,
-        requested_to=approval.requested_to,
-        event_name=approval.event_name,
-        facilitator=approval.facilitator,
-        budget=getattr(approval, "budget", None),
-        description=approval.description,
-        venue_name=approval.venue_name,
-        intendedAudience=getattr(approval, "intendedAudience", None),
-        start_date=approval.start_date,
-        start_time=approval.start_time,
-        end_date=approval.end_date,
-        end_time=approval.end_time,
-        requirements=approval.requirements,
-        other_notes=approval.other_notes,
-        event_id=approval.event_id,
-        decided_at=approval.decided_at,
-        decided_by=approval.decided_by,
-        created_at=approval.created_at,
-    )
+    response_body = serialize_approval(approval)
     if idem_key:
         await store_response(idem_key, 200, response_body.model_dump(mode="json"))
     return response_body

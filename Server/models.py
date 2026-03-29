@@ -52,6 +52,10 @@ class Event(Document):
     venue_name: str
     intendedAudience: Optional[str] = None
     budget: Optional[float] = None  # Event budget in Rs
+    budget_breakdown_file_id: Optional[str] = None
+    budget_breakdown_file_name: Optional[str] = None
+    budget_breakdown_web_view_link: Optional[str] = None
+    budget_breakdown_uploaded_at: Optional[datetime] = None
     start_date: str
     start_time: str
     end_date: str
@@ -77,6 +81,10 @@ class ApprovalRequest(Document):
     event_name: str
     facilitator: str
     budget: Optional[float] = None  # Event budget in Rs
+    budget_breakdown_file_id: Optional[str] = None
+    budget_breakdown_file_name: Optional[str] = None
+    budget_breakdown_web_view_link: Optional[str] = None
+    budget_breakdown_uploaded_at: Optional[datetime] = None
     description: Optional[str] = None
     venue_name: str
     intendedAudience: Optional[str] = None

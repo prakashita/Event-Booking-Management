@@ -83,6 +83,8 @@ export default function App() {
     end_time: { hour: "", minute: "", period: "AM" }
   });
   const [eventFormStatus, setEventFormStatus] = useState({ status: "idle", error: "" });
+  const [budgetBreakdownFile, setBudgetBreakdownFile] = useState(null);
+  const budgetBreakdownInputRef = useRef(null);
   const [conflictState, setConflictState] = useState({ open: false, items: [] });
   const [approvalModal, setApprovalModal] = useState({ open: false, status: "idle", error: "" });
   const [approvalForm, setApprovalForm] = useState({
@@ -2110,6 +2112,10 @@ export default function App() {
   };
 
   const handleEventModalOpen = () => {
+    setBudgetBreakdownFile(null);
+    if (budgetBreakdownInputRef.current) {
+      budgetBreakdownInputRef.current.value = "";
+    }
     setEventForm((prev) => ({
       ...prev,
       facilitator: prev.facilitator || defaultFacilitator
@@ -2119,6 +2125,10 @@ export default function App() {
   };
 
   const handleEventModalClose = () => {
+    setBudgetBreakdownFile(null);
+    if (budgetBreakdownInputRef.current) {
+      budgetBreakdownInputRef.current.value = "";
+    }
     setIsEventModalOpen(false);
     setConflictState({ open: false, items: [] });
   };
@@ -2235,6 +2245,10 @@ export default function App() {
       description: "",
       budget: ""
     });
+    setBudgetBreakdownFile(null);
+    if (budgetBreakdownInputRef.current) {
+      budgetBreakdownInputRef.current.value = "";
+    }
   };
 
   const handleMarketingSkip = () => {
@@ -2293,6 +2307,26 @@ export default function App() {
       .trim() || "Event";
     const datePart = (startDate || "").trim() || "0000-00-00";
     return `${sanitized}_${datePart}_Report.pdf`;
+  };
+
+  const uploadBudgetBreakdown = async (approvalId, file) => {
+    if (!approvalId || !file) {
+      throw new Error("Missing approval reference or budget file.");
+    }
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    const res = await api.post(`/approvals/${approvalId}/budget-breakdown`, fd);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const detail = data?.detail;
+      const message =
+        typeof detail === "string"
+          ? detail
+          : Array.isArray(detail)
+            ? detail.map((d) => d.msg || d).join(" ")
+            : "Budget breakdown upload failed.";
+      throw new Error(message);
+    }
   };
 
   const handleReportOpen = (eventItem) => {
@@ -3000,6 +3034,14 @@ export default function App() {
       return;
     }
 
+    if (!budgetBreakdownFile) {
+      setEventFormStatus({
+        status: "error",
+        error: "Budget breakdown PDF is required."
+      });
+      return;
+    }
+
     setEventFormStatus({ status: "loading", error: "" });
 
     try {
@@ -3042,6 +3084,20 @@ export default function App() {
         throw new Error(message);
       }
 
+      const data = await res.json();
+      try {
+        await uploadBudgetBreakdown(data?.approval_request?.id, budgetBreakdownFile);
+      } catch (uploadErr) {
+        setEventFormStatus({
+          status: "error",
+          error:
+            uploadErr?.message ||
+            "Budget breakdown upload failed. Your request was created—open your pending request and try uploading again, or contact support."
+        });
+        loadEvents();
+        return;
+      }
+
       setEventForm({
         start_date: "",
         end_date: "",
@@ -3054,6 +3110,10 @@ export default function App() {
         description: "",
         budget: ""
       });
+      setBudgetBreakdownFile(null);
+      if (budgetBreakdownInputRef.current) {
+        budgetBreakdownInputRef.current.value = "";
+      }
       setEventTimeParts({
         start_time: { hour: "", minute: "", period: "AM" },
         end_time: { hour: "", minute: "", period: "AM" }
@@ -3079,6 +3139,15 @@ export default function App() {
         open: true,
         status: "error",
         error: "Please sign in again."
+      });
+      return;
+    }
+
+    if (!budgetBreakdownFile) {
+      setApprovalModal({
+        open: true,
+        status: "error",
+        error: "Budget breakdown PDF is required."
       });
       return;
     }
@@ -3121,13 +3190,28 @@ export default function App() {
         throw new Error("Unable to send approval request.");
       }
 
+      const data = await res.json();
+      try {
+        await uploadBudgetBreakdown(data?.approval_request?.id, budgetBreakdownFile);
+      } catch (uploadErr) {
+        setApprovalModal({
+          open: true,
+          status: "error",
+          error:
+            uploadErr?.message ||
+            "Budget breakdown upload failed. Your request was created—try sending the PDF again from your pending list or contact support."
+        });
+        loadEvents();
+        return;
+      }
+
       setApprovalModal({ open: false, status: "idle", error: "" });
       setOverrideConflict(false);
       resetEventFormState();
       setIsEventModalOpen(false);
       setConflictState({ open: false, items: [] });
-      setStatus({ type: "success", message: "Event sent to registrar for approval." });
       loadEvents();
+      setStatus({ type: "success", message: "Event sent to registrar for approval." });
     } catch (err) {
       setApprovalModal({
         open: true,
@@ -4683,6 +4767,28 @@ export default function App() {
                         onChange={handleEventFieldChange("budget")}
                       />
                     </label>
+                    <div className="form-field">
+                      <span>
+                        Budget breakdown PDF <em>(required)</em>
+                      </span>
+                      <p className="form-hint">
+                        Upload a PDF with your budget breakdown. Any filename is fine; it is renamed automatically when saved (event name and start date).
+                      </p>
+                      <input
+                        ref={budgetBreakdownInputRef}
+                        type="file"
+                        accept="application/pdf"
+                        className="budget-breakdown-file-input"
+                        required
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          setBudgetBreakdownFile(f || null);
+                        }}
+                      />
+                      {budgetBreakdownFile ? (
+                        <p className="form-hint budget-breakdown-picked">Selected: {budgetBreakdownFile.name}</p>
+                      ) : null}
+                    </div>
                     {eventFormStatus.status === "error" ? (
                       <p className="form-error">{eventFormStatus.error}</p>
                     ) : null}
@@ -6581,13 +6687,30 @@ export default function App() {
                       <p className="details-label">Venue</p>
                       <p className="details-value">{eventDetailsModal.details.event?.venue_name}</p>
                     </div>
-                    <div>
+                    <div className="details-wide">
                       <p className="details-label">Budget (Rs)</p>
-                      <p className="details-value">
-                        {eventDetailsModal.details.event?.budget != null
-                          ? `Rs ${Number(eventDetailsModal.details.event.budget).toLocaleString()}`
-                          : "—"}
-                      </p>
+                      <div className="details-value details-budget-row">
+                        <span className="details-budget-amount">
+                          {eventDetailsModal.details.event?.budget != null
+                            ? `Rs ${Number(eventDetailsModal.details.event.budget).toLocaleString()}`
+                            : "—"}
+                        </span>
+                        {eventDetailsModal.details.event?.budget_breakdown_web_view_link ? (
+                          <button
+                            type="button"
+                            className="details-button"
+                            onClick={() =>
+                              window.open(
+                                eventDetailsModal.details.event.budget_breakdown_web_view_link,
+                                "_blank",
+                                "noopener,noreferrer"
+                              )
+                            }
+                          >
+                            Budget breakdown (PDF)
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                     <div>
                       <p className="details-label">Status</p>
@@ -6750,15 +6873,32 @@ export default function App() {
                     <p className="details-label">Requester</p>
                     <p className="details-value">{approvalDetailsModal.request.requester_email || "-"}</p>
                   </div>
-                  <div>
+                  <div className="details-wide">
                     <p className="details-label">Budget (Rs)</p>
-                    <p className="details-value">
-                      {approvalDetailsModal.request.budget != null &&
-                      approvalDetailsModal.request.budget !== "" &&
-                      !isNaN(Number(approvalDetailsModal.request.budget))
-                        ? `Rs ${Number(approvalDetailsModal.request.budget).toLocaleString()}`
-                        : "—"}
-                    </p>
+                    <div className="details-value details-budget-row">
+                      <span className="details-budget-amount">
+                        {approvalDetailsModal.request.budget != null &&
+                        approvalDetailsModal.request.budget !== "" &&
+                        !isNaN(Number(approvalDetailsModal.request.budget))
+                          ? `Rs ${Number(approvalDetailsModal.request.budget).toLocaleString()}`
+                          : "—"}
+                      </span>
+                      {approvalDetailsModal.request.budget_breakdown_web_view_link ? (
+                        <button
+                          type="button"
+                          className="details-button"
+                          onClick={() =>
+                            window.open(
+                              approvalDetailsModal.request.budget_breakdown_web_view_link,
+                              "_blank",
+                              "noopener,noreferrer"
+                            )
+                          }
+                        >
+                          Budget breakdown (PDF)
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                   <div>
                     <p className="details-label">Requested To</p>

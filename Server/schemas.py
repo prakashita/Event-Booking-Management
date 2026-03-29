@@ -89,6 +89,10 @@ class EventResponse(BaseModel):
     status: str
     google_event_id: Optional[str] = None
     google_event_link: Optional[str] = None
+    budget_breakdown_file_id: Optional[str] = None
+    budget_breakdown_file_name: Optional[str] = None
+    budget_breakdown_web_view_link: Optional[str] = None
+    budget_breakdown_uploaded_at: Optional[datetime] = None
     report_file_id: Optional[str] = None
     report_file_name: Optional[str] = None
     report_web_view_link: Optional[str] = None
@@ -105,6 +109,10 @@ class ApprovalRequestResponse(BaseModel):
     event_name: str
     facilitator: str
     budget: Optional[float] = None
+    budget_breakdown_file_id: Optional[str] = None
+    budget_breakdown_file_name: Optional[str] = None
+    budget_breakdown_web_view_link: Optional[str] = None
+    budget_breakdown_uploaded_at: Optional[datetime] = None
     description: Optional[str] = None
     venue_name: str
     intendedAudience: Optional[str] = None
