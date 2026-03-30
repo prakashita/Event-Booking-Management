@@ -47,6 +47,11 @@ async def get_connect_url(user: User = Depends(get_current_user)):
     return {"url": build_google_oauth_url(state)}
 
 
+@router.get("/status")
+async def get_calendar_status(user: User = Depends(get_current_user)):
+    return {"connected": bool(user.google_refresh_token)}
+
+
 @router.get("/oauth/callback")
 async def oauth_callback(code: str, state: str):
     payload = decode_oauth_state(state)
