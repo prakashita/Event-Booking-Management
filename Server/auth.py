@@ -50,6 +50,35 @@ async def get_user_by_role(role: str):
     return await User.find_one(User.role == role.lower())
 
 
+# Roles that receive Google Calendar invitations when an event is approved (organizer excluded).
+CALENDAR_INVITE_STAFF_ROLES = (
+    "registrar",
+    "facility_manager",
+    "marketing",
+    "it",
+    "admin",
+)
+
+
+async def get_staff_emails_for_calendar_invites(
+    exclude_emails: set[str] | None = None,
+) -> list[str]:
+    """Primary emails for staff roles that should see approved bookings on Google Calendar."""
+    from models import User
+
+    exclude = {e.strip().lower() for e in exclude_emails if e and e.strip()} if exclude_emails else set()
+    seen: set[str] = set()
+    out: list[str] = []
+    for role in CALENDAR_INVITE_STAFF_ROLES:
+        users = await User.find(User.role == role).to_list()
+        for u in users:
+            em = (u.email or "").strip().lower()
+            if not em or em in exclude or em in seen:
+                continue
+            seen.add(em)
+            out.append(em)
+    return out
+
 
 def verify_google_token(token: str):
     response = requests.get(GOOGLE_TOKEN_INFO_URL, params={"id_token": token})

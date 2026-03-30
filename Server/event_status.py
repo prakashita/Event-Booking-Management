@@ -70,6 +70,30 @@ def event_has_started(start_date: str, start_time: str, now: datetime | None = N
         return False
 
 
+def event_has_ended(
+    end_date: str | None,
+    end_time: str | None,
+    *,
+    start_date: str | None = None,
+    start_time: str | None = None,
+    now: datetime | None = None,
+) -> bool:
+    """True if the event end datetime is in the past (or now). Falls back to start_date if end_date is missing."""
+    date_str = (end_date or "").strip() or (start_date or "").strip()
+    if not date_str:
+        return False
+    if now is None:
+        now = datetime.now()
+    try:
+        time_str = (end_time or start_time or "23:59:59").strip()
+        if len(time_str) <= 5:
+            time_str = f"{time_str}:00"
+        end_dt = combine_datetime(date_str, time_str)
+        return now >= end_dt
+    except (ValueError, TypeError):
+        return False
+
+
 def compute_event_status(start_dt: datetime, end_dt: datetime, now: datetime | None = None) -> str:
     if now is None:
         now = datetime.now()

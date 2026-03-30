@@ -159,10 +159,10 @@ export default function App() {
   });
   const REQUIREMENT_OPTIONS = [
     { key: "poster_required", type: "poster", label: "Poster" },
-    { key: "video_required", type: "video", label: "Video" },
-    { key: "linkedin_post", type: "linkedin", label: "Social Media" },
-    { key: "photography", type: "photography", label: "Photo" },
-    { key: "recording", type: "recording", label: "Post-Event Video" }
+    { key: "video_required", type: "video", label: "Videoshoot" },
+    { key: "linkedin_post", type: "linkedin", label: "Social Media Post" },
+    { key: "photography", type: "photography", label: "Photoshoot / Photo upload" },
+    { key: "recording", type: "recording", label: "Video Upload" }
   ];
   const MARKETING_REQUIREMENT_GROUPS = [
     {
@@ -170,24 +170,24 @@ export default function App() {
       title: "Pre-Event",
       fields: [
         { key: "poster", label: "Poster" },
-        { key: "social_media", label: "Social Media" }
+        { key: "social_media", label: "Social Media Post" }
       ]
     },
     {
       key: "during_event",
       title: "During Event",
       fields: [
-        { key: "photo", label: "Photo" },
-        { key: "video", label: "Video" }
+        { key: "photo", label: "Photoshoot" },
+        { key: "video", label: "Videoshoot" }
       ]
     },
     {
       key: "post_event",
       title: "Post-Event",
       fields: [
-        { key: "social_media", label: "Social Media" },
+        { key: "social_media", label: "Social Media Post" },
         { key: "photo_upload", label: "Photo Upload" },
-        { key: "video", label: "Video" }
+        { key: "video", label: "Video Upload" }
       ]
     }
   ];
@@ -2466,34 +2466,109 @@ export default function App() {
     };
   };
 
+  /** Types marketing must upload (excludes during-event videoshoot and on-site photoshoot only). */
+  const getMarketingDeliverableUploadFlags = (request) => {
+    const normalized = normalizeMarketingRequirements(request);
+    const flags = getMarketingRequirementFlags(request);
+    return {
+      poster_required: flags.poster_required,
+      video_required: false,
+      linkedin_post: flags.linkedin_post,
+      photography: Boolean(normalized.post_event.photo_upload),
+      recording: flags.recording
+    };
+  };
+
+  const getMarketingDeliverableLabel = (deliverableType) =>
+    REQUIREMENT_OPTIONS.find((o) => o.type === deliverableType)?.label || deliverableType;
+
+  /** When uploads for this deliverable type are blocked (must match server _enforce_deliverable_upload_window). */
+  const getMarketingDeliverableRowLock = (type, request) => {
+    if (!request?.start_date) {
+      return { locked: true, hint: "Event schedule unavailable." };
+    }
+    const req = normalizeMarketingRequirements(request);
+    const started = isEventStarted(request);
+    const ended = isEventEnded(request);
+    const preSocial = req.pre_event.social_media;
+    const postSocial = req.post_event.social_media;
+    if (type === "poster") {
+      return started
+        ? { locked: true, hint: "Upload before the event starts." }
+        : { locked: false, hint: "" };
+    }
+    if (type === "linkedin") {
+      if (preSocial && !postSocial) {
+        return started
+          ? { locked: true, hint: "Pre-event social posts: upload before the event starts." }
+          : { locked: false, hint: "" };
+      }
+      if (postSocial && !preSocial) {
+        return !ended
+          ? { locked: true, hint: "Post-event social posts: upload after the event has ended." }
+          : { locked: false, hint: "" };
+      }
+      return started && !ended
+        ? { locked: true, hint: "Upload before the event starts or after it ends (not during)." }
+        : { locked: false, hint: "" };
+    }
+    if (type === "recording") {
+      return !ended
+        ? { locked: true, hint: "Post-event video: upload after the event has ended." }
+        : { locked: false, hint: "" };
+    }
+    if (type === "photography") {
+      return !ended
+        ? { locked: true, hint: "Post-event photo: upload after the event has ended." }
+        : { locked: false, hint: "" };
+    }
+    return { locked: false, hint: "" };
+  };
+
+  const hasMarketingModalActionableChoice = (request, requirements) =>
+    REQUIREMENT_OPTIONS.some((opt) => {
+      if (!getMarketingDeliverableUploadFlags(request || {})[opt.key]) return false;
+      const r = requirements?.[opt.type];
+      if (!r?.na && !r?.file) return false;
+      return !getMarketingDeliverableRowLock(opt.type, request).locked;
+    });
+
   const getMarketingNeedsLabel = (request) => {
     const req = normalizeMarketingRequirements(request);
     const sections = [];
     const pre = [];
     if (req.pre_event.poster) pre.push("Poster");
-    if (req.pre_event.social_media) pre.push("Social Media");
+    if (req.pre_event.social_media) pre.push("Social Media Post");
     if (pre.length) sections.push(`Pre-Event: ${pre.join(", ")}`);
 
     const during = [];
-    if (req.during_event.photo) during.push("Photo");
-    if (req.during_event.video) during.push("Video");
+    if (req.during_event.photo) during.push("Photoshoot");
+    if (req.during_event.video) during.push("Videoshoot");
     if (during.length) sections.push(`During Event: ${during.join(", ")}`);
 
     const post = [];
-    if (req.post_event.social_media) post.push("Social Media");
+    if (req.post_event.social_media) post.push("Social Media Post");
     if (req.post_event.photo_upload) post.push("Photo Upload");
-    if (req.post_event.video) post.push("Video");
+    if (req.post_event.video) post.push("Video Upload");
     if (post.length) sections.push(`Post-Event: ${post.join(", ")}`);
 
     return sections.length ? sections.join(" | ") : "None";
   };
 
   const openMarketingDeliverableModal = (request) => {
-    if (isEventStarted(request)) return;
-    const requirementFlags = getMarketingRequirementFlags(request);
+    const uploadFlags = getMarketingDeliverableUploadFlags(request);
+    const hasUploadable = REQUIREMENT_OPTIONS.some((opt) => uploadFlags[opt.key]);
+    if (!hasUploadable) {
+      setStatus({
+        type: "info",
+        message:
+          "This request only includes during-event marketing (videoshoot / on-site photoshoot). No file uploads are required."
+      });
+      return;
+    }
     const requirements = {};
     REQUIREMENT_OPTIONS.forEach(({ key, type }) => {
-      if (requirementFlags[key]) {
+      if (uploadFlags[key]) {
         const existing = request.deliverables?.find((d) => d.deliverable_type === type);
         requirements[type] = {
           na: !!existing?.is_na,
@@ -2528,19 +2603,20 @@ export default function App() {
       setMarketingDeliverableModal((prev) => ({ ...prev, status: "error", error: "Please sign in again." }));
       return;
     }
-    const hasAnyChoice = Object.values(requirements || {}).some((r) => r.na || r.file);
-    if (!request?.id || !hasAnyChoice) {
+    if (!request?.id || !hasMarketingModalActionableChoice(request, requirements)) {
       setMarketingDeliverableModal((prev) => ({
         ...prev,
         status: "error",
-        error: "For each requirement, select NA or upload a file."
+        error: "For at least one deliverable that is open for upload now, select NA or choose a file."
       }));
       return;
     }
     setMarketingDeliverableModal((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
       const formData = new FormData();
-      REQUIREMENT_OPTIONS.forEach(({ type }) => {
+      const uploadFlags = getMarketingDeliverableUploadFlags(request);
+      REQUIREMENT_OPTIONS.forEach(({ key, type }) => {
+        if (!uploadFlags[key]) return;
         const r = requirements?.[type];
         if (!r) return;
         if (r.na) {
@@ -3009,6 +3085,16 @@ export default function App() {
     const startStr = `${event.start_date}T${normalizeTimeToHHMMSS(event.start_time)}`;
     const start = new Date(startStr);
     return !Number.isNaN(start.getTime()) && start <= new Date();
+  };
+
+  /** True if event end is in the past (uses end_date/end_time, or start_date if end_date missing). */
+  const isEventEnded = (event) => {
+    if (!event) return false;
+    const dateStr = (event.end_date || event.start_date || "").trim();
+    if (!dateStr) return false;
+    const endStr = `${dateStr}T${normalizeTimeToHHMMSS(event.end_time ?? event.start_time)}`;
+    const end = new Date(endStr);
+    return !Number.isNaN(end.getTime()) && end <= new Date();
   };
 
   const submitEvent = async (formEvent, override) => {
@@ -6352,6 +6438,9 @@ export default function App() {
                       const needsLabel = getMarketingNeedsLabel(item);
                       const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
                       const eventHasStarted = isEventStarted(item);
+                      const marketingHasFileUploads = REQUIREMENT_OPTIONS.some(
+                        (opt) => getMarketingDeliverableUploadFlags(item)[opt.key]
+                      );
                       return (
                         <div key={item.id} className="events-table-row marketing">
                           <span>{item.event_name}</span>
@@ -6373,8 +6462,12 @@ export default function App() {
                             <button
                               type="button"
                               className="details-button upload"
-                              disabled={eventHasStarted}
-                              title={eventHasStarted ? "Event has already started" : ""}
+                              disabled={!marketingHasFileUploads}
+                              title={
+                                marketingHasFileUploads
+                                  ? ""
+                                  : "No file uploads for this request (during-event videoshoot / photoshoot only)."
+                              }
                               onClick={() => openMarketingDeliverableModal(item)}
                             >
                               Upload
@@ -6813,32 +6906,35 @@ export default function App() {
                     ) : null}
                   </div>
 
-                  {eventDetailsModal.details.marketing_requests?.some((r) => r.deliverables?.length) ? (
+                  {eventDetailsModal.details.marketing_requests?.length ? (
                     <div className="event-details-section">
-                      <p className="details-label">Files uploaded by marketing</p>
-                      {eventDetailsModal.details.marketing_requests.map((req, i) =>
-                        req.deliverables?.length ? (
-                          <div key={req.id || i} className="details-subsection">
-                            {eventDetailsModal.details.marketing_requests.length > 1 ? (
-                              <p className="details-sublabel">Request to {req.requested_to || "marketing"}</p>
-                            ) : null}
+                      <p className="details-label">Marketing deliverables</p>
+                      {eventDetailsModal.details.marketing_requests.map((req, i) => (
+                        <div key={req.id || i} className="details-subsection">
+                          {eventDetailsModal.details.marketing_requests.length > 1 ? (
+                            <p className="details-sublabel">Request to {req.requested_to || "marketing"}</p>
+                          ) : null}
+                          {req.deliverables?.length ? (
                             <ul className="details-list">
                               {req.deliverables.map((d, j) => (
                                 <li key={j}>
                                   {d.is_na ? (
-                                    <span>{d.deliverable_type}: N/A</span>
+                                    <span>{getMarketingDeliverableLabel(d.deliverable_type)}: N/A</span>
                                   ) : d.web_view_link ? (
-                                    <a href={d.web_view_link} target="_blank" rel="noreferrer">{d.file_name || d.deliverable_type}</a>
+                                    <a href={d.web_view_link} target="_blank" rel="noreferrer">
+                                      {d.file_name || getMarketingDeliverableLabel(d.deliverable_type)}
+                                    </a>
                                   ) : (
-                                    <span>{d.file_name || d.deliverable_type}</span>
+                                    <span>{d.file_name || getMarketingDeliverableLabel(d.deliverable_type)}</span>
                                   )}
-                                  {!d.is_na ? ` (${d.deliverable_type})` : null}
                                 </li>
                               ))}
                             </ul>
-                          </div>
-                        ) : null
-                      )}
+                          ) : (
+                            <p className="details-value">No files uploaded yet.</p>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   ) : null}
 
@@ -6976,18 +7072,30 @@ export default function App() {
                 {marketingDeliverableModal.request.event_name || "Event"}
               </p>
               <p className="form-hint" style={{ marginBottom: "1rem" }}>
-                For each requirement, select NA or upload a file (max 25MB each).
+                Upload pre-event items (poster, pre-event social) before the event starts. Post-event items (video upload,
+                post social, post-event photos) after the event ends. Videoshoot and on-site photoshoot are handled during
+                the event and do not use this form. You can save in multiple visits (max 25MB per file).
               </p>
               <form className="event-form" onSubmit={submitMarketingDeliverable}>
-                {REQUIREMENT_OPTIONS.filter((opt) => getMarketingRequirementFlags(marketingDeliverableModal.request || {})[opt.key]).map((opt) => {
+                {REQUIREMENT_OPTIONS.filter((opt) =>
+                  getMarketingDeliverableUploadFlags(marketingDeliverableModal.request || {})[opt.key]
+                ).map((opt) => {
                   const r = marketingDeliverableModal.requirements?.[opt.type] || { na: false, file: null };
+                  const rowLock = getMarketingDeliverableRowLock(opt.type, marketingDeliverableModal.request);
+                  const rowDisabled = rowLock.locked;
                   return (
                     <div key={opt.type} className="form-field deliverable-row">
                       <span className="deliverable-label">{opt.label}</span>
+                      {rowLock.hint ? (
+                        <span className="form-hint" style={{ display: "block", marginBottom: "0.25rem" }}>
+                          {rowLock.hint}
+                        </span>
+                      ) : null}
                       <label className="deliverable-na">
                         <input
                           type="checkbox"
                           checked={r.na}
+                          disabled={rowDisabled}
                           onChange={(e) => {
                             setMarketingDeliverableModal((prev) => ({
                               ...prev,
@@ -7005,7 +7113,7 @@ export default function App() {
                           key={`${opt.type}-${r.na}`}
                           type="file"
                           accept="*/*"
-                          disabled={r.na}
+                          disabled={r.na || rowDisabled}
                           onChange={(e) => {
                             const f = e.target.files?.[0];
                             setMarketingDeliverableModal((prev) => ({
@@ -7029,15 +7137,15 @@ export default function App() {
                       {marketingDeliverableModal.request.deliverables.map((d, i) => (
                         <li key={i}>
                           {d.is_na ? (
-                            <span>{d.deliverable_type}: N/A</span>
+                            <span>{getMarketingDeliverableLabel(d.deliverable_type)}: N/A</span>
                           ) : d.web_view_link ? (
                             <a href={d.web_view_link} target="_blank" rel="noreferrer">
-                              {d.file_name || d.deliverable_type}
+                              {d.file_name || getMarketingDeliverableLabel(d.deliverable_type)}
                             </a>
                           ) : (
-                            <span>{d.file_name || d.deliverable_type}</span>
+                            <span>{d.file_name || getMarketingDeliverableLabel(d.deliverable_type)}</span>
                           )}
-                          {!d.is_na ? ` (${d.deliverable_type})` : null}
+                          {!d.is_na ? ` (${getMarketingDeliverableLabel(d.deliverable_type)})` : null}
                         </li>
                       ))}
                     </ul>
@@ -7070,7 +7178,10 @@ export default function App() {
                     className="primary-action"
                     disabled={
                       marketingDeliverableModal.status === "loading" ||
-                      !Object.values(marketingDeliverableModal.requirements || {}).some((r) => r.na || r.file)
+                      !hasMarketingModalActionableChoice(
+                        marketingDeliverableModal.request,
+                        marketingDeliverableModal.requirements
+                      )
                     }
                   >
                     {marketingDeliverableModal.status === "loading" ? "Saving..." : "Save"}

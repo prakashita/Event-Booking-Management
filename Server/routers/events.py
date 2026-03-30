@@ -12,7 +12,12 @@ from rate_limit import limiter
 from fastapi.responses import JSONResponse
 import requests
 
-from auth import ensure_google_access_token, get_primary_email_by_role, get_user_by_role
+from auth import (
+    ensure_google_access_token,
+    get_primary_email_by_role,
+    get_staff_emails_for_calendar_invites,
+    get_user_by_role,
+)
 from drive import delete_drive_file, upload_report_file
 from errors import error_payload
 from idempotency import get_cached_response, get_idempotency_key, store_response
@@ -84,6 +89,10 @@ async def sync_event_to_google_calendar(event: Event, user: User) -> None:
 
     access_token = await ensure_google_access_token(user)
     time_zone = os.getenv("DEFAULT_TIMEZONE", "Asia/Kolkata")
+    organizer_email = (user.email or "").strip().lower()
+    staff_emails = await get_staff_emails_for_calendar_invites(
+        exclude_emails={organizer_email} if organizer_email else None,
+    )
     payload = {
         "summary": event.name,
         "description": event.description or "",
@@ -91,9 +100,14 @@ async def sync_event_to_google_calendar(event: Event, user: User) -> None:
         "start": {"dateTime": f"{event.start_date}T{event.start_time}", "timeZone": time_zone},
         "end": {"dateTime": f"{event.end_date}T{event.end_time}", "timeZone": time_zone},
     }
+    if staff_emails:
+        payload["attendees"] = [{"email": email} for email in staff_emails]
+
+    send_updates = "all" if staff_emails else "none"
     response = requests.post(
         "https://www.googleapis.com/calendar/v3/calendars/primary/events",
         headers={"Authorization": f"Bearer {access_token}"},
+        params={"sendUpdates": send_updates},
         json=payload,
         timeout=15,
     )

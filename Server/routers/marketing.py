@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 from auth import ensure_google_access_token, get_primary_email_by_role
 from drive import upload_report_file
-from event_status import event_has_started
+from event_status import event_has_ended, event_has_started
 from models import ApprovalRequest, Event, MarketingDeliverable, MarketingRequest, User
 from notifications import send_notification_email
 from routers.deps import get_current_user
@@ -105,6 +105,94 @@ def _serialize_deliverables(deliverables_list):
             )
         )
     return result
+
+
+def _enforce_deliverable_upload_window(request_item: MarketingRequest, deliverable_type: str) -> None:
+    """Pre-event uploads before start; post-event uploads after end (no during-event file uploads)."""
+    start_d = request_item.start_date
+    start_t = request_item.start_time
+    end_d = request_item.end_date
+    end_t = request_item.end_time
+
+    normalized, _flags = _normalize_marketing_requirements(
+        getattr(request_item, "marketing_requirements", None),
+        poster_required=getattr(request_item, "poster_required", False),
+        video_required=getattr(request_item, "video_required", False),
+        linkedin_post=getattr(request_item, "linkedin_post", False),
+        photography=getattr(request_item, "photography", False),
+        recording=getattr(request_item, "recording", False),
+    )
+    pre_social = normalized["pre_event"]["social_media"]
+    post_social = normalized["post_event"]["social_media"]
+    started = event_has_started(start_d, start_t)
+    ended = event_has_ended(end_d, end_t, start_date=start_d, start_time=start_t)
+
+    if deliverable_type == "poster":
+        if started:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Poster must be uploaded before the event starts.",
+            )
+        return
+
+    if deliverable_type == "linkedin":
+        if pre_social and not post_social:
+            if started:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Pre-event social posts must be uploaded before the event starts.",
+                )
+        elif post_social and not pre_social:
+            if not ended:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Post-event social posts must be uploaded after the event has ended.",
+                )
+        else:
+            if started and not ended:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Social media deliverables must be uploaded before the event starts or after it ends.",
+                )
+        return
+
+    if deliverable_type == "recording":
+        if not ended:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Post-event video must be uploaded after the event has ended.",
+            )
+        return
+
+    if deliverable_type == "photography":
+        if not ended:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Post-event photo must be uploaded after the event has ended.",
+            )
+        return
+
+
+def _marketing_upload_deliverable_types(request_item: MarketingRequest) -> list[str]:
+    """Deliverable types marketing may submit. During-event (videoshoot, on-site photoshoot) has no file upload."""
+    normalized, flags = _normalize_marketing_requirements(
+        getattr(request_item, "marketing_requirements", None),
+        poster_required=getattr(request_item, "poster_required", False),
+        video_required=getattr(request_item, "video_required", False),
+        linkedin_post=getattr(request_item, "linkedin_post", False),
+        photography=getattr(request_item, "photography", False),
+        recording=getattr(request_item, "recording", False),
+    )
+    types: list[str] = []
+    if flags["poster_required"]:
+        types.append("poster")
+    if flags["linkedin_post"]:
+        types.append("linkedin")
+    if normalized["post_event"]["photo_upload"]:
+        types.append("photography")
+    if flags["recording"]:
+        types.append("recording")
+    return types
 
 
 def _serialize_marketing_response(item: MarketingRequest) -> MarketingRequestResponse:
@@ -220,10 +308,10 @@ async def create_marketing_request(
         f"Event: {request_item.event_name}\n"
         f"Date: {request_item.start_date} {request_item.start_time} - {request_item.end_date} {request_item.end_time}\n"
         f"Poster required: {'Yes' if request_item.poster_required else 'No'}\n"
-        f"Video required: {'Yes' if request_item.video_required else 'No'}\n"
-        f"LinkedIn post: {'Yes' if request_item.linkedin_post else 'No'}\n"
-        f"Photography: {'Yes' if request_item.photography else 'No'}\n"
-        f"Recording: {'Yes' if request_item.recording else 'No'}\n"
+        f"Videoshoot: {'Yes' if request_item.video_required else 'No'}\n"
+        f"Social media post: {'Yes' if request_item.linkedin_post else 'No'}\n"
+        f"Photoshoot / photo upload: {'Yes' if request_item.photography else 'No'}\n"
+        f"Video upload (post-event): {'Yes' if request_item.recording else 'No'}\n"
     )
     if request_item.other_notes:
         body += f"\nAdditional notes: {request_item.other_notes}\n"
@@ -296,7 +384,7 @@ async def upload_marketing_deliverable(
     request: Request,
     request_id: str,
     file: UploadFile = File(...),
-    deliverable_type: str = Form(..., pattern="^(poster|photography|video|recording|other)$"),
+    deliverable_type: str = Form(..., pattern="^(poster|photography|recording|linkedin|other)$"),
     user: User = Depends(get_current_user),
 ):
     """Upload a deliverable (poster, photo, video, etc.) for a marketing request. Only the marketing contact can upload."""
@@ -317,11 +405,14 @@ async def upload_marketing_deliverable(
                 detail="Only the marketing contact or users with the marketing role can upload deliverables",
             )
 
-        if event_has_started(request_item.start_date, request_item.start_time):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Event has already started; no actions allowed on this request.",
-            )
+        if deliverable_type != "other":
+            allowed = set(_marketing_upload_deliverable_types(request_item))
+            if deliverable_type not in allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This deliverable type does not require a file upload for this request.",
+                )
+            _enforce_deliverable_upload_window(request_item, deliverable_type)
 
         if not file.filename:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File is required")
@@ -377,16 +468,6 @@ async def upload_marketing_deliverable(
         ) from exc
 
 
-# Requirement types marked by faculty -> deliverable_type
-_REQUIREMENT_MAP = [
-    ("poster_required", "poster", "Poster"),
-    ("video_required", "video", "Video"),
-    ("linkedin_post", "linkedin", "LinkedIn"),
-    ("photography", "photography", "Photography"),
-    ("recording", "recording", "Recording"),
-]
-
-
 @router.post("/requests/{request_id}/deliverables/batch", response_model=MarketingRequestResponse)
 @limiter.limit("30/minute")
 async def upload_marketing_deliverables_batch(
@@ -394,17 +475,15 @@ async def upload_marketing_deliverables_batch(
     request_id: str,
     user: User = Depends(get_current_user),
     na_poster: Optional[str] = Form(None),
-    na_video: Optional[str] = Form(None),
     na_linkedin: Optional[str] = Form(None),
     na_photography: Optional[str] = Form(None),
     na_recording: Optional[str] = Form(None),
     file_poster: Optional[UploadFile] = File(None),
-    file_video: Optional[UploadFile] = File(None),
     file_linkedin: Optional[UploadFile] = File(None),
     file_photography: Optional[UploadFile] = File(None),
     file_recording: Optional[UploadFile] = File(None),
 ):
-    """Submit deliverables for all requirements: either NA or upload a file for each."""
+    """Submit deliverables for uploadable requirements (pre/post only; during-event needs have no files)."""
     try:
         request_item = await MarketingRequest.get(request_id)
         if not request_item:
@@ -421,12 +500,6 @@ async def upload_marketing_deliverables_batch(
                 detail="Only the marketing contact or users with the marketing role can upload deliverables",
             )
 
-        if event_has_started(request_item.start_date, request_item.start_time):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Event has already started; no actions allowed on this request.",
-            )
-
         folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
         if not folder_id:
             raise HTTPException(
@@ -434,20 +507,20 @@ async def upload_marketing_deliverables_batch(
                 detail="Google Drive folder not configured. Set GOOGLE_DRIVE_FOLDER_ID in .env.",
             )
 
-        na_map = {"poster": na_poster, "video": na_video, "linkedin": na_linkedin, "photography": na_photography, "recording": na_recording}
-        file_map = {"poster": file_poster, "video": file_video, "linkedin": file_linkedin, "photography": file_photography, "recording": file_recording}
+        na_map = {"poster": na_poster, "linkedin": na_linkedin, "photography": na_photography, "recording": na_recording}
+        file_map = {"poster": file_poster, "linkedin": file_linkedin, "photography": file_photography, "recording": file_recording}
 
         existing = list(getattr(request_item, "deliverables", None) or [])
         existing_by_type = {_deliverable_field(d, "deliverable_type"): d for d in existing}
 
         access_token = None
 
-        for req_key, dtype, _ in _REQUIREMENT_MAP:
-            if not getattr(request_item, req_key, False):
-                continue
-
+        for dtype in _marketing_upload_deliverable_types(request_item):
             is_na = bool(na_map.get(dtype))
             uf = file_map.get(dtype)
+
+            if is_na or (uf and uf.filename):
+                _enforce_deliverable_upload_window(request_item, dtype)
 
             if is_na:
                 existing_by_type[dtype] = MarketingDeliverable(
