@@ -3097,6 +3097,13 @@ export default function App() {
     return !Number.isNaN(end.getTime()) && end <= new Date();
   };
 
+  const isBudgetBreakdownPdf = (file) => {
+    if (!file) return false;
+    const name = (file.name || "").toLowerCase();
+    const type = (file.type || "").toLowerCase();
+    return type === "application/pdf" || name.endsWith(".pdf");
+  };
+
   const submitEvent = async (formEvent, override) => {
     if (formEvent) {
       formEvent.preventDefault();
@@ -3120,10 +3127,10 @@ export default function App() {
       return;
     }
 
-    if (!budgetBreakdownFile) {
+    if (!budgetBreakdownFile || !isBudgetBreakdownPdf(budgetBreakdownFile)) {
       setEventFormStatus({
         status: "error",
-        error: "Budget breakdown PDF is required."
+        error: "Budget breakdown PDF is required. Choose a PDF file before continuing."
       });
       return;
     }
@@ -3229,11 +3236,11 @@ export default function App() {
       return;
     }
 
-    if (!budgetBreakdownFile) {
+    if (!budgetBreakdownFile || !isBudgetBreakdownPdf(budgetBreakdownFile)) {
       setApprovalModal({
         open: true,
         status: "error",
-        error: "Budget breakdown PDF is required."
+        error: "Budget breakdown PDF is required. Choose a PDF file before continuing."
       });
       return;
     }
@@ -3556,6 +3563,14 @@ export default function App() {
       return;
     }
 
+    if (!budgetBreakdownFile || !isBudgetBreakdownPdf(budgetBreakdownFile)) {
+      setEventFormStatus({
+        status: "error",
+        error: "Budget breakdown PDF is required. Choose a PDF file before continuing."
+      });
+      return;
+    }
+
     setEventFormStatus({ status: "loading", error: "" });
 
     try {
@@ -3611,6 +3626,14 @@ export default function App() {
   };
 
   const handleConflictApprovalRequest = () => {
+    if (!budgetBreakdownFile || !isBudgetBreakdownPdf(budgetBreakdownFile)) {
+      setConflictState({ open: false, items: [] });
+      setEventFormStatus({
+        status: "error",
+        error: "Budget breakdown PDF is required. Choose a PDF file before continuing."
+      });
+      return;
+    }
     setOverrideConflict(true);
     setConflictState({ open: false, items: [] });
     setIsEventModalOpen(false);
@@ -4862,8 +4885,9 @@ export default function App() {
                       </p>
                       <input
                         ref={budgetBreakdownInputRef}
+                        name="budget_breakdown_pdf"
                         type="file"
-                        accept="application/pdf"
+                        accept="application/pdf,.pdf"
                         className="budget-breakdown-file-input"
                         required
                         onChange={(e) => {
@@ -4882,7 +4906,20 @@ export default function App() {
                       <button type="button" className="secondary-action" onClick={handleEventModalClose}>
                         Cancel
                       </button>
-                      <button type="submit" className="primary-action" disabled={eventFormStatus.status === "loading"}>
+                      <button
+                        type="submit"
+                        className="primary-action"
+                        disabled={
+                          eventFormStatus.status === "loading" ||
+                          !budgetBreakdownFile ||
+                          !isBudgetBreakdownPdf(budgetBreakdownFile)
+                        }
+                        title={
+                          !budgetBreakdownFile || !isBudgetBreakdownPdf(budgetBreakdownFile)
+                            ? "Select a budget breakdown PDF to continue"
+                            : undefined
+                        }
+                      >
                         {eventFormStatus.status === "loading" ? "Creating..." : "Create Event"}
                       </button>
                     </div>
@@ -5002,7 +5039,16 @@ export default function App() {
                       <button
                         type="submit"
                         className="primary-action"
-                        disabled={approvalModal.status === "loading"}
+                        disabled={
+                          approvalModal.status === "loading" ||
+                          !budgetBreakdownFile ||
+                          !isBudgetBreakdownPdf(budgetBreakdownFile)
+                        }
+                        title={
+                          !budgetBreakdownFile || !isBudgetBreakdownPdf(budgetBreakdownFile)
+                            ? "Select a budget breakdown PDF in the create event form first"
+                            : undefined
+                        }
                       >
                         {approvalModal.status === "loading" ? "Sending..." : "Send"}
                       </button>
