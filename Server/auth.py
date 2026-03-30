@@ -1,239 +1,184 @@
-# import json
-from urllib.parse import urlencode, urlparse
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import RedirectResponse
-from pydantic import BaseModel
-
-from rate_limit import limiter
-from models import PendingRoleAssignment, User
-from auth import (
-    GOOGLE_CLIENT_ID,
-    GOOGLE_CLIENT_SECRET,
-    GOOGLE_REDIRECT_URI,
-    REQUIRED_GOOGLE_SCOPES,
-    ensure_google_access_token,
-    get_primary_email_by_role,
-    verify_google_token,
-    create_access_token,
-    decode_access_token,
-    is_admin_email,
-)
-from routers.deps import get_current_user
+import os
+from datetime import datetime, timedelta, timezone
+from jose import jwt, JWTError
 import requests
+from fastapi import HTTPException, status
+from dotenv import load_dotenv
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+# Load environment variables from Server/.env explicitly
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-MOBILE_APP_SCHEME = "eventbooking"
+SECRET_KEY = os.getenv("SECRET_KEY", "CHANGE_ME_LATER")
+ALGORITHM = "HS256"
+# Default 7 days; set ACCESS_TOKEN_EXPIRE_MINUTES in .env to override
+_access_minutes = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(_access_minutes) if _access_minutes.isdigit() else (60 * 24 * 7)
+
+GOOGLE_TOKEN_INFO_URL = "https://oauth2.googleapis.com/tokeninfo"
+# Comma-separated allowed email domains (e.g. srmap.edu.in,vidyashilp.edu.in,gmail.com)
+# Emails must end with @<domain> (e.g. user@vidyashilp.edu.in)
+_allowed = os.getenv("ALLOWED_EMAIL_DOMAINS", "srmap.edu.in,vidyashilp.edu.in,gmail.com")
+ALLOWED_DOMAIN = [f"@{d.strip()}" if d.strip() and not d.strip().startswith("@") else d.strip() for d in _allowed.split(",") if d.strip()]
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/calendar/oauth/callback")
+GOOGLE_OAUTH_SCOPE = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.file"
+REQUIRED_GOOGLE_SCOPES = GOOGLE_OAUTH_SCOPE.split()
+
+ADMIN_EMAILS = [
+    email.strip().lower()
+    for email in os.getenv("ADMIN_EMAILS", "").split(",")
+    if email.strip()
+]
 
 
-def _server_base_url() -> str:
-    parsed = urlparse(GOOGLE_REDIRECT_URI)
-    return f"{parsed.scheme}://{parsed.netloc}"
+def is_admin_email(email: str) -> bool:
+    return (email or "").strip().lower() in ADMIN_EMAILS
 
 
-class TokenRequest(BaseModel):
-    token: str
+async def get_primary_email_by_role(role: str) -> str:
+    """Get primary email for a role from User collection. Used for registrar, facility_manager, marketing, it."""
+    from models import User
+    user = await User.find_one(User.role == role.lower())
+    return (user.email or "").strip().lower() if user else ""
 
 
-@router.post("/google")
-@limiter.limit("10/minute")
-async def google_login(request: Request, payload: TokenRequest):
-    google_data = verify_google_token(payload.token)
+async def get_user_by_role(role: str):
+    """Get the User with the given role, or None."""
+    from models import User
+    return await User.find_one(User.role == role.lower())
 
-    google_id = google_data["sub"]
-    email = google_data["email"]
-    name = google_data.get("name", "")
 
-    # Find user by google_id
-    user = await User.find_one(User.google_id == google_id)
+# Roles that receive Google Calendar invitations when an event is approved (organizer excluded).
+CALENDAR_INVITE_STAFF_ROLES = (
+    "registrar",
+    "facility_manager",
+    "marketing",
+    "it",
+    "admin",
+)
 
-    if not user:
-        # Create new user if doesn't exist
-        user = User(
-            name=name,
-            email=email,
-            google_id=google_id
+
+async def get_staff_emails_for_calendar_invites(
+    exclude_emails: set[str] | None = None,
+) -> list[str]:
+    """Primary emails for staff roles that should see approved bookings on Google Calendar."""
+    from models import User
+
+    exclude = {e.strip().lower() for e in exclude_emails if e and e.strip()} if exclude_emails else set()
+    seen: set[str] = set()
+    out: list[str] = []
+    for role in CALENDAR_INVITE_STAFF_ROLES:
+        users = await User.find(User.role == role).to_list()
+        for u in users:
+            em = (u.email or "").strip().lower()
+            if not em or em in exclude or em in seen:
+                continue
+            seen.add(em)
+            out.append(em)
+    return out
+
+
+def verify_google_token(token: str):
+    response = requests.get(GOOGLE_TOKEN_INFO_URL, params={"id_token": token})
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+
+    data = response.json()
+
+    email = data.get("email")
+    if not ALLOWED_DOMAIN or not any(email.endswith(d) for d in ALLOWED_DOMAIN):
+        raise HTTPException(
+            status_code=403,
+            detail="Only Vidyashilp accounts allowed"
         )
-        await user.insert()
-        # Apply pre-assigned role from Add User (pending role assignment)
-        pending = await PendingRoleAssignment.find_one(PendingRoleAssignment.email == email.lower().strip())
-        if pending and pending.role:
-            user.role = (pending.role or "").strip().lower()
-            await user.save()
-            await pending.delete()
 
-    normalized_role = (user.role or "").strip().lower()
-    if is_admin_email(email) and normalized_role != "admin":
-        user.role = "admin"
-        await user.save()
-
-    jwt_token = create_access_token({"user_id": str(user.id)})
-
-    return {
-        "access_token": jwt_token,
-        "user": {
-            "id": str(user.id),
-            "name": user.name,
-            "email": user.email,
-            "role": user.role
-        }
-    }
+    return data
 
 
-@router.get("/google/mobile-auth-url")
-@limiter.limit("10/minute")
-async def mobile_auth_url(request: Request):
-    """Return a Google OAuth URL for mobile sign-in via in-app browser."""
-    base = _server_base_url()
-    callback = f"{base}/api/v1/auth/google/mobile-callback"
-    state = create_access_token({"purpose": "mobile_login"})
-    params = urlencode({
-        "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": callback,
-        "response_type": "code",
-        "scope": "openid profile email",
-        "state": state,
-        "access_type": "online",
-        "prompt": "select_account",
-    })
-    return {"url": f"https://accounts.google.com/o/oauth2/v2/auth?{params}"}
+def create_access_token(data: dict):
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    data["exp"] = expire
+    return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
 
-@router.get("/google/mobile-callback")
-async def mobile_auth_callback(
-    code: str = Query(...),
-    state: str = Query(...),
-):
-    """OAuth callback for mobile login: exchange code, create/find user, redirect to app."""
+def decode_access_token(token: str) -> dict:
     try:
-        decode_access_token(state)
-    except HTTPException:
-        return RedirectResponse(
-            url=f"{MOBILE_APP_SCHEME}://auth?error=invalid_state"
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
         )
 
-    base = _server_base_url()
-    callback = f"{base}/api/v1/auth/google/mobile-callback"
 
-    token_resp = requests.post(
+def create_oauth_state(user_id: str) -> str:
+    payload = {
+        "user_id": user_id,
+        "exp": datetime.utcnow() + timedelta(minutes=10)
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_oauth_state(state: str) -> dict:
+    try:
+        return jwt.decode(state, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid OAuth state"
+        )
+
+
+async def ensure_google_access_token(user):
+    if user.google_access_token and user.google_token_expiry:
+        expiry = user.google_token_expiry
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
+        if expiry > datetime.now(timezone.utc) + timedelta(minutes=1):
+            return user.google_access_token
+
+    if not user.google_refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Google not connected"
+        )
+
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google OAuth not configured"
+        )
+
+    response = requests.post(
         "https://oauth2.googleapis.com/token",
         data={
             "client_id": GOOGLE_CLIENT_ID,
             "client_secret": GOOGLE_CLIENT_SECRET,
-            "code": code,
-            "grant_type": "authorization_code",
-            "redirect_uri": callback,
+            "refresh_token": user.google_refresh_token,
+            "grant_type": "refresh_token",
         },
         timeout=15,
     )
-    if token_resp.status_code != 200:
-        return RedirectResponse(
-            url=f"{MOBILE_APP_SCHEME}://auth?error=token_exchange_failed"
-        )
 
-    id_token = token_resp.json().get("id_token")
-    if not id_token:
-        return RedirectResponse(
-            url=f"{MOBILE_APP_SCHEME}://auth?error=no_id_token"
-        )
-
-    try:
-        google_data = verify_google_token(id_token)
-    except HTTPException as exc:
-        msg = exc.detail or "verification_failed"
-        return RedirectResponse(
-            url=f"{MOBILE_APP_SCHEME}://auth?error={msg}"
-        )
-
-    google_id = google_data["sub"]
-    email = google_data["email"]
-    name = google_data.get("name", "")
-
-    user = await User.find_one(User.google_id == google_id)
-    if not user:
-        user = User(name=name, email=email, google_id=google_id)
-        await user.insert()
-        pending = await PendingRoleAssignment.find_one(
-            PendingRoleAssignment.email == email.lower().strip()
-        )
-        if pending and pending.role:
-            user.role = (pending.role or "").strip().lower()
-            await user.save()
-            await pending.delete()
-
-    if is_admin_email(email) and (user.role or "").strip().lower() != "admin":
-        user.role = "admin"
-        await user.save()
-
-    jwt_token = create_access_token({"user_id": str(user.id)})
-    user_json = json.dumps({
-        "id": str(user.id),
-        "name": user.name,
-        "email": user.email,
-        "role": user.role,
-    })
-
-    redirect_params = urlencode({"access_token": jwt_token, "user": user_json})
-    return RedirectResponse(
-        url=f"{MOBILE_APP_SCHEME}://auth?{redirect_params}",
-        status_code=302,
-    )
-
-
-@router.get("/google/status")
-async def google_oauth_status(user: User = Depends(get_current_user)):
-    if not user.google_refresh_token:
-        return {"connected": False, "missing_scopes": REQUIRED_GOOGLE_SCOPES}
-
-    try:
-        access_token = await ensure_google_access_token(user)
-    except HTTPException as exc:
-        if exc.status_code in {
-            status.HTTP_403_FORBIDDEN,
-            status.HTTP_401_UNAUTHORIZED,
-            status.HTTP_502_BAD_GATEWAY,
-        }:
-            return {"connected": False, "missing_scopes": REQUIRED_GOOGLE_SCOPES}
-        raise
-
-    response = requests.get(
-        "https://oauth2.googleapis.com/tokeninfo",
-        params={"access_token": access_token},
-        timeout=10,
-    )
     if response.status_code != 200:
-        return {"connected": False, "missing_scopes": REQUIRED_GOOGLE_SCOPES}
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Unable to refresh Google token. Please reconnect Google.",
+        )
 
     data = response.json()
-    granted_scopes = set((data.get("scope") or "").split())
-    missing = [scope for scope in REQUIRED_GOOGLE_SCOPES if scope not in granted_scopes]
-    return {"connected": len(missing) == 0, "missing_scopes": missing}
+    access_token = data.get("access_token")
+    expires_in = data.get("expires_in", 3600)
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Google token missing. Please reconnect Google.",
+        )
 
-
-@router.get("/registrar-email")
-async def get_registrar_email(user: User = Depends(get_current_user)):
-    """Return the registrar email for display in approval forms."""
-    email = await get_primary_email_by_role("registrar")
-    return {"email": email or ""}
-
-
-@router.get("/facility-manager-email")
-async def get_facility_manager_email(user: User = Depends(get_current_user)):
-    """Return the facility manager email for prefilling request forms."""
-    email = await get_primary_email_by_role("facility_manager")
-    return {"email": email or ""}
-
-
-@router.get("/marketing-email")
-async def get_marketing_email(user: User = Depends(get_current_user)):
-    """Return the marketing email for prefilling request forms."""
-    email = await get_primary_email_by_role("marketing")
-    return {"email": email or ""}
-
-
-@router.get("/it-email")
-async def get_it_email(user: User = Depends(get_current_user)):
-    """Return the IT email for prefilling request forms."""
-    email = await get_primary_email_by_role("it")
-    return {"email": email or ""}
+    user.google_access_token = access_token
+    user.google_token_expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    await user.save()
+    return access_token
