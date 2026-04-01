@@ -5605,14 +5605,15 @@ export default function App() {
 
             {transportModal.open ? (
               <div className="approval-overlay" role="dialog" aria-modal="true">
-                <div className="marketing-card">
+                <div className="marketing-card marketing-card--scrollable">
                   <div className="approval-header">
                     <h3>TRANSPORT REQUEST</h3>
                     <button type="button" className="modal-close" onClick={handleTransportModalClose}>
                       &times;
                     </button>
                   </div>
-                  <form className="approval-form" onSubmit={submitTransportRequest}>
+                  <form className="approval-form requirements-scroll-form" onSubmit={submitTransportRequest}>
+                    <div className="requirements-form-scroll">
                     <div className="approval-grid">
                       <label className="approval-field">
                         <span>From</span>
@@ -5806,8 +5807,9 @@ export default function App() {
                     {transportModal.status === "error" ? (
                       <p className="form-error">{transportModal.error}</p>
                     ) : null}
+                    </div>
 
-                    <div className="modal-actions">
+                    <div className="modal-actions requirements-modal-actions">
                       <button type="button" className="secondary-action" onClick={handleTransportSkip}>
                         Skip
                       </button>

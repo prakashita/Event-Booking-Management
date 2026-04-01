@@ -1010,6 +1010,66 @@ body {
   animation: riseIn 0.2s ease-out;
 }
 
+.marketing-card.marketing-card--scrollable {
+  max-height: min(90vh, 920px);
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.marketing-card.marketing-card--scrollable > .approval-header {
+  flex-shrink: 0;
+}
+
+form.approval-form.requirements-scroll-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  gap: 16px;
+}
+
+.requirements-form-scroll {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  padding-right: 6px;
+  margin-right: -4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.requirements-form-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.requirements-form-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.requirements-form-scroll::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+.requirements-form-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.requirements-modal-actions {
+  flex-shrink: 0;
+  padding-top: 4px;
+  border-top: 1px solid #ead8dd;
+}
+
 .marketing-requirements {
   display: grid;
   gap: 12px;
