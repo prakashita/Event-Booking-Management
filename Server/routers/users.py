@@ -2,7 +2,7 @@ from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from models import ApprovalRequest, Event, FacilityManagerRequest, Invite, ItRequest, MarketingRequest, PendingRoleAssignment, Publication, User
+from models import ApprovalRequest, Event, FacilityManagerRequest, Invite, ItRequest, MarketingRequest, PendingRoleAssignment, Publication, TransportRequest, User
 from routers.deps import require_admin
 from schemas import AddUserRequest, UserAdminResponse, UserRoleUpdate
 
@@ -20,7 +20,7 @@ def serialize_user(user: User) -> UserAdminResponse:
     )
 
 
-ADD_USER_ALLOWED_ROLES = {"registrar", "facility_manager", "marketing", "it"}
+ADD_USER_ALLOWED_ROLES = {"registrar", "facility_manager", "marketing", "it", "transport"}
 
 
 @router.get("", response_model=list[UserAdminResponse])
@@ -114,6 +114,7 @@ async def delete_user(user_id: str, admin: User = Depends(require_admin)):
     await FacilityManagerRequest.find(FacilityManagerRequest.requester_id == user_id).delete()
     await MarketingRequest.find(MarketingRequest.requester_id == user_id).delete()
     await ItRequest.find(ItRequest.requester_id == user_id).delete()
+    await TransportRequest.find(TransportRequest.requester_id == user_id).delete()
     await Invite.find(Invite.created_by == user_id).delete()
     await Publication.find(Publication.created_by == user_id).delete()
 

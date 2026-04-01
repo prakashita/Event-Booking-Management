@@ -211,6 +211,40 @@ class ItRequest(Document):
         name = "it_requests"
 
 
+class TransportRequest(Document):
+    """Guest cab, off-campus student transport, or both; created after registrar approves the event."""
+
+    requester_id: str
+    requester_email: str
+    requested_to: Optional[str] = None
+    event_id: Optional[str] = None
+    event_name: str
+    start_date: str
+    start_time: str
+    end_date: str
+    end_time: str
+    transport_type: str  # guest_cab | students_off_campus | both
+    guest_pickup_location: Optional[str] = None
+    guest_pickup_date: Optional[str] = None
+    guest_pickup_time: Optional[str] = None
+    guest_dropoff_location: Optional[str] = None
+    guest_dropoff_date: Optional[str] = None
+    guest_dropoff_time: Optional[str] = None
+    student_count: Optional[int] = None
+    student_transport_kind: Optional[str] = None
+    student_date: Optional[str] = None
+    student_time: Optional[str] = None
+    student_pickup_point: Optional[str] = None
+    other_notes: Optional[str] = None
+    status: str = Field(default="pending")
+    decided_at: Optional[datetime] = None
+    decided_by: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "transport_requests"
+
+
 class Invite(Document):
     event_id: str
     created_by: str

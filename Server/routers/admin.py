@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from models import ApprovalRequest, Event, FacilityManagerRequest, Invite, ItRequest, MarketingRequest, Publication, User, Venue
+from models import ApprovalRequest, Event, FacilityManagerRequest, Invite, ItRequest, MarketingRequest, Publication, TransportRequest, User, Venue
 from routers.deps import require_admin
 from schemas import (
     ApprovalRequestResponse,
@@ -14,6 +14,7 @@ from schemas import (
     MarketingRequestResponse,
     PaginatedResponse,
     PublicationResponse,
+    TransportRequestResponse,
     VenueResponse,
 )
 
@@ -207,6 +208,38 @@ def serialize_facility(item: FacilityManagerRequest) -> FacilityManagerRequestRe
     )
 
 
+def serialize_transport(item: TransportRequest) -> TransportRequestResponse:
+    return TransportRequestResponse(
+        id=str(item.id),
+        requester_id=item.requester_id,
+        requester_email=item.requester_email,
+        requested_to=item.requested_to,
+        event_id=item.event_id,
+        event_name=item.event_name,
+        start_date=item.start_date,
+        start_time=item.start_time,
+        end_date=item.end_date,
+        end_time=item.end_time,
+        transport_type=item.transport_type,
+        guest_pickup_location=item.guest_pickup_location,
+        guest_pickup_date=item.guest_pickup_date,
+        guest_pickup_time=item.guest_pickup_time,
+        guest_dropoff_location=item.guest_dropoff_location,
+        guest_dropoff_date=item.guest_dropoff_date,
+        guest_dropoff_time=item.guest_dropoff_time,
+        student_count=item.student_count,
+        student_transport_kind=item.student_transport_kind,
+        student_date=item.student_date,
+        student_time=item.student_time,
+        student_pickup_point=item.student_pickup_point,
+        other_notes=item.other_notes,
+        status=item.status,
+        decided_at=item.decided_at,
+        decided_by=item.decided_by,
+        created_at=item.created_at,
+    )
+
+
 def serialize_it(item: ItRequest) -> ItRequestResponse:
     return ItRequestResponse(
         id=str(item.id),
@@ -268,6 +301,7 @@ async def admin_overview(admin: User = Depends(require_admin)):
         "facility": await FacilityManagerRequest.find_all().count(),
         "marketing": await MarketingRequest.find_all().count(),
         "it": await ItRequest.find_all().count(),
+        "transport": await TransportRequest.find_all().count(),
         "invites": await Invite.find_all().count(),
         "publications": await Publication.find_all().count(),
     }
@@ -388,6 +422,25 @@ async def list_all_it(
     )
 
 
+@router.get("/transport", response_model=PaginatedResponse[TransportRequestResponse])
+async def list_all_transport(
+    admin: User = Depends(require_admin),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    query = TransportRequest.find_all().sort("-created_at")
+    total = await query.count()
+    items = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[TransportRequestResponse](
+        items=[serialize_transport(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
+
+
 @router.get("/invites", response_model=PaginatedResponse[InviteResponse])
 async def list_all_invites(
     admin: User = Depends(require_admin),
@@ -488,6 +541,18 @@ async def delete_event(event_id: str, admin: User = Depends(require_admin)):
             "end_time": item.end_time,
         }
     ).delete()
+    await TransportRequest.find(TransportRequest.event_id == event_id).delete()
+    await TransportRequest.find(
+        {
+            "event_id": None,
+            "requester_id": item.created_by,
+            "event_name": item.name,
+            "start_date": item.start_date,
+            "start_time": item.start_time,
+            "end_date": item.end_date,
+            "end_time": item.end_time,
+        }
+    ).delete()
     # Remove related invites
     await Invite.find(Invite.event_id == event_id).delete()
     await item.delete()
@@ -542,6 +607,17 @@ async def delete_approval(request_id: str, admin: User = Depends(require_admin))
             "end_time": item.end_time,
         }
     ).delete()
+    await TransportRequest.find(
+        {
+            "event_id": None,
+            "requester_id": item.requester_id,
+            "event_name": item.event_name,
+            "start_date": item.start_date,
+            "start_time": item.start_time,
+            "end_date": item.end_date,
+            "end_time": item.end_time,
+        }
+    ).delete()
     await item.delete()
     return {"status": "deleted", "id": request_id}
 
@@ -571,6 +647,16 @@ async def delete_it(request_id: str, admin: User = Depends(require_admin)):
         raise HTTPException(status_code=404, detail="IT request not found")
     await item.delete()
     return {"status": "deleted", "id": request_id}
+
+
+@router.delete("/transport/{request_id}")
+async def delete_transport(request_id: str, admin: User = Depends(require_admin)):
+    item = await TransportRequest.get(request_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Transport request not found")
+    await item.delete()
+    return {"status": "deleted", "id": request_id}
+
 
 @router.delete("/invites/{invite_id}")
 async def delete_invite(invite_id: str, admin: User = Depends(require_admin)):

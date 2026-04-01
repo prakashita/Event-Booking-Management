@@ -17,13 +17,21 @@ from auth import (
     get_primary_email_by_role,
     get_staff_emails_for_calendar_invites,
     get_user_by_role,
+    is_admin_email,
 )
 from drive import delete_drive_file, upload_report_file
 from errors import error_payload
 from idempotency import get_cached_response, get_idempotency_key, store_response
 from event_status import combine_datetime, sync_event_status
-from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, User
-from routers.admin import serialize_approval, serialize_event, serialize_facility, serialize_it, serialize_marketing
+from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, TransportRequest, User
+from routers.admin import (
+    serialize_approval,
+    serialize_event,
+    serialize_facility,
+    serialize_it,
+    serialize_marketing,
+    serialize_transport,
+)
 from routers.deps import IQAC_ALLOWED_ROLES, get_current_user
 from routers.iqac import persist_iqac_upload, validate_iqac_path
 from schemas import (
@@ -36,15 +44,46 @@ from schemas import (
     ItRequestResponse,
     MarketingRequestResponse,
     PaginatedResponse,
+    TransportRequestResponse,
 )
 
 router = APIRouter(prefix="/events", tags=["Events"])
 logger = logging.getLogger("event-booking.events")
 
 
+def _requested_to_matches_user_email(email: str) -> dict:
+    """Case-insensitive exact match on requested_to (handles legacy casing in DB)."""
+    return {"$regex": f"^{re.escape((email or '').strip())}$", "$options": "i"}
+
+
+async def user_may_view_event_details(user: User, event: Event) -> bool:
+    """Creator, admin/registrar, or staff who received a requirement for this event."""
+    if event.created_by == str(user.id):
+        return True
+    role = (user.role or "").strip().lower()
+    if role in ("admin", "registrar"):
+        return True
+    if is_admin_email(user.email or ""):
+        return True
+    email = (user.email or "").strip()
+    if not email:
+        return False
+    eid = str(event.id)
+    to_query = _requested_to_matches_user_email(email)
+    if await MarketingRequest.find_one({"event_id": eid, "requested_to": to_query}):
+        return True
+    if await FacilityManagerRequest.find_one({"event_id": eid, "requested_to": to_query}):
+        return True
+    if await ItRequest.find_one({"event_id": eid, "requested_to": to_query}):
+        return True
+    if await TransportRequest.find_one({"event_id": eid, "requested_to": to_query}):
+        return True
+    return False
+
+
 def _requirement_status_for_event_details(
-    row: FacilityManagerRequestResponse | MarketingRequestResponse | ItRequestResponse,
-) -> FacilityManagerRequestResponse | MarketingRequestResponse | ItRequestResponse:
+    row: FacilityManagerRequestResponse | MarketingRequestResponse | ItRequestResponse | TransportRequestResponse,
+) -> FacilityManagerRequestResponse | MarketingRequestResponse | ItRequestResponse | TransportRequestResponse:
     """Event details UI shows 'accepted' for facility/marketing/IT; registrar stays 'approved'."""
     if (row.status or "").strip() == "approved":
         return row.model_copy(update={"status": "accepted"})
@@ -285,6 +324,7 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
                 facility_requests=[],
                 marketing_requests=[],
                 it_requests=[],
+                transport_requests=[],
             )
 
         event_id = approval.event_id
@@ -297,7 +337,7 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
     event = await Event.get(event_object_id)
     if not event:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
-    if event.created_by != str(user.id):
+    if not await user_may_view_event_details(user, event):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to view this event")
 
     event_id_str = str(event.id)
@@ -310,6 +350,9 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
         MarketingRequest.event_id == event_id_str
     ).sort("-created_at").to_list()
     it_requests = await ItRequest.find(ItRequest.event_id == event_id_str).sort("-created_at").to_list()
+    transport_requests = await TransportRequest.find(TransportRequest.event_id == event_id_str).sort(
+        "-created_at"
+    ).to_list()
 
     return EventDetailsResponse(
         event=serialize_event(event),
@@ -321,6 +364,9 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
             _requirement_status_for_event_details(serialize_marketing(r)) for r in marketing_requests
         ],
         it_requests=[_requirement_status_for_event_details(serialize_it(r)) for r in it_requests],
+        transport_requests=[
+            _requirement_status_for_event_details(serialize_transport(r)) for r in transport_requests
+        ],
     )
 
 

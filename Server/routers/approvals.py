@@ -10,7 +10,7 @@ import requests
 from auth import ensure_google_access_token
 from drive import upload_report_file
 from idempotency import get_cached_response, get_idempotency_key, store_response
-from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, User
+from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, TransportRequest, User
 from event_status import combine_datetime, compute_event_status, event_has_started
 from rate_limit import limiter
 from routers.admin import serialize_approval
@@ -302,6 +302,15 @@ async def decide_request(
 
                 it_requests = await ItRequest.find(matching_query).to_list()
                 for request_item in it_requests:
+                    if (
+                        normalize_time(request_item.start_time) == approval_start
+                        and normalize_time(request_item.end_time) == approval_end
+                    ):
+                        request_item.event_id = approval.event_id
+                        await request_item.save()
+
+                transport_requests = await TransportRequest.find(matching_query).to_list()
+                for request_item in transport_requests:
                     if (
                         normalize_time(request_item.start_time) == approval_start
                         and normalize_time(request_item.end_time) == approval_end

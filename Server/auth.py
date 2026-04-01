@@ -38,7 +38,7 @@ def is_admin_email(email: str) -> bool:
 
 
 async def get_primary_email_by_role(role: str) -> str:
-    """Get primary email for a role from User collection. Used for registrar, facility_manager, marketing, it."""
+    """Get primary email for a role from User collection. Used for registrar, facility_manager, marketing, it, transport."""
     from models import User
     user = await User.find_one(User.role == role.lower())
     return (user.email or "").strip().lower() if user else ""
@@ -56,6 +56,7 @@ CALENDAR_INVITE_STAFF_ROLES = (
     "facility_manager",
     "marketing",
     "it",
+    "transport",
     "admin",
 )
 

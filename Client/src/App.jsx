@@ -43,6 +43,13 @@ function normalizePathname(pathname) {
   return pathname;
 }
 
+function transportRequestTypeLabel(type) {
+  if (type === "guest_cab") return "Guest cab";
+  if (type === "students_off_campus") return "Students (off-campus)";
+  if (type === "both") return "Guest cab & students";
+  return type ? String(type) : "—";
+}
+
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -72,6 +79,7 @@ export default function App() {
   const [marketingState, setMarketingState] = useState({ status: "idle", items: [], error: "" });
   const [itState, setItState] = useState({ status: "idle", items: [], error: "" });
   const [facilityState, setFacilityState] = useState({ status: "idle", items: [], error: "" });
+  const [transportState, setTransportState] = useState({ status: "idle", items: [], error: "" });
   const [eventForm, setEventForm] = useState({
     start_date: "",
     end_date: "",
@@ -148,6 +156,24 @@ export default function App() {
     to: "",
     venue_required: true,
     refreshments: false,
+    other_notes: ""
+  });
+  const [transportModal, setTransportModal] = useState({ open: false, status: "idle", error: "" });
+  const [transportForm, setTransportForm] = useState({
+    to: "",
+    include_guest_cab: true,
+    include_students: false,
+    guest_pickup_location: "",
+    guest_pickup_date: "",
+    guest_pickup_time: "",
+    guest_dropoff_location: "",
+    guest_dropoff_date: "",
+    guest_dropoff_time: "",
+    student_count: "",
+    student_transport_kind: "",
+    student_date: "",
+    student_time: "",
+    student_pickup_point: "",
     other_notes: ""
   });
   const [requirementsModal, setRequirementsModal] = useState({ open: false, event: null });
@@ -293,6 +319,7 @@ export default function App() {
   const [adminApprovalsState, setAdminApprovalsState] = useState({ status: "idle", items: [], error: "" });
   const [adminMarketingState, setAdminMarketingState] = useState({ status: "idle", items: [], error: "" });
   const [adminItState, setAdminItState] = useState({ status: "idle", items: [], error: "" });
+  const [adminTransportState, setAdminTransportState] = useState({ status: "idle", items: [], error: "" });
   const [adminInvitesState, setAdminInvitesState] = useState({ status: "idle", items: [], error: "" });
   const [adminPublicationsState, setAdminPublicationsState] = useState({ status: "idle", items: [], error: "" });
   const [adminVenueName, setAdminVenueName] = useState("");
@@ -311,6 +338,7 @@ export default function App() {
   const [facilityManagerEmail, setFacilityManagerEmail] = useState("");
   const [marketingEmail, setMarketingEmail] = useState("");
   const [itEmail, setItEmail] = useState("");
+  const [transportEmail, setTransportEmail] = useState("");
   const [chatUsers, setChatUsers] = useState([]);
   const [chatActiveUser, setChatActiveUser] = useState(null);
   const [chatConversationId, setChatConversationId] = useState("");
@@ -354,9 +382,11 @@ export default function App() {
   const isFacilityManagerRole = normalizedUserRole === "facility_manager";
   const isMarketingRole = normalizedUserRole === "marketing";
   const isItRole = normalizedUserRole === "it";
+  const isTransportRole = normalizedUserRole === "transport";
   const canAccessAdminConsole = isAdmin || isRegistrar;
   const canAccessApprovals = isRegistrar;
-  const canAccessRequirements = isFacilityManagerRole || isMarketingRole || isItRole;
+  const canAccessRequirements =
+    isFacilityManagerRole || isMarketingRole || isItRole || isTransportRole;
   const canAccessIqac = ROLES_WITH_IQAC_ACCESS.includes(normalizedUserRole);
   const canDeleteIqacFiles = ROLES_WITH_IQAC_DELETE_ACCESS.includes(normalizedUserRole);
   const defaultFacilitator = (user?.name || "").trim();
@@ -893,6 +923,55 @@ export default function App() {
     [apiBaseUrl, apiFetch, canAccessAdminConsole]
   );
 
+  const loadAdminTransport = useCallback(async () => {
+    if (!canAccessAdminConsole) {
+      return;
+    }
+    setAdminTransportState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/admin/transport`);
+      if (!res.ok) {
+        throw new Error("Unable to load transport requests.");
+      }
+      const data = await res.json();
+      const items = Array.isArray(data?.items) ? data.items : [];
+      setAdminTransportState({ status: "ready", items, error: "" });
+    } catch (err) {
+      setAdminTransportState({
+        status: "error",
+        items: [],
+        error: err?.message || "Unable to load transport requests."
+      });
+    }
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
+
+  const handleAdminDeleteTransport = useCallback(
+    async (requestId) => {
+      if (!canAccessAdminConsole) {
+        return;
+      }
+      if (!window.confirm("Delete this transport request?")) {
+        return;
+      }
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/admin/transport/${requestId}`, { method: "DELETE" });
+        if (!res.ok) {
+          throw new Error("Unable to delete transport request.");
+        }
+        setAdminTransportState((prev) => ({
+          ...prev,
+          items: prev.items.filter((item) => item.id !== requestId)
+        }));
+      } catch (err) {
+        setAdminTransportState((prev) => ({
+          ...prev,
+          error: err?.message || "Unable to delete transport request."
+        }));
+      }
+    },
+    [apiBaseUrl, apiFetch, canAccessAdminConsole]
+  );
+
   const handleAdminDeleteInvite = useCallback(
     async (inviteId) => {
       if (!canAccessAdminConsole) {
@@ -1407,14 +1486,16 @@ export default function App() {
         return;
       }
 
-      const [eventsRes, approvalsRes, facilityRes, marketingRes, itRes, invitesRes] = await Promise.all([
-        apiFetch(`${apiBaseUrl}/events`),
-        apiFetch(`${apiBaseUrl}/approvals/me`),
-        apiFetch(`${apiBaseUrl}/facility/requests/me`),
-        apiFetch(`${apiBaseUrl}/marketing/requests/me`),
-        apiFetch(`${apiBaseUrl}/it/requests/me`),
-        apiFetch(`${apiBaseUrl}/invites/me`)
-      ]);
+      const [eventsRes, approvalsRes, facilityRes, marketingRes, itRes, transportRes, invitesRes] =
+        await Promise.all([
+          apiFetch(`${apiBaseUrl}/events`),
+          apiFetch(`${apiBaseUrl}/approvals/me`),
+          apiFetch(`${apiBaseUrl}/facility/requests/me`),
+          apiFetch(`${apiBaseUrl}/marketing/requests/me`),
+          apiFetch(`${apiBaseUrl}/it/requests/me`),
+          apiFetch(`${apiBaseUrl}/transport/requests/me`),
+          apiFetch(`${apiBaseUrl}/invites/me`)
+        ]);
 
       if (!eventsRes.ok) {
         throw new Error("Unable to load events.");
@@ -1434,16 +1515,19 @@ export default function App() {
       const facilityData = facilityRes.ok ? await facilityRes.json() : [];
       const marketingData = marketingRes.ok ? await marketingRes.json() : [];
       const itData = itRes.ok ? await itRes.json() : [];
+      const transportData = transportRes.ok ? await transportRes.json() : [];
       const invitesData = invitesRes.ok ? await invitesRes.json() : [];
       const approvalByEventId = new Map();
       const facilityByEventId = new Map();
       const marketingByEventId = new Map();
       const itByEventId = new Map();
+      const transportByEventId = new Map();
       const inviteByEventId = new Map();
       const approvalByEventKey = new Map();
       const facilityByEventKey = new Map();
       const marketingByEventKey = new Map();
       const itByEventKey = new Map();
+      const transportByEventKey = new Map();
 
       const normalizeTime = (value) => {
         if (!value) {
@@ -1484,6 +1568,12 @@ export default function App() {
         }
         itByEventKey.set(buildEventKey(item), item.status);
       });
+      transportData.forEach((item) => {
+        if (item.event_id) {
+          transportByEventId.set(item.event_id, item.status);
+        }
+        transportByEventKey.set(buildEventKey(item), item.status);
+      });
       invitesData.forEach((invite) => {
         if (invite.event_id) {
           inviteByEventId.set(invite.event_id, invite.status);
@@ -1520,6 +1610,8 @@ export default function App() {
           marketing_status:
             marketingByEventId.get(event.id) || marketingByEventKey.get(eventKey),
           it_status: itByEventId.get(event.id) || itByEventKey.get(eventKey),
+          transport_status:
+            transportByEventId.get(event.id) || transportByEventKey.get(eventKey),
           invite_status: inviteByEventId.get(event.id)
         };
       });
@@ -1537,6 +1629,7 @@ export default function App() {
           e.approval_status === "approved" &&
           !isEventStartedCheck(e) &&
           ((e.facility_status !== "approved" && e.facility_status !== "pending") ||
+            (e.transport_status !== "approved" && e.transport_status !== "pending") ||
             (e.marketing_status !== "approved" && e.marketing_status !== "pending") ||
             (e.it_status !== "approved" && e.it_status !== "pending"))
       );
@@ -1654,6 +1747,29 @@ export default function App() {
     }
   }, [apiBaseUrl]);
 
+  const loadTransportInbox = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setTransportState({ status: "error", items: [], error: "Missing auth token." });
+      return;
+    }
+    setTransportState((prev) => ({ ...prev, status: "loading", error: "" }));
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/transport/inbox`);
+      if (!res.ok) {
+        throw new Error("Unable to load transport requests.");
+      }
+      const data = await res.json();
+      setTransportState({ status: "ready", items: Array.isArray(data) ? data : [], error: "" });
+    } catch (err) {
+      setTransportState({
+        status: "error",
+        items: [],
+        error: err?.message || "Unable to load transport requests."
+      });
+    }
+  }, [apiBaseUrl, apiFetch]);
+
   const loadRegistrarEmail = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
     if (!token) return;
@@ -1707,6 +1823,20 @@ export default function App() {
       }
     } catch {
       setItEmail("");
+    }
+  }, [apiBaseUrl, apiFetch]);
+
+  const loadTransportEmail = useCallback(async () => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) return;
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/auth/transport-email`);
+      if (res.ok) {
+        const data = await res.json();
+        setTransportEmail(data?.email || "");
+      }
+    } catch {
+      setTransportEmail("");
     }
   }, [apiBaseUrl, apiFetch]);
 
@@ -1821,13 +1951,15 @@ export default function App() {
       loadFacilityManagerEmail();
       loadMarketingEmail();
       loadItEmail();
+      loadTransportEmail();
     } else {
       setRegistrarEmail("");
       setFacilityManagerEmail("");
       setMarketingEmail("");
       setItEmail("");
+      setTransportEmail("");
     }
-  }, [user, loadRegistrarEmail, loadFacilityManagerEmail, loadMarketingEmail, loadItEmail]);
+  }, [user, loadRegistrarEmail, loadFacilityManagerEmail, loadMarketingEmail, loadItEmail, loadTransportEmail]);
 
   useEffect(() => {
     if (!user) return;
@@ -2044,6 +2176,9 @@ export default function App() {
     if (isItRole && itState.status === "idle") {
       loadItInbox();
     }
+    if (isTransportRole && transportState.status === "idle") {
+      loadTransportInbox();
+    }
   }, [
     activeView,
     approvalsState.status,
@@ -2052,12 +2187,15 @@ export default function App() {
     isFacilityManagerRole,
     isItRole,
     isMarketingRole,
+    isTransportRole,
     loadApprovalsInbox,
     loadFacilityInbox,
     loadItInbox,
     loadMarketingInbox,
+    loadTransportInbox,
     itState.status,
     marketingState.status,
+    transportState.status,
     user
   ]);
 
@@ -2080,8 +2218,18 @@ export default function App() {
       else if (isFacilityManagerRole) setApprovalsTab("facility");
       else if (isMarketingRole) setApprovalsTab("marketing");
       else if (isItRole) setApprovalsTab("it");
+      else if (isTransportRole) setApprovalsTab("transport");
     }
-  }, [activeView, canAccessApprovals, canAccessRequirements, isApproverRole, isFacilityManagerRole, isMarketingRole, isItRole]);
+  }, [
+    activeView,
+    canAccessApprovals,
+    canAccessRequirements,
+    isApproverRole,
+    isFacilityManagerRole,
+    isMarketingRole,
+    isItRole,
+    isTransportRole
+  ]);
 
   useEffect(() => {
     if (!user || !canAccessAdminConsole || activeView !== "admin") {
@@ -2094,6 +2242,7 @@ export default function App() {
     loadAdminApprovals();
     loadAdminMarketing();
     loadAdminIt();
+    loadAdminTransport();
     loadAdminInvites();
     loadAdminPublications();
   }, [
@@ -2103,6 +2252,7 @@ export default function App() {
     loadAdminEvents,
     loadAdminIt,
     loadAdminMarketing,
+    loadAdminTransport,
     loadAdminOverview,
     loadAdminPublications,
     loadAdminInvites,
@@ -2220,6 +2370,46 @@ export default function App() {
     if (queue[0] === "facility") {
       requirementsFlowQueueRef.current = queue.slice(1);
       const next = requirementsFlowQueueRef.current[0];
+      if (next === "transport") handleTransportModalOpen();
+      else if (next === "it") handleItModalOpen();
+      else if (next === "marketing") handleMarketingModalOpen();
+    } else {
+      requirementsFlowQueueRef.current = [];
+    }
+  };
+
+  const handleTransportModalOpen = () => {
+    setTransportForm({
+      to: transportEmail,
+      include_guest_cab: true,
+      include_students: false,
+      guest_pickup_location: "",
+      guest_pickup_date: "",
+      guest_pickup_time: "",
+      guest_dropoff_location: "",
+      guest_dropoff_date: "",
+      guest_dropoff_time: "",
+      student_count: "",
+      student_transport_kind: "",
+      student_date: "",
+      student_time: "",
+      student_pickup_point: "",
+      other_notes: ""
+    });
+    setTransportModal({ open: true, status: "idle", error: "" });
+  };
+
+  const handleTransportModalClose = () => {
+    requirementsFlowQueueRef.current = [];
+    setTransportModal({ open: false, status: "idle", error: "" });
+  };
+
+  const handleTransportSkip = () => {
+    setTransportModal({ open: false, status: "idle", error: "" });
+    const queue = requirementsFlowQueueRef.current;
+    if (queue[0] === "transport") {
+      requirementsFlowQueueRef.current = queue.slice(1);
+      const next = requirementsFlowQueueRef.current[0];
       if (next === "it") handleItModalOpen();
       else if (next === "marketing") handleMarketingModalOpen();
     } else {
@@ -2309,10 +2499,14 @@ export default function App() {
     setPendingEvent({ ...eventItem, event_id: eventItem?.id || eventItem?.event_id || "" });
     const queue = [];
     if (eventItem.facility_status !== "approved" && eventItem.facility_status !== "pending") queue.push("facility");
+    if (eventItem.transport_status !== "approved" && eventItem.transport_status !== "pending") {
+      queue.push("transport");
+    }
     if (eventItem.it_status !== "approved" && eventItem.it_status !== "pending") queue.push("it");
     if (eventItem.marketing_status !== "approved" && eventItem.marketing_status !== "pending") queue.push("marketing");
     requirementsFlowQueueRef.current = queue;
     if (queue[0] === "facility") handleFacilityModalOpen();
+    else if (queue[0] === "transport") handleTransportModalOpen();
     else if (queue[0] === "it") handleItModalOpen();
     else if (queue[0] === "marketing") handleMarketingModalOpen();
   };
@@ -3071,10 +3265,20 @@ export default function App() {
     const statusValue = event.status || "";
     const explicitStatus = statusValue ? formatStatusLabel(statusValue) : null;
     const hasApprovalData =
-      event.approval_status || event.marketing_status || event.it_status;
+      event.approval_status ||
+      event.facility_status ||
+      event.transport_status ||
+      event.marketing_status ||
+      event.it_status;
     let derivedStatus = "Approved";
     if (hasApprovalData) {
-      const statuses = [event.approval_status, event.marketing_status, event.it_status];
+      const statuses = [
+        event.approval_status,
+        event.facility_status,
+        event.transport_status,
+        event.marketing_status,
+        event.it_status
+      ];
       if (statuses.includes("rejected")) {
         derivedStatus = "Rejected";
       } else if (statuses.every((status) => status === "approved")) {
@@ -3382,7 +3586,8 @@ export default function App() {
       if (queue[0] === "facility") {
         requirementsFlowQueueRef.current = queue.slice(1);
         const next = requirementsFlowQueueRef.current[0];
-        if (next === "it") handleItModalOpen();
+        if (next === "transport") handleTransportModalOpen();
+        else if (next === "it") handleItModalOpen();
         else if (next === "marketing") handleMarketingModalOpen();
       }
     } catch (err) {
@@ -3390,6 +3595,137 @@ export default function App() {
         open: true,
         status: "error",
         error: err?.message || "Unable to send facility manager request."
+      });
+    }
+  };
+
+  const submitTransportRequest = async (formEvent) => {
+    if (formEvent) {
+      formEvent.preventDefault();
+    }
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setTransportModal({
+        open: true,
+        status: "error",
+        error: "Please sign in again."
+      });
+      return;
+    }
+
+    const eventPayload = pendingEvent || eventForm;
+    const wantsGuest = Boolean(transportForm.include_guest_cab);
+    const wantsStudents = Boolean(transportForm.include_students);
+    if (!wantsGuest && !wantsStudents) {
+      setTransportModal({
+        open: true,
+        status: "error",
+        error: "Select at least one: cab for guest and/or students (off-campus)."
+      });
+      return;
+    }
+    if (wantsGuest) {
+      const missing = [
+        transportForm.guest_pickup_location,
+        transportForm.guest_pickup_date,
+        transportForm.guest_pickup_time,
+        transportForm.guest_dropoff_location,
+        transportForm.guest_dropoff_time
+      ].some((v) => !(v || "").trim());
+      if (missing) {
+        setTransportModal({
+          open: true,
+          status: "error",
+          error: "Fill guest cab: pickup location, pickup date & time, drop-off location, and drop-off time."
+        });
+        return;
+      }
+    }
+    if (wantsStudents) {
+      const n = parseInt(String(transportForm.student_count || "").trim(), 10);
+      const missingStudents =
+        !Number.isFinite(n) ||
+        n < 1 ||
+        !(transportForm.student_transport_kind || "").trim() ||
+        !(transportForm.student_date || "").trim() ||
+        !(transportForm.student_time || "").trim() ||
+        !(transportForm.student_pickup_point || "").trim();
+      if (missingStudents) {
+        setTransportModal({
+          open: true,
+          status: "error",
+          error: "Fill student transport: number of students, kind, date, time, and pickup point."
+        });
+        return;
+      }
+    }
+    const transport_type =
+      wantsGuest && wantsStudents ? "both" : wantsGuest ? "guest_cab" : "students_off_campus";
+
+    setTransportModal((prev) => ({ ...prev, status: "loading", error: "" }));
+
+    try {
+      const studentCountParsed = parseInt(String(transportForm.student_count || "").trim(), 10);
+      const payload = {
+        requested_to: transportForm.to || undefined,
+        event_id: eventPayload?.event_id || eventPayload?.id || "",
+        event_name: eventPayload?.name || "",
+        start_date: eventPayload?.start_date || "",
+        start_time: eventPayload?.start_time || "",
+        end_date: eventPayload?.end_date || "",
+        end_time: eventPayload?.end_time || "",
+        transport_type,
+        guest_pickup_location: wantsGuest ? transportForm.guest_pickup_location || undefined : undefined,
+        guest_pickup_date: wantsGuest ? transportForm.guest_pickup_date || undefined : undefined,
+        guest_pickup_time: wantsGuest ? transportForm.guest_pickup_time || undefined : undefined,
+        guest_dropoff_location: wantsGuest ? transportForm.guest_dropoff_location || undefined : undefined,
+        guest_dropoff_date: wantsGuest ? transportForm.guest_dropoff_date || undefined : undefined,
+        guest_dropoff_time: wantsGuest ? transportForm.guest_dropoff_time || undefined : undefined,
+        student_count:
+          wantsStudents && Number.isFinite(studentCountParsed) ? studentCountParsed : undefined,
+        student_transport_kind: wantsStudents ? transportForm.student_transport_kind || undefined : undefined,
+        student_date: wantsStudents ? transportForm.student_date || undefined : undefined,
+        student_time: wantsStudents ? transportForm.student_time || undefined : undefined,
+        student_pickup_point: wantsStudents ? transportForm.student_pickup_point || undefined : undefined,
+        other_notes: transportForm.other_notes || ""
+      };
+
+      const res = await apiFetch(`${apiBaseUrl}/transport/requests`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const detail = errData?.detail;
+        const msg =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((d) => d.msg || JSON.stringify(d)).join(" ")
+              : "Unable to send transport request.";
+        throw new Error(msg);
+      }
+
+      setTransportModal({ open: false, status: "idle", error: "" });
+      setRequirementsModal((prev) => (prev.open ? { ...prev, open: false, event: null } : prev));
+      setStatus({ type: "success", message: "Transport request submitted." });
+      loadEvents();
+      const queue = requirementsFlowQueueRef.current;
+      if (queue[0] === "transport") {
+        requirementsFlowQueueRef.current = queue.slice(1);
+        const next = requirementsFlowQueueRef.current[0];
+        if (next === "it") handleItModalOpen();
+        else if (next === "marketing") handleMarketingModalOpen();
+      }
+    } catch (err) {
+      setTransportModal({
+        open: true,
+        status: "error",
+        error: err?.message || "Unable to send transport request."
       });
     }
   };
@@ -3714,6 +4050,13 @@ export default function App() {
     }));
   };
 
+  const handleTransportFieldChange = (field) => (event) => {
+    setTransportForm((prev) => ({
+      ...prev,
+      [field]: event.target.value
+    }));
+  };
+
   const handleMarketingFieldChange = (field) => (event) => {
     setMarketingForm((prev) => ({
       ...prev,
@@ -3962,6 +4305,36 @@ export default function App() {
       }
     };
 
+    const handleTransportDecision = async (requestId, decision) => {
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        setTransportState({ status: "error", items: [], error: "Missing auth token." });
+        return;
+      }
+
+      try {
+        const res = await apiFetch(`${apiBaseUrl}/transport/requests/${requestId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ status: decision })
+        });
+
+        if (!res.ok) {
+          throw new Error("Unable to update transport request.");
+        }
+
+        loadTransportInbox();
+      } catch (err) {
+        setTransportState({
+          status: "error",
+          items: [],
+          error: err?.message || "Unable to update transport request."
+        });
+      }
+    };
+
     const renderPrimaryContent = () => {
       if (isAdminView) {
         if (!canAccessAdminConsole) {
@@ -3999,6 +4372,10 @@ export default function App() {
                 <div className="admin-card">
                   <p>Approvals</p>
                   <h3>{overview.approvals ?? "--"}</h3>
+                </div>
+                <div className="admin-card">
+                  <p>Transport</p>
+                  <h3>{overview.transport ?? "--"}</h3>
                 </div>
               </div>
               <button type="button" className="secondary-action" onClick={loadAdminOverview}>
@@ -4098,6 +4475,7 @@ export default function App() {
                             <option value="facility_manager">Facility Manager</option>
                             <option value="marketing">Marketing</option>
                             <option value="it">IT</option>
+                            <option value="transport">Transport</option>
                             <option value="iqac">IQAC</option>
                           </select>
                         </div>
@@ -4327,6 +4705,7 @@ export default function App() {
                     loadAdminApprovals();
                     loadAdminMarketing();
                     loadAdminIt();
+                    loadAdminTransport();
                   }}>
                     Refresh
                   </button>
@@ -4397,6 +4776,30 @@ export default function App() {
                             type="button"
                             className="details-button reject"
                             onClick={() => handleAdminDeleteIt(item.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="admin-request-block">
+                    <h4>Transport</h4>
+                    {adminTransportState.status === "loading" ? (
+                      <p className="table-message">Loading transport...</p>
+                    ) : null}
+                    {adminTransportState.items.slice(0, 6).map((item) => (
+                      <div key={item.id} className="admin-request-item">
+                        <div>
+                          <p className="admin-name">{item.event_name}</p>
+                          <p className="admin-email">{item.requester_email}</p>
+                        </div>
+                        <div className="admin-request-actions">
+                          <span className={`status-pill ${item.status}`}>{item.status}</span>
+                          <button
+                            type="button"
+                            className="details-button reject"
+                            onClick={() => handleAdminDeleteTransport(item.id)}
                           >
                             Delete
                           </button>
@@ -4541,12 +4944,17 @@ export default function App() {
                       const statusValue = event.status || "";
                       const explicitStatus = statusValue ? formatStatusLabel(statusValue) : null;
                       const hasApprovalData =
-                        event.approval_status || event.facility_status || event.marketing_status || event.it_status;
+                        event.approval_status ||
+                        event.facility_status ||
+                        event.transport_status ||
+                        event.marketing_status ||
+                        event.it_status;
                       let derivedStatus = "Approved";
                       if (hasApprovalData) {
                         const statuses = [
                           event.approval_status,
                           event.facility_status,
+                          event.transport_status,
                           event.marketing_status,
                           event.it_status
                         ];
@@ -4572,9 +4980,14 @@ export default function App() {
                       const canInvite =
                         !eventHasStarted &&
                         isUpcomingEvent &&
-                        ((!event.approval_status && !event.facility_status && !event.marketing_status && !event.it_status) ||
+                        ((!event.approval_status &&
+                          !event.facility_status &&
+                          !event.transport_status &&
+                          !event.marketing_status &&
+                          !event.it_status) ||
                           (event.approval_status === "approved" &&
                             event.facility_status === "approved" &&
+                            event.transport_status === "approved" &&
                             event.marketing_status === "approved" &&
                             event.it_status === "approved")) &&
                         !inviteSent;
@@ -4595,6 +5008,10 @@ export default function App() {
                         canSendSupportForms &&
                         event.it_status !== "approved" &&
                         event.it_status !== "pending";
+                      const canSendTransportRequest =
+                        canSendSupportForms &&
+                        event.transport_status !== "approved" &&
+                        event.transport_status !== "pending";
                       const canUploadReport = !isApprovalItem && statusValue === "completed";
                       const canCloseEvent =
                         !isApprovalItem &&
@@ -4668,7 +5085,10 @@ export default function App() {
                               </button>
                             ) : null}
                             {canSendSupportForms &&
-                            (canSendFacilityRequest || canSendMarketingRequest || canSendItRequest) ? (
+                            (canSendFacilityRequest ||
+                              canSendTransportRequest ||
+                              canSendMarketingRequest ||
+                              canSendItRequest) ? (
                               <button
                                 type="button"
                                 className="ev-action-btn ev-action-requirements"
@@ -5028,7 +5448,8 @@ export default function App() {
                     </div>
 
                     <p className="approval-note">
-                      Registrar will approve or reject this event. After approval, you can send requirements to Facility Manager, IT, and Marketing.
+                      Registrar will approve or reject this event. After approval, you can send requirements to Facility,
+                      Transport, IT, and Marketing.
                     </p>
 
                     {approvalModal.status === "error" ? (
@@ -5158,6 +5579,230 @@ export default function App() {
                         disabled={facilityModal.status === "loading"}
                       >
                         {facilityModal.status === "loading" ? "Sending..." : "Send"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : null}
+
+            {transportModal.open ? (
+              <div className="approval-overlay" role="dialog" aria-modal="true">
+                <div className="marketing-card">
+                  <div className="approval-header">
+                    <h3>TRANSPORT REQUEST</h3>
+                    <button type="button" className="modal-close" onClick={handleTransportModalClose}>
+                      &times;
+                    </button>
+                  </div>
+                  <form className="approval-form" onSubmit={submitTransportRequest}>
+                    <div className="approval-grid">
+                      <label className="approval-field">
+                        <span>From</span>
+                        <input type="email" value={user?.email || ""} readOnly />
+                      </label>
+                      <label className="approval-field">
+                        <span>To</span>
+                        <input
+                          type="email"
+                          placeholder="transport@campus.edu"
+                          value={transportForm.to}
+                          onChange={handleTransportFieldChange("to")}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="approval-summary">
+                      <p>
+                        <strong>Event:</strong> {pendingEvent?.name || eventForm.name || "Untitled event"}
+                      </p>
+                      <p>
+                        <strong>Date:</strong>{" "}
+                        {pendingEvent?.start_date || eventForm.start_date || "--"}{" "}
+                        {pendingEvent?.end_date
+                          ? `to ${pendingEvent.end_date}`
+                          : eventForm.end_date
+                            ? `to ${eventForm.end_date}`
+                            : ""}
+                      </p>
+                      <p>
+                        <strong>Time:</strong>{" "}
+                        {formatISTTime(pendingEvent?.start_time || eventForm.start_time) || "--"}{" "}
+                        {pendingEvent?.end_time
+                          ? `to ${formatISTTime(pendingEvent.end_time)}`
+                          : eventForm.end_time
+                            ? `to ${formatISTTime(eventForm.end_time)}`
+                            : ""}
+                      </p>
+                    </div>
+
+                    <div className="approval-requirements">
+                      <p>Transport arrangement (you can select both)</p>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={transportForm.include_guest_cab}
+                          onChange={(e) =>
+                            setTransportForm((prev) => ({
+                              ...prev,
+                              include_guest_cab: e.target.checked
+                            }))
+                          }
+                        />
+                        Cab for guest
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={transportForm.include_students}
+                          onChange={(e) =>
+                            setTransportForm((prev) => ({
+                              ...prev,
+                              include_students: e.target.checked
+                            }))
+                          }
+                        />
+                        Students (off-campus event)
+                      </label>
+                    </div>
+
+                    {transportForm.include_guest_cab ? (
+                      <div className="form-grid" style={{ marginTop: "0.75rem" }}>
+                        <p className="details-sublabel" style={{ gridColumn: "1 / -1", margin: 0 }}>
+                          Guest cab
+                        </p>
+                        <label className="approval-field">
+                          <span>Pick up location</span>
+                          <input
+                            type="text"
+                            value={transportForm.guest_pickup_location}
+                            onChange={handleTransportFieldChange("guest_pickup_location")}
+                            placeholder="Address or landmark"
+                          />
+                        </label>
+                        <label className="approval-field">
+                          <span>Pick up date</span>
+                          <input
+                            type="date"
+                            value={transportForm.guest_pickup_date}
+                            onChange={handleTransportFieldChange("guest_pickup_date")}
+                          />
+                        </label>
+                        <label className="approval-field">
+                          <span>Pick up time</span>
+                          <input
+                            type="time"
+                            value={transportForm.guest_pickup_time}
+                            onChange={handleTransportFieldChange("guest_pickup_time")}
+                          />
+                        </label>
+                        <label className="approval-field">
+                          <span>Drop off location</span>
+                          <input
+                            type="text"
+                            value={transportForm.guest_dropoff_location}
+                            onChange={handleTransportFieldChange("guest_dropoff_location")}
+                            placeholder="Address or landmark"
+                          />
+                        </label>
+                        <label className="approval-field">
+                          <span>Drop off date (optional)</span>
+                          <input
+                            type="date"
+                            value={transportForm.guest_dropoff_date}
+                            onChange={handleTransportFieldChange("guest_dropoff_date")}
+                          />
+                        </label>
+                        <label className="approval-field">
+                          <span>Drop off time</span>
+                          <input
+                            type="time"
+                            value={transportForm.guest_dropoff_time}
+                            onChange={handleTransportFieldChange("guest_dropoff_time")}
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+
+                    {transportForm.include_students ? (
+                      <div className="form-grid" style={{ marginTop: "0.75rem" }}>
+                        <p className="details-sublabel" style={{ gridColumn: "1 / -1", margin: 0 }}>
+                          Student transport
+                        </p>
+                        <label className="approval-field">
+                          <span>Number of students</span>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={transportForm.student_count}
+                            onChange={handleTransportFieldChange("student_count")}
+                          />
+                        </label>
+                        <label className="approval-field">
+                          <span>Kind of transport</span>
+                          <input
+                            type="text"
+                            value={transportForm.student_transport_kind}
+                            onChange={handleTransportFieldChange("student_transport_kind")}
+                            placeholder="e.g. bus, van"
+                          />
+                        </label>
+                        <label className="approval-field">
+                          <span>Date</span>
+                          <input
+                            type="date"
+                            value={transportForm.student_date}
+                            onChange={handleTransportFieldChange("student_date")}
+                          />
+                        </label>
+                        <label className="approval-field">
+                          <span>Time</span>
+                          <input
+                            type="time"
+                            value={transportForm.student_time}
+                            onChange={handleTransportFieldChange("student_time")}
+                          />
+                        </label>
+                        <label className="approval-field" style={{ gridColumn: "1 / -1" }}>
+                          <span>Pick up point</span>
+                          <input
+                            type="text"
+                            value={transportForm.student_pickup_point}
+                            onChange={handleTransportFieldChange("student_pickup_point")}
+                            placeholder="Meeting point for students"
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+
+                    <label className="approval-field">
+                      <span>Additional notes</span>
+                      <textarea
+                        rows="3"
+                        placeholder="Any other details for transport."
+                        value={transportForm.other_notes}
+                        onChange={handleTransportFieldChange("other_notes")}
+                      />
+                    </label>
+
+                    {transportModal.status === "error" ? (
+                      <p className="form-error">{transportModal.error}</p>
+                    ) : null}
+
+                    <div className="modal-actions">
+                      <button type="button" className="secondary-action" onClick={handleTransportSkip}>
+                        Skip
+                      </button>
+                      <button type="button" className="secondary-action" onClick={handleTransportModalClose}>
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="primary-action"
+                        disabled={transportModal.status === "loading"}
+                      >
+                        {transportModal.status === "loading" ? "Sending..." : "Send"}
                       </button>
                     </div>
                   </form>
@@ -6491,6 +7136,21 @@ export default function App() {
                   ) : null}
                 </button>
               ) : null}
+              {isTransportRole ? (
+                <button
+                  type="button"
+                  className={`tab-button ${approvalsTab === "transport" ? "active" : ""}`}
+                  onClick={() => setApprovalsTab("transport")}
+                >
+                  Transport
+                  {transportState.status === "ready" &&
+                  transportState.items.filter((i) => i.status === "pending").length > 0 ? (
+                    <span className="tab-badge">
+                      {transportState.items.filter((i) => i.status === "pending").length}
+                    </span>
+                  ) : null}
+                </button>
+              ) : null}
             </div>
             {isApproverRole && approvalsTab === "approval-requests" ? (
             <div className="events-table-card">
@@ -6749,6 +7409,85 @@ export default function App() {
             </div>
             ) : null}
 
+            {isTransportRole && approvalsTab === "transport" ? (
+            <div className="events-table-card">
+              <div className="table-header">
+                <h3>Transport Requests</h3>
+                <button type="button" className="secondary-action" onClick={loadTransportInbox}>Refresh</button>
+              </div>
+              <div className="events-table">
+                <div className="events-table-row header facility">
+                  <span>Event</span>
+                  <span>Requester</span>
+                  <span>Type</span>
+                  <span>Date</span>
+                  <span>Time</span>
+                  <span>Status</span>
+                  <span>Action</span>
+                </div>
+                {transportState.status === "loading" ? (
+                  <p className="table-message">Loading transport requests...</p>
+                ) : null}
+                {transportState.status === "error" ? (
+                  <p className="table-message">{transportState.error}</p>
+                ) : null}
+                {transportState.status === "ready" && transportState.items.length === 0 ? (
+                  <p className="table-message">No transport requests yet.</p>
+                ) : null}
+                {transportState.status === "ready"
+                  ? transportState.items.map((item) => {
+                      const typeLabel = transportRequestTypeLabel(item.transport_type);
+                      const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                      const eventHasStarted = isEventStarted(item);
+                      return (
+                        <div key={item.id} className="events-table-row facility">
+                          <span>{item.event_name}</span>
+                          <span>{item.requester_email}</span>
+                          <span>{typeLabel}</span>
+                          <span>{item.start_date}</span>
+                          <span>{formatISTTime(item.start_time)}</span>
+                          <span className={`status-pill ${item.status}`}>{statusLabel}</span>
+                          <div className="approval-actions">
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
+                              title={item.event_id ? "View event details" : "Event details available after approval"}
+                              disabled={!item.event_id}
+                            >
+                              Details
+                            </button>
+                            {item.status === "pending" ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="details-button"
+                                  disabled={eventHasStarted}
+                                  title={eventHasStarted ? "Event has already started" : ""}
+                                  onClick={() => handleTransportDecision(item.id, "approved")}
+                                >
+                                  Accept
+                                </button>
+                                <button
+                                  type="button"
+                                  className="details-button reject"
+                                  disabled={eventHasStarted}
+                                  title={eventHasStarted ? "Event has already started" : ""}
+                                  onClick={() => handleTransportDecision(item.id, "rejected")}
+                                >
+                                  Reject
+                                </button>
+                              </>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })
+                  : null}
+              </div>
+            </div>
+            ) : null}
+
             {isItRole && approvalsTab === "it" ? (
             <div className="events-table-card">
               <div className="table-header">
@@ -6979,6 +7718,7 @@ export default function App() {
                     <option value="facility_manager">Facility Manager</option>
                     <option value="marketing">Marketing</option>
                     <option value="it">IT</option>
+                    <option value="transport">Transport</option>
                     <option value="iqac">IQAC</option>
                   </select>
                 </label>
@@ -7119,6 +7859,22 @@ export default function App() {
                         ))}
                       </div>
                     ) : null}
+                    {eventDetailsModal.details.transport_requests?.length > 0 ? (
+                      <div className="details-subsection">
+                        <p className="details-sublabel">Transport</p>
+                        {eventDetailsModal.details.transport_requests.map((r, i) => (
+                          <div key={r.id || i} className="details-row">
+                            <span>
+                              {transportRequestTypeLabel(r.transport_type)} — To: {r.requested_to || "—"}
+                            </span>
+                            <span className={`status-pill ${r.status}`}>
+                              {formatRequirementDecisionStatusLabel(r.status)}
+                            </span>
+                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     {eventDetailsModal.details.marketing_requests?.length > 0 ? (
                       <div className="details-subsection">
                         <p className="details-sublabel">Marketing</p>
@@ -7148,8 +7904,13 @@ export default function App() {
                         ))}
                       </div>
                     ) : null}
-                    {!(eventDetailsModal.details.facility_requests?.length || eventDetailsModal.details.marketing_requests?.length || eventDetailsModal.details.it_requests?.length) ? (
-                      <p className="details-value">No facility, marketing, or IT requests sent yet.</p>
+                    {!(
+                      eventDetailsModal.details.facility_requests?.length ||
+                      eventDetailsModal.details.transport_requests?.length ||
+                      eventDetailsModal.details.marketing_requests?.length ||
+                      eventDetailsModal.details.it_requests?.length
+                    ) ? (
+                      <p className="details-value">No facility, transport, marketing, or IT requests sent yet.</p>
                     ) : null}
                   </div>
 

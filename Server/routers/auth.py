@@ -122,3 +122,10 @@ async def get_it_email(user: User = Depends(get_current_user)):
     """Return the IT email for prefilling request forms."""
     email = await get_primary_email_by_role("it")
     return {"email": email or ""}
+
+
+@router.get("/transport-email")
+async def get_transport_email(user: User = Depends(get_current_user)):
+    """Return the transport coordinator email for prefilling request forms."""
+    email = await get_primary_email_by_role("transport")
+    return {"email": email or ""}
