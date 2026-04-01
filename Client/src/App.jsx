@@ -2345,8 +2345,15 @@ export default function App() {
   };
 
   const handleMarketingModalClose = () => {
-    requirementsFlowQueueRef.current = [];
-    setMarketingModal({ open: false, status: "idle", error: "" });
+      const queue = requirementsFlowQueueRef.current;
+      if (queue[0] === "marketing") {
+        requirementsFlowQueueRef.current = queue.slice(1);
+        const next = requirementsFlowQueueRef.current[0];
+        if (next === "transport") handleTransportModalOpen();
+      } else {
+        requirementsFlowQueueRef.current = [];
+      }
+      setMarketingModal({ open: false, status: "idle", error: "" });
   };
 
   const handleFacilityModalOpen = () => {
@@ -2370,9 +2377,9 @@ export default function App() {
     if (queue[0] === "facility") {
       requirementsFlowQueueRef.current = queue.slice(1);
       const next = requirementsFlowQueueRef.current[0];
-      if (next === "transport") handleTransportModalOpen();
-      else if (next === "it") handleItModalOpen();
+      if (next === "it") handleItModalOpen();
       else if (next === "marketing") handleMarketingModalOpen();
+      else if (next === "transport") handleTransportModalOpen();
     } else {
       requirementsFlowQueueRef.current = [];
     }
@@ -2409,9 +2416,6 @@ export default function App() {
     const queue = requirementsFlowQueueRef.current;
     if (queue[0] === "transport") {
       requirementsFlowQueueRef.current = queue.slice(1);
-      const next = requirementsFlowQueueRef.current[0];
-      if (next === "it") handleItModalOpen();
-      else if (next === "marketing") handleMarketingModalOpen();
     } else {
       requirementsFlowQueueRef.current = [];
     }
@@ -2459,7 +2463,15 @@ export default function App() {
   };
 
   const handleMarketingSkip = () => {
-    handleMarketingModalClose();
+    setMarketingModal({ open: false, status: "idle", error: "" });
+    const queue = requirementsFlowQueueRef.current;
+    if (queue[0] === "marketing") {
+      requirementsFlowQueueRef.current = queue.slice(1);
+      const next = requirementsFlowQueueRef.current[0];
+      if (next === "transport") handleTransportModalOpen();
+    } else {
+      requirementsFlowQueueRef.current = [];
+    }
   };
 
   const handleItSkip = () => {
@@ -2469,6 +2481,7 @@ export default function App() {
       requirementsFlowQueueRef.current = queue.slice(1);
       const next = requirementsFlowQueueRef.current[0];
       if (next === "marketing") handleMarketingModalOpen();
+      else if (next === "transport") handleTransportModalOpen();
       else requirementsFlowQueueRef.current = [];
     } else {
       requirementsFlowQueueRef.current = [];
@@ -2499,16 +2512,16 @@ export default function App() {
     setPendingEvent({ ...eventItem, event_id: eventItem?.id || eventItem?.event_id || "" });
     const queue = [];
     if (eventItem.facility_status !== "approved" && eventItem.facility_status !== "pending") queue.push("facility");
+    if (eventItem.it_status !== "approved" && eventItem.it_status !== "pending") queue.push("it");
+    if (eventItem.marketing_status !== "approved" && eventItem.marketing_status !== "pending") queue.push("marketing");
     if (eventItem.transport_status !== "approved" && eventItem.transport_status !== "pending") {
       queue.push("transport");
     }
-    if (eventItem.it_status !== "approved" && eventItem.it_status !== "pending") queue.push("it");
-    if (eventItem.marketing_status !== "approved" && eventItem.marketing_status !== "pending") queue.push("marketing");
     requirementsFlowQueueRef.current = queue;
     if (queue[0] === "facility") handleFacilityModalOpen();
-    else if (queue[0] === "transport") handleTransportModalOpen();
     else if (queue[0] === "it") handleItModalOpen();
     else if (queue[0] === "marketing") handleMarketingModalOpen();
+    else if (queue[0] === "transport") handleTransportModalOpen();
   };
 
   const getExpectedReportFilename = (eventName, startDate) => {
@@ -3586,9 +3599,9 @@ export default function App() {
       if (queue[0] === "facility") {
         requirementsFlowQueueRef.current = queue.slice(1);
         const next = requirementsFlowQueueRef.current[0];
-        if (next === "transport") handleTransportModalOpen();
-        else if (next === "it") handleItModalOpen();
+        if (next === "it") handleItModalOpen();
         else if (next === "marketing") handleMarketingModalOpen();
+        else if (next === "transport") handleTransportModalOpen();
       }
     } catch (err) {
       setFacilityModal({
@@ -3717,9 +3730,6 @@ export default function App() {
       const queue = requirementsFlowQueueRef.current;
       if (queue[0] === "transport") {
         requirementsFlowQueueRef.current = queue.slice(1);
-        const next = requirementsFlowQueueRef.current[0];
-        if (next === "it") handleItModalOpen();
-        else if (next === "marketing") handleMarketingModalOpen();
       }
     } catch (err) {
       setTransportModal({
@@ -3775,7 +3785,14 @@ export default function App() {
       setMarketingModal({ open: false, status: "idle", error: "" });
       setStatus({ type: "success", message: "Marketing request submitted." });
       loadEvents();
-      requirementsFlowQueueRef.current = [];
+      const queue = requirementsFlowQueueRef.current;
+      if (queue[0] === "marketing") {
+        requirementsFlowQueueRef.current = queue.slice(1);
+        const next = requirementsFlowQueueRef.current[0];
+        if (next === "transport") handleTransportModalOpen();
+      } else {
+        requirementsFlowQueueRef.current = [];
+      }
     } catch (err) {
       setMarketingModal({
         open: true,
@@ -5449,7 +5466,7 @@ export default function App() {
 
                     <p className="approval-note">
                       Registrar will approve or reject this event. After approval, you can send requirements to Facility,
-                      Transport, IT, and Marketing.
+                      IT, Marketing, and Transport.
                     </p>
 
                     {approvalModal.status === "error" ? (
