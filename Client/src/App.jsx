@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { jsPDF } from "jspdf";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
+import tippy from "tippy.js";
+import "tippy.js/dist/tippy.css";
 import {
   menuItems,
   preferenceItems,
@@ -26,7 +28,11 @@ import {
 import { GoogleIcon, SimpleIcon, PlaceholderCard } from "./components/icons";
 import { LoginPage, Sidebar } from "./components/layout";
 import { Modal, StatusMessage } from "./components/ui";
+import PremiumDatePicker from "./components/ui/PremiumDatePicker";
+import PremiumTimePicker from "./components/ui/PremiumTimePicker";
+import SearchableSelect from "./components/ui/SearchableSelect";
 import IqacDataPage from "./components/IqacDataPage";
+import { MessengerProvider, FloatingMessenger } from "./components/messenger";
 import api from "./services/api";
 
 /** Normalize path so "/event reports" or "/event%20reports" map to canonical routes. */
@@ -270,6 +276,7 @@ export default function App() {
     events: [],
     error: ""
   });
+  const [calendarDetailModal, setCalendarDetailModal] = useState({ open: false, event: null });
   const [publicationsState, setPublicationsState] = useState({
     status: "idle",
     items: [],
@@ -2132,6 +2139,16 @@ export default function App() {
     setIsEventModalOpen(false);
     setConflictState({ open: false, items: [] });
   };
+
+  // Lock body scroll when Create Event modal is open
+  useEffect(() => {
+    if (isEventModalOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [isEventModalOpen]);
 
   const handleApprovalModalOpen = () => {
     setApprovalForm({
@@ -4434,87 +4451,58 @@ export default function App() {
             : "";
         return (
           <div className="primary-column">
-            <div className="events-actions">
-              <span title={createTooltip} className="action-tooltip">
-                <button
-                  type="button"
-                  className="primary-action"
-                  onClick={() => {
-                    if (limitReached) {
-                      setStatus({
-                        type: "error",
-                        message: "Submit reports of completed events before creating a new one."
-                      });
-                      return;
-                    }
-                    if (warnThresholdReached) {
-                      setStatus({
-                        type: "info",
-                        message: "Submit report of completed events to avoid creation block."
-                      });
-                    }
-                    handleEventModalOpen();
-                  }}
-                  disabled={limitReached}
-                >
-                  + New Event
+            <div className="my-events-page-header">
+              <div className="my-events-title-group">
+                <h2 className="my-events-title">{isReportsView ? "Event Reports" : "My Events"}</h2>
+                <span className="my-events-count-badge">{filteredEvents.length}</span>
+              </div>
+              <div className="my-events-header-actions">
+                {!isReportsView && (
+                  <span title={createTooltip} className="action-tooltip">
+                    <button
+                      type="button"
+                      className="primary-action my-events-new-btn"
+                      onClick={() => {
+                        if (limitReached) {
+                          setStatus({
+                            type: "error",
+                            message: "Submit reports of completed events before creating a new one."
+                          });
+                          return;
+                        }
+                        if (warnThresholdReached) {
+                          setStatus({
+                            type: "info",
+                            message: "Submit report of completed events to avoid creation block."
+                          });
+                        }
+                        handleEventModalOpen();
+                      }}
+                      disabled={limitReached}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      New Event
+                    </button>
+                  </span>
+                )}
+                <button type="button" className="secondary-action my-events-refresh-btn" onClick={loadEvents}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                  Refresh
                 </button>
-              </span>
-              <button type="button" className="secondary-action" onClick={loadEvents}>
-                Refresh
-              </button>
+              </div>
             </div>
 
             <div className="events-table-card">
-              <div className="table-header">
-                <h3>{isReportsView ? "Event Reports" : "My Events"}</h3>
-                {isReportsView ? null : (
-                  <div className="table-tabs">
-                  <button
-                    type="button"
-                    className={`tab-button ${myEventsTab === "all" ? "active" : ""}`}
-                    onClick={() => setMyEventsTab("all")}
-                  >
-                    All
-                  </button>
-                  <button
-                    type="button"
-                    className={`tab-button ${myEventsTab === "pending" ? "active" : ""}`}
-                    onClick={() => setMyEventsTab("pending")}
-                  >
-                    Pending
-                  </button>
-                  <button
-                    type="button"
-                    className={`tab-button ${myEventsTab === "upcoming" ? "active" : ""}`}
-                    onClick={() => setMyEventsTab("upcoming")}
-                  >
-                    Upcoming
-                  </button>
-                  <button
-                    type="button"
-                    className={`tab-button ${myEventsTab === "ongoing" ? "active" : ""}`}
-                    onClick={() => setMyEventsTab("ongoing")}
-                  >
-                    Ongoing
-                  </button>
-                  <button
-                    type="button"
-                    className={`tab-button ${myEventsTab === "completed" ? "active" : ""}`}
-                    onClick={() => setMyEventsTab("completed")}
-                  >
-                    Completed
-                  </button>
-                  <button
-                    type="button"
-                    className={`tab-button ${myEventsTab === "closed" ? "active" : ""}`}
-                    onClick={() => setMyEventsTab("closed")}
-                  >
-                    Closed
-                  </button>
+              {isReportsView ? null : (
+                <div className="my-events-tabs">
+                  <button type="button" className={`my-events-tab ${myEventsTab === "all" ? "active" : ""}`} onClick={() => setMyEventsTab("all")}>All</button>
+                  <button type="button" className={`my-events-tab ${myEventsTab === "pending" ? "active" : ""}`} onClick={() => setMyEventsTab("pending")}>Pending</button>
+                  <button type="button" className={`my-events-tab ${myEventsTab === "upcoming" ? "active" : ""}`} onClick={() => setMyEventsTab("upcoming")}>Upcoming</button>
+                  <button type="button" className={`my-events-tab ${myEventsTab === "ongoing" ? "active" : ""}`} onClick={() => setMyEventsTab("ongoing")}>Ongoing</button>
+                  <button type="button" className={`my-events-tab ${myEventsTab === "completed" ? "active" : ""}`} onClick={() => setMyEventsTab("completed")}>Completed</button>
+                  <button type="button" className={`my-events-tab ${myEventsTab === "closed" ? "active" : ""}`} onClick={() => setMyEventsTab("closed")}>Closed</button>
                 </div>
-                )}
-              </div>
+              )}
               <div className="events-table">
                 <div className={`events-table-row header ${isReportsTab ? "reports" : ""}`}>
                   <span>Events</span>
@@ -4524,27 +4512,29 @@ export default function App() {
                   <span>Action</span>
                 </div>
                 {eventsState.status === "loading" ? (
-                  <p className="table-message">Loading events...</p>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className={`events-table-row my-events-skeleton-row ${isReportsTab ? "reports" : ""}`}>
+                      <span className="skeleton-line" style={{ height: "16px", width: "65%", display: "block" }} />
+                      {isReportsTab ? null : <span className="skeleton-line" style={{ height: "16px", width: "55%", display: "block" }} />}
+                      {isReportsTab ? null : <span className="skeleton-line" style={{ height: "16px", width: "45%", display: "block" }} />}
+                      <span className="skeleton-line" style={{ height: "26px", width: "72px", borderRadius: "999px", display: "block" }} />
+                      <span className="skeleton-line" style={{ height: "30px", width: "80px", borderRadius: "10px", display: "block" }} />
+                    </div>
+                  ))
                 ) : null}
                 {eventsState.status === "error" ? (
                   <p className="table-message">{eventsState.error}</p>
                 ) : null}
                 {eventsState.status === "ready" && filteredEvents.length === 0 ? (
-                  <p className="table-message">
-                    {isReportsTab
-                      ? "No closed events yet."
-                      : myEventsTab === "completed"
-                        ? "No completed events yet."
-                        : myEventsTab === "upcoming"
-                          ? "No upcoming events."
-                          : myEventsTab === "ongoing"
-                            ? "No ongoing events."
-                            : myEventsTab === "closed"
-                              ? "No closed events yet."
-                              : myEventsTab === "pending"
-                                ? "No pending events."
-                                : "No events yet. Create your first event."}
-                  </p>
+                  <div className="my-events-empty-state">
+                    <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#c4c9d4" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <p className="my-events-empty-title">
+                      {isReportsTab ? "No closed events yet." : myEventsTab === "completed" ? "No completed events yet." : myEventsTab === "upcoming" ? "No upcoming events." : myEventsTab === "ongoing" ? "No ongoing events." : myEventsTab === "pending" ? "No pending events." : "No events found."}
+                    </p>
+                    {myEventsTab === "all" && !isReportsTab ? (
+                      <span className="my-events-empty-sub">Create your first event to get started.</span>
+                    ) : null}
+                  </div>
                 ) : null}
                 {eventsState.status === "ready"
                   ? filteredEvents.map((event) => {
@@ -4612,15 +4602,16 @@ export default function App() {
                         Boolean(event.report_file_id);
                       if (isReportsTab) {
                         return (
-                          <div key={event.id} className="events-table-row reports">
-                            <span>{event.name}</span>
+                          <div key={event.id} className="events-table-row reports my-events-row">
+                            <span className="my-events-row-name">{event.name}</span>
                             <span className={`status-pill ${statusClass}`}>{statusLabel}</span>
                             <div className="event-actions">
                               <button
                                 type="button"
-                                className="details-button invite"
+                                className="ev-action-btn ev-action-details"
                                 onClick={() => handleViewReport(event)}
                               >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                 View Report
                               </button>
                             </div>
@@ -4628,8 +4619,8 @@ export default function App() {
                         );
                       }
                       return (
-                        <div key={event.id} className="events-table-row">
-                          <span>{event.name}</span>
+                        <div key={event.id} className="events-table-row my-events-row">
+                          <span className="my-events-row-name">{event.name}</span>
                           <span>{event.start_date}</span>
                           <span>{formatISTTime(event.start_time)}</span>
                           <div className="status-cell">
@@ -4646,29 +4637,33 @@ export default function App() {
                             )}
                           </div>
                           <div className="event-actions">
-                            <button type="button" className="details-button" onClick={() => handleEventDetailsOpen(event)}>
+                            <button type="button" className="ev-action-btn ev-action-details" onClick={() => handleEventDetailsOpen(event)}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                               Details
                             </button>
                             {inviteSent ? (
-                              <button type="button" className="details-button invite" disabled>
+                              <button type="button" className="ev-action-btn ev-action-sent" disabled>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                 Sent
                               </button>
                             ) : null}
                             {canInvite ? (
                               <button
                                 type="button"
-                                className="details-button invite"
+                                className="ev-action-btn ev-action-invite"
                                 onClick={() => handleInviteOpen(event)}
                               >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                                 Send Invite
                               </button>
                             ) : null}
                             {canUploadReport ? (
                               <button
                                 type="button"
-                                className="details-button invite"
+                                className="ev-action-btn ev-action-upload"
                                 onClick={() => handleReportOpen(event)}
                               >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                                 {event.report_file_id ? "Replace Report" : "Upload Report"}
                               </button>
                             ) : null}
@@ -4676,18 +4671,20 @@ export default function App() {
                             (canSendFacilityRequest || canSendMarketingRequest || canSendItRequest) ? (
                               <button
                                 type="button"
-                                className="details-button invite"
+                                className="ev-action-btn ev-action-requirements"
                                 onClick={() => handleSendRequirements(event)}
                               >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                                 Send your requirements
                               </button>
                             ) : null}
                             {event.report_file_id && event.status === "closed" ? (
                               <button
                                 type="button"
-                                className="details-button invite"
+                                className="ev-action-btn ev-action-details"
                                 onClick={() => handleViewReport(event)}
                               >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                 View Report
                               </button>
                             ) : null}
@@ -4700,215 +4697,211 @@ export default function App() {
             </div>
 
             {isEventModalOpen ? (
-              <div className="modal-overlay" role="dialog" aria-modal="true">
-                <div className="modal-card">
-                  <div className="modal-header">
-                    <h3>Create Event</h3>
-                    <button type="button" className="modal-close" onClick={handleEventModalClose}>
-                      &times;
+              <div className="modal-overlay premium-modal-overlay" role="dialog" aria-modal="true" onClick={(e) => { if (e.target === e.currentTarget) handleEventModalClose(); }}>
+                <div className="modal-card premium-modal-card">
+                  <div className="modal-header premium-modal-header">
+                    <div className="premium-modal-title-row">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue, #4285f4)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                      <h3>Create Event</h3>
+                    </div>
+                    <button type="button" className="modal-close premium-modal-close" onClick={handleEventModalClose} aria-label="Close">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
                     </button>
                   </div>
-                  <form className="event-form" onSubmit={handleEventSubmit}>
-                    <div className="form-grid">
-                      <label className="form-field">
-                        <span>Start date</span>
+                  <form className="event-form premium-event-form" onSubmit={handleEventSubmit}>
+                    <div className="premium-form-body">
+                    {/* Date & Time Section */}
+                    <div className="premium-section">
+                      <div className="premium-section-label">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+                        <span>Date &amp; Time</span>
+                      </div>
+                      <div className="premium-datetime-grid">
+                        <div className="premium-datetime-row">
+                          <span className="premium-datetime-label">Start</span>
+                          <PremiumDatePicker
+                            value={eventForm.start_date}
+                            onChange={handleEventFieldChange("start_date")}
+                            required
+                          />
+                          <PremiumTimePicker
+                            timeParts={eventTimeParts.start_time}
+                            onPartChange={(key) => handleEventTimePartChange("start_time", key)}
+                            required
+                          />
+                        </div>
+                        <div className="premium-datetime-row">
+                          <span className="premium-datetime-label">End</span>
+                          <PremiumDatePicker
+                            value={eventForm.end_date}
+                            onChange={handleEventFieldChange("end_date")}
+                            required
+                          />
+                          <PremiumTimePicker
+                            timeParts={eventTimeParts.end_time}
+                            onPartChange={(key) => handleEventTimePartChange("end_time", key)}
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Event Details Section */}
+                    <div className="premium-section">
+                      <div className="premium-section-label">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                        <span>Event Details</span>
+                      </div>
+                      <label className="form-field premium-form-field">
+                        <span>Event name</span>
                         <input
-                          type="date"
-                          value={eventForm.start_date}
-                          onChange={handleEventFieldChange("start_date")}
+                          type="text"
+                          placeholder="e.g. Annual Tech Conference 2026"
+                          value={eventForm.name}
+                          onChange={handleEventFieldChange("name")}
                           required
+                          className="premium-input"
                         />
                       </label>
-                      <label className="form-field">
-                        <span>End date</span>
+                      <label className="form-field premium-form-field">
+                        <span>Facilitator</span>
                         <input
-                          type="date"
-                          value={eventForm.end_date}
-                          onChange={handleEventFieldChange("end_date")}
+                          type="text"
+                          placeholder="e.g. Dr. Sharma"
+                          value={eventForm.facilitator}
+                          onChange={handleEventFieldChange("facilitator")}
                           required
+                          className="premium-input"
                         />
                       </label>
-                      <label className="form-field">
-                        <span>Start time</span>
-                        <div className="time-picker">
-                          <select
-                            value={eventTimeParts.start_time.hour}
-                            onChange={handleEventTimePartChange("start_time", "hour")}
+                    </div>
+
+                    {/* Venue & Audience Section */}
+                    <div className="premium-section">
+                      <div className="premium-section-label">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" /></svg>
+                        <span>Venue &amp; Audience</span>
+                      </div>
+                      <div className="premium-two-col">
+                        <div className="form-field premium-form-field">
+                          <SearchableSelect
+                            label="Venue"
+                            value={eventForm.venue_name}
+                            onChange={handleEventFieldChange("venue_name")}
+                            options={venuesState.items.map((v) => ({ value: v.name, label: v.name }))}
+                            placeholder="Select a venue"
                             required
-                          >
-                            <option value="">Hour</option>
-                            {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((hour) => (
-                              <option key={`start-hour-${hour}`} value={hour}>
-                                {hour}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            value={eventTimeParts.start_time.minute}
-                            onChange={handleEventTimePartChange("start_time", "minute")}
+                            emptyMessage="No venues found"
+                          />
+                          {venuesState.status === "error" ? (
+                            <span className="form-error">{venuesState.error}</span>
+                          ) : null}
+                        </div>
+                        <div className="form-field premium-form-field">
+                          <SearchableSelect
+                            label="Intended Audience"
+                            value={eventForm.intendedAudience}
+                            onChange={handleEventFieldChange("intendedAudience")}
+                            options={[
+                              { value: "Students", label: "Students" },
+                              { value: "Faculty", label: "Faculty" },
+                              { value: "PhD Scholars", label: "PhD Scholars" },
+                              { value: "Staffs", label: "Staffs" },
+                              { value: "Everyone at VU", label: "Everyone at VU" }
+                            ]}
+                            placeholder="Select intended audience"
                             required
-                          >
-                            <option value="">Minute</option>
-                            {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map((minute) => (
-                              <option key={`start-minute-${minute}`} value={minute}>
-                                {minute}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            value={eventTimeParts.start_time.period}
-                            onChange={handleEventTimePartChange("start_time", "period")}
-                            required
-                          >
-                            <option value="AM">AM</option>
-                            <option value="PM">PM</option>
-                          </select>
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Description & Budget Section */}
+                    <div className="premium-section">
+                      <div className="premium-section-label">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="17" y1="10" x2="3" y2="10" /><line x1="21" y1="6" x2="3" y2="6" /><line x1="21" y1="14" x2="3" y2="14" /><line x1="17" y1="18" x2="3" y2="18" /></svg>
+                        <span>Description &amp; Budget</span>
+                      </div>
+                      <label className="form-field premium-form-field">
+                        <span>Description</span>
+                        <div className="premium-textarea-wrap">
+                          <textarea
+                            rows="4"
+                            placeholder="Add a short overview of the event..."
+                            value={eventForm.description}
+                            onChange={(e) => {
+                              handleEventFieldChange("description")(e);
+                              e.target.style.height = "auto";
+                              e.target.style.height = e.target.scrollHeight + "px";
+                            }}
+                            className="premium-textarea"
+                            maxLength={2000}
+                          />
+                          <div className="premium-char-counter">
+                            <span className="premium-char-count">{(eventForm.description || "").length} / 2000</span>
+                          </div>
                         </div>
                       </label>
-                      <label className="form-field">
-                        <span>End time</span>
-                        <div className="time-picker">
-                          <select
-                            value={eventTimeParts.end_time.hour}
-                            onChange={handleEventTimePartChange("end_time", "hour")}
-                            required
-                          >
-                            <option value="">Hour</option>
-                            {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((hour) => (
-                              <option key={`end-hour-${hour}`} value={hour}>
-                                {hour}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            value={eventTimeParts.end_time.minute}
-                            onChange={handleEventTimePartChange("end_time", "minute")}
-                            required
-                          >
-                            <option value="">Minute</option>
-                            {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map((minute) => (
-                              <option key={`end-minute-${minute}`} value={minute}>
-                                {minute}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            value={eventTimeParts.end_time.period}
-                            onChange={handleEventTimePartChange("end_time", "period")}
-                            required
-                          >
-                            <option value="AM">AM</option>
-                            <option value="PM">PM</option>
-                          </select>
+                      <div className="premium-budget-grid">
+                        <label className="form-field premium-form-field">
+                          <span>Budget (Rs)</span>
+                          <div className="premium-input-icon-wrap">
+                            <span className="premium-input-prefix">₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              placeholder="e.g. 50000"
+                              value={eventForm.budget}
+                              onChange={handleEventFieldChange("budget")}
+                              className="premium-input premium-input--with-prefix"
+                            />
+                          </div>
+                        </label>
+                        <div className="form-field premium-form-field">
+                          <span>
+                            Budget breakdown PDF <em>(required)</em>
+                          </span>
+                          <p className="premium-upload-hint">
+                            Upload a PDF with your budget breakdown. You can upload it with any file name. It will be stored automatically using the event name and date.
+                          </p>
+                          <label className="premium-file-upload">
+                            <input
+                              ref={budgetBreakdownInputRef}
+                              name="budget_breakdown_pdf"
+                              type="file"
+                              accept="application/pdf,.pdf"
+                              className="premium-file-input"
+                              required
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                setBudgetBreakdownFile(f || null);
+                              }}
+                            />
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                            <span>{budgetBreakdownFile ? budgetBreakdownFile.name : "Choose PDF file"}</span>
+                          </label>
+                          {budgetBreakdownFile ? (
+                            <span className="premium-file-name">{budgetBreakdownFile.name}</span>
+                          ) : null}
                         </div>
-                      </label>
+                      </div>
                     </div>
-                    <label className="form-field">
-                      <span>Event name</span>
-                      <input
-                        type="text"
-                        placeholder="Business Conference 2025"
-                        value={eventForm.name}
-                        onChange={handleEventFieldChange("name")}
-                        required
-                      />
-                    </label>
-                    <label className="form-field">
-                      <span>Facilitator</span>
-                      <input
-                        type="text"
-                        placeholder="James"
-                        value={eventForm.facilitator}
-                        onChange={handleEventFieldChange("facilitator")}
-                        required
-                      />
-                    </label>
-                    <label className="form-field">
-                      <span>Venue</span>
-                      <select
-                        value={eventForm.venue_name}
-                        onChange={handleEventFieldChange("venue_name")}
-                        required
-                      >
-                        <option value="">Select a venue</option>
-                        {venuesState.items.map((venue) => (
-                          <option key={venue.id} value={venue.name}>
-                            {venue.name}
-                          </option>
-                        ))}
-                      </select>
-                      {venuesState.status === "error" ? (
-                        <span className="form-error">{venuesState.error}</span>
-                      ) : null}
-                    </label>
-                    <label className="form-field">
-                      <span>Intended Audience</span>
-                      <select
-                        value={eventForm.intendedAudience}
-                        onChange={handleEventFieldChange("intendedAudience")}
-                        required
-                      >
-                        <option value="">Select intended audience</option>
-                        <option value="Students">Students</option>
-                        <option value="Faculty">Faculty</option>
-                        <option value="PhD Scholars">PhD Scholars</option>
-                        <option value="Staffs">Staffs</option>
-                        <option value="Everyone at VU">Everyone at VU</option>
-                      </select>
-                    </label>
-                    <label className="form-field">
-                      <span>Description</span>
-                      <textarea
-                        rows="3"
-                        placeholder="Add a short overview of the event."
-                        value={eventForm.description}
-                        onChange={handleEventFieldChange("description")}
-                      />
-                    </label>
-                    <label className="form-field">
-                      <span>Budget (Rs)</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="e.g. 50000"
-                        value={eventForm.budget}
-                        onChange={handleEventFieldChange("budget")}
-                      />
-                    </label>
-                    <div className="form-field">
-                      <span>
-                        Budget breakdown PDF <em>(required)</em>
-                      </span>
-                      <p className="form-hint">
-                        Upload a PDF with your budget breakdown. Any filename is fine; it is renamed automatically when saved (event name and start date).
-                      </p>
-                      <input
-                        ref={budgetBreakdownInputRef}
-                        name="budget_breakdown_pdf"
-                        type="file"
-                        accept="application/pdf,.pdf"
-                        className="budget-breakdown-file-input"
-                        required
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          setBudgetBreakdownFile(f || null);
-                        }}
-                      />
-                      {budgetBreakdownFile ? (
-                        <p className="form-hint budget-breakdown-picked">Selected: {budgetBreakdownFile.name}</p>
-                      ) : null}
-                    </div>
+
                     {eventFormStatus.status === "error" ? (
-                      <p className="form-error">{eventFormStatus.error}</p>
+                      <div className="premium-form-error">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" /></svg>
+                        <span>{eventFormStatus.error}</span>
+                      </div>
                     ) : null}
-                    <div className="modal-actions">
-                      <button type="button" className="secondary-action" onClick={handleEventModalClose}>
+                    </div>{/* end premium-form-body */}
+                    <div className="modal-actions premium-modal-actions">
+                      <button type="button" className="secondary-action premium-cancel-btn" onClick={handleEventModalClose}>
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="primary-action"
+                        className="primary-action premium-submit-btn"
                         disabled={
                           eventFormStatus.status === "loading" ||
                           !budgetBreakdownFile ||
@@ -4920,7 +4913,17 @@ export default function App() {
                             : undefined
                         }
                       >
-                        {eventFormStatus.status === "loading" ? "Creating..." : "Create Event"}
+                        {eventFormStatus.status === "loading" ? (
+                          <>
+                            <span className="premium-spinner" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                            Create Event
+                          </>
+                        )}
                       </button>
                     </div>
                   </form>
@@ -5771,69 +5774,116 @@ export default function App() {
           );
         };
 
+        const pubTypeIcons = {
+          webpage: (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+          ),
+          journal_article: (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          ),
+          book: (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          ),
+          report: (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="18" y1="12" x2="6" y2="12"/><line x1="18" y1="16" x2="6" y2="16"/><polyline points="10 6 9 6 8 6"/></svg>
+          ),
+          video: (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          ),
+          online_newspaper: (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a4 4 0 01-4-4V6"/><line x1="12" y1="10" x2="18" y2="10"/><line x1="12" y1="14" x2="18" y2="14"/><rect x="8" y="10" width="2" height="4"/></svg>
+          ),
+        };
+
+        const allPubItems = Array.isArray(publicationsState.items) ? publicationsState.items : [];
+        const filteredPubItems = !publicationTypeFilter
+          ? allPubItems
+          : allPubItems.filter((item) => (item.pub_type || "") === publicationTypeFilter);
+
         return (
           <div className="primary-column">
-            <div className="events-actions">
-              <button type="button" className="primary-action" onClick={handlePublicationOpen}>
-                + New Publication
-              </button>
-              <label className="publication-filter-label">
-                Type:
-                <select
-                  value={publicationTypeFilter}
-                  onChange={(e) => setPublicationTypeFilter(e.target.value)}
-                  className="publication-sort-select"
-                  aria-label="Filter by publication type"
-                >
-                  <option value="">All types</option>
-                  {Object.entries(PUB_META).map(([key, { label }]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="publication-sort-label">
-                Sort:
-                <select
-                  value={publicationSort}
-                  onChange={(e) => setPublicationSort(e.target.value)}
-                  className="publication-sort-select"
-                  aria-label="Sort publications"
-                >
-                  <option value="date_desc">Date added (newest first)</option>
-                  <option value="date_asc">Date added (oldest first)</option>
-                  <option value="title_asc">Title (A–Z)</option>
-                  <option value="title_desc">Title (Z–A)</option>
-                </select>
-              </label>
+            <div className="pub-page-header">
+              <div className="pub-page-title-group">
+                <h2 className="pub-page-title">Publications</h2>
+                {publicationsState.status === "ready" && (
+                  <span className="pub-page-count">{filteredPubItems.length}</span>
+                )}
+              </div>
+              <div className="pub-page-header-actions">
+                <button type="button" className="primary-action pub-new-btn" onClick={handlePublicationOpen}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  New Publication
+                </button>
+                <div className="pub-filter-group">
+                  <div className="pub-select-wrapper">
+                    <svg className="pub-select-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+                    <select
+                      value={publicationTypeFilter}
+                      onChange={(e) => setPublicationTypeFilter(e.target.value)}
+                      className="pub-styled-select"
+                      aria-label="Filter by publication type"
+                    >
+                      <option value="">All types</option>
+                      {Object.entries(PUB_META).map(([key, { label }]) => (
+                        <option key={key} value={key}>{label}</option>
+                      ))}
+                    </select>
+                    <svg className="pub-select-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+                  <div className="pub-select-wrapper">
+                    <svg className="pub-select-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    <select
+                      value={publicationSort}
+                      onChange={(e) => setPublicationSort(e.target.value)}
+                      className="pub-styled-select"
+                      aria-label="Sort publications"
+                    >
+                      <option value="date_desc">Newest first</option>
+                      <option value="date_asc">Oldest first</option>
+                      <option value="title_asc">Title (A–Z)</option>
+                      <option value="title_desc">Title (Z–A)</option>
+                    </select>
+                    <svg className="pub-select-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* ── Publications list (MLA style) ── */}
             {publicationsState.status === "loading" ? (
-              <div className="pub-list-empty"><p>Loading publications…</p></div>
+              <ul className="pub-mla-list" aria-label="Loading publications">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <li key={i} className="pub-mla-list-item pub-skeleton-item">
+                    <div className="skeleton-line" style={{ height: "14px", width: "85%", display: "block" }} />
+                    <div className="skeleton-line" style={{ height: "14px", width: "60%", display: "block", marginTop: "6px" }} />
+                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                      <div className="skeleton-line" style={{ height: "22px", width: "80px", borderRadius: "999px", display: "block" }} />
+                      <div className="skeleton-line" style={{ height: "22px", width: "90px", borderRadius: "8px", display: "block" }} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
             ) : publicationsState.status === "error" ? (
               <div className="pub-list-empty"><p className="form-error">{publicationsState.error}</p></div>
-            ) : publicationsState.status === "ready" && (!Array.isArray(publicationsState.items) || publicationsState.items.length === 0) ? (
+            ) : publicationsState.status === "ready" && allPubItems.length === 0 ? (
               <div className="pub-list-empty">
-                <span className="pub-empty-icon">📭</span>
+                <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#c4c9d4" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
                 <p className="pub-empty-title">No publications yet</p>
                 <p className="pub-empty-sub">Click <strong>+ New Publication</strong> to add your first one.</p>
               </div>
-            ) : (() => {
-              const allItems = Array.isArray(publicationsState.items) ? publicationsState.items : [];
-              const filteredItems = !publicationTypeFilter
-                ? allItems
-                : allItems.filter((item) => (item.pub_type || "") === publicationTypeFilter);
-              return filteredItems.length === 0 && allItems.length > 0 ? (
-                <div className="pub-list-empty">
-                  <p className="pub-empty-title">No publications of this type</p>
-                  <p className="pub-empty-sub">Try selecting &quot;All types&quot; or another type.</p>
-                </div>
-              ) : (
+            ) : filteredPubItems.length === 0 && allPubItems.length > 0 ? (
+              <div className="pub-list-empty">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#c4c9d4" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <p className="pub-empty-title">No publications of this type</p>
+                <p className="pub-empty-sub">Try selecting "All types" or another type.</p>
+              </div>
+            ) : (
               <ul className="pub-mla-list" aria-label="Publications">
-                {filteredItems.map((item) => {
+                {filteredPubItems.map((item) => {
                   const meta = PUB_META[item.pub_type] || { icon: "📋", label: item.pub_type || "Unknown", color: "#666" };
                   const citation = formatPublicationMLA(item);
                   const linkUrl = item.web_view_link || item.url;
+                  const isFile = Boolean(item.web_view_link);
                   const linkLabel = item.web_view_link ? "View file" : item.url ? "Visit URL" : null;
                   return (
                     <li key={item.id} className="pub-mla-list-item">
@@ -5844,14 +5894,22 @@ export default function App() {
                         <p className="pub-mla-notes">{item.others}</p>
                       )}
                       <div className="pub-mla-meta">
-                        <span className={`pub-type-badge pub-type-${item.pub_type || "unknown"}`}>{meta.label}</span>
+                        <span className={`pub-type-badge pub-type-${item.pub_type || "unknown"}`}>
+                          <span className="pub-badge-icon">{pubTypeIcons[item.pub_type] || null}</span>
+                          {meta.label}
+                        </span>
                         {linkLabel && (
                           <button
                             type="button"
-                            className="pub-mla-link"
+                            className={`pub-action-btn ${isFile ? "pub-action-file" : "pub-action-url"}`}
                             onClick={() => window.open(linkUrl, "_blank", "noopener,noreferrer")}
                           >
-                            {linkLabel} →
+                            {isFile ? (
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            ) : (
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            )}
+                            {linkLabel}
                           </button>
                         )}
                       </div>
@@ -5859,8 +5917,7 @@ export default function App() {
                   );
                 })}
               </ul>
-              );
-            })()}
+            )}
 
 
             {/* ── Publication type-selection modal ── */}
@@ -5878,20 +5935,57 @@ export default function App() {
                   </div>
                   <div className="pub-type-grid">
                     {[
-                      { key: "webpage", icon: "🌐", label: "Webpage", desc: "Information from a specific page on a website" },
-                      { key: "journal_article", icon: "📄", label: "Journal Article", desc: "Peer-reviewed academic or scholarly journal articles" },
-                      { key: "book", icon: "📚", label: "Book", desc: "Printed book or e-book with publisher info" },
-                      { key: "report", icon: "📊", label: "Report", desc: "Research, policy or statistical reports by organizations" },
-                      { key: "video", icon: "🎬", label: "Video", desc: "Online videos from YouTube, Vimeo or platforms" },
-                      { key: "online_newspaper", icon: "📰", label: "Online Newspaper", desc: "Articles published in online news websites" }
+                      {
+                        key: "webpage",
+                        icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>,
+                        label: "Webpage",
+                        desc: "Information from a specific page on a website",
+                        color: "#2c7a7b"
+                      },
+                      {
+                        key: "journal_article",
+                        icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+                        label: "Journal Article",
+                        desc: "Peer-reviewed academic or scholarly journal articles",
+                        color: "#553c9a"
+                      },
+                      {
+                        key: "book",
+                        icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>,
+                        label: "Book",
+                        desc: "Printed book or e-book with publisher info",
+                        color: "#c05621"
+                      },
+                      {
+                        key: "report",
+                        icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>,
+                        label: "Report",
+                        desc: "Research, policy or statistical reports by organizations",
+                        color: "#2b6cb0"
+                      },
+                      {
+                        key: "video",
+                        icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
+                        label: "Video",
+                        desc: "Online videos from YouTube, Vimeo or platforms",
+                        color: "#c53030"
+                      },
+                      {
+                        key: "online_newspaper",
+                        icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a4 4 0 01-4-4V6"/><line x1="12" y1="10" x2="18" y2="10"/><line x1="12" y1="14" x2="18" y2="14"/><rect x="8" y="10" width="2" height="4"/></svg>,
+                        label: "Online Newspaper",
+                        desc: "Articles published in online news websites",
+                        color: "#276749"
+                      }
                     ].map((type) => (
                       <button
                         key={type.key}
                         type="button"
                         className="pub-type-card"
+                        style={{ "--pub-card-color": type.color }}
                         onClick={() => handlePublicationTypeSelect(type.key)}
                       >
-                        <span className="pub-type-icon" aria-hidden="true">{type.icon}</span>
+                        <span className="pub-type-icon" aria-hidden="true" style={{ color: type.color }}>{type.icon}</span>
                         <span className="pub-type-card-label">{type.label}</span>
                         <span className="pub-type-card-desc">{type.desc}</span>
                       </button>
@@ -5907,14 +6001,14 @@ export default function App() {
                 <div className="modal-card pub-form-card">
                   <div className="modal-header">
                     <div>
-                      <h3>
+                      <h3 className="pub-form-modal-title">
                         {{
-                          webpage: "🌐 Webpage Citation",
-                          journal_article: "📄 Journal Article Citation",
-                          book: "📚 Book Citation",
-                          report: "📊 Report Citation",
-                          video: "🎬 Video Citation",
-                          online_newspaper: "📰 Online Newspaper Citation"
+                          webpage: <><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2c7a7b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg> Webpage Citation</>,
+                          journal_article: <><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#553c9a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Journal Article Citation</>,
+                          book: <><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c05621" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg> Book Citation</>,
+                          report: <><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2b6cb0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg> Report Citation</>,
+                          video: <><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c53030" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Video Citation</>,
+                          online_newspaper: <><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#276749" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 002-2V4a2 2 0 00-2-2H8a2 2 0 00-2 2v16a4 4 0 01-4-4V6"/><line x1="12" y1="10" x2="18" y2="10"/><line x1="12" y1="14" x2="18" y2="14"/></svg> Online Newspaper Citation</>
                         }[publicationForm.pubType] || "New Publication"}
                       </h3>
                     </div>
@@ -6179,6 +6273,7 @@ export default function App() {
 
 
       if (isCalendar) {
+        const calendarInitialView = window.innerWidth < 768 ? "timeGridDay" : window.innerWidth < 1024 ? "timeGridWeek" : "dayGridMonth";
         return (
           <div className="primary-column">
             <div className="calendar-card">
@@ -6212,7 +6307,7 @@ export default function App() {
               <div className="calendar-shell">
                 <FullCalendar
                   plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                  initialView="dayGridMonth"
+                  initialView={calendarInitialView}
                   timeZone="Asia/Kolkata"
                   eventTimeFormat={{ hour: "numeric", minute: "2-digit", meridiem: "short" }}
                   headerToolbar={{
@@ -6221,11 +6316,116 @@ export default function App() {
                     right: "dayGridMonth,timeGridWeek,timeGridDay"
                   }}
                   height="auto"
+                  editable
+                  eventResizableFromStart
                   events={calendarState.events}
                   datesSet={(info) => fetchCalendarEvents({ start: info.start, end: info.end })}
+                  eventClick={(info) => {
+                    info.jsEvent.preventDefault();
+                    const evt = info.event;
+                    setCalendarDetailModal({
+                      open: true,
+                      event: {
+                        title: evt.title,
+                        start: evt.start,
+                        end: evt.end,
+                        location: evt.extendedProps?.location || "",
+                        url: evt.url || ""
+                      }
+                    });
+                  }}
+                  eventDidMount={(info) => {
+                    const evt = info.event;
+                    const loc = evt.extendedProps?.location;
+                    const startStr = evt.start
+                      ? evt.start.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
+                      : "";
+                    const endStr = evt.end
+                      ? evt.end.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", timeStyle: "short" })
+                      : "";
+                    const tooltipHtml = `<strong>${evt.title}</strong>${startStr ? `<br/>${startStr}${endStr ? " – " + endStr : ""}` : ""}${loc ? `<br/>📍 ${loc}` : ""}`;
+                    tippy(info.el, {
+                      content: tooltipHtml,
+                      allowHTML: true,
+                      placement: "top",
+                      theme: "calendar-tooltip",
+                      delay: [200, 0],
+                      animation: "shift-away",
+                      arrow: true
+                    });
+
+                    const title = (evt.title || "").toLowerCase();
+                    let color = "var(--accent-blue)";
+                    if (title.includes("workshop")) color = "#6366f1";
+                    else if (title.includes("seminar")) color = "#0891b2";
+                    else if (title.includes("meeting")) color = "#059669";
+                    else if (title.includes("cultural") || title.includes("fest")) color = "#d946ef";
+                    else if (title.includes("exam") || title.includes("test")) color = "#dc2626";
+                    else if (title.includes("holiday") || title.includes("break")) color = "#f59e0b";
+                    else if (title.includes("sports") || title.includes("athletic")) color = "#10b981";
+                    info.el.style.backgroundColor = color;
+                    info.el.style.borderColor = color;
+                  }}
                 />
               </div>
             </div>
+
+            {calendarDetailModal.open && calendarDetailModal.event ? (
+              <Modal
+                title="Event Details"
+                onClose={() => setCalendarDetailModal({ open: false, event: null })}
+                className="calendar-detail-modal"
+                actions={
+                  calendarDetailModal.event.url ? (
+                    <a
+                      href={calendarDetailModal.event.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="primary-action"
+                    >
+                      Open in Google Calendar
+                    </a>
+                  ) : null
+                }
+              >
+                <div className="modal-body calendar-detail-body">
+                  <div className="cal-detail-row">
+                    <span className="cal-detail-label">Title</span>
+                    <span className="cal-detail-value">{calendarDetailModal.event.title}</span>
+                  </div>
+                  {calendarDetailModal.event.start ? (
+                    <div className="cal-detail-row">
+                      <span className="cal-detail-label">Start</span>
+                      <span className="cal-detail-value">
+                        {calendarDetailModal.event.start.toLocaleString("en-IN", {
+                          timeZone: "Asia/Kolkata",
+                          dateStyle: "full",
+                          timeStyle: "short"
+                        })}
+                      </span>
+                    </div>
+                  ) : null}
+                  {calendarDetailModal.event.end ? (
+                    <div className="cal-detail-row">
+                      <span className="cal-detail-label">End</span>
+                      <span className="cal-detail-value">
+                        {calendarDetailModal.event.end.toLocaleString("en-IN", {
+                          timeZone: "Asia/Kolkata",
+                          dateStyle: "full",
+                          timeStyle: "short"
+                        })}
+                      </span>
+                    </div>
+                  ) : null}
+                  {calendarDetailModal.event.location ? (
+                    <div className="cal-detail-row">
+                      <span className="cal-detail-label">Venue</span>
+                      <span className="cal-detail-value">{calendarDetailModal.event.location}</span>
+                    </div>
+                  ) : null}
+                </div>
+              </Modal>
+            ) : null}
           </div>
         );
       }
@@ -6708,6 +6908,7 @@ export default function App() {
     };
 
     return (
+      <MessengerProvider>
       <div className={`dashboard-page ${mobileMenuOpen ? "mobile-menu-open" : ""}`}>
         {googleScopeModal.open ? (
           <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -7242,6 +7443,7 @@ export default function App() {
           onLogout={handleLogout}
           className={mobileMenuOpen ? "mobile-open" : ""}
           onNavigate={() => setMobileMenuOpen(false)}
+          user={user}
         />
         {mobileMenuOpen ? (
           <button
@@ -7258,7 +7460,7 @@ export default function App() {
               <div className="brand-icon" aria-hidden="true">
                 <SimpleIcon path="M6 12a6 6 0 1 1 6 6H6v-6Z" />
               </div>
-              <span>FACULTY</span>
+              <span>{(user?.role || "Faculty").replace(/_/g, " ").toUpperCase()}</span>
             </div>
             <button
               type="button"
@@ -7338,231 +7540,45 @@ export default function App() {
 
           <section className="dashboard-content">
             {renderPrimaryContent()}
-
-            <aside className="chat-panel">
-              <div className="chat-header">
-                <div>
-                  <p className="chat-title">Messages</p>
-                  <p className="chat-subtitle">Event chats and direct messages</p>
-                </div>
-                <button
-                  type="button"
-                  className="icon-button chat-refresh"
-                  onClick={() => {
-                    loadChatUsers();
-                    loadChatThreads();
-                  }}
-                  aria-label="Refresh chats"
-                >
-                  <SimpleIcon path="M12 5a7 7 0 1 1-6.3 4H3l3-3 3 3H7.3A4.7 4.7 0 1 0 12 7v2l3-3-3-3v2Z" />
-                </button>
-              </div>
-              <div className="chat-users">
-                {chatEventThreads.length > 0 ? (
-                  <>
-                    <p className="chat-section-label">Event chats</p>
-                    {chatEventThreads.map((thread) => {
-                      const tname = thread.title || "Event";
-                      const avatarLabel = tname.trim().charAt(0).toUpperCase() || "E";
-                      const unread = chatUnreadByConversation[thread.id] || 0;
-                      const n = thread.participants?.length ?? 0;
-                      return (
-                        <button
-                          key={thread.id}
-                          type="button"
-                          className={`chat-user chat-user-event ${chatActiveEventThread?.id === thread.id ? "active" : ""}`}
-                          onClick={() => openEventThread(thread)}
-                        >
-                          <span className="chat-avatar chat-avatar-event" aria-hidden="true">
-                            {avatarLabel}
-                          </span>
-                          <div className="chat-user-text">
-                            <p className="chat-user-name">
-                              {tname}
-                              {unread ? <span className="chat-unread">{unread}</span> : null}
-                            </p>
-                            <p className="chat-event-meta">{n} in chat</p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </>
-                ) : null}
-                <p className="chat-section-label">People</p>
-                {chatUsers.map((chatUser) => {
-                  const name = chatUser.name || "Unknown";
-                  const avatarLabel = name.trim().charAt(0).toUpperCase() || "?";
-                  return (
-                    <button
-                      key={chatUser.id}
-                      type="button"
-                      className={`chat-user ${chatActiveUser?.id === chatUser.id ? "active" : ""}`}
-                      onClick={() => startConversation(chatUser)}
-                    >
-                      <span className="chat-avatar" aria-hidden="true">
-                        {avatarLabel}
-                        <span className={`chat-presence ${chatUser.online ? "online" : ""}`} />
-                      </span>
-                      <div className="chat-user-text">
-                        <p className="chat-user-name">
-                          {name}
-                          {chatUser.unread ? <span className="chat-unread">{chatUser.unread}</span> : null}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-                {chatUsers.length === 0 ? <p className="chat-note">No users found.</p> : null}
-              </div>
-            </aside>
-            {chatActiveUser || chatActiveEventThread ? (
-              <div
-                className="chat-window"
-                role="dialog"
-                aria-label={
-                  chatActiveEventThread
-                    ? `Event chat: ${chatActiveEventThread.title || "Event"}`
-                    : `Chat with ${chatActiveUser.name}`
-                }
-              >
-                <div className="chat-window-header">
-                  <div>
-                    <p className="chat-thread-name">
-                      {chatActiveEventThread ? chatActiveEventThread.title || "Event chat" : chatActiveUser.name}
-                    </p>
-                    <p className="chat-thread-status">
-                      {chatActiveEventThread
-                        ? `Group chat · ${chatActiveEventThread.participants?.length ?? 0} people`
-                        : chatActiveUser.online
-                          ? "Online"
-                          : chatActiveUser.last_seen
-                            ? `Last seen ${formatChatTime(chatActiveUser.last_seen)}`
-                            : "Last seen unknown"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="chat-window-close"
-                    onClick={() => {
-                      setChatActiveUser(null);
-                      setChatActiveEventThread(null);
-                      setChatConversationId("");
-                      setChatMessages([]);
-                      setChatTypingUser(null);
-                    }}
-                    aria-label="Close chat window"
-                  >
-                    &times;
-                  </button>
-                </div>
-                <div className="chat-body" ref={chatListRef}>
-                  {chatHasMore && chatMessages.length ? (
-                    <button
-                      type="button"
-                      className="chat-load"
-                      onClick={() => loadConversationMessages(chatConversationId, chatMessages[0]?.created_at)}
-                      disabled={chatLoadingMore}
-                    >
-                      {chatLoadingMore ? "Loading..." : "Load earlier"}
-                    </button>
-                  ) : null}
-                  {chatStatus.status === "loading" ? <p className="chat-note">Loading chat...</p> : null}
-                  {chatStatus.status === "error" ? <p className="chat-note">{chatStatus.error}</p> : null}
-                  {chatMessages.map((message) => {
-                    const isOwn = message.sender_id === user.id;
-                    let isRead = false;
-                    if (chatActiveEventThread?.participants?.length) {
-                      const others = chatActiveEventThread.participants.filter((pid) => pid !== user.id);
-                      isRead = others.some((pid) => message.read_by.includes(pid));
-                    } else if (chatActiveUser) {
-                      isRead = message.read_by.includes(chatActiveUser.id);
-                    }
-                    return (
-                      <div key={message.id} className={`chat-message ${isOwn ? "own" : ""}`}>
-                        <div className="chat-bubble">
-                          <div className="chat-meta">
-                            <span className="chat-author">{message.sender_name}</span>
-                            <span>{formatChatTime(message.created_at)}</span>
-                          </div>
-                          {message.content ? <p className="chat-text">{message.content}</p> : null}
-                          {message.attachments?.length ? (
-                            <div className="chat-attachments">
-                              {message.attachments.map((attachment) => {
-                                const url = resolveAttachmentUrl(attachment.url);
-                                const isImage = attachment.content_type?.startsWith("image/");
-                                return (
-                                  <div key={`${message.id}-${attachment.url}`} className="chat-attachment">
-                                    {isImage ? (
-                                      <img src={url} alt={attachment.name} />
-                                    ) : (
-                                      <a href={url} target="_blank" rel="noreferrer">
-                                        {attachment.name}
-                                      </a>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : null}
-                          {isOwn ? (
-                            <div className="chat-read">{isRead ? "✓✓" : "✓"}</div>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {typingName ? <div className="chat-typing">{typingName} typing...</div> : null}
-                <div className="chat-composer compact">
-                  {chatFiles.length ? (
-                    <div className="chat-files">
-                      {chatFiles.map((file, index) => (
-                        <div key={`${file.name}-${index}`} className="chat-file">
-                          <span>{file.name}</span>
-                          <button
-                            type="button"
-                            className="chat-file-remove"
-                            onClick={() => removeChatFile(index)}
-                            aria-label={`Remove ${file.name}`}
-                          >
-                            &times;
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="chat-input-row">
-                    <label className="chat-attach">
-                      <input
-                        type="file"
-                        multiple
-                        onChange={handleChatFiles}
-                        disabled={!chatActiveUser && !chatActiveEventThread}
-                      />
-                      <span>+</span>
-                    </label>
-                    <textarea
-                      value={chatInput}
-                      onChange={handleChatInputChange}
-                      placeholder="Type a message..."
-                      rows={2}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && !event.shiftKey) {
-                          event.preventDefault();
-                          sendChatMessage();
-                        }
-                      }}
-                    />
-                    <button type="button" className="chat-send" onClick={sendChatMessage}>
-                      Send
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </section>
+
+          <FloatingMessenger
+            user={user}
+            chatUsers={chatUsers}
+            chatEventThreads={chatEventThreads}
+            chatActiveUser={chatActiveUser}
+            chatActiveEventThread={chatActiveEventThread}
+            chatUnreadByUser={chatUnreadByUser}
+            chatUnreadByConversation={chatUnreadByConversation}
+            chatMessages={chatMessages}
+            chatStatus={chatStatus}
+            chatInput={chatInput}
+            chatFiles={chatFiles}
+            chatTypingUser={chatTypingUser}
+            chatHasMore={chatHasMore}
+            chatLoadingMore={chatLoadingMore}
+            chatConversationId={chatConversationId}
+            onStartConversation={startConversation}
+            onOpenEventThread={openEventThread}
+            onRefresh={() => { loadChatUsers(); loadChatThreads(); }}
+            onChatInputChange={handleChatInputChange}
+            onSendMessage={sendChatMessage}
+            onChatFiles={handleChatFiles}
+            onRemoveChatFile={removeChatFile}
+            onLoadMore={loadConversationMessages}
+            onCloseChat={() => {
+              setChatActiveUser(null);
+              setChatActiveEventThread(null);
+              setChatConversationId("");
+              setChatMessages([]);
+              setChatTypingUser(null);
+            }}
+            formatChatTime={formatChatTime}
+            resolveAttachmentUrl={resolveAttachmentUrl}
+          />
         </main>
       </div>
+      </MessengerProvider>
     );
   }
 

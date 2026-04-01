@@ -6,9 +6,14 @@ export default function Sidebar({
   visibleMenuItems,
   onLogout,
   className = "",
-  onNavigate
+  onNavigate,
+  user
 }) {
   const navigate = useNavigate();
+
+  const roleLabel = (user?.role || "Faculty")
+    .replace(/_/g, " ")
+    .toUpperCase();
 
   return (
     <aside className={`sidebar ${className}`.trim()}>
@@ -16,7 +21,7 @@ export default function Sidebar({
         <div className="brand-icon">
           <SimpleIcon path="M6 12a6 6 0 1 1 6 6H6v-6Z" />
         </div>
-        <span>FACULTY</span>
+        <span>{roleLabel}</span>
       </div>
 
       <div className="menu-block">
