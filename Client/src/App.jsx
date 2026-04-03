@@ -20,7 +20,6 @@ import {
 } from "./constants";
 import {
   formatISTTime,
-  formatRequirementDecisionStatusLabel,
   normalizeTimeToHHMMSS,
   parse24ToTimeParts,
   timePartsTo24
@@ -32,6 +31,7 @@ import PremiumDatePicker from "./components/ui/PremiumDatePicker";
 import PremiumTimePicker from "./components/ui/PremiumTimePicker";
 import SearchableSelect from "./components/ui/SearchableSelect";
 import IqacDataPage from "./components/IqacDataPage";
+import EventDetailsModalBody from "./components/EventDetailsModalBody";
 import { MessengerProvider, FloatingMessenger } from "./components/messenger";
 import api from "./services/api";
 
@@ -2756,28 +2756,6 @@ export default function App() {
       if (!r?.na && !r?.file) return false;
       return !getMarketingDeliverableRowLock(opt.type, request).locked;
     });
-
-  const getMarketingNeedsLabel = (request) => {
-    const req = normalizeMarketingRequirements(request);
-    const sections = [];
-    const pre = [];
-    if (req.pre_event.poster) pre.push("Poster");
-    if (req.pre_event.social_media) pre.push("Social Media Post");
-    if (pre.length) sections.push(`Pre-Event: ${pre.join(", ")}`);
-
-    const during = [];
-    if (req.during_event.photo) during.push("Photoshoot");
-    if (req.during_event.video) during.push("Videoshoot");
-    if (during.length) sections.push(`During Event: ${during.join(", ")}`);
-
-    const post = [];
-    if (req.post_event.social_media) post.push("Social Media Post");
-    if (req.post_event.photo_upload) post.push("Photo Upload");
-    if (req.post_event.video) post.push("Video Upload");
-    if (post.length) sections.push(`Post-Event: ${post.join(", ")}`);
-
-    return sections.length ? sections.join(" | ") : "None";
-  };
 
   const openMarketingDeliverableModal = (request) => {
     const uploadFlags = getMarketingDeliverableUploadFlags(request);
@@ -7343,11 +7321,8 @@ export default function App() {
                 <div className="events-table-row header marketing">
                   <span>Event</span>
                   <span>Requester</span>
-                  <span>Date</span>
-                  <span>Time</span>
                   <span>Status</span>
-                  <span>Needs</span>
-                  <span>Action</span>
+                  <span>Actions</span>
                 </div>
                 {marketingState.status === "loading" ? (
                   <p className="table-message">Loading marketing requests...</p>
@@ -7360,7 +7335,6 @@ export default function App() {
                 ) : null}
                 {marketingState.status === "ready"
                   ? marketingState.items.map((item) => {
-                      const needsLabel = getMarketingNeedsLabel(item);
                       const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
                       const eventHasStarted = isEventStarted(item);
                       const marketingHasFileUploads = REQUIREMENT_OPTIONS.some(
@@ -7370,11 +7344,8 @@ export default function App() {
                         <div key={item.id} className="events-table-row marketing">
                           <span>{item.event_name}</span>
                           <span>{item.requester_email}</span>
-                          <span>{item.start_date}</span>
-                          <span>{formatISTTime(item.start_time)}</span>
                           <span className={`status-pill ${item.status}`}>{statusLabel}</span>
-                          <span className="marketing-needs">{needsLabel}</span>
-                          <div className="approval-actions">
+                          <div className="approval-actions marketing-actions">
                             <button
                               type="button"
                               className="details-button"
@@ -7772,200 +7743,21 @@ export default function App() {
               ) : eventDetailsModal.status === "error" ? (
                 <p className="form-error">{eventDetailsModal.error}</p>
               ) : eventDetailsModal.details ? (
-                <>
-                  <div className="details-grid">
-                    <div>
-                      <p className="details-label">Event</p>
-                      <p className="details-value">{eventDetailsModal.details.event?.name || eventDetailsModal.event?.name}</p>
-                    </div>
-                    <div>
-                      <p className="details-label">Facilitator</p>
-                      <p className="details-value">{eventDetailsModal.details.event?.facilitator}</p>
-                    </div>
-                    <div>
-                      <p className="details-label">Venue</p>
-                      <p className="details-value">{eventDetailsModal.details.event?.venue_name}</p>
-                    </div>
-                    <div className="details-wide">
-                      <p className="details-label">Budget (Rs)</p>
-                      <div className="details-value details-budget-row">
-                        <span className="details-budget-amount">
-                          {eventDetailsModal.details.event?.budget != null
-                            ? `Rs ${Number(eventDetailsModal.details.event.budget).toLocaleString()}`
-                            : "—"}
-                        </span>
-                        {eventDetailsModal.details.event?.budget_breakdown_web_view_link ? (
-                          <button
-                            type="button"
-                            className="details-button"
-                            onClick={() =>
-                              window.open(
-                                eventDetailsModal.details.event.budget_breakdown_web_view_link,
-                                "_blank",
-                                "noopener,noreferrer"
-                              )
-                            }
-                          >
-                            Budget breakdown (PDF)
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="details-label">Status</p>
-                      <p className="details-value">{eventDetailsModal.details.event?.status}</p>
-                    </div>
-                    <div>
-                      <p className="details-label">Start</p>
-                      <p className="details-value">
-                        {eventDetailsModal.details.event?.start_date && eventDetailsModal.details.event?.start_time
-                          ? `${eventDetailsModal.details.event.start_date} ${formatISTTime(eventDetailsModal.details.event.start_time)}`
-                          : "—"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="details-label">End</p>
-                      <p className="details-value">
-                        {eventDetailsModal.details.event?.end_date && eventDetailsModal.details.event?.end_time
-                          ? `${eventDetailsModal.details.event.end_date} ${formatISTTime(eventDetailsModal.details.event.end_time)}`
-                          : "—"}
-                      </p>
-                    </div>
-                    <div className="details-wide">
-                      <p className="details-label">Description</p>
-                      <p className="details-value">{eventDetailsModal.details.event?.description || "—"}</p>
-                    </div>
-                  </div>
-
-                  <div className="event-details-section">
-                    <p className="details-label">Registrar approval</p>
-                    {eventDetailsModal.details.approval_request ? (
-                      <div className="details-subsection">
-                        <p className="details-value">
-                          Sent to: <strong>{eventDetailsModal.details.approval_request.requested_to || "—"}</strong>
-                        </p>
-                        <p className="details-value">
-                          Status: <span className={`status-pill ${eventDetailsModal.details.approval_request.status}`}>
-                            {eventDetailsModal.details.approval_request.status}
-                          </span>
-                        </p>
-                        {eventDetailsModal.details.approval_request.status === "approved" && eventDetailsModal.details.approval_request.decided_by ? (
-                          <p className="details-value">Approved by: <strong>{eventDetailsModal.details.approval_request.decided_by}</strong></p>
-                        ) : eventDetailsModal.details.approval_request.status === "pending" ? (
-                          <p className="details-value">Awaiting approval from registrar.</p>
-                        ) : eventDetailsModal.details.approval_request.decided_by ? (
-                          <p className="details-value">Decided by: <strong>{eventDetailsModal.details.approval_request.decided_by}</strong></p>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <p className="details-value">No approval request sent for this event.</p>
-                    )}
-                  </div>
-
-                  <div className="event-details-section">
-                    <p className="details-label">Requirements sent</p>
-                    {eventDetailsModal.details.facility_requests?.length > 0 ? (
-                      <div className="details-subsection">
-                        <p className="details-sublabel">Facility</p>
-                        {eventDetailsModal.details.facility_requests.map((r, i) => (
-                          <div key={r.id || i} className="details-row">
-                            <span>To: {r.requested_to || "—"}</span>
-                            <span className={`status-pill ${r.status}`}>
-                              {formatRequirementDecisionStatusLabel(r.status)}
-                            </span>
-                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {eventDetailsModal.details.transport_requests?.length > 0 ? (
-                      <div className="details-subsection">
-                        <p className="details-sublabel">Transport</p>
-                        {eventDetailsModal.details.transport_requests.map((r, i) => (
-                          <div key={r.id || i} className="details-row">
-                            <span>
-                              {transportRequestTypeLabel(r.transport_type)} — To: {r.requested_to || "—"}
-                            </span>
-                            <span className={`status-pill ${r.status}`}>
-                              {formatRequirementDecisionStatusLabel(r.status)}
-                            </span>
-                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {eventDetailsModal.details.marketing_requests?.length > 0 ? (
-                      <div className="details-subsection">
-                        <p className="details-sublabel">Marketing</p>
-                        {eventDetailsModal.details.marketing_requests.map((r, i) => (
-                          <div key={r.id || i} className="details-row">
-                            <span>To: {r.requested_to || "—"}</span>
-                            <span>{getMarketingNeedsLabel(r)}</span>
-                            <span className={`status-pill ${r.status}`}>
-                              {formatRequirementDecisionStatusLabel(r.status)}
-                            </span>
-                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {eventDetailsModal.details.it_requests?.length > 0 ? (
-                      <div className="details-subsection">
-                        <p className="details-sublabel">IT</p>
-                        {eventDetailsModal.details.it_requests.map((r, i) => (
-                          <div key={r.id || i} className="details-row">
-                            <span>To: {r.requested_to || "—"}</span>
-                            <span className={`status-pill ${r.status}`}>
-                              {formatRequirementDecisionStatusLabel(r.status)}
-                            </span>
-                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {!(
-                      eventDetailsModal.details.facility_requests?.length ||
-                      eventDetailsModal.details.transport_requests?.length ||
-                      eventDetailsModal.details.marketing_requests?.length ||
-                      eventDetailsModal.details.it_requests?.length
-                    ) ? (
-                      <p className="details-value">No facility, transport, marketing, or IT requests sent yet.</p>
-                    ) : null}
-                  </div>
-
-                  {eventDetailsModal.details.marketing_requests?.length ? (
-                    <div className="event-details-section">
-                      <p className="details-label">Marketing deliverables</p>
-                      {eventDetailsModal.details.marketing_requests.map((req, i) => (
-                        <div key={req.id || i} className="details-subsection">
-                          {eventDetailsModal.details.marketing_requests.length > 1 ? (
-                            <p className="details-sublabel">Request to {req.requested_to || "marketing"}</p>
-                          ) : null}
-                          {req.deliverables?.length ? (
-                            <ul className="details-list">
-                              {req.deliverables.map((d, j) => (
-                                <li key={j}>
-                                  {d.is_na ? (
-                                    <span>{getMarketingDeliverableLabel(d.deliverable_type)}: N/A</span>
-                                  ) : d.web_view_link ? (
-                                    <a href={d.web_view_link} target="_blank" rel="noreferrer">
-                                      {d.file_name || getMarketingDeliverableLabel(d.deliverable_type)}
-                                    </a>
-                                  ) : (
-                                    <span>{d.file_name || getMarketingDeliverableLabel(d.deliverable_type)}</span>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="details-value">No files uploaded yet.</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                </>
+                <EventDetailsModalBody
+                  details={eventDetailsModal.details}
+                  fallbackEventName={eventDetailsModal.event?.name}
+                  formatISTTime={formatISTTime}
+                  normalizeMarketingRequirements={normalizeMarketingRequirements}
+                  getMarketingDeliverableLabel={getMarketingDeliverableLabel}
+                  viewerRole={normalizedUserRole}
+                  transportRequestTypeLabel={transportRequestTypeLabel}
+                  isMarketingViewer={isMarketingRole}
+                  getMarketingDeliverableUploadFlags={getMarketingDeliverableUploadFlags}
+                  onMarketingUpload={(req) => {
+                    handleEventDetailsClose();
+                    openMarketingDeliverableModal(req);
+                  }}
+                />
               ) : (
                 <p className="table-message">Event details not available.</p>
               )}

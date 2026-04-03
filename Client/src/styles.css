@@ -1634,7 +1634,19 @@ form.approval-form.requirements-scroll-form {
 }
 
 .events-table-row.marketing {
-  grid-template-columns: 1.4fr 1.2fr 0.9fr 0.9fr 0.8fr 1.3fr 1.2fr;
+  grid-template-columns: minmax(130px, 1.6fr) minmax(110px, 1.25fr) minmax(96px, 0.85fr) minmax(220px, 1.45fr);
+  align-items: center;
+}
+
+.marketing-actions {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.marketing-actions .details-button {
+  min-height: 36px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
 }
 
 .events-table-row.it {
@@ -2689,6 +2701,475 @@ form.approval-form.requirements-scroll-form {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  max-width: min(960px, calc(100vw - 32px));
+  width: 100%;
+}
+
+.event-details-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.85rem;
+}
+
+.evt-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.evt-section-head-icon {
+  flex-shrink: 0;
+  color: var(--accent-blue, #0066cc);
+  margin-top: 0.1rem;
+}
+
+.evt-section-head-icon svg {
+  display: block;
+}
+
+.evt-section-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink, #2a2430);
+  letter-spacing: 0.02em;
+}
+
+.evt-section-title--large {
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+}
+
+.evt-section-sub {
+  margin: 0 0 1rem;
+  font-size: 0.82rem;
+  color: #8a7c83;
+  line-height: 1.45;
+}
+
+.evt-section-sub--tight {
+  margin: 0;
+  max-width: 52ch;
+}
+
+.evt-overview-card {
+  background: linear-gradient(155deg, #fbfcff 0%, #f0f3fb 100%);
+  border: 1px solid var(--border, #e4e6ef);
+  border-radius: 18px;
+  padding: 1.35rem 1.5rem 1.5rem;
+  box-shadow: 0 8px 28px rgba(25, 40, 80, 0.06);
+}
+
+.evt-overview-card .evt-section-head {
+  margin-bottom: 1.15rem;
+}
+
+.evt-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem 1.65rem;
+}
+
+.evt-overview-field {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.evt-overview-field-icon {
+  flex-shrink: 0;
+  color: #6b7c9a;
+  margin-top: 0.15rem;
+}
+
+.evt-overview-field-icon svg {
+  display: block;
+}
+
+.evt-overview-field-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.evt-overview-field-body .details-label {
+  margin-bottom: 0.15rem;
+}
+
+.evt-overview-field-body .details-value {
+  margin-top: 0.25rem;
+}
+
+.evt-overview-wide {
+  grid-column: 1 / -1;
+}
+
+.evt-workflow-section {
+  padding: 0 0.15rem;
+}
+
+.evt-workflow-section .evt-section-head {
+  margin-bottom: 1.15rem;
+}
+
+.evt-workflow-stepper {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.evt-workflow-step {
+  position: relative;
+  flex: 1 1 152px;
+  min-width: 132px;
+  max-width: 220px;
+}
+
+.evt-workflow-connector {
+  display: none;
+}
+
+.evt-workflow-step-inner {
+  background: #fff;
+  border: 1px solid var(--border, #e4e6ef);
+  border-radius: 16px;
+  padding: 1rem 1.05rem 1.1rem;
+  height: 100%;
+  box-shadow: 0 2px 12px rgba(20, 30, 60, 0.05);
+}
+
+.evt-workflow-step-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  align-items: flex-start;
+}
+
+.evt-workflow-step-label {
+  font-weight: 700;
+  font-size: 0.88rem;
+  color: #3d4a5c;
+}
+
+.evt-workflow-meta {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  font-size: 0.78rem;
+  color: #5c5660;
+  line-height: 1.4;
+}
+
+.evt-workflow-meta-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.evt-meta-k {
+  display: block;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #9a8f96;
+  font-weight: 700;
+}
+
+.evt-meta-v {
+  font-size: 0.8rem;
+  color: #3a3540;
+  word-break: break-word;
+}
+
+.evt-meta-muted {
+  color: #a8a0a6;
+  font-style: italic;
+  font-size: 0.78rem;
+}
+
+.wf-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.wf-badge--approved {
+  background: rgba(0, 102, 204, 0.14);
+  color: #0066cc;
+}
+
+.wf-badge--pending {
+  background: #f9e9c7;
+  color: #9c6a00;
+}
+
+.wf-badge--rejected {
+  background: #f7dadd;
+  color: #a9382a;
+}
+
+.wf-badge--neutral {
+  background: #eceef4;
+  color: #6f6a72;
+}
+
+.evt-requirements-section {
+  padding: 0 0.15rem 0.5rem;
+}
+
+.evt-req-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.evt-req-card {
+  border: 1px solid var(--border, #e4e6ef);
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.evt-req-card--you {
+  border-color: rgba(0, 102, 204, 0.45);
+  box-shadow: 0 0 0 1px rgba(0, 102, 204, 0.12);
+}
+
+.evt-req-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.15rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #2a2430;
+  background: #f8f9fd;
+}
+
+.evt-req-summary::-webkit-details-marker {
+  display: none;
+}
+
+.evt-req-summary::after {
+  content: "▾";
+  font-size: 0.75rem;
+  color: #8a7c83;
+  transition: transform 0.15s ease;
+}
+
+.evt-req-card[open] .evt-req-summary::after {
+  transform: rotate(-180deg);
+}
+
+.evt-req-summary-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.evt-req-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #5a6b88;
+  line-height: 0;
+}
+
+.evt-req-icon svg {
+  display: block;
+}
+
+.evt-your-badge {
+  flex-shrink: 0;
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(0, 102, 204, 0.12);
+  color: #0066cc;
+  max-width: 100%;
+  text-align: center;
+}
+
+.evt-req-card-body {
+  padding: 0 1.15rem 1.15rem;
+  border-top: 1px solid var(--border, #e4e6ef);
+}
+
+.evt-req-block {
+  padding-top: 0.85rem;
+}
+
+.evt-req-block + .evt-req-block {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed #e4e6ef;
+}
+
+.evt-req-block-sub {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  color: #6f6a72;
+}
+
+.evt-req-block-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.65rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.evt-req-people {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.evt-req-assignee,
+.evt-req-decided {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #5c5660;
+  line-height: 1.4;
+}
+
+.evt-req-assignee-k,
+.evt-req-assignee .evt-req-assignee-k {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: #9a8f96;
+  margin-right: 0.25rem;
+}
+
+.evt-req-assignee a {
+  color: var(--accent-blue, #0066cc);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.evt-req-at {
+  color: #8a7c83;
+}
+
+.evt-req-phase {
+  margin-top: 0.5rem;
+}
+
+.evt-req-phase-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: #8a7c83;
+}
+
+.evt-req-items {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 0.88rem;
+  color: #333;
+  line-height: 1.5;
+}
+
+.evt-req-items li {
+  margin-top: 0.2rem;
+}
+
+.evt-req-report {
+  margin: 0.65rem 0 0;
+  font-size: 0.88rem;
+}
+
+.evt-req-deliverables {
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed #e4e6ef;
+}
+
+.evt-req-empty-hint {
+  margin: 0.25rem 0 0.65rem;
+  font-size: 0.84rem;
+  color: #8a7c83;
+  font-style: italic;
+}
+
+.evt-marketing-upload {
+  margin-top: 0.75rem;
+}
+
+.evt-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.evt-upload-btn-icon {
+  flex-shrink: 0;
+}
+
+.marketing-dept-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.dept-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+}
+
+.dept-pill--marketing {
+  background: rgba(0, 102, 204, 0.12);
+  color: #0066cc;
+  border-color: rgba(0, 102, 204, 0.2);
+}
+
+.dept-pill--muted {
+  background: #f2f3f8;
+  color: #8a7c83;
+  border-color: #e4e6ef;
+}
+
+@media (max-width: 720px) {
+  .evt-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .evt-workflow-stepper {
+    flex-direction: column;
+  }
+
+  .evt-workflow-step {
+    max-width: none;
+  }
 }
 
 .details-grid {
