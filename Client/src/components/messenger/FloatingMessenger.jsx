@@ -1,51 +1,29 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useMessenger } from "./MessengerContext";
 import MessengerHeader from "./MessengerHeader";
 import ConversationList from "./ConversationList";
 import ChatWindow from "./ChatWindow";
 
-export default function FloatingMessenger({
-  user,
-  chatUsers,
-  chatEventThreads,
-  chatActiveUser,
-  chatActiveEventThread,
-  chatUnreadByUser,
-  chatUnreadByConversation,
-  chatMessages,
-  chatStatus,
-  chatInput,
-  chatFiles,
-  chatTypingUser,
-  chatHasMore,
-  chatLoadingMore,
-  chatConversationId,
-  onStartConversation,
-  onOpenEventThread,
-  onRefresh,
-  onChatInputChange,
-  onSendMessage,
-  onChatFiles,
-  onRemoveChatFile,
-  onLoadMore,
-  onCloseChat,
-  formatChatTime,
-  resolveAttachmentUrl,
-}) {
-  const { panelOpen, togglePanel, closePanel } = useMessenger();
-  const hasActiveChat = !!(chatActiveUser || chatActiveEventThread);
+export default function FloatingMessenger() {
+  const {
+    panelOpen,
+    togglePanel,
+    closePanel,
+    totalUnread,
+    activeUser,
+    activeEventThread,
+    loadConversations,
+    loadChatUsers,
+  } = useMessenger();
 
-  const totalUnread = useMemo(() => {
-    const userUnread = Object.values(chatUnreadByUser || {}).reduce(
-      (a, b) => a + b,
-      0
-    );
-    const convUnread = Object.values(chatUnreadByConversation || {}).reduce(
-      (a, b) => a + b,
-      0
-    );
-    return userUnread + convUnread;
-  }, [chatUnreadByUser, chatUnreadByConversation]);
+  const hasActiveChat = !!(activeUser || activeEventThread);
+
+  useEffect(() => {
+    if (!panelOpen) return;
+    if (typeof Notification === "undefined") return;
+    if (Notification.permission !== "default") return;
+    Notification.requestPermission().catch(() => {});
+  }, [panelOpen]);
 
   useEffect(() => {
     const handleKey = (e) => {
@@ -55,7 +33,10 @@ export default function FloatingMessenger({
     return () => document.removeEventListener("keydown", handleKey);
   }, [panelOpen, closePanel]);
 
-  if (!user) return null;
+  const handleRefresh = () => {
+    loadConversations();
+    loadChatUsers();
+  };
 
   return (
     <>
@@ -85,41 +66,9 @@ export default function FloatingMessenger({
           role="complementary"
           aria-label="Messenger"
         >
-          <MessengerHeader onClose={closePanel} onRefresh={onRefresh} />
+          <MessengerHeader onClose={closePanel} onRefresh={handleRefresh} />
 
-          {hasActiveChat ? (
-            <ChatWindow
-              user={user}
-              chatActiveUser={chatActiveUser}
-              chatActiveEventThread={chatActiveEventThread}
-              chatMessages={chatMessages}
-              chatStatus={chatStatus}
-              chatInput={chatInput}
-              chatFiles={chatFiles}
-              chatTypingUser={chatTypingUser}
-              chatHasMore={chatHasMore}
-              chatLoadingMore={chatLoadingMore}
-              chatConversationId={chatConversationId}
-              onChatInputChange={onChatInputChange}
-              onSendMessage={onSendMessage}
-              onChatFiles={onChatFiles}
-              onRemoveChatFile={onRemoveChatFile}
-              onLoadMore={onLoadMore}
-              onBack={onCloseChat}
-              formatChatTime={formatChatTime}
-              resolveAttachmentUrl={resolveAttachmentUrl}
-            />
-          ) : (
-            <ConversationList
-              chatUsers={chatUsers}
-              chatEventThreads={chatEventThreads}
-              chatActiveUser={chatActiveUser}
-              chatActiveEventThread={chatActiveEventThread}
-              chatUnreadByConversation={chatUnreadByConversation}
-              onStartConversation={onStartConversation}
-              onOpenEventThread={onOpenEventThread}
-            />
-          )}
+          {hasActiveChat ? <ChatWindow /> : <ConversationList />}
         </div>
       ) : null}
     </>

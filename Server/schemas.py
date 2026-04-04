@@ -130,6 +130,7 @@ class ApprovalRequestResponse(BaseModel):
 
 class ApprovalDecision(BaseModel):
     status: str
+    comment: Optional[str] = Field(default=None, max_length=4000)
 
 
 class FacilityManagerRequestCreate(BaseModel):
@@ -167,6 +168,7 @@ class FacilityManagerRequestResponse(BaseModel):
 
 class FacilityManagerDecision(BaseModel):
     status: str
+    comment: Optional[str] = Field(default=None, max_length=4000)
 
 
 class MarketingRequirementsPreEvent(BaseModel):
@@ -248,6 +250,7 @@ class MarketingRequestResponse(BaseModel):
 
 class MarketingDecision(BaseModel):
     status: str
+    comment: Optional[str] = Field(default=None, max_length=4000)
 
 
 class ItRequestCreate(BaseModel):
@@ -287,6 +290,7 @@ class ItRequestResponse(BaseModel):
 
 class ItDecision(BaseModel):
     status: str
+    comment: Optional[str] = Field(default=None, max_length=4000)
 
 
 TransportTypeLiteral = Literal["guest_cab", "students_off_campus", "both"]
@@ -390,6 +394,21 @@ class TransportRequestResponse(BaseModel):
 
 class TransportDecision(BaseModel):
     status: str
+    comment: Optional[str] = Field(default=None, max_length=4000)
+
+
+class WorkflowActionLogEntry(BaseModel):
+    id: str
+    event_id: Optional[str] = None
+    approval_request_id: Optional[str] = None
+    related_kind: str
+    related_id: str
+    role: str
+    action_type: str
+    comment: str
+    action_by: str
+    action_by_user_id: str
+    created_at: datetime
 
 
 class EventCreateResponse(BaseModel):
@@ -406,6 +425,7 @@ class EventDetailsResponse(BaseModel):
     marketing_requests: List[MarketingRequestResponse] = Field(default_factory=list)
     it_requests: List[ItRequestResponse] = Field(default_factory=list)
     transport_requests: List[TransportRequestResponse] = Field(default_factory=list)
+    workflow_action_logs: List[WorkflowActionLogEntry] = Field(default_factory=list)
 
 
 class EventStatusUpdate(BaseModel):
@@ -444,6 +464,10 @@ class ChatMessageCreate(BaseModel):
     attachments: list[ChatAttachment] = Field(default_factory=list)
 
 
+class ChatMessageEdit(BaseModel):
+    content: str = Field(..., min_length=1, max_length=4000)
+
+
 class ChatMessageResponse(BaseModel):
     id: str
     conversation_id: str
@@ -455,6 +479,10 @@ class ChatMessageResponse(BaseModel):
     read_by: list[str]
     created_at: datetime
     conversation_thread_kind: Optional[str] = None
+    is_deleted: bool = False
+    deleted_for_everyone: bool = False
+    edited: bool = False
+    edited_at: Optional[datetime] = None
 
 
 class ChatReadReceipt(BaseModel):
@@ -468,6 +496,11 @@ class ChatUserResponse(BaseModel):
     role: str
     online: bool
     last_seen: Optional[datetime] = None
+
+
+class ChatParticipantSummary(BaseModel):
+    id: str
+    name: str
 
 
 class ChatConversationCreate(BaseModel):
@@ -493,6 +526,18 @@ class ChatConversationListItem(BaseModel):
     title: Optional[str] = None
     event_id: Optional[str] = None
     other_user: Optional[ChatUserResponse] = None
+    unread_count: int = 0
+    last_message: Optional[dict] = None  # {text, sender_id, sender_name, created_at, message_id?}
+    participant_count: int = 0
+    participants_preview: list[ChatParticipantSummary] = Field(default_factory=list)
+
+
+class ChatSendMessage(BaseModel):
+    """Unified send-message payload: provide conversation_id OR recipient_id."""
+    conversation_id: Optional[str] = None
+    recipient_id: Optional[str] = None
+    content: Optional[str] = Field(default=None, max_length=4000)
+    attachments: list[ChatAttachment] = Field(default_factory=list)
 
 
 class ChatUploadResponse(BaseModel):

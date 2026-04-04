@@ -20,11 +20,11 @@ import {
 } from "./constants";
 import {
   formatISTTime,
-  formatRequirementDecisionStatusLabel,
   normalizeTimeToHHMMSS,
   parse24ToTimeParts,
   timePartsTo24
 } from "./utils/format";
+import { formatInboxDecisionStatusLabel } from "./utils/eventDetailsView";
 import { GoogleIcon, SimpleIcon, PlaceholderCard } from "./components/icons";
 import { LoginPage, Sidebar } from "./components/layout";
 import { Modal, StatusMessage } from "./components/ui";
@@ -32,6 +32,8 @@ import PremiumDatePicker from "./components/ui/PremiumDatePicker";
 import PremiumTimePicker from "./components/ui/PremiumTimePicker";
 import SearchableSelect from "./components/ui/SearchableSelect";
 import IqacDataPage from "./components/IqacDataPage";
+import EventDetailsModalBody from "./components/EventDetailsModalBody";
+import ApprovalDetailsModalBody from "./components/ApprovalDetailsModalBody";
 import { MessengerProvider, FloatingMessenger } from "./components/messenger";
 import api from "./services/api";
 
@@ -41,6 +43,16 @@ function normalizePathname(pathname) {
   const decoded = decodeURIComponent(pathname);
   if (decoded === "/event reports") return ROUTES.EVENT_REPORTS;
   return pathname;
+}
+
+function canActOnWorkflowRow(status) {
+  const s = String(status || "").toLowerCase();
+  return s === "pending" || s === "clarification_requested";
+}
+
+function workflowInboxAttentionCount(items) {
+  if (!Array.isArray(items)) return 0;
+  return items.filter((i) => canActOnWorkflowRow(i?.status)).length;
 }
 
 function transportRequestTypeLabel(type) {
@@ -237,7 +249,23 @@ export default function App() {
     status: "idle",
     error: ""
   });
-  const [approvalDetailsModal, setApprovalDetailsModal] = useState({ open: false, request: null });
+  const [approvalDetailsModal, setApprovalDetailsModal] = useState({
+    open: false,
+    request: null,
+    eventDetails: null,
+    detailsStatus: "idle",
+    detailsError: ""
+  });
+  const [workflowActionModal, setWorkflowActionModal] = useState({
+    open: false,
+    channel: null,
+    requestId: null,
+    status: null,
+    actionLabel: "",
+    comment: "",
+    error: "",
+    submitting: false
+  });
   const [publicationTypeModal, setPublicationTypeModal] = useState({ open: false });
   const [publicationModal, setPublicationModal] = useState({
     open: false,
@@ -339,27 +367,6 @@ export default function App() {
   const [marketingEmail, setMarketingEmail] = useState("");
   const [itEmail, setItEmail] = useState("");
   const [transportEmail, setTransportEmail] = useState("");
-  const [chatUsers, setChatUsers] = useState([]);
-  const [chatActiveUser, setChatActiveUser] = useState(null);
-  const [chatConversationId, setChatConversationId] = useState("");
-  const [chatMessages, setChatMessages] = useState([]);
-  const [chatStatus, setChatStatus] = useState({ status: "idle", error: "" });
-  const [chatInput, setChatInput] = useState("");
-  const [chatFiles, setChatFiles] = useState([]);
-  const [chatTypingUser, setChatTypingUser] = useState(null);
-  const [chatUnreadByUser, setChatUnreadByUser] = useState({});
-  const [chatUnreadByConversation, setChatUnreadByConversation] = useState({});
-  const [chatEventThreads, setChatEventThreads] = useState([]);
-  const [chatActiveEventThread, setChatActiveEventThread] = useState(null);
-  const [chatHasMore, setChatHasMore] = useState(true);
-  const [chatLoadingMore, setChatLoadingMore] = useState(false);
-  const chatWsRef = useRef(null);
-  const chatListRef = useRef(null);
-  const chatTypingTimeoutRef = useRef(null);
-  const chatActiveConversationRef = useRef("");
-  const chatActiveUserRef = useRef(null);
-  const chatEventConversationIdsRef = useRef(new Set());
-  const loadConversationMessagesRef = useRef(null);
   const loadEventsRef = useRef(null);
   const requirementsFlowQueueRef = useRef([]);
   const [user, setUser] = useState(() => {
@@ -1026,24 +1033,6 @@ export default function App() {
     [apiBaseUrl, apiFetch, canAccessAdminConsole]
   );
 
-  const formatChatTime = useCallback((value) => {
-    if (!value) {
-      return "";
-    }
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return "";
-    }
-    return date
-      .toLocaleTimeString("en-IN", {
-        timeZone: "Asia/Kolkata",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true
-      })
-      .toUpperCase();
-  }, []);
-
   useEffect(() => {
     setEventTimeParts({
       start_time: parse24ToTimeParts(eventForm.start_time),
@@ -1057,299 +1046,6 @@ export default function App() {
     }
     setEventForm((prev) => (prev.facilitator ? prev : { ...prev, facilitator: defaultFacilitator }));
   }, [defaultFacilitator]);
-
-  const resolveAttachmentUrl = useCallback(
-    (url) => {
-      if (!url) {
-        return "";
-      }
-      if (url.startsWith("http://") || url.startsWith("https://")) {
-        return url;
-      }
-      return `${apiBaseUrl}${url}`;
-    },
-    [apiBaseUrl]
-  );
-
-  const loadChatUsers = useCallback(async () => {
-    if (!user) {
-      return;
-    }
-    try {
-      const res = await apiFetch(`${apiBaseUrl}/chat/users`);
-      if (!res.ok) {
-        throw new Error("Unable to load users.");
-      }
-      const data = await res.json();
-      setChatUsers((prev) => {
-        const unreadMap = chatUnreadByUser;
-        return data.map((item) => ({
-          ...item,
-          unread: unreadMap[item.id] || 0
-        }));
-      });
-      setChatStatus({ status: "ready", error: "" });
-    } catch (err) {
-      setChatStatus((prev) => ({
-        status: "error",
-        error: err?.message || "Unable to load users."
-      }));
-    }
-  }, [apiBaseUrl, apiFetch, chatUnreadByUser, user]);
-
-  const loadChatThreads = useCallback(async () => {
-    if (!user) {
-      return;
-    }
-    try {
-      const res = await apiFetch(`${apiBaseUrl}/chat/conversations/me`);
-      if (!res.ok) {
-        return;
-      }
-      const data = await res.json();
-      setChatEventThreads(Array.isArray(data) ? data.filter((item) => item.thread_kind === "event") : []);
-    } catch {
-      /* ignore */
-    }
-  }, [apiBaseUrl, apiFetch, user]);
-
-  useEffect(() => {
-    chatEventConversationIdsRef.current = new Set((chatEventThreads || []).map((t) => t.id));
-  }, [chatEventThreads]);
-
-  const loadConversationMessages = useCallback(
-    async (conversationId, before) => {
-      if (!conversationId) {
-        return;
-      }
-      if (before) {
-        setChatLoadingMore(true);
-      } else {
-        setChatStatus({ status: "loading", error: "" });
-      }
-      try {
-        const params = new URLSearchParams({ limit: "50" });
-        if (before) {
-          params.set("before", before);
-        }
-        const res = await apiFetch(
-          `${apiBaseUrl}/chat/conversations/${conversationId}/messages?${params.toString()}`
-        );
-        if (!res.ok) {
-          throw new Error("Unable to load messages.");
-        }
-        const data = await res.json();
-        setChatMessages((prev) => (before ? [...data, ...prev] : data));
-        if (data.length < 50) {
-          setChatHasMore(false);
-        } else if (!before) {
-          setChatHasMore(true);
-        }
-        setChatStatus({ status: "ready", error: "" });
-      } catch (err) {
-        setChatStatus({ status: "error", error: err?.message || "Unable to load messages." });
-      } finally {
-        setChatLoadingMore(false);
-      }
-    },
-    [apiBaseUrl, apiFetch]
-  );
-
-  const openEventThread = useCallback(
-    async (thread) => {
-      if (!thread?.id) {
-        return;
-      }
-      setChatActiveUser(null);
-      setChatActiveEventThread(thread);
-      setChatTypingUser(null);
-      setChatMessages([]);
-      setChatHasMore(true);
-      setChatLoadingMore(false);
-      setChatStatus({ status: "loading", error: "" });
-      setChatConversationId(thread.id);
-      setChatUnreadByConversation((prev) => ({ ...prev, [thread.id]: 0 }));
-      await loadConversationMessages(thread.id);
-    },
-    [loadConversationMessages]
-  );
-
-  const startConversation = useCallback(
-    async (targetUser) => {
-      if (!targetUser) {
-        return;
-      }
-      setChatActiveEventThread(null);
-      setChatActiveUser(targetUser);
-      setChatTypingUser(null);
-      setChatMessages([]);
-      setChatHasMore(true);
-      setChatLoadingMore(false);
-      setChatStatus({ status: "loading", error: "" });
-      try {
-        const res = await apiFetch(`${apiBaseUrl}/chat/conversations`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: targetUser.id })
-        });
-        if (!res.ok) {
-          throw new Error("Unable to start conversation.");
-        }
-        const data = await res.json();
-        setChatConversationId(data.id);
-        await loadConversationMessages(data.id);
-        setChatUnreadByUser((prev) => ({ ...prev, [targetUser.id]: 0 }));
-        setChatUsers((prev) =>
-          prev.map((item) => (item.id === targetUser.id ? { ...item, unread: 0 } : item))
-        );
-      } catch (err) {
-        setChatStatus({ status: "error", error: err?.message || "Unable to start conversation." });
-      }
-    },
-    [apiBaseUrl, apiFetch, loadConversationMessages]
-  );
-
-  const uploadChatAttachment = useCallback(
-    async (file) => {
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await apiFetch(`${apiBaseUrl}/chat/upload`, {
-        method: "POST",
-        body: formData
-      });
-      if (!res.ok) {
-        throw new Error("Unable to upload attachment.");
-      }
-      const data = await res.json();
-      return data.attachment;
-    },
-    [apiBaseUrl, apiFetch]
-  );
-
-  const sendReadReceipts = useCallback(
-    async (messageIds) => {
-      if (!messageIds?.length) {
-        return;
-      }
-      const ws = chatWsRef.current;
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "read", message_ids: messageIds }));
-        return;
-      }
-      await apiFetch(`${apiBaseUrl}/chat/read`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message_ids: messageIds })
-      });
-    },
-    [apiBaseUrl, apiFetch]
-  );
-
-  const sendChatMessage = useCallback(
-    async () => {
-      const trimmed = chatInput.trim();
-      if (!trimmed && chatFiles.length === 0) {
-        return;
-      }
-      if (!chatConversationId || (!chatActiveUser && !chatActiveEventThread)) {
-        setChatStatus({ status: "error", error: "Select a chat to message." });
-        return;
-      }
-      const clientId =
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      try {
-        const attachments =
-          chatFiles.length > 0 ? await Promise.all(chatFiles.map(uploadChatAttachment)) : [];
-        const optimisticMessage = {
-          id: `client-${clientId}`,
-          client_id: clientId,
-          conversation_id: chatConversationId,
-          sender_id: user.id,
-          sender_name: user.name,
-          sender_email: user.email,
-          content: trimmed,
-          attachments,
-          read_by: [user.id],
-          created_at: new Date().toISOString()
-        };
-        setChatMessages((prev) => [...prev, optimisticMessage]);
-        const payload = {
-          type: "message",
-          text: trimmed,
-          attachments,
-          conversation_id: chatConversationId,
-          client_id: clientId
-        };
-        const ws = chatWsRef.current;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify(payload));
-        } else {
-          await apiFetch(`${apiBaseUrl}/chat/messages`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              conversation_id: chatConversationId,
-              content: trimmed,
-              attachments
-            })
-          });
-        }
-        setChatInput("");
-        setChatFiles([]);
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "typing", is_typing: false, conversation_id: chatConversationId }));
-        }
-      } catch (err) {
-        setChatStatus({ status: "error", error: err?.message || "Unable to send message." });
-      }
-    },
-    [
-      apiBaseUrl,
-      apiFetch,
-      chatActiveEventThread,
-      chatActiveUser,
-      chatConversationId,
-      chatFiles,
-      chatInput,
-      uploadChatAttachment,
-      user
-    ]
-  );
-
-  const handleChatInputChange = useCallback(
-    (event) => {
-      const value = event.target.value;
-      setChatInput(value);
-      const ws = chatWsRef.current;
-      if (ws && ws.readyState === WebSocket.OPEN && chatConversationId) {
-        ws.send(JSON.stringify({ type: "typing", is_typing: true, conversation_id: chatConversationId }));
-      }
-      if (chatTypingTimeoutRef.current) {
-        clearTimeout(chatTypingTimeoutRef.current);
-      }
-      chatTypingTimeoutRef.current = setTimeout(() => {
-        const activeWs = chatWsRef.current;
-        if (activeWs && activeWs.readyState === WebSocket.OPEN && chatConversationId) {
-          activeWs.send(JSON.stringify({ type: "typing", is_typing: false, conversation_id: chatConversationId }));
-        }
-      }, 1500);
-    },
-    [chatConversationId]
-  );
-
-  const handleChatFiles = useCallback((event) => {
-    const nextFiles = Array.from(event.target.files || []);
-    if (nextFiles.length) {
-      setChatFiles((prev) => [...prev, ...nextFiles]);
-    }
-    event.target.value = "";
-  }, []);
-
-  const removeChatFile = useCallback((index) => {
-    setChatFiles((prev) => prev.filter((_, idx) => idx !== index));
-  }, []);
 
   const handleGoogleCredential = useCallback(
     async (response) => {
@@ -1973,171 +1669,8 @@ export default function App() {
   }, [user, checkGoogleScopes]);
 
   useEffect(() => {
-    chatActiveConversationRef.current = chatConversationId;
-  }, [chatConversationId]);
-
-  useEffect(() => {
-    chatActiveUserRef.current = chatActiveUser?.id || null;
-  }, [chatActiveUser]);
-
-  useEffect(() => {
-    loadConversationMessagesRef.current = loadConversationMessages;
-  }, [loadConversationMessages]);
-
-  useEffect(() => {
     loadEventsRef.current = loadEvents;
   }, [loadEvents]);
-
-  useEffect(() => {
-    if (!user) {
-      if (chatWsRef.current) {
-        chatWsRef.current.close();
-        chatWsRef.current = null;
-      }
-      setChatUsers([]);
-      setChatMessages([]);
-      setChatActiveUser(null);
-      setChatConversationId("");
-      setChatStatus({ status: "idle", error: "" });
-      setChatTypingUser(null);
-      setChatUnreadByUser({});
-      setChatUnreadByConversation({});
-      setChatEventThreads([]);
-      setChatActiveEventThread(null);
-      return;
-    }
-
-    loadChatUsers();
-    loadChatThreads();
-
-    const token = localStorage.getItem("auth_token");
-    if (!token) {
-      return;
-    }
-
-    const wsBase = apiBaseUrl.replace(/^http/, "ws");
-    const ws = new WebSocket(`${wsBase}/chat/ws?token=${token}`);
-    chatWsRef.current = ws;
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "message" && data.message) {
-          const incoming = data.message;
-          const activeConversation = chatActiveConversationRef.current;
-          if (incoming.conversation_id === activeConversation) {
-            if (incoming.client_id) {
-              setChatMessages((prev) => {
-                const replaced = prev.map((message) =>
-                  message.client_id === incoming.client_id ? incoming : message
-                );
-                const hasMatch = prev.some((message) => message.client_id === incoming.client_id);
-                return hasMatch ? replaced : [...prev, incoming];
-              });
-            } else {
-              setChatMessages((prev) => [...prev, incoming]);
-            }
-          } else {
-            setChatUnreadByConversation((prev) => ({
-              ...prev,
-              [incoming.conversation_id]: (prev[incoming.conversation_id] || 0) + 1
-            }));
-            const isEventConv =
-              incoming.conversation_thread_kind === "event" ||
-              chatEventConversationIdsRef.current.has(incoming.conversation_id);
-            if (!isEventConv && incoming.sender_id) {
-              setChatUnreadByUser((prev) => ({
-                ...prev,
-                [incoming.sender_id]: (prev[incoming.sender_id] || 0) + 1
-              }));
-              setChatUsers((prev) =>
-                prev.map((item) =>
-                  item.id === incoming.sender_id
-                    ? { ...item, unread: (item.unread || 0) + 1 }
-                    : item
-                )
-              );
-            }
-          }
-          return;
-        }
-        if (data.type === "typing") {
-          if (data.conversation_id !== chatActiveConversationRef.current) {
-            return;
-          }
-          if (data.is_typing) {
-            setChatTypingUser({ id: data.user_id, name: data.user_name });
-          } else {
-            setChatTypingUser(null);
-          }
-          return;
-        }
-        if (data.type === "read" && data.message_ids) {
-          setChatMessages((prev) =>
-            prev.map((message) => {
-              if (!data.message_ids.includes(message.id)) {
-                return message;
-              }
-              if (message.read_by.includes(data.user_id)) {
-                return message;
-              }
-              return { ...message, read_by: [...message.read_by, data.user_id] };
-            })
-          );
-          return;
-        }
-        if (data.type === "presence") {
-          setChatUsers((prev) =>
-            prev.map((item) =>
-              item.id === data.user_id
-                ? { ...item, online: data.online, last_seen: data.last_seen }
-                : item
-            )
-          );
-          setChatActiveUser((prev) =>
-            prev && prev.id === data.user_id
-              ? { ...prev, online: data.online, last_seen: data.last_seen }
-              : prev
-          );
-        }
-      } catch (err) {
-        // Ignore malformed payloads
-      }
-    };
-
-    return () => {
-      ws.close();
-    };
-  }, [apiBaseUrl, loadChatUsers, loadChatThreads, user]);
-
-  useEffect(() => {
-    if (!chatListRef.current) {
-      return;
-    }
-    chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
-  }, [chatMessages.length]);
-
-  useEffect(() => {
-    if (!chatActiveUser) {
-      return;
-    }
-    const updated = chatUsers.find((item) => item.id === chatActiveUser.id);
-    if (updated) {
-      setChatActiveUser(updated);
-    }
-  }, [chatUsers, chatActiveUser]);
-
-  useEffect(() => {
-    if (!user || chatMessages.length === 0 || !chatConversationId) {
-      return;
-    }
-    const unread = chatMessages
-      .filter((message) => message.sender_id !== user.id && !message.read_by.includes(user.id))
-      .map((message) => message.id);
-    if (unread.length) {
-      sendReadReceipts(unread);
-    }
-  }, [chatMessages, chatConversationId, sendReadReceipts, user]);
 
   useEffect(() => {
     if (
@@ -2649,13 +2182,53 @@ export default function App() {
     });
   };
 
-  const handleApprovalDetailsOpen = (requestItem) => {
-    setApprovalDetailsModal({ open: true, request: requestItem });
+  const handleApprovalDetailsOpen = async (requestItem) => {
+    const detailsUrl = requestItem?.event_id
+      ? `${apiBaseUrl}/events/${requestItem.event_id}/details`
+      : requestItem?.id
+        ? `${apiBaseUrl}/events/approval-${requestItem.id}/details`
+        : null;
+
+    setApprovalDetailsModal({
+      open: true,
+      request: requestItem,
+      eventDetails: null,
+      detailsStatus: detailsUrl ? "loading" : "idle",
+      detailsError: ""
+    });
+    if (!detailsUrl) return;
+    try {
+      const res = await apiFetch(detailsUrl);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.detail || "Could not load event details");
+      }
+      const eventDetails = await res.json();
+      setApprovalDetailsModal((prev) => ({
+        ...prev,
+        eventDetails,
+        detailsStatus: "ready",
+        detailsError: ""
+      }));
+    } catch (err) {
+      setApprovalDetailsModal((prev) => ({
+        ...prev,
+        eventDetails: null,
+        detailsStatus: "error",
+        detailsError: err?.message || "Could not load event details"
+      }));
+    }
   };
 
-    const handleApprovalDetailsClose = () => {
-      setApprovalDetailsModal({ open: false, request: null });
-    };
+  const handleApprovalDetailsClose = () => {
+    setApprovalDetailsModal({
+      open: false,
+      request: null,
+      eventDetails: null,
+      detailsStatus: "idle",
+      detailsError: ""
+    });
+  };
 
   const normalizeMarketingRequirements = (request) => {
     const req = request?.marketing_requirements || {};
@@ -2756,28 +2329,6 @@ export default function App() {
       if (!r?.na && !r?.file) return false;
       return !getMarketingDeliverableRowLock(opt.type, request).locked;
     });
-
-  const getMarketingNeedsLabel = (request) => {
-    const req = normalizeMarketingRequirements(request);
-    const sections = [];
-    const pre = [];
-    if (req.pre_event.poster) pre.push("Poster");
-    if (req.pre_event.social_media) pre.push("Social Media Post");
-    if (pre.length) sections.push(`Pre-Event: ${pre.join(", ")}`);
-
-    const during = [];
-    if (req.during_event.photo) during.push("Photoshoot");
-    if (req.during_event.video) during.push("Videoshoot");
-    if (during.length) sections.push(`During Event: ${during.join(", ")}`);
-
-    const post = [];
-    if (req.post_event.social_media) post.push("Social Media Post");
-    if (req.post_event.photo_upload) post.push("Photo Upload");
-    if (req.post_event.video) post.push("Video Upload");
-    if (post.length) sections.push(`Post-Event: ${post.join(", ")}`);
-
-    return sections.length ? sections.join(" | ") : "None";
-  };
 
   const openMarketingDeliverableModal = (request) => {
     const uploadFlags = getMarketingDeliverableUploadFlags(request);
@@ -4195,160 +3746,87 @@ export default function App() {
       }
       return true;
     });
-    const typingName = chatTypingUser?.name || "";
 
-    const handleApprovalDecision = async (requestId, decision) => {
+    const openWorkflowActionModal = (channel, requestId, status, actionLabel) => {
+      setWorkflowActionModal({
+        open: true,
+        channel,
+        requestId,
+        status,
+        actionLabel,
+        comment: "",
+        error: "",
+        submitting: false
+      });
+    };
+
+    const closeWorkflowActionModal = () => {
+      setWorkflowActionModal({
+        open: false,
+        channel: null,
+        requestId: null,
+        status: null,
+        actionLabel: "",
+        comment: "",
+        error: "",
+        submitting: false
+      });
+    };
+
+    const submitWorkflowActionModal = async () => {
       const token = localStorage.getItem("auth_token");
-      if (!token) {
-        setApprovalsState({ status: "error", items: [], error: "Missing auth token." });
+      const m = workflowActionModal;
+      const comment = (m.comment || "").trim();
+      if (!comment) {
+        setWorkflowActionModal((prev) => ({ ...prev, error: "Comment is required." }));
+        return;
+      }
+      if (!token || !m.channel || !m.requestId || !m.status) {
+        setWorkflowActionModal((prev) => ({ ...prev, error: "Missing action context." }));
         return;
       }
 
-      try {
-        const idemKey = generateIdempotencyKey();
-        const res = await apiFetch(`${apiBaseUrl}/approvals/${requestId}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            ...(idemKey && { "Idempotency-Key": idemKey })
-          },
-          body: JSON.stringify({ status: decision })
-        });
+      setWorkflowActionModal((prev) => ({ ...prev, submitting: true, error: "" }));
 
-        if (res.status === 409) {
+      const body = JSON.stringify({ status: m.status, comment });
+      const headers = { "Content-Type": "application/json" };
+      let url;
+      try {
+        if (m.channel === "approval") {
+          const idemKey = generateIdempotencyKey();
+          if (idemKey) headers["Idempotency-Key"] = idemKey;
+          url = `${apiBaseUrl}/approvals/${m.requestId}`;
+        } else if (m.channel === "facility") {
+          url = `${apiBaseUrl}/facility/requests/${m.requestId}`;
+        } else if (m.channel === "marketing") {
+          url = `${apiBaseUrl}/marketing/requests/${m.requestId}`;
+        } else if (m.channel === "it") {
+          url = `${apiBaseUrl}/it/requests/${m.requestId}`;
+        } else if (m.channel === "transport") {
+          url = `${apiBaseUrl}/transport/requests/${m.requestId}`;
+        } else {
+          throw new Error("Unknown action channel.");
+        }
+
+        const res = await apiFetch(url, { method: "PATCH", headers, body });
+
+        if (m.channel === "approval" && res.status === 409) {
           throw new Error("Schedule conflict detected. Ask the requester to reschedule.");
         }
         if (!res.ok) {
-          throw new Error("Unable to update approval.");
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.detail || "Unable to submit action.");
         }
 
-        loadApprovalsInbox();
+        closeWorkflowActionModal();
+        if (m.channel === "approval") loadApprovalsInbox();
+        else if (m.channel === "facility") loadFacilityInbox();
+        else if (m.channel === "marketing") loadMarketingInbox();
+        else if (m.channel === "it") loadItInbox();
+        else if (m.channel === "transport") loadTransportInbox();
       } catch (err) {
-        setApprovalsState({
-          status: "error",
-          items: [],
-          error: err?.message || "Unable to update approval."
-        });
-      }
-    };
-
-    const handleFacilityDecision = async (requestId, decision) => {
-      const token = localStorage.getItem("auth_token");
-      if (!token) {
-        setFacilityState({ status: "error", items: [], error: "Missing auth token." });
-        return;
-      }
-
-      try {
-        const res = await apiFetch(`${apiBaseUrl}/facility/requests/${requestId}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ status: decision })
-        });
-
-        if (!res.ok) {
-          throw new Error("Unable to update facility request.");
-        }
-
-        loadFacilityInbox();
-      } catch (err) {
-        setFacilityState({
-          status: "error",
-          items: [],
-          error: err?.message || "Unable to update facility request."
-        });
-      }
-    };
-
-    const handleMarketingDecision = async (requestId, decision) => {
-      const token = localStorage.getItem("auth_token");
-      if (!token) {
-        setMarketingState({ status: "error", items: [], error: "Missing auth token." });
-        return;
-      }
-
-      try {
-        const res = await apiFetch(`${apiBaseUrl}/marketing/requests/${requestId}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ status: decision })
-        });
-
-        if (!res.ok) {
-          throw new Error("Unable to update marketing request.");
-        }
-
-        loadMarketingInbox();
-      } catch (err) {
-        setMarketingState({
-          status: "error",
-          items: [],
-          error: err?.message || "Unable to update marketing request."
-        });
-      }
-    };
-
-    const handleItDecision = async (requestId, decision) => {
-      const token = localStorage.getItem("auth_token");
-      if (!token) {
-        setItState({ status: "error", items: [], error: "Missing auth token." });
-        return;
-      }
-
-      try {
-        const res = await apiFetch(`${apiBaseUrl}/it/requests/${requestId}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ status: decision })
-        });
-
-        if (!res.ok) {
-          throw new Error("Unable to update IT request.");
-        }
-
-        loadItInbox();
-      } catch (err) {
-        setItState({
-          status: "error",
-          items: [],
-          error: err?.message || "Unable to update IT request."
-        });
-      }
-    };
-
-    const handleTransportDecision = async (requestId, decision) => {
-      const token = localStorage.getItem("auth_token");
-      if (!token) {
-        setTransportState({ status: "error", items: [], error: "Missing auth token." });
-        return;
-      }
-
-      try {
-        const res = await apiFetch(`${apiBaseUrl}/transport/requests/${requestId}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ status: decision })
-        });
-
-        if (!res.ok) {
-          throw new Error("Unable to update transport request.");
-        }
-
-        loadTransportInbox();
-      } catch (err) {
-        setTransportState({
-          status: "error",
-          items: [],
-          error: err?.message || "Unable to update transport request."
-        });
+        const msg = err?.message || "Unable to submit action.";
+        setWorkflowActionModal((prev) => ({ ...prev, submitting: false, error: msg }));
       }
     };
 
@@ -7114,8 +6592,8 @@ export default function App() {
                   onClick={() => setApprovalsTab("approval-requests")}
                 >
                   Approval Requests
-                  {approvalsState.status === "ready" && approvalsState.items.filter((i) => i.status === "pending").length > 0 ? (
-                    <span className="tab-badge">{approvalsState.items.filter((i) => i.status === "pending").length}</span>
+                  {approvalsState.status === "ready" && workflowInboxAttentionCount(approvalsState.items) > 0 ? (
+                    <span className="tab-badge">{workflowInboxAttentionCount(approvalsState.items)}</span>
                   ) : null}
                 </button>
               ) : null}
@@ -7126,8 +6604,8 @@ export default function App() {
                   onClick={() => setApprovalsTab("facility")}
                 >
                   Facility Manager
-                  {facilityState.status === "ready" && facilityState.items.filter((i) => i.status === "pending").length > 0 ? (
-                    <span className="tab-badge">{facilityState.items.filter((i) => i.status === "pending").length}</span>
+                  {facilityState.status === "ready" && workflowInboxAttentionCount(facilityState.items) > 0 ? (
+                    <span className="tab-badge">{workflowInboxAttentionCount(facilityState.items)}</span>
                   ) : null}
                 </button>
               ) : null}
@@ -7138,8 +6616,8 @@ export default function App() {
                   onClick={() => setApprovalsTab("marketing")}
                 >
                   Marketing
-                  {marketingState.status === "ready" && marketingState.items.filter((i) => i.status === "pending").length > 0 ? (
-                    <span className="tab-badge">{marketingState.items.filter((i) => i.status === "pending").length}</span>
+                  {marketingState.status === "ready" && workflowInboxAttentionCount(marketingState.items) > 0 ? (
+                    <span className="tab-badge">{workflowInboxAttentionCount(marketingState.items)}</span>
                   ) : null}
                 </button>
               ) : null}
@@ -7150,8 +6628,8 @@ export default function App() {
                   onClick={() => setApprovalsTab("it")}
                 >
                   IT
-                  {itState.status === "ready" && itState.items.filter((i) => i.status === "pending").length > 0 ? (
-                    <span className="tab-badge">{itState.items.filter((i) => i.status === "pending").length}</span>
+                  {itState.status === "ready" && workflowInboxAttentionCount(itState.items) > 0 ? (
+                    <span className="tab-badge">{workflowInboxAttentionCount(itState.items)}</span>
                   ) : null}
                 </button>
               ) : null}
@@ -7162,30 +6640,26 @@ export default function App() {
                   onClick={() => setApprovalsTab("transport")}
                 >
                   Transport
-                  {transportState.status === "ready" &&
-                  transportState.items.filter((i) => i.status === "pending").length > 0 ? (
-                    <span className="tab-badge">
-                      {transportState.items.filter((i) => i.status === "pending").length}
-                    </span>
+                  {transportState.status === "ready" && workflowInboxAttentionCount(transportState.items) > 0 ? (
+                    <span className="tab-badge">{workflowInboxAttentionCount(transportState.items)}</span>
                   ) : null}
                 </button>
               ) : null}
             </div>
             {isApproverRole && approvalsTab === "approval-requests" ? (
             <div className="events-table-card">
-              <div className="table-header">
+              <div className="table-header table-header--toolbar">
                 <h3>Approval Requests</h3>
-                <button type="button" className="secondary-action" onClick={loadApprovalsInbox}>Refresh</button>
+                <button type="button" className="refresh-toolbar-btn" onClick={loadApprovalsInbox}>
+                  Refresh
+                </button>
               </div>
               <div className="events-table">
                 <div className="events-table-row header approvals">
                   <span>Event</span>
                   <span>Requester</span>
-                  <span>Budget</span>
-                  <span>Date</span>
-                  <span>Time</span>
                   <span>Status</span>
-                  <span>Action</span>
+                  <span>Actions</span>
                 </div>
                 {approvalsState.status === "loading" ? (
                   <p className="table-message">Loading approvals...</p>
@@ -7198,49 +6672,60 @@ export default function App() {
                 ) : null}
                 {approvalsState.status === "ready"
                     ? approvalsState.items.map((item) => {
-                        const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                        const statusLabel = formatInboxDecisionStatusLabel(item.status);
                         const eventHasStarted = isEventStarted(item);
+                        const rowAttention = canActOnWorkflowRow(item.status);
                         return (
-                          <div key={item.id} className="events-table-row approvals">
-                            <span>{item.event_name}</span>
-                            <span>{item.requester_email}</span>
-                            <span>{item.budget != null ? `Rs ${Number(item.budget).toLocaleString()}` : "—"}</span>
-                            <span>{item.start_date}</span>
-                          <span>{formatISTTime(item.start_time)}</span>
-                          <span className={`status-pill ${item.status}`}>{statusLabel}</span>
-                          <div className="approval-actions">
-                            <button
-                              type="button"
-                              className="details-button"
-                              onClick={() => handleApprovalDetailsOpen(item)}
-                            >
-                              Details
-                            </button>
-                            {item.status === "pending" ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="details-button"
-                                  disabled={eventHasStarted}
-                                  title={eventHasStarted ? "Event has already started" : ""}
-                                  onClick={() => handleApprovalDecision(item.id, "approved")}
+                          <div
+                            key={item.id}
+                            className={`events-table-row approvals${rowAttention ? " approvals-row--pending" : ""}`}
+                          >
+                            <span className="approvals-col-event">{item.event_name}</span>
+                            <span className="approvals-col-requester">{item.requester_email}</span>
+                            <div className="req-inbox-status-with-details">
+                              <span className={`status-pill registrar-status-pill ${item.status}`}>{statusLabel}</span>
+                              <button
+                                type="button"
+                                className="details-button details-button--primary"
+                                onClick={() => handleApprovalDetailsOpen(item)}
+                              >
+                                Details
+                              </button>
+                            </div>
+                            <div className="approval-actions registrar-approval-actions req-inbox-actions">
+                              {rowAttention && !eventHasStarted ? (
+                                <select
+                                  className="workflow-action-select"
+                                  aria-label="Choose approval action"
+                                  defaultValue=""
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    e.target.value = "";
+                                    if (v === "approved") openWorkflowActionModal("approval", item.id, "approved", "Approve");
+                                    else if (v === "rejected") openWorkflowActionModal("approval", item.id, "rejected", "Reject");
+                                    else if (v === "clarification_requested") {
+                                      openWorkflowActionModal(
+                                        "approval",
+                                        item.id,
+                                        "clarification_requested",
+                                        "Need clarification"
+                                      );
+                                    }
+                                  }}
                                 >
-                                  Approve
-                                </button>
-                                <button
-                                  type="button"
-                                  className="details-button reject"
-                                  disabled={eventHasStarted}
-                                  title={eventHasStarted ? "Event has already started" : ""}
-                                  onClick={() => handleApprovalDecision(item.id, "rejected")}
-                                >
-                                  Reject
-                                </button>
-                              </>
-                            ) : null}
+                                  <option value="">Action</option>
+                                  <option value="approved">Approve</option>
+                                  <option value="rejected">Reject</option>
+                                  <option value="clarification_requested">Need clarification</option>
+                                </select>
+                              ) : (
+                                <span className="req-inbox-actions-placeholder" aria-hidden>
+                                  —
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      );
+                        );
                     })
                     : null}
               </div>
@@ -7249,19 +6734,18 @@ export default function App() {
 
             {isFacilityManagerRole && approvalsTab === "facility" ? (
             <div className="events-table-card">
-              <div className="table-header">
+              <div className="table-header table-header--toolbar">
                 <h3>Facility Manager Requests</h3>
-                <button type="button" className="secondary-action" onClick={loadFacilityInbox}>Refresh</button>
+                <button type="button" className="refresh-toolbar-btn" onClick={loadFacilityInbox}>
+                  Refresh
+                </button>
               </div>
               <div className="events-table">
-                <div className="events-table-row header facility">
+                <div className="events-table-row header inbox-req-row">
                   <span>Event</span>
                   <span>Requester</span>
-                  <span>Date</span>
-                  <span>Time</span>
                   <span>Status</span>
-                  <span>Needs</span>
-                  <span>Action</span>
+                  <span>Actions</span>
                 </div>
                 {facilityState.status === "loading" ? (
                   <p className="table-message">Loading facility requests...</p>
@@ -7274,56 +6758,57 @@ export default function App() {
                 ) : null}
                 {facilityState.status === "ready"
                   ? facilityState.items.map((item) => {
-                      const needs = [];
-                      if (item.venue_required) {
-                        needs.push("Venue");
-                      }
-                      if (item.refreshments) {
-                        needs.push("Refreshments");
-                      }
-                      const needsLabel = needs.length ? needs.join(", ") : "None";
-                      const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                      const statusLabel = formatInboxDecisionStatusLabel(item.status);
                       const eventHasStarted = isEventStarted(item);
+                      const rowAttention = canActOnWorkflowRow(item.status);
                       return (
-                        <div key={item.id} className="events-table-row facility">
+                        <div
+                          key={item.id}
+                          className={`events-table-row inbox-req-row${rowAttention ? " inbox-req-row--pending" : ""}`}
+                        >
                           <span>{item.event_name}</span>
                           <span>{item.requester_email}</span>
-                          <span>{item.start_date}</span>
-                          <span>{formatISTTime(item.start_time)}</span>
-                          <span className={`status-pill ${item.status}`}>{statusLabel}</span>
-                          <span className="marketing-needs">{needsLabel}</span>
-                          <div className="approval-actions">
+                          <div className="req-inbox-status-with-details">
+                            <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                             <button
                               type="button"
-                              className="details-button"
+                              className="details-button details-button--primary"
                               onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
                               title={item.event_id ? "View event details" : "Event details available after approval"}
                               disabled={!item.event_id}
                             >
                               Details
                             </button>
-                            {item.status === "pending" ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="details-button"
-                                  disabled={eventHasStarted}
-                                  title={eventHasStarted ? "Event has already started" : ""}
-                                  onClick={() => handleFacilityDecision(item.id, "approved")}
-                                >
-                                  Accept
-                                </button>
-                                <button
-                                  type="button"
-                                  className="details-button reject"
-                                  disabled={eventHasStarted}
-                                  title={eventHasStarted ? "Event has already started" : ""}
-                                  onClick={() => handleFacilityDecision(item.id, "rejected")}
-                                >
-                                  Reject
-                                </button>
-                              </>
-                            ) : null}
+                          </div>
+                          <div className="req-inbox-actions">
+                            {rowAttention && !eventHasStarted ? (
+                              <select
+                                className="workflow-action-select"
+                                aria-label="Choose facility action"
+                                defaultValue=""
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  e.target.value = "";
+                                  if (v === "approved") openWorkflowActionModal("facility", item.id, "approved", "Approve");
+                                  else if (v === "rejected") openWorkflowActionModal("facility", item.id, "rejected", "Reject");
+                                  else if (v === "clarification_requested") {
+                                    openWorkflowActionModal(
+                                      "facility",
+                                      item.id,
+                                      "clarification_requested",
+                                      "Need clarification"
+                                    );
+                                  }
+                                }}
+                              >
+                                <option value="">Action</option>
+                                <option value="approved">Approve</option>
+                                <option value="rejected">Reject</option>
+                                <option value="clarification_requested">Need clarification</option>
+                              </select>
+                            ) : (
+                              <span className="req-inbox-actions-placeholder">—</span>
+                            )}
                           </div>
                         </div>
                       );
@@ -7335,19 +6820,18 @@ export default function App() {
 
             {isMarketingRole && approvalsTab === "marketing" ? (
             <div className="events-table-card">
-              <div className="table-header">
+              <div className="table-header table-header--toolbar">
                 <h3>Marketing Requests</h3>
-                <button type="button" className="secondary-action" onClick={loadMarketingInbox}>Refresh</button>
+                <button type="button" className="refresh-toolbar-btn" onClick={loadMarketingInbox}>
+                  Refresh
+                </button>
               </div>
               <div className="events-table">
-                <div className="events-table-row header marketing">
+                <div className="events-table-row header inbox-req-row">
                   <span>Event</span>
                   <span>Requester</span>
-                  <span>Date</span>
-                  <span>Time</span>
                   <span>Status</span>
-                  <span>Needs</span>
-                  <span>Action</span>
+                  <span>Actions</span>
                 </div>
                 {marketingState.status === "loading" ? (
                   <p className="table-message">Loading marketing requests...</p>
@@ -7360,30 +6844,32 @@ export default function App() {
                 ) : null}
                 {marketingState.status === "ready"
                   ? marketingState.items.map((item) => {
-                      const needsLabel = getMarketingNeedsLabel(item);
-                      const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                      const statusLabel = formatInboxDecisionStatusLabel(item.status);
                       const eventHasStarted = isEventStarted(item);
+                      const rowAttention = canActOnWorkflowRow(item.status);
                       const marketingHasFileUploads = REQUIREMENT_OPTIONS.some(
                         (opt) => getMarketingDeliverableUploadFlags(item)[opt.key]
                       );
                       return (
-                        <div key={item.id} className="events-table-row marketing">
+                        <div
+                          key={item.id}
+                          className={`events-table-row inbox-req-row${rowAttention ? " inbox-req-row--pending" : ""}`}
+                        >
                           <span>{item.event_name}</span>
                           <span>{item.requester_email}</span>
-                          <span>{item.start_date}</span>
-                          <span>{formatISTTime(item.start_time)}</span>
-                          <span className={`status-pill ${item.status}`}>{statusLabel}</span>
-                          <span className="marketing-needs">{needsLabel}</span>
-                          <div className="approval-actions">
+                          <div className="req-inbox-status-with-details">
+                            <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                             <button
                               type="button"
-                              className="details-button"
+                              className="details-button details-button--primary"
                               onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
                               title={item.event_id ? "View event details" : "Event details available after approval"}
                               disabled={!item.event_id}
                             >
                               Details
                             </button>
+                          </div>
+                          <div className="req-inbox-actions">
                             <button
                               type="button"
                               className="details-button upload"
@@ -7397,28 +6883,34 @@ export default function App() {
                             >
                               Upload
                             </button>
-                            {item.status === "pending" ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="details-button"
-                                  disabled={eventHasStarted}
-                                  title={eventHasStarted ? "Event has already started" : ""}
-                                  onClick={() => handleMarketingDecision(item.id, "approved")}
-                                >
-                                  Accept
-                                </button>
-                                <button
-                                  type="button"
-                                  className="details-button reject"
-                                  disabled={eventHasStarted}
-                                  title={eventHasStarted ? "Event has already started" : ""}
-                                  onClick={() => handleMarketingDecision(item.id, "rejected")}
-                                >
-                                  Reject
-                                </button>
-                              </>
-                            ) : null}
+                            {rowAttention && !eventHasStarted ? (
+                              <select
+                                className="workflow-action-select"
+                                aria-label="Choose marketing action"
+                                defaultValue=""
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  e.target.value = "";
+                                  if (v === "approved") openWorkflowActionModal("marketing", item.id, "approved", "Approve");
+                                  else if (v === "rejected") openWorkflowActionModal("marketing", item.id, "rejected", "Reject");
+                                  else if (v === "clarification_requested") {
+                                    openWorkflowActionModal(
+                                      "marketing",
+                                      item.id,
+                                      "clarification_requested",
+                                      "Need clarification"
+                                    );
+                                  }
+                                }}
+                              >
+                                <option value="">Action</option>
+                                <option value="approved">Approve</option>
+                                <option value="rejected">Reject</option>
+                                <option value="clarification_requested">Need clarification</option>
+                              </select>
+                            ) : (
+                              <span className="req-inbox-actions-placeholder">—</span>
+                            )}
                           </div>
                         </div>
                       );
@@ -7430,19 +6922,18 @@ export default function App() {
 
             {isTransportRole && approvalsTab === "transport" ? (
             <div className="events-table-card">
-              <div className="table-header">
+              <div className="table-header table-header--toolbar">
                 <h3>Transport Requests</h3>
-                <button type="button" className="secondary-action" onClick={loadTransportInbox}>Refresh</button>
+                <button type="button" className="refresh-toolbar-btn" onClick={loadTransportInbox}>
+                  Refresh
+                </button>
               </div>
               <div className="events-table">
-                <div className="events-table-row header facility">
+                <div className="events-table-row header inbox-req-row">
                   <span>Event</span>
                   <span>Requester</span>
-                  <span>Type</span>
-                  <span>Date</span>
-                  <span>Time</span>
                   <span>Status</span>
-                  <span>Action</span>
+                  <span>Actions</span>
                 </div>
                 {transportState.status === "loading" ? (
                   <p className="table-message">Loading transport requests...</p>
@@ -7455,49 +6946,57 @@ export default function App() {
                 ) : null}
                 {transportState.status === "ready"
                   ? transportState.items.map((item) => {
-                      const typeLabel = transportRequestTypeLabel(item.transport_type);
-                      const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                      const statusLabel = formatInboxDecisionStatusLabel(item.status);
                       const eventHasStarted = isEventStarted(item);
+                      const rowAttention = canActOnWorkflowRow(item.status);
                       return (
-                        <div key={item.id} className="events-table-row facility">
+                        <div
+                          key={item.id}
+                          className={`events-table-row inbox-req-row${rowAttention ? " inbox-req-row--pending" : ""}`}
+                        >
                           <span>{item.event_name}</span>
                           <span>{item.requester_email}</span>
-                          <span>{typeLabel}</span>
-                          <span>{item.start_date}</span>
-                          <span>{formatISTTime(item.start_time)}</span>
-                          <span className={`status-pill ${item.status}`}>{statusLabel}</span>
-                          <div className="approval-actions">
+                          <div className="req-inbox-status-with-details">
+                            <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                             <button
                               type="button"
-                              className="details-button"
+                              className="details-button details-button--primary"
                               onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
                               title={item.event_id ? "View event details" : "Event details available after approval"}
                               disabled={!item.event_id}
                             >
                               Details
                             </button>
-                            {item.status === "pending" ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="details-button"
-                                  disabled={eventHasStarted}
-                                  title={eventHasStarted ? "Event has already started" : ""}
-                                  onClick={() => handleTransportDecision(item.id, "approved")}
-                                >
-                                  Accept
-                                </button>
-                                <button
-                                  type="button"
-                                  className="details-button reject"
-                                  disabled={eventHasStarted}
-                                  title={eventHasStarted ? "Event has already started" : ""}
-                                  onClick={() => handleTransportDecision(item.id, "rejected")}
-                                >
-                                  Reject
-                                </button>
-                              </>
-                            ) : null}
+                          </div>
+                          <div className="req-inbox-actions">
+                            {rowAttention && !eventHasStarted ? (
+                              <select
+                                className="workflow-action-select"
+                                aria-label="Choose transport action"
+                                defaultValue=""
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  e.target.value = "";
+                                  if (v === "approved") openWorkflowActionModal("transport", item.id, "approved", "Approve");
+                                  else if (v === "rejected") openWorkflowActionModal("transport", item.id, "rejected", "Reject");
+                                  else if (v === "clarification_requested") {
+                                    openWorkflowActionModal(
+                                      "transport",
+                                      item.id,
+                                      "clarification_requested",
+                                      "Need clarification"
+                                    );
+                                  }
+                                }}
+                              >
+                                <option value="">Action</option>
+                                <option value="approved">Approve</option>
+                                <option value="rejected">Reject</option>
+                                <option value="clarification_requested">Need clarification</option>
+                              </select>
+                            ) : (
+                              <span className="req-inbox-actions-placeholder">—</span>
+                            )}
                           </div>
                         </div>
                       );
@@ -7509,19 +7008,18 @@ export default function App() {
 
             {isItRole && approvalsTab === "it" ? (
             <div className="events-table-card">
-              <div className="table-header">
+              <div className="table-header table-header--toolbar">
                 <h3>IT Requests</h3>
-                <button type="button" className="secondary-action" onClick={loadItInbox}>Refresh</button>
+                <button type="button" className="refresh-toolbar-btn" onClick={loadItInbox}>
+                  Refresh
+                </button>
               </div>
               <div className="events-table">
-                <div className="events-table-row header it">
+                <div className="events-table-row header inbox-req-row">
                   <span>Event</span>
                   <span>Requester</span>
-                  <span>Date</span>
-                  <span>Time</span>
                   <span>Status</span>
-                  <span>Needs</span>
-                  <span>Action</span>
+                  <span>Actions</span>
                 </div>
                 {itState.status === "loading" ? (
                   <p className="table-message">Loading IT requests...</p>
@@ -7534,56 +7032,57 @@ export default function App() {
                 ) : null}
                 {itState.status === "ready"
                   ? itState.items.map((item) => {
-                      const needs = [];
-                      if (item.pa_system) {
-                        needs.push("PA System");
-                      }
-                      if (item.projection) {
-                        needs.push("Projection");
-                      }
-                      const needsLabel = needs.length ? needs.join(", ") : "None";
-                      const statusLabel = `${item.status.charAt(0).toUpperCase()}${item.status.slice(1)}`;
+                      const statusLabel = formatInboxDecisionStatusLabel(item.status);
                       const eventHasStarted = isEventStarted(item);
+                      const rowAttention = canActOnWorkflowRow(item.status);
                       return (
-                        <div key={item.id} className="events-table-row it">
+                        <div
+                          key={item.id}
+                          className={`events-table-row inbox-req-row${rowAttention ? " inbox-req-row--pending" : ""}`}
+                        >
                           <span>{item.event_name}</span>
                           <span>{item.requester_email}</span>
-                          <span>{item.start_date}</span>
-                          <span>{formatISTTime(item.start_time)}</span>
-                          <span className={`status-pill ${item.status}`}>{statusLabel}</span>
-                          <span className="marketing-needs">{needsLabel}</span>
-                          <div className="approval-actions">
+                          <div className="req-inbox-status-with-details">
+                            <span className={`status-pill ${item.status}`}>{statusLabel}</span>
                             <button
                               type="button"
-                              className="details-button"
+                              className="details-button details-button--primary"
                               onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
                               title={item.event_id ? "View event details" : "Event details available after approval"}
                               disabled={!item.event_id}
                             >
                               Details
                             </button>
-                            {item.status === "pending" ? (
-                              <>
-                                <button
-                                  type="button"
-                                  className="details-button"
-                                  disabled={eventHasStarted}
-                                  title={eventHasStarted ? "Event has already started" : ""}
-                                  onClick={() => handleItDecision(item.id, "approved")}
-                                >
-                                  Accept
-                                </button>
-                                <button
-                                  type="button"
-                                  className="details-button reject"
-                                  disabled={eventHasStarted}
-                                  title={eventHasStarted ? "Event has already started" : ""}
-                                  onClick={() => handleItDecision(item.id, "rejected")}
-                                >
-                                  Reject
-                                </button>
-                              </>
-                            ) : null}
+                          </div>
+                          <div className="req-inbox-actions">
+                            {rowAttention && !eventHasStarted ? (
+                              <select
+                                className="workflow-action-select"
+                                aria-label="Choose IT action"
+                                defaultValue=""
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  e.target.value = "";
+                                  if (v === "approved") openWorkflowActionModal("it", item.id, "approved", "Approve");
+                                  else if (v === "rejected") openWorkflowActionModal("it", item.id, "rejected", "Reject");
+                                  else if (v === "clarification_requested") {
+                                    openWorkflowActionModal(
+                                      "it",
+                                      item.id,
+                                      "clarification_requested",
+                                      "Need clarification"
+                                    );
+                                  }
+                                }}
+                              >
+                                <option value="">Action</option>
+                                <option value="approved">Approve</option>
+                                <option value="rejected">Reject</option>
+                                <option value="clarification_requested">Need clarification</option>
+                              </select>
+                            ) : (
+                              <span className="req-inbox-actions-placeholder">—</span>
+                            )}
                           </div>
                         </div>
                       );
@@ -7666,7 +7165,7 @@ export default function App() {
     };
 
     return (
-      <MessengerProvider>
+      <MessengerProvider user={user}>
       <div className={`dashboard-page ${mobileMenuOpen ? "mobile-menu-open" : ""}`}>
         {googleScopeModal.open ? (
           <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -7772,200 +7271,21 @@ export default function App() {
               ) : eventDetailsModal.status === "error" ? (
                 <p className="form-error">{eventDetailsModal.error}</p>
               ) : eventDetailsModal.details ? (
-                <>
-                  <div className="details-grid">
-                    <div>
-                      <p className="details-label">Event</p>
-                      <p className="details-value">{eventDetailsModal.details.event?.name || eventDetailsModal.event?.name}</p>
-                    </div>
-                    <div>
-                      <p className="details-label">Facilitator</p>
-                      <p className="details-value">{eventDetailsModal.details.event?.facilitator}</p>
-                    </div>
-                    <div>
-                      <p className="details-label">Venue</p>
-                      <p className="details-value">{eventDetailsModal.details.event?.venue_name}</p>
-                    </div>
-                    <div className="details-wide">
-                      <p className="details-label">Budget (Rs)</p>
-                      <div className="details-value details-budget-row">
-                        <span className="details-budget-amount">
-                          {eventDetailsModal.details.event?.budget != null
-                            ? `Rs ${Number(eventDetailsModal.details.event.budget).toLocaleString()}`
-                            : "—"}
-                        </span>
-                        {eventDetailsModal.details.event?.budget_breakdown_web_view_link ? (
-                          <button
-                            type="button"
-                            className="details-button"
-                            onClick={() =>
-                              window.open(
-                                eventDetailsModal.details.event.budget_breakdown_web_view_link,
-                                "_blank",
-                                "noopener,noreferrer"
-                              )
-                            }
-                          >
-                            Budget breakdown (PDF)
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="details-label">Status</p>
-                      <p className="details-value">{eventDetailsModal.details.event?.status}</p>
-                    </div>
-                    <div>
-                      <p className="details-label">Start</p>
-                      <p className="details-value">
-                        {eventDetailsModal.details.event?.start_date && eventDetailsModal.details.event?.start_time
-                          ? `${eventDetailsModal.details.event.start_date} ${formatISTTime(eventDetailsModal.details.event.start_time)}`
-                          : "—"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="details-label">End</p>
-                      <p className="details-value">
-                        {eventDetailsModal.details.event?.end_date && eventDetailsModal.details.event?.end_time
-                          ? `${eventDetailsModal.details.event.end_date} ${formatISTTime(eventDetailsModal.details.event.end_time)}`
-                          : "—"}
-                      </p>
-                    </div>
-                    <div className="details-wide">
-                      <p className="details-label">Description</p>
-                      <p className="details-value">{eventDetailsModal.details.event?.description || "—"}</p>
-                    </div>
-                  </div>
-
-                  <div className="event-details-section">
-                    <p className="details-label">Registrar approval</p>
-                    {eventDetailsModal.details.approval_request ? (
-                      <div className="details-subsection">
-                        <p className="details-value">
-                          Sent to: <strong>{eventDetailsModal.details.approval_request.requested_to || "—"}</strong>
-                        </p>
-                        <p className="details-value">
-                          Status: <span className={`status-pill ${eventDetailsModal.details.approval_request.status}`}>
-                            {eventDetailsModal.details.approval_request.status}
-                          </span>
-                        </p>
-                        {eventDetailsModal.details.approval_request.status === "approved" && eventDetailsModal.details.approval_request.decided_by ? (
-                          <p className="details-value">Approved by: <strong>{eventDetailsModal.details.approval_request.decided_by}</strong></p>
-                        ) : eventDetailsModal.details.approval_request.status === "pending" ? (
-                          <p className="details-value">Awaiting approval from registrar.</p>
-                        ) : eventDetailsModal.details.approval_request.decided_by ? (
-                          <p className="details-value">Decided by: <strong>{eventDetailsModal.details.approval_request.decided_by}</strong></p>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <p className="details-value">No approval request sent for this event.</p>
-                    )}
-                  </div>
-
-                  <div className="event-details-section">
-                    <p className="details-label">Requirements sent</p>
-                    {eventDetailsModal.details.facility_requests?.length > 0 ? (
-                      <div className="details-subsection">
-                        <p className="details-sublabel">Facility</p>
-                        {eventDetailsModal.details.facility_requests.map((r, i) => (
-                          <div key={r.id || i} className="details-row">
-                            <span>To: {r.requested_to || "—"}</span>
-                            <span className={`status-pill ${r.status}`}>
-                              {formatRequirementDecisionStatusLabel(r.status)}
-                            </span>
-                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {eventDetailsModal.details.transport_requests?.length > 0 ? (
-                      <div className="details-subsection">
-                        <p className="details-sublabel">Transport</p>
-                        {eventDetailsModal.details.transport_requests.map((r, i) => (
-                          <div key={r.id || i} className="details-row">
-                            <span>
-                              {transportRequestTypeLabel(r.transport_type)} — To: {r.requested_to || "—"}
-                            </span>
-                            <span className={`status-pill ${r.status}`}>
-                              {formatRequirementDecisionStatusLabel(r.status)}
-                            </span>
-                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {eventDetailsModal.details.marketing_requests?.length > 0 ? (
-                      <div className="details-subsection">
-                        <p className="details-sublabel">Marketing</p>
-                        {eventDetailsModal.details.marketing_requests.map((r, i) => (
-                          <div key={r.id || i} className="details-row">
-                            <span>To: {r.requested_to || "—"}</span>
-                            <span>{getMarketingNeedsLabel(r)}</span>
-                            <span className={`status-pill ${r.status}`}>
-                              {formatRequirementDecisionStatusLabel(r.status)}
-                            </span>
-                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {eventDetailsModal.details.it_requests?.length > 0 ? (
-                      <div className="details-subsection">
-                        <p className="details-sublabel">IT</p>
-                        {eventDetailsModal.details.it_requests.map((r, i) => (
-                          <div key={r.id || i} className="details-row">
-                            <span>To: {r.requested_to || "—"}</span>
-                            <span className={`status-pill ${r.status}`}>
-                              {formatRequirementDecisionStatusLabel(r.status)}
-                            </span>
-                            {r.decided_by ? <span>By: {r.decided_by}</span> : r.status === "pending" ? <span>Pending</span> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                    {!(
-                      eventDetailsModal.details.facility_requests?.length ||
-                      eventDetailsModal.details.transport_requests?.length ||
-                      eventDetailsModal.details.marketing_requests?.length ||
-                      eventDetailsModal.details.it_requests?.length
-                    ) ? (
-                      <p className="details-value">No facility, transport, marketing, or IT requests sent yet.</p>
-                    ) : null}
-                  </div>
-
-                  {eventDetailsModal.details.marketing_requests?.length ? (
-                    <div className="event-details-section">
-                      <p className="details-label">Marketing deliverables</p>
-                      {eventDetailsModal.details.marketing_requests.map((req, i) => (
-                        <div key={req.id || i} className="details-subsection">
-                          {eventDetailsModal.details.marketing_requests.length > 1 ? (
-                            <p className="details-sublabel">Request to {req.requested_to || "marketing"}</p>
-                          ) : null}
-                          {req.deliverables?.length ? (
-                            <ul className="details-list">
-                              {req.deliverables.map((d, j) => (
-                                <li key={j}>
-                                  {d.is_na ? (
-                                    <span>{getMarketingDeliverableLabel(d.deliverable_type)}: N/A</span>
-                                  ) : d.web_view_link ? (
-                                    <a href={d.web_view_link} target="_blank" rel="noreferrer">
-                                      {d.file_name || getMarketingDeliverableLabel(d.deliverable_type)}
-                                    </a>
-                                  ) : (
-                                    <span>{d.file_name || getMarketingDeliverableLabel(d.deliverable_type)}</span>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="details-value">No files uploaded yet.</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                </>
+                <EventDetailsModalBody
+                  details={eventDetailsModal.details}
+                  fallbackEventName={eventDetailsModal.event?.name}
+                  formatISTTime={formatISTTime}
+                  normalizeMarketingRequirements={normalizeMarketingRequirements}
+                  getMarketingDeliverableLabel={getMarketingDeliverableLabel}
+                  viewerRole={normalizedUserRole}
+                  transportRequestTypeLabel={transportRequestTypeLabel}
+                  isMarketingViewer={isMarketingRole}
+                  getMarketingDeliverableUploadFlags={getMarketingDeliverableUploadFlags}
+                  onMarketingUpload={(req) => {
+                    handleEventDetailsClose();
+                    openMarketingDeliverableModal(req);
+                  }}
+                />
               ) : (
                 <p className="table-message">Event details not available.</p>
               )}
@@ -7979,108 +7299,75 @@ export default function App() {
         ) : null}
         {approvalDetailsModal.open ? (
           <div className="modal-overlay" role="dialog" aria-modal="true">
-            <div className="modal-card details-card">
+            <div className="modal-card details-card event-details-modal approval-details-modal">
               <div className="modal-header">
-                <h3>Approval Request Details</h3>
+                <h3>Approval request</h3>
                 <button type="button" className="modal-close" onClick={handleApprovalDetailsClose}>
                   &times;
                 </button>
               </div>
               {approvalDetailsModal.request ? (
-                <div className="details-grid">
-                  <div>
-                    <p className="details-label">Event</p>
-                    <p className="details-value">{approvalDetailsModal.request.event_name || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="details-label">Requester</p>
-                    <p className="details-value">{approvalDetailsModal.request.requester_email || "-"}</p>
-                  </div>
-                  <div className="details-wide">
-                    <p className="details-label">Budget (Rs)</p>
-                    <div className="details-value details-budget-row">
-                      <span className="details-budget-amount">
-                        {approvalDetailsModal.request.budget != null &&
-                        approvalDetailsModal.request.budget !== "" &&
-                        !isNaN(Number(approvalDetailsModal.request.budget))
-                          ? `Rs ${Number(approvalDetailsModal.request.budget).toLocaleString()}`
-                          : "—"}
-                      </span>
-                      {approvalDetailsModal.request.budget_breakdown_web_view_link ? (
-                        <button
-                          type="button"
-                          className="details-button"
-                          onClick={() =>
-                            window.open(
-                              approvalDetailsModal.request.budget_breakdown_web_view_link,
-                              "_blank",
-                              "noopener,noreferrer"
-                            )
-                          }
-                        >
-                          Budget breakdown (PDF)
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="details-label">Requested To</p>
-                    <p className="details-value">{approvalDetailsModal.request.requested_to || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="details-label">Status</p>
-                    <p className="details-value">{approvalDetailsModal.request.status || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="details-label">Facilitator</p>
-                    <p className="details-value">{approvalDetailsModal.request.facilitator || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="details-label">Venue</p>
-                    <p className="details-value">{approvalDetailsModal.request.venue_name || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="details-label">Start</p>
-                    <p className="details-value">
-                      {approvalDetailsModal.request.start_date || "-"} ?{" "}
-                      {approvalDetailsModal.request.start_time
-                        ? formatISTTime(approvalDetailsModal.request.start_time)
-                        : "-"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="details-label">End</p>
-                    <p className="details-value">
-                      {approvalDetailsModal.request.end_date || "-"} ?{" "}
-                      {approvalDetailsModal.request.end_time
-                        ? formatISTTime(approvalDetailsModal.request.end_time)
-                        : "-"}
-                    </p>
-                  </div>
-                  <div className="details-wide">
-                    <p className="details-label">Requirements</p>
-                    <p className="details-value">
-                      {Array.isArray(approvalDetailsModal.request.requirements) &&
-                      approvalDetailsModal.request.requirements.length
-                        ? approvalDetailsModal.request.requirements.join(", ")
-                        : "None"}
-                    </p>
-                  </div>
-                  <div className="details-wide">
-                    <p className="details-label">Other Notes</p>
-                    <p className="details-value">{approvalDetailsModal.request.other_notes || "-"}</p>
-                  </div>
-                  <div className="details-wide">
-                    <p className="details-label">Description</p>
-                    <p className="details-value">{approvalDetailsModal.request.description || "-"}</p>
-                  </div>
-                </div>
+                <ApprovalDetailsModalBody
+                  request={approvalDetailsModal.request}
+                  eventDetails={approvalDetailsModal.eventDetails}
+                  detailsStatus={approvalDetailsModal.detailsStatus}
+                  detailsError={approvalDetailsModal.detailsError}
+                  formatISTTime={formatISTTime}
+                  normalizeMarketingRequirements={normalizeMarketingRequirements}
+                  getMarketingDeliverableLabel={getMarketingDeliverableLabel}
+                  transportRequestTypeLabel={transportRequestTypeLabel}
+                />
               ) : (
                 <p className="table-message">Approval request details not available.</p>
               )}
               <div className="modal-actions">
                 <button type="button" className="secondary-action" onClick={handleApprovalDetailsClose}>
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {workflowActionModal.open ? (
+          <div className="modal-overlay" role="dialog" aria-modal="true">
+            <div className="modal-card modal-card-narrow workflow-action-modal-card">
+              <div className="modal-header">
+                <h3>Submit action</h3>
+                <button type="button" className="modal-close" onClick={closeWorkflowActionModal}>
+                  &times;
+                </button>
+              </div>
+              <p className="workflow-action-modal-type">
+                <span className="details-label">Action</span>
+                <span className="workflow-action-modal-type-value">{workflowActionModal.actionLabel || "—"}</span>
+              </p>
+              <label className="form-field workflow-action-comment-field">
+                <span>Comment (required)</span>
+                <textarea
+                  className="workflow-action-textarea"
+                  rows={4}
+                  value={workflowActionModal.comment}
+                  onChange={(e) =>
+                    setWorkflowActionModal((prev) => ({ ...prev, comment: e.target.value, error: "" }))
+                  }
+                  placeholder="Add your note, reason, or question for the requester."
+                />
+              </label>
+              {workflowActionModal.error ? (
+                <p className="form-error">{workflowActionModal.error}</p>
+              ) : null}
+              <div className="modal-actions">
+                <button type="button" className="secondary-action" onClick={closeWorkflowActionModal}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary-action"
+                  disabled={workflowActionModal.submitting}
+                  onClick={() => submitWorkflowActionModal()}
+                >
+                  {workflowActionModal.submitting ? "Submitting…" : "Submit"}
                 </button>
               </div>
             </div>
@@ -8322,40 +7609,7 @@ export default function App() {
             {renderPrimaryContent()}
           </section>
 
-          <FloatingMessenger
-            user={user}
-            chatUsers={chatUsers}
-            chatEventThreads={chatEventThreads}
-            chatActiveUser={chatActiveUser}
-            chatActiveEventThread={chatActiveEventThread}
-            chatUnreadByUser={chatUnreadByUser}
-            chatUnreadByConversation={chatUnreadByConversation}
-            chatMessages={chatMessages}
-            chatStatus={chatStatus}
-            chatInput={chatInput}
-            chatFiles={chatFiles}
-            chatTypingUser={chatTypingUser}
-            chatHasMore={chatHasMore}
-            chatLoadingMore={chatLoadingMore}
-            chatConversationId={chatConversationId}
-            onStartConversation={startConversation}
-            onOpenEventThread={openEventThread}
-            onRefresh={() => { loadChatUsers(); loadChatThreads(); }}
-            onChatInputChange={handleChatInputChange}
-            onSendMessage={sendChatMessage}
-            onChatFiles={handleChatFiles}
-            onRemoveChatFile={removeChatFile}
-            onLoadMore={loadConversationMessages}
-            onCloseChat={() => {
-              setChatActiveUser(null);
-              setChatActiveEventThread(null);
-              setChatConversationId("");
-              setChatMessages([]);
-              setChatTypingUser(null);
-            }}
-            formatChatTime={formatChatTime}
-            resolveAttachmentUrl={resolveAttachmentUrl}
-          />
+          <FloatingMessenger />
         </main>
       </div>
       </MessengerProvider>

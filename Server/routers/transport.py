@@ -1,13 +1,14 @@
 import logging
 import re
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from auth import get_primary_email_by_role
+from decision_helpers import parse_requirement_decision_status, require_decision_comment
 from event_status import event_has_started
 from models import ApprovalRequest, Event, TransportRequest, User
 from notifications import send_notification_email
+from requirement_decision_service import apply_requirement_decision
 from routers.deps import get_current_user
 from schemas import TransportDecision, TransportRequestCreate, TransportRequestResponse
 
@@ -173,12 +174,8 @@ async def decide_transport_request(
     payload: TransportDecision,
     user: User = Depends(get_current_user),
 ):
-    normalized_status = payload.status.strip().lower()
-    if normalized_status not in {"approved", "rejected"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Status must be approved or rejected",
-        )
+    comment = require_decision_comment(payload.comment)
+    normalized_status = parse_requirement_decision_status(payload.status)
 
     request_item = await TransportRequest.get(request_id)
     if not request_item:
@@ -194,18 +191,14 @@ async def decide_transport_request(
     if request_item.requested_to and request_item.requested_to.strip().lower() != approver_email:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
-    if request_item.status == "pending":
-        request_item.status = normalized_status
-        request_item.decided_by = user.email
-        request_item.decided_at = datetime.utcnow()
-        await request_item.save()
-        if normalized_status == "approved" and request_item.event_id:
-            try:
-                from event_chat_service import add_participant_to_event_chat
-
-                await add_participant_to_event_chat(request_item.event_id, str(user.id))
-            except Exception:
-                pass
+    await apply_requirement_decision(
+        request_item,
+        user=user,
+        normalized_status=normalized_status,
+        comment=comment,
+        related_kind="transport_request",
+        role="transport",
+    )
 
     return _response(request_item)
 

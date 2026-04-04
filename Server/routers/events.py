@@ -45,7 +45,9 @@ from schemas import (
     MarketingRequestResponse,
     PaginatedResponse,
     TransportRequestResponse,
+    WorkflowActionLogEntry,
 )
+from workflow_action_service import list_workflow_actions_for_scope
 
 router = APIRouter(prefix="/events", tags=["Events"])
 logger = logging.getLogger("event-booking.events")
@@ -79,6 +81,25 @@ async def user_may_view_event_details(user: User, event: Event) -> bool:
     if await TransportRequest.find_one({"event_id": eid, "requested_to": to_query}):
         return True
     return False
+
+
+def _serialize_workflow_logs(entries) -> list[WorkflowActionLogEntry]:
+    return [
+        WorkflowActionLogEntry(
+            id=str(entry.id),
+            event_id=entry.event_id,
+            approval_request_id=entry.approval_request_id,
+            related_kind=entry.related_kind,
+            related_id=entry.related_id,
+            role=entry.role,
+            action_type=entry.action_type,
+            comment=entry.comment,
+            action_by=entry.action_by,
+            action_by_user_id=entry.action_by_user_id,
+            created_at=entry.created_at,
+        )
+        for entry in entries
+    ]
 
 
 def _requirement_status_for_event_details(
@@ -289,10 +310,21 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
         approval = await ApprovalRequest.get(approval_object_id)
         if not approval:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
-        if approval.requester_id != str(user.id):
+        role = (user.role or "").strip().lower()
+        is_requester = approval.requester_id == str(user.id)
+        is_assigned_approver = (
+            approval.requested_to
+            and approval.requested_to.strip().lower() == (user.email or "").strip().lower()
+        )
+        is_privileged = role in ("registrar", "admin") or is_admin_email(user.email or "")
+        if not (is_requester or is_assigned_approver or is_privileged):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to view this event")
 
         if not approval.event_id:
+            wf_logs = await list_workflow_actions_for_scope(
+                event_id=None,
+                approval_request_id=str(approval.id),
+            )
             return EventDetailsResponse(
                 event=EventResponse(
                     id=event_id,
@@ -325,6 +357,7 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
                 marketing_requests=[],
                 it_requests=[],
                 transport_requests=[],
+                workflow_action_logs=_serialize_workflow_logs(wf_logs),
             )
 
         event_id = approval.event_id
@@ -354,6 +387,11 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
         "-created_at"
     ).to_list()
 
+    wf_logs = await list_workflow_actions_for_scope(
+        event_id=event_id_str,
+        approval_request_id=str(approval_request.id) if approval_request else None,
+    )
+
     return EventDetailsResponse(
         event=serialize_event(event),
         approval_request=serialize_approval(approval_request) if approval_request else None,
@@ -367,6 +405,7 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
         transport_requests=[
             _requirement_status_for_event_details(serialize_transport(r)) for r in transport_requests
         ],
+        workflow_action_logs=_serialize_workflow_logs(wf_logs),
     )
 
 
