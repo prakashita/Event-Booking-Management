@@ -1,39 +1,25 @@
 import {
-  DeptIconFacility,
-  DeptIconIqac,
-  DeptIconIt,
-  DeptIconMarketing,
-  DeptIconTransport,
   IconCalendar,
   IconDocument,
   IconFlag,
   IconFlow,
-  IconLayers,
   IconMapPin,
   IconStatusRing,
-  IconUploadCloud,
   IconUser,
   IconUsersAudience,
   IconWallet
 } from "./icons/EventModalIcons";
+import DepartmentRequirementsDeck from "./DepartmentRequirementsDeck";
 import {
   buildWorkflowStepperSteps,
   collectDepartmentRequirementSections,
   formatModalDateTime,
-  normalizeDecisionStatusForWf,
+  formatWorkflowActionTypeLabel,
+  formatWorkflowRoleLabel,
   orderDepartmentSectionsForRole,
-  viewerDepartmentKey,
   wfBadgeClass,
   wfBadgeLabel
 } from "../utils/eventDetailsView";
-
-const DEPT_ICONS = {
-  marketing: DeptIconMarketing,
-  facility: DeptIconFacility,
-  it: DeptIconIt,
-  transport: DeptIconTransport,
-  iqac: DeptIconIqac
-};
 
 export default function EventDetailsModalBody({
   details,
@@ -51,12 +37,11 @@ export default function EventDetailsModalBody({
   const eventName = event?.name || fallbackEventName || "—";
   const intendedAudience = event?.intendedAudience ?? event?.intended_audience ?? null;
   const steps = buildWorkflowStepperSteps(details);
+  const actionLogs = Array.isArray(details?.workflow_action_logs) ? details.workflow_action_logs : [];
   const deptSections = orderDepartmentSectionsForRole(
     viewerRole,
     collectDepartmentRequirementSections(details, normalizeMarketingRequirements, transportRequestTypeLabel)
   );
-  const highlightDept = viewerDepartmentKey(viewerRole);
-
   const scheduleStart =
     event?.start_date && event?.start_time
       ? `${event.start_date} · ${formatISTTime(event.start_time)}`
@@ -228,150 +213,43 @@ export default function EventDetailsModalBody({
         </ol>
       </section>
 
-      <section className="evt-requirements-section" aria-labelledby="evt-req-heading">
-        <div className="evt-section-head">
-          <span className="evt-section-head-icon" aria-hidden>
-            <IconLayers size={22} />
-          </span>
-          <div>
-            <h4 id="evt-req-heading" className="evt-section-title evt-section-title--large">
-              Requirements by department
+      {actionLogs.length > 0 ? (
+        <section className="evt-action-history-section" aria-labelledby="evt-action-history-heading">
+          <div className="evt-section-head">
+            <span className="evt-section-head-icon" aria-hidden>
+              <IconFlow size={22} />
+            </span>
+            <h4 id="evt-action-history-heading" className="evt-section-title evt-section-title--large">
+              Action history / comments
             </h4>
-            <p className="evt-section-sub evt-section-sub--tight">
-              Expand each card for phased requirements. Your department is listed first.
-            </p>
           </div>
-        </div>
-        <div className="evt-req-deck">
-          {deptSections.map((section, idx) => {
-            const isYou = highlightDept && section.key === highlightDept;
-            const defaultOpen = isYou || (!highlightDept && idx === 0);
-            const IconCmp = DEPT_ICONS[section.iconKey] || DeptIconFacility;
-            return (
-              <details
-                key={section.key}
-                className={`evt-req-card${isYou ? " evt-req-card--you" : ""}`}
-                defaultOpen={defaultOpen}
-              >
-                <summary className="evt-req-summary">
-                  <span className="evt-req-summary-title">
-                    <span className="evt-req-icon" aria-hidden>
-                      <IconCmp />
-                    </span>
-                    {section.title}
-                  </span>
-                  {isYou ? (
-                    <span className="evt-your-badge" title="Your department">
-                      YOUR RESPONSIBILITY
-                    </span>
-                  ) : null}
-                </summary>
-                <div className="evt-req-card-body">
-                  {section.blocks.map((block) => {
-                    const wf = normalizeDecisionStatusForWf(block.status);
-                    const marketingReq = block.marketingRequest;
-                    const uploadFlags =
-                      marketingReq && getMarketingDeliverableUploadFlags
-                        ? getMarketingDeliverableUploadFlags(marketingReq)
-                        : {};
-                    const hasUploadSlots =
-                      marketingReq &&
-                      getMarketingDeliverableUploadFlags &&
-                      Object.values(uploadFlags).some(Boolean);
-                    return (
-                      <div key={block.id} className="evt-req-block">
-                        {block.subtitle ? <p className="evt-req-block-sub">{block.subtitle}</p> : null}
-                        <div className="evt-req-block-status">
-                          <span className={wfBadgeClass(wf)}>{wfBadgeLabel(wf)}</span>
-                          <div className="evt-req-people">
-                            {block.requestedTo ? (
-                              <p className="evt-req-assignee">
-                                <span className="evt-req-assignee-k">Assigned</span>{" "}
-                                <a href={`mailto:${block.requestedTo}`}>{block.requestedTo}</a>
-                              </p>
-                            ) : null}
-                            {block.decidedBy ? (
-                              <p className="evt-req-decided">
-                                <span className="evt-req-assignee-k">By</span>{" "}
-                                <strong>{block.decidedBy}</strong>
-                                {block.decidedAt ? (
-                                  <span className="evt-req-at">
-                                    {" "}
-                                    · {formatModalDateTime(block.decidedAt) || ""}
-                                  </span>
-                                ) : null}
-                              </p>
-                            ) : null}
-                          </div>
-                        </div>
-                        {block.phases.map((phase, pi) => (
-                          <div key={`${block.id}-${phase.title}-${pi}`} className="evt-req-phase">
-                            <p className="evt-req-phase-title">{phase.title}</p>
-                            <ul className="evt-req-items">
-                              {phase.items.map((item, ii) => (
-                                <li key={`${item}-${ii}`}>{item}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        ))}
-                        {section.key === "iqac" && block.reportLink ? (
-                          <p className="evt-req-report">
-                            <a href={block.reportLink} target="_blank" rel="noreferrer">
-                              {block.reportName || "View event report"}
-                            </a>
-                          </p>
-                        ) : null}
-                        {section.key === "marketing" ? (
-                          <div className="evt-req-deliverables">
-                            <p className="evt-req-phase-title">Uploaded deliverables</p>
-                            {block.deliverables?.length ? (
-                              <ul className="evt-req-items">
-                                {block.deliverables.map((d, j) => (
-                                  <li key={j}>
-                                    {d.is_na ? (
-                                      <span>{getMarketingDeliverableLabel(d.deliverable_type)}: N/A</span>
-                                    ) : d.web_view_link ? (
-                                      <a href={d.web_view_link} target="_blank" rel="noreferrer">
-                                        {d.file_name || getMarketingDeliverableLabel(d.deliverable_type)}
-                                      </a>
-                                    ) : (
-                                      <span>{d.file_name || getMarketingDeliverableLabel(d.deliverable_type)}</span>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="evt-req-empty-hint">No files uploaded yet.</p>
-                            )}
-                            {isMarketingViewer && marketingReq && onMarketingUpload ? (
-                              <div className="evt-marketing-upload">
-                                <button
-                                  type="button"
-                                  className="details-button upload evt-upload-btn"
-                                  disabled={!hasUploadSlots}
-                                  title={
-                                    hasUploadSlots
-                                      ? "Open the same upload flow as the marketing inbox"
-                                      : "No file uploads for this request (during-event videoshoot / photoshoot only)."
-                                  }
-                                  onClick={() => onMarketingUpload(marketingReq)}
-                                >
-                                  <IconUploadCloud className="evt-upload-btn-icon" size={16} />
-                                  Upload
-                                </button>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+          <ul className="evt-action-history-list">
+            {actionLogs.map((log) => (
+              <li key={log.id} className="evt-action-history-item">
+                <div className="evt-action-history-head">
+                  <span className="evt-action-history-role">{formatWorkflowRoleLabel(log.role)}</span>
+                  <span className="evt-action-history-action">{formatWorkflowActionTypeLabel(log.action_type)}</span>
                 </div>
-              </details>
-            );
-          })}
-        </div>
-      </section>
+                <p className="evt-action-history-comment">{log.comment}</p>
+                <div className="evt-action-history-meta">
+                  <span>By {log.action_by || "—"}</span>
+                  <span>{formatModalDateTime(log.created_at) || "—"}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <DepartmentRequirementsDeck
+        deptSections={deptSections}
+        viewerRole={viewerRole}
+        getMarketingDeliverableLabel={getMarketingDeliverableLabel}
+        isMarketingViewer={isMarketingViewer}
+        onMarketingUpload={onMarketingUpload}
+        getMarketingDeliverableUploadFlags={getMarketingDeliverableUploadFlags}
+        deckSubtitle="Expand each card for phased requirements. Your department is listed first."
+      />
     </div>
   );
 }

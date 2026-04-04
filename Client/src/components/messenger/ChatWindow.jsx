@@ -1,49 +1,107 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
+import { useMessenger } from "./MessengerContext";
 import MessageBubble from "./MessageBubble";
 import MessageInput from "./MessageInput";
+import MessengerConfirmDialog from "./MessengerConfirmDialog";
 
-export default function ChatWindow({
-  user,
-  chatActiveUser,
-  chatActiveEventThread,
-  chatMessages,
-  chatStatus,
-  chatInput,
-  chatFiles,
-  chatTypingUser,
-  chatHasMore,
-  chatLoadingMore,
-  chatConversationId,
-  onChatInputChange,
-  onSendMessage,
-  onChatFiles,
-  onRemoveChatFile,
-  onLoadMore,
-  onBack,
-  formatChatTime,
-  resolveAttachmentUrl,
-}) {
+export default function ChatWindow() {
+  const {
+    user,
+    activeUser,
+    activeEventThread,
+    activeConversation,
+    messages,
+    chatStatus,
+    chatInput,
+    chatFiles,
+    typingUser,
+    hasMore,
+    loadingMore,
+    handleInputChange,
+    sendMessage,
+    handleFiles,
+    removeFile,
+    loadMessages,
+    closeChat,
+    deleteMessageForEveryone,
+    deleteMessageForMe,
+    editMessage,
+    formatChatTime,
+    resolveAttachmentUrl,
+  } = useMessenger();
+
   const listRef = useRef(null);
+  const [confirm, setConfirm] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [editError, setEditError] = useState("");
 
   useEffect(() => {
     if (listRef.current) {
       listRef.current.scrollTop = listRef.current.scrollHeight;
     }
-  }, [chatMessages.length]);
+  }, [messages.length, editingId]);
 
-  const activeName = chatActiveEventThread
-    ? chatActiveEventThread.title || "Event chat"
-    : chatActiveUser?.name || "";
+  const activeName = activeEventThread
+    ? activeEventThread.title || "Event chat"
+    : activeUser?.name || "";
 
-  const activeStatus = chatActiveEventThread
-    ? `Group · ${chatActiveEventThread.participants?.length ?? 0} people`
-    : chatActiveUser?.online
+  const activeStatus = activeEventThread
+    ? `Group · ${activeEventThread.participants?.length ?? activeConversation?.participant_count ?? 0} people`
+    : activeUser?.online
       ? "Online"
-      : chatActiveUser?.last_seen
-        ? `Last seen ${formatChatTime(chatActiveUser.last_seen)}`
+      : activeUser?.last_seen
+        ? `Last seen ${formatChatTime(activeUser.last_seen)}`
         : "";
 
-  const typingName = chatTypingUser?.name || "";
+  const preview =
+    activeConversation?.participants_preview ||
+    activeEventThread?.participants_preview ||
+    [];
+  const participantCount =
+    activeConversation?.participant_count ??
+    activeEventThread?.participant_count ??
+    preview.length ??
+    0;
+  const participantNamesTitle = preview.map((p) => p.name).filter(Boolean).join(", ");
+
+  const typingName = typingUser?.name || "";
+
+  const onStartEdit = useCallback((message) => {
+    setEditError("");
+    setEditingId(message.id);
+    setEditDraft(message.content || "");
+  }, []);
+
+  const onCancelEdit = useCallback(() => {
+    setEditingId(null);
+    setEditDraft("");
+    setEditError("");
+  }, []);
+
+  const onSaveEdit = useCallback(async () => {
+    if (!editingId) return;
+    setEditError("");
+    try {
+      await editMessage(editingId, editDraft);
+      setEditingId(null);
+      setEditDraft("");
+    } catch (e) {
+      setEditError(e?.message || "Could not save changes.");
+    }
+  }, [editingId, editDraft, editMessage]);
+
+  const onRequestDeleteForEveryone = useCallback((messageId) => {
+    setConfirm({ kind: "deleteEveryone", messageId });
+  }, []);
+
+  const handleConfirm = useCallback(async () => {
+    if (!confirm) return;
+    if (confirm.kind === "deleteEveryone" && confirm.messageId) {
+      await deleteMessageForEveryone(confirm.messageId);
+    }
+    setConfirm(null);
+  }, [confirm, deleteMessageForEveryone]);
 
   return (
     <div
@@ -55,7 +113,7 @@ export default function ChatWindow({
         <button
           type="button"
           className="msger-back"
-          onClick={onBack}
+          onClick={closeChat}
           aria-label="Back to conversations"
         >
           <svg
@@ -76,20 +134,35 @@ export default function ChatWindow({
           {activeStatus ? (
             <p className="msger-chat-status">{activeStatus}</p>
           ) : null}
+          {activeEventThread && participantCount > 0 ? (
+            <div
+              className="msger-chat-participants"
+              title={participantNamesTitle || undefined}
+            >
+              <span className="msger-chat-participants-count">
+                {participantCount} member{participantCount === 1 ? "" : "s"}
+              </span>
+              {participantNamesTitle ? (
+                <span className="msger-chat-participants-names">
+                  {participantNamesTitle}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
       <div className="msger-messages" ref={listRef}>
-        {chatHasMore && chatMessages.length > 0 ? (
+        {hasMore && messages.length > 0 ? (
           <button
             type="button"
             className="msger-load-more"
             onClick={() =>
-              onLoadMore(chatConversationId, chatMessages[0]?.created_at)
+              loadMessages(activeConversation?.id, messages[0]?.created_at)
             }
-            disabled={chatLoadingMore}
+            disabled={loadingMore}
           >
-            {chatLoadingMore ? "Loading..." : "Load earlier"}
+            {loadingMore ? "Loading..." : "Load earlier"}
           </button>
         ) : null}
         {chatStatus.status === "loading" ? (
@@ -98,16 +171,17 @@ export default function ChatWindow({
         {chatStatus.status === "error" ? (
           <p className="msger-note msger-error">{chatStatus.error}</p>
         ) : null}
-        {chatMessages.map((message) => {
-          const isOwn = message.sender_id === user.id;
+        {editError ? <p className="msger-note msger-error">{editError}</p> : null}
+        {messages.map((message) => {
+          const isOwn = message.sender_id === user?.id;
           let isRead = false;
-          if (chatActiveEventThread?.participants?.length) {
-            const others = chatActiveEventThread.participants.filter(
-              (pid) => pid !== user.id
+          if (activeEventThread?.participants?.length) {
+            const others = activeEventThread.participants.filter(
+              (pid) => pid !== user?.id
             );
-            isRead = others.some((pid) => message.read_by.includes(pid));
-          } else if (chatActiveUser) {
-            isRead = message.read_by.includes(chatActiveUser.id);
+            isRead = others.some((pid) => (message.read_by || []).includes(pid));
+          } else if (activeUser) {
+            isRead = (message.read_by || []).includes(activeUser.id);
           }
           return (
             <MessageBubble
@@ -117,6 +191,14 @@ export default function ChatWindow({
               isRead={isRead}
               formatTime={formatChatTime}
               resolveAttachmentUrl={resolveAttachmentUrl}
+              onDeleteForMe={deleteMessageForMe}
+              onRequestDeleteForEveryone={onRequestDeleteForEveryone}
+              onStartEdit={onStartEdit}
+              isEditing={editingId === message.id}
+              editDraft={editDraft}
+              onEditDraftChange={setEditDraft}
+              onSaveEdit={onSaveEdit}
+              onCancelEdit={onCancelEdit}
             />
           );
         })}
@@ -129,11 +211,22 @@ export default function ChatWindow({
       <MessageInput
         chatInput={chatInput}
         chatFiles={chatFiles}
-        disabled={!chatActiveUser && !chatActiveEventThread}
-        onInputChange={onChatInputChange}
-        onSend={onSendMessage}
-        onFileChange={onChatFiles}
-        onRemoveFile={onRemoveChatFile}
+        disabled={!activeUser && !activeEventThread}
+        onInputChange={handleInputChange}
+        onSend={sendMessage}
+        onFileChange={handleFiles}
+        onRemoveFile={removeFile}
+      />
+
+      <MessengerConfirmDialog
+        open={confirm?.kind === "deleteEveryone"}
+        title="Delete for everyone?"
+        message="This message will be removed for all participants in the chat."
+        confirmLabel="Delete for everyone"
+        cancelLabel="Cancel"
+        danger
+        onConfirm={handleConfirm}
+        onCancel={() => setConfirm(null)}
       />
     </div>
   );

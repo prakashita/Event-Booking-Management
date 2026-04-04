@@ -320,10 +320,18 @@ class ChatConversation(Document):
     thread_kind: str = Field(default="direct")
     event_id: Optional[str] = None
     title: Optional[str] = None
+    # Messaging enhancements
+    last_message: Optional[dict] = None  # {text, sender_id, sender_name, created_at}
+    deleted_for: List[str] = Field(default_factory=list)  # user_ids who soft-deleted
+    participant_unreads: dict = Field(default_factory=dict)  # {user_id: unread_count}
 
     class Settings:
         name = "chat_conversations"
-        indexes = ["event_id"]
+        indexes = [
+            "event_id",
+            "participants",
+            "updated_at",
+        ]
 
 
 class ChatMessage(Document):
@@ -335,9 +343,19 @@ class ChatMessage(Document):
     attachments: List[ChatAttachment] = Field(default_factory=list)
     read_by: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    # Deletion support
+    is_deleted: bool = Field(default=False)
+    deleted_for_everyone: bool = Field(default=False)
+    deleted_for: List[str] = Field(default_factory=list)  # user_ids — hidden for these users only
+    edited: bool = Field(default=False)
+    edited_at: Optional[datetime] = None
 
     class Settings:
         name = "chat_messages"
+        indexes = [
+            "conversation_id",
+            "created_at",
+        ]
 
 
 class IQACFile(Document):
@@ -360,3 +378,22 @@ class IQACFile(Document):
             "item",
             ("criterion", "sub_folder", "item"),
         ]
+
+
+class WorkflowActionLog(Document):
+    """Audit trail for registrar and department decisions (approve / reject / need clarification)."""
+
+    event_id: Optional[str] = None
+    approval_request_id: Optional[str] = None
+    related_kind: str  # approval_request | facility_request | marketing_request | it_request | transport_request
+    related_id: str
+    role: str  # registrar | facility_manager | marketing | it | transport
+    action_type: str  # approve | reject | clarification
+    comment: str
+    action_by: str
+    action_by_user_id: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "workflow_action_logs"
+        indexes = ["event_id", "approval_request_id", "related_id", "created_at"]

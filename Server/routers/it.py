@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from auth import get_primary_email_by_role
@@ -7,6 +5,8 @@ from event_status import event_has_started
 from models import ApprovalRequest, Event, ItRequest, User
 from notifications import send_notification_email
 from routers.deps import get_current_user
+from decision_helpers import parse_requirement_decision_status, require_decision_comment
+from requirement_decision_service import apply_requirement_decision
 from schemas import ItDecision, ItRequestCreate, ItRequestResponse
 
 router = APIRouter(prefix="/it", tags=["IT"])
@@ -148,12 +148,8 @@ async def decide_it_request(
     payload: ItDecision,
     user: User = Depends(get_current_user),
 ):
-    normalized_status = payload.status.strip().lower()
-    if normalized_status not in {"approved", "rejected"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Status must be approved or rejected",
-        )
+    comment = require_decision_comment(payload.comment)
+    normalized_status = parse_requirement_decision_status(payload.status)
 
     request_item = await ItRequest.get(request_id)
     if not request_item:
@@ -168,18 +164,14 @@ async def decide_it_request(
     if request_item.requested_to and request_item.requested_to != (user.email or "").strip().lower():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
-    if request_item.status == "pending":
-        request_item.status = normalized_status
-        request_item.decided_by = user.email
-        request_item.decided_at = datetime.utcnow()
-        await request_item.save()
-        if normalized_status == "approved" and request_item.event_id:
-            try:
-                from event_chat_service import add_participant_to_event_chat
-
-                await add_participant_to_event_chat(request_item.event_id, str(user.id))
-            except Exception:
-                pass
+    await apply_requirement_decision(
+        request_item,
+        user=user,
+        normalized_status=normalized_status,
+        comment=comment,
+        related_kind="it_request",
+        role="it",
+    )
 
     return ItRequestResponse(
         id=str(request_item.id),

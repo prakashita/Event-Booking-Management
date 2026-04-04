@@ -178,3 +178,21 @@ export function IconStatusRing({ className, size }) {
     </Svg>
   );
 }
+
+export function IconEnvelope({ className, size }) {
+  return (
+    <Svg className={className} size={size}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 7l9 6 9-6" />
+    </Svg>
+  );
+}
+
+export function IconShieldCheck({ className, size }) {
+  return (
+    <Svg className={className} size={size}>
+      <path d="M12 3l8 4v5c0 5-3.5 9-8 10-4.5-1-8-5-8-10V7l8-4z" />
+      <path d="M9 12l2 2 4-4" />
+    </Svg>
+  );
+}

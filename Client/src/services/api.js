@@ -87,6 +87,21 @@ export const api = {
     const res = await this.post(path, body);
     return parseJson(res);
   },
+
+  async patchJson(path, body) {
+    const res = await this.patch(path, body);
+    const data = await parseJson(res);
+    if (!res.ok) {
+      const d = data?.detail;
+      let msg = "Request failed";
+      if (typeof d === "string") msg = d;
+      else if (Array.isArray(d)) {
+        msg = d.map((e) => (typeof e?.msg === "string" ? e.msg : JSON.stringify(e))).join("; ");
+      }
+      throw new Error(msg);
+    }
+    return data;
+  },
 };
 
 export default api;
