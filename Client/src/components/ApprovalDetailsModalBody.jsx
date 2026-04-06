@@ -11,13 +11,16 @@ import {
   IconUsersAudience,
   IconWallet
 } from "./icons/EventModalIcons";
+import ApprovalDiscussionTree from "./ApprovalDiscussionTree";
 import DepartmentRequirementsDeck from "./DepartmentRequirementsDeck";
+import { useMessenger } from "./messenger/MessengerContext";
 import {
   buildRegistrarFallbackDeptSections,
   collectDepartmentRequirementSections,
   formatModalDateTime,
   formatWorkflowActionTypeLabel,
   formatWorkflowRoleLabel,
+  nestApprovalDiscussionFromLogs,
   normalizeDecisionStatusForWf,
   orderDepartmentSectionsForRole,
   wfBadgeClass,
@@ -32,9 +35,16 @@ export default function ApprovalDetailsModalBody({
   formatISTTime,
   normalizeMarketingRequirements,
   getMarketingDeliverableLabel,
-  transportRequestTypeLabel
+  transportRequestTypeLabel,
+  openMessengerForApprovalReply,
+  openApprovalThread,
+  onRefreshApprovalDetails,
+  approvalDiscussionCanReply = false,
+  currentUserId,
+  viewerRole = "registrar",
 }) {
   const intendedAudience = request?.intendedAudience ?? request?.intended_audience ?? null;
+  const realApprovalId = request?.approval_request_id || String(request?.id || "").replace(/^approval-/, "");
   const scheduleStart =
     request?.start_date && request?.start_time
       ? `${request.start_date} · ${formatISTTime(request.start_time)}`
@@ -49,11 +59,17 @@ export default function ApprovalDetailsModalBody({
   const actionLogs = Array.isArray(eventDetails?.workflow_action_logs)
     ? eventDetails.workflow_action_logs
     : [];
+  const discussionRoots =
+    detailsStatus === "ready" && realApprovalId
+      ? eventDetails?.approval_discussion_threads?.length > 0
+        ? eventDetails.approval_discussion_threads
+        : nestApprovalDiscussionFromLogs(actionLogs, realApprovalId)
+      : [];
 
   const deptSections = useMemo(() => {
     if (detailsStatus === "ready" && eventDetails) {
       return orderDepartmentSectionsForRole(
-        "registrar",
+        viewerRole,
         collectDepartmentRequirementSections(
           eventDetails,
           normalizeMarketingRequirements,
@@ -62,15 +78,20 @@ export default function ApprovalDetailsModalBody({
       );
     }
     return buildRegistrarFallbackDeptSections(request?.requirements || []);
-  }, [detailsStatus, eventDetails, request?.requirements, normalizeMarketingRequirements, transportRequestTypeLabel]);
+  }, [detailsStatus, eventDetails, request?.requirements, normalizeMarketingRequirements, transportRequestTypeLabel, viewerRole]);
 
+  const isFacultyViewer = viewerRole === "faculty";
   const deckSubtitle =
     detailsStatus === "ready" && eventDetails
-      ? "Linked to the approved event record. Status reflects each team’s request queue."
+      ? isFacultyViewer
+        ? "Department requirement statuses for your event."
+        : "Linked to the approved event record. Status reflects each team's request queue."
       : detailsStatus === "error"
         ? "Could not load the event record; showing any submitted intent from the approval only."
         : !request?.event_id
-          ? "No event record yet (pending approval). After approval, this section loads linked Facility, IT, Marketing, Transport, and IQAC data."
+          ? isFacultyViewer
+            ? "Requirements will appear here once the registrar approves your request."
+            : "No event record yet (pending approval). After approval, this section loads linked Facility, IT, Marketing, Transport, and IQAC data."
           : "Showing data derived from the approval record.";
 
   return (
@@ -247,9 +268,39 @@ export default function ApprovalDetailsModalBody({
             </div>
           ) : null}
         </div>
+        {request?.discussion_status && request?.status === "clarification_requested" ? (
+          <div className={`approval-discussion-status-banner ${
+            request.discussion_status === "waiting_for_faculty"
+              ? "approval-discussion-status-banner--waiting-faculty"
+              : "approval-discussion-status-banner--waiting-dept"
+          }`}>
+            {request.discussion_status === "waiting_for_faculty"
+              ? isFacultyViewer
+                ? "The registrar has requested clarification. Please review and reply."
+                : "Waiting for the faculty to respond to your clarification request."
+              : isFacultyViewer
+                ? "Your reply has been sent. Waiting for the registrar to review."
+                : "The faculty has replied. Please review their response."}
+          </div>
+        ) : null}
       </section>
 
-      {detailsStatus === "ready" && actionLogs.length > 0 ? (
+      {realApprovalId ? (
+        <ApprovalDiscussionTree
+          approvalRequestId={realApprovalId}
+          currentUserId={currentUserId}
+          isFacultyViewer={isFacultyViewer}
+          onRefresh={onRefreshApprovalDetails}
+          openApprovalThread={openApprovalThread}
+          rootsFromApi={eventDetails?.approval_discussion_threads}
+          workflowLogs={actionLogs}
+          approvalStatus={request?.status}
+          eventId={request?.event_id}
+          canReply={approvalDiscussionCanReply}
+          openMessengerForApprovalReply={openMessengerForApprovalReply}
+        />
+      ) : null}
+      {detailsStatus === "ready" && discussionRoots.length === 0 && actionLogs.length > 0 ? (
         <section className="evt-action-history-section" aria-labelledby="approval-action-history-heading">
           <div className="evt-section-head">
             <span className="evt-section-head-icon" aria-hidden>
@@ -286,7 +337,7 @@ export default function ApprovalDetailsModalBody({
           {detailsError ? <p className="form-error evt-approval-details-err">{detailsError}</p> : null}
           <DepartmentRequirementsDeck
             deptSections={deptSections}
-            viewerRole="registrar"
+            viewerRole={viewerRole}
             getMarketingDeliverableLabel={getMarketingDeliverableLabel}
             deckSubtitle={deckSubtitle}
             sectionId="approval-req-heading"
@@ -315,5 +366,16 @@ export default function ApprovalDetailsModalBody({
         </div>
       </section>
     </div>
+  );
+}
+
+export function ConnectedApprovalDetailsModalBody(props) {
+  const { openMessengerForApprovalReply, openApprovalThread } = useMessenger();
+  return (
+    <ApprovalDetailsModalBody
+      {...props}
+      openMessengerForApprovalReply={openMessengerForApprovalReply}
+      openApprovalThread={openApprovalThread}
+    />
   );
 }

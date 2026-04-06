@@ -112,6 +112,23 @@ async def create_transport_request(
     )
     await request_item.insert()
 
+    # Ensure a discussion thread exists between faculty and Transport
+    try:
+        ar_for_event = await ApprovalRequest.find_one(ApprovalRequest.event_id == payload.event_id)
+        if ar_for_event:
+            from event_chat_service import ensure_dept_request_thread
+            await ensure_dept_request_thread(
+                approval_request_id=str(ar_for_event.id),
+                department="transport",
+                faculty_user_id=str(user.id),
+                dept_email=requested_to,
+                related_request_id=str(request_item.id),
+                related_kind="transport_request",
+                event_name=request_item.event_name,
+            )
+    except Exception:
+        pass
+
     subject = f"Transport Request: {request_item.event_name}"
     common_head = (
         f"Requester: {user.email}\n"

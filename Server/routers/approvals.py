@@ -4,21 +4,40 @@ import os
 import re
 from datetime import datetime
 
+from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 import requests
 
-from auth import ensure_google_access_token
+from auth import ensure_google_access_token, is_admin_email
 from drive import upload_report_file
 from idempotency import get_cached_response, get_idempotency_key, store_response
-from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, TransportRequest, User
+from models import (
+    ApprovalRequest, ChatConversation, ChatMessage, Event,
+    FacilityManagerRequest, ItRequest, MarketingRequest, TransportRequest,
+    User, WorkflowActionLog,
+)
 from event_status import combine_datetime, compute_event_status, event_has_started
+from event_chat_service import (
+    DEPARTMENT_LABELS,
+    ensure_approval_thread_chat,
+    list_approval_threads,
+    resolve_approval_thread_status,
+)
 from rate_limit import limiter
 from routers.admin import serialize_approval
 from routers.deps import get_current_user
-from routers.events import get_expected_budget_breakdown_filename, sync_event_to_google_calendar
-from decision_helpers import action_type_for_status, parse_registrar_decision_status, require_decision_comment
-from schemas import ApprovalDecision, ApprovalRequestResponse, PaginatedResponse
-from workflow_action_service import record_workflow_action
+from routers.events import (
+    get_expected_budget_breakdown_filename,
+    serialize_workflow_log_entry,
+    sync_event_to_google_calendar,
+)
+from decision_helpers import action_type_for_status, parse_registrar_decision_status, registrar_decision_comment
+from schemas import (
+    ApprovalDecision, ApprovalDiscussionReply, ApprovalRequestResponse,
+    ApprovalThreadEnsureRequest, ApprovalThreadInfo, ApprovalThreadMessage,
+    ApprovalThreadParticipant, PaginatedResponse, WorkflowActionLogEntry,
+)
+from workflow_action_service import record_approval_discussion_reply, record_workflow_action
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
 logger = logging.getLogger("event-booking.approvals")
@@ -211,6 +230,386 @@ async def upload_budget_breakdown(
     return serialize_approval(approval)
 
 
+@router.get("/{request_id}/threads", response_model=list[ApprovalThreadInfo])
+async def get_approval_threads(
+    request_id: str,
+    user: User = Depends(get_current_user),
+):
+    """Return all department-isolated approval threads with their chat messages.
+
+    Access: requester sees all threads, privileged (registrar/admin) sees all,
+    department users see only threads they participate in.
+    """
+    try:
+        oid = PydanticObjectId(request_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    approval = await ApprovalRequest.get(oid)
+    if not approval:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+
+    role = (user.role or "").strip().lower()
+    uid = str(user.id)
+    is_requester = str(approval.requester_id) == uid
+    is_privileged = role in ("registrar", "admin") or is_admin_email(user.email or "")
+
+    conversations = await list_approval_threads(str(approval.id))
+
+    result: list[ApprovalThreadInfo] = []
+    for conv in conversations:
+        user_is_participant = uid in conv.participants
+        if is_privileged or is_requester:
+            pass  # sees every thread
+        elif user_is_participant:
+            pass  # department user sees own thread
+        else:
+            continue
+
+        participants: list[ApprovalThreadParticipant] = []
+        for pid in conv.participants:
+            u = await User.get(pid)
+            if u:
+                participants.append(ApprovalThreadParticipant(
+                    id=str(u.id), name=u.name, email=u.email, role=u.role or "",
+                ))
+
+        raw_messages = await ChatMessage.find(
+            {"conversation_id": str(conv.id), "is_deleted": {"$ne": True}},
+        ).sort("created_at").to_list()
+        messages = [
+            ApprovalThreadMessage(
+                id=str(m.id),
+                sender_id=m.sender_id,
+                sender_name=m.sender_name,
+                content=m.content,
+                created_at=m.created_at,
+            )
+            for m in raw_messages
+        ]
+
+        result.append(ApprovalThreadInfo(
+            id=str(conv.id),
+            department=conv.department or "",
+            department_label=DEPARTMENT_LABELS.get(conv.department or "", conv.department or ""),
+            related_request_id=conv.related_request_id,
+            related_kind=conv.related_kind,
+            thread_status=conv.thread_status or "active",
+            participants=participants,
+            created_at=conv.created_at,
+            messages=messages,
+        ))
+    return result
+
+
+@router.post("/{request_id}/threads/ensure", response_model=ApprovalThreadInfo)
+async def ensure_department_thread(
+    request_id: str,
+    payload: ApprovalThreadEnsureRequest,
+    user: User = Depends(get_current_user),
+):
+    """Create or retrieve an approval discussion thread for a department.
+
+    Faculty can initiate threads with any department.  Department users can
+    initiate a thread with the faculty for their own department.  A first
+    message is posted when supplied.
+    """
+    try:
+        oid = PydanticObjectId(request_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    approval = await ApprovalRequest.get(oid)
+    if not approval:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+
+    department = payload.department.strip().lower()
+    valid_departments = ("registrar", "facility_manager", "it", "marketing", "transport", "iqac")
+    if department not in valid_departments:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid department: {department}")
+
+    uid = str(user.id)
+    role = (user.role or "").strip().lower()
+    is_requester = str(approval.requester_id) == uid
+    is_admin_or_reg = role in ("registrar", "admin") or is_admin_email(user.email or "")
+
+    # Determine who the two parties are
+    faculty_user_id = str(approval.requester_id)
+    department_user_id: str | None = None
+
+    if is_requester or is_admin_or_reg:
+        # Faculty or registrar initiating — find department person
+        if department == "registrar":
+            # Find the registrar user (the one in requested_to or by role)
+            reg_email = (approval.requested_to or "").strip().lower()
+            dept_u = await User.find_one({"email": reg_email}) if reg_email else None
+            if not dept_u:
+                from auth import get_primary_email_by_role as _get_pe
+                reg_email2 = await _get_pe("registrar")
+                dept_u = await User.find_one({"email": reg_email2}) if reg_email2 else None
+            department_user_id = str(dept_u.id) if dept_u else uid
+        elif department == "iqac":
+            from auth import get_primary_email_by_role as _get_pe
+            iqac_email = await _get_pe("iqac")
+            dept_u = await User.find_one({"email": iqac_email}) if iqac_email else None
+            department_user_id = str(dept_u.id) if dept_u else uid
+        else:
+            # Look for an existing dept request to find requested_to
+            dept_model_map = {
+                "facility_manager": "FacilityManagerRequest",
+                "it": "ItRequest",
+                "marketing": "MarketingRequest",
+                "transport": "TransportRequest",
+            }
+            from models import FacilityManagerRequest, ItRequest, MarketingRequest, TransportRequest
+            model_cls = {"facility_manager": FacilityManagerRequest, "it": ItRequest,
+                         "marketing": MarketingRequest, "transport": TransportRequest}[department]
+            dept_req = None
+            if approval.event_id:
+                dept_req = await model_cls.find_one({"event_id": approval.event_id})
+            if dept_req and dept_req.requested_to:
+                dept_u = await User.find_one({"email": dept_req.requested_to.strip().lower()})
+                department_user_id = str(dept_u.id) if dept_u else None
+            if not department_user_id:
+                from auth import get_primary_email_by_role as _get_pe
+                dept_email = await _get_pe(department)
+                dept_u = await User.find_one({"email": dept_email}) if dept_email else None
+                department_user_id = str(dept_u.id) if dept_u else uid
+
+    elif role == department:
+        # Department user initiating — they are the dept side
+        department_user_id = uid
+    else:
+        # Check if user is already a participant in a thread for this dept
+        existing = await ChatConversation.find_one({
+            "thread_kind": "approval_thread",
+            "approval_request_id": str(approval.id),
+            "department": department,
+            "participants": uid,
+        })
+        if not existing:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorised for this thread")
+        department_user_id = uid
+
+    if not department_user_id:
+        department_user_id = uid
+
+    from event_chat_service import (
+        DEPARTMENT_LABELS,
+        build_last_message_snapshot,
+        ensure_approval_thread_chat,
+        increment_participant_unreads,
+    )
+    dept_label = DEPARTMENT_LABELS.get(department, department.title())
+    conv = await ensure_approval_thread_chat(
+        approval_request_id=str(approval.id),
+        department=department,
+        faculty_user_id=faculty_user_id,
+        department_user_id=department_user_id,
+        related_request_id=str(approval.id),
+        related_kind="approval_request",
+        title=f"{dept_label} discussion – {approval.event_name}",
+        initial_message="",
+        sender_name=user.name,
+        sender_email=user.email or "",
+    )
+
+    # Post initial message if provided
+    if payload.message and payload.message.strip():
+        from datetime import datetime
+        msg = ChatMessage(
+            conversation_id=str(conv.id),
+            sender_id=uid,
+            sender_name=user.name,
+            sender_email=user.email or "",
+            content=payload.message.strip(),
+            read_by=[uid],
+            created_at=datetime.utcnow(),
+        )
+        await msg.insert()
+        conv.last_message = build_last_message_snapshot(msg)
+        conv.updated_at = datetime.utcnow()
+        await conv.save()
+        await increment_participant_unreads(conv, uid)
+        try:
+            from event_chat_service import notify_thread_reply
+            await notify_thread_reply(conv, msg, user, approval)
+        except Exception as exc:
+            logger.warning("ensure_department_thread notify failed: %s", exc)
+
+    # Serialize and return
+    participants: list[ApprovalThreadParticipant] = []
+    for pid in conv.participants:
+        pu = await User.get(pid)
+        if pu:
+            participants.append(ApprovalThreadParticipant(
+                id=str(pu.id), name=pu.name, email=pu.email, role=pu.role or "",
+            ))
+    raw_msgs = await ChatMessage.find(
+        {"conversation_id": str(conv.id), "is_deleted": {"$ne": True}},
+    ).sort("created_at").to_list()
+    messages = [
+        ApprovalThreadMessage(
+            id=str(m.id), sender_id=m.sender_id, sender_name=m.sender_name,
+            content=m.content, created_at=m.created_at,
+        )
+        for m in raw_msgs
+    ]
+    return ApprovalThreadInfo(
+        id=str(conv.id),
+        department=conv.department or "",
+        department_label=DEPARTMENT_LABELS.get(conv.department or "", conv.department or ""),
+        related_request_id=conv.related_request_id,
+        related_kind=conv.related_kind,
+        thread_status=conv.thread_status or "active",
+        participants=participants,
+        created_at=conv.created_at,
+        messages=messages,
+    )
+
+
+@router.post("/{request_id}/reply", response_model=WorkflowActionLogEntry)
+async def post_approval_discussion_reply(
+    request_id: str,
+    payload: ApprovalDiscussionReply,
+    user: User = Depends(get_current_user),
+):
+    """Reply on approval discussion via department thread (thread_id) or legacy parent (parent_id).
+
+    Thread-based replies are allowed at any approval status (approved, rejected, etc.) as long
+    as the specific thread is not resolved.  Only the legacy parent_id path is gated by status.
+    """
+    try:
+        oid = PydanticObjectId(request_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    approval = await ApprovalRequest.get(oid)
+    if not approval:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+
+    # ---- Thread-based reply (department chat) ----
+    if payload.thread_id:
+        conv = await ChatConversation.find_one({"_id": PydanticObjectId(payload.thread_id)})
+        if not conv or conv.thread_kind != "approval_thread":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+        if str(conv.approval_request_id) != str(approval.id):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thread does not belong to this approval")
+        if str(user.id) not in conv.participants:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a participant of this thread")
+        if (conv.thread_status or "active") == "resolved":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This thread has been resolved")
+
+        from event_chat_service import (
+            build_last_message_snapshot,
+            increment_participant_unreads,
+            notify_thread_reply,
+        )
+
+        msg = ChatMessage(
+            conversation_id=str(conv.id),
+            sender_id=str(user.id),
+            sender_name=user.name,
+            sender_email=user.email or "",
+            content=payload.message.strip(),
+            read_by=[str(user.id)],
+            created_at=datetime.utcnow(),
+        )
+        await msg.insert()
+        conv.last_message = build_last_message_snapshot(msg)
+        conv.updated_at = datetime.utcnow()
+
+        is_reply_from_requester = str(user.id) == str(approval.requester_id)
+
+        # Per-thread discussion turn
+        conv.thread_status = "waiting_for_department" if is_reply_from_requester else "waiting_for_faculty"
+        await conv.save()
+        await increment_participant_unreads(conv, str(user.id))
+
+        # Global discussion_status on the approval (backward compat)
+        approval.discussion_status = conv.thread_status
+        await approval.save()
+
+        # Email notification to the other participant(s)
+        try:
+            await notify_thread_reply(conv, msg, user, approval)
+        except Exception as exc:
+            logger.warning("Thread reply notification failed: %s", exc)
+
+        log = await record_workflow_action(
+            event_id=approval.event_id,
+            action_type="discussion_reply",
+            approval_request_id=str(approval.id),
+            related_kind=conv.related_kind or "approval_request",
+            related_id=conv.related_request_id or str(approval.id),
+            role=user.role or "faculty",
+            comment=payload.message.strip(),
+            action_by_email=user.email or "",
+            action_by_user_id=str(user.id),
+            thread_id=payload.thread_id,
+        )
+        return serialize_workflow_log_entry(log)
+
+    # ---- Legacy parent_id reply (registrar discussion) ----
+    if not payload.parent_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either thread_id or parent_id must be provided.",
+        )
+
+    # Legacy path is only valid when approval is still open
+    if approval.status in ("approved", "rejected"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This approval is closed for further discussion.",
+        )
+    if approval.status not in ("pending", "clarification_requested"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot add a reply in the current approval state.",
+        )
+
+    role = (user.role or "").strip().lower()
+    is_requester = str(approval.requester_id) == str(user.id)
+    approver_email = (approval.requested_to or "").strip().lower()
+    user_email = (user.email or "").strip().lower()
+    is_assigned_approver = bool(approver_email and approver_email == user_email)
+    is_privileged = role in ("registrar", "admin") or is_admin_email(user.email or "")
+
+    if not (is_requester or is_assigned_approver or is_privileged):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+
+    try:
+        parent_oid = PydanticObjectId(payload.parent_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid parent_id")
+    parent = await WorkflowActionLog.get(parent_oid)
+    if not parent:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent comment not found")
+    if str(parent.approval_request_id or "") != str(approval.id) or parent.related_kind != "approval_request":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Parent does not belong to this approval.",
+        )
+
+    log = await record_approval_discussion_reply(
+        approval=approval,
+        user=user,
+        parent_id=str(parent.id),
+        message=payload.message.strip(),
+    )
+
+    is_reply_from_requester = str(user.id) == str(approval.requester_id)
+    approval.discussion_status = "waiting_for_department" if is_reply_from_requester else "waiting_for_faculty"
+    await approval.save()
+
+    # Email notification: notify the "other side" of the registrar discussion
+    try:
+        from event_chat_service import notify_legacy_discussion_reply
+        await notify_legacy_discussion_reply(user, approval, payload.message.strip())
+    except Exception as exc:
+        logger.warning("Legacy discussion reply notification failed: %s", exc)
+
+    return serialize_workflow_log_entry(log)
+
+
 @router.patch("/{request_id}", response_model=ApprovalRequestResponse)
 async def decide_request(
     request: Request,
@@ -225,8 +624,8 @@ async def decide_request(
             from fastapi.responses import JSONResponse
             return JSONResponse(status_code=cached[0], content=cached[1])
 
-    comment = require_decision_comment(payload.comment)
     normalized_status = parse_registrar_decision_status(payload.status)
+    comment = registrar_decision_comment(normalized_status, payload.comment)
 
     approval = await ApprovalRequest.get(request_id)
     if not approval:
@@ -266,6 +665,7 @@ async def decide_request(
 
     if normalized_status == "clarification_requested":
         approval.status = "clarification_requested"
+        approval.discussion_status = "waiting_for_faculty"
         approval.decided_by = user.email
         approval.decided_at = datetime.utcnow()
         await approval.save()
@@ -282,8 +682,25 @@ async def decide_request(
                 )
             except Exception as exc:
                 logger.warning("Requester clarification notification failed: %s", exc)
+            # Auto-create an approval thread between registrar and requester
+            try:
+                await ensure_approval_thread_chat(
+                    approval_request_id=str(approval.id),
+                    department="registrar",
+                    faculty_user_id=str(approval.requester_id),
+                    department_user_id=str(user.id),
+                    related_request_id=str(approval.id),
+                    related_kind="approval_request",
+                    title=f"Registrar clarification – {approval.event_name}",
+                    initial_message=comment,
+                    sender_name=user.name,
+                    sender_email=user.email or "",
+                )
+            except Exception as exc:
+                logger.warning("Approval thread creation failed: %s", exc)
     elif normalized_status == "rejected":
         approval.status = "rejected"
+        approval.discussion_status = None
         approval.decided_by = user.email
         approval.decided_at = datetime.utcnow()
         await approval.save()
@@ -413,6 +830,7 @@ async def decide_request(
                 logger.warning("Event group chat creation failed: %s", exc)
 
         approval.status = "approved"
+        approval.discussion_status = None
         approval.decided_by = user.email
         approval.decided_at = datetime.utcnow()
         await approval.save()
@@ -423,6 +841,14 @@ async def decide_request(
         )
 
     response_body = serialize_approval(approval)
+
+    # Resolve all approval threads when the decision is final
+    if normalized_status in ("approved", "rejected"):
+        try:
+            await resolve_approval_thread_status(str(approval.id), normalized_status)
+        except Exception as exc:
+            logger.warning("Resolve approval threads failed: %s", exc)
+
     if idem_key:
         await store_response(idem_key, 200, response_body.model_dump(mode="json"))
     return response_body

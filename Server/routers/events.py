@@ -46,8 +46,13 @@ from schemas import (
     PaginatedResponse,
     TransportRequestResponse,
     WorkflowActionLogEntry,
+    WorkflowActionThreadNode,
 )
-from workflow_action_service import list_workflow_actions_for_scope
+from workflow_action_service import (
+    filter_logs_for_approval_discussion,
+    list_workflow_actions_for_scope,
+    nest_workflow_logs_as_trees,
+)
 
 router = APIRouter(prefix="/events", tags=["Events"])
 logger = logging.getLogger("event-booking.events")
@@ -83,23 +88,35 @@ async def user_may_view_event_details(user: User, event: Event) -> bool:
     return False
 
 
+def serialize_workflow_log_entry(entry) -> WorkflowActionLogEntry:
+    deleted = bool(getattr(entry, "is_deleted", False))
+    text = "[Deleted]" if deleted else (entry.comment or "")
+    return WorkflowActionLogEntry(
+        id=str(entry.id),
+        event_id=entry.event_id,
+        approval_request_id=entry.approval_request_id,
+        related_kind=entry.related_kind,
+        related_id=entry.related_id,
+        role=entry.role,
+        action_type=entry.action_type,
+        comment=text,
+        action_by=entry.action_by,
+        action_by_user_id=entry.action_by_user_id,
+        created_at=entry.created_at,
+        parent_id=getattr(entry, "parent_id", None),
+        thread_id=getattr(entry, "thread_id", None),
+        is_deleted=deleted,
+    )
+
+
 def _serialize_workflow_logs(entries) -> list[WorkflowActionLogEntry]:
-    return [
-        WorkflowActionLogEntry(
-            id=str(entry.id),
-            event_id=entry.event_id,
-            approval_request_id=entry.approval_request_id,
-            related_kind=entry.related_kind,
-            related_id=entry.related_id,
-            role=entry.role,
-            action_type=entry.action_type,
-            comment=entry.comment,
-            action_by=entry.action_by,
-            action_by_user_id=entry.action_by_user_id,
-            created_at=entry.created_at,
-        )
-        for entry in entries
-    ]
+    return [serialize_workflow_log_entry(entry) for entry in entries]
+
+
+def _build_approval_discussion_threads(wf_logs, approval_request_id: str) -> list[WorkflowActionThreadNode]:
+    scoped = filter_logs_for_approval_discussion(wf_logs, approval_request_id)
+    trees = nest_workflow_logs_as_trees(scoped)
+    return [WorkflowActionThreadNode.model_validate(t) for t in trees]
 
 
 def _requirement_status_for_event_details(
@@ -325,6 +342,7 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
                 event_id=None,
                 approval_request_id=str(approval.id),
             )
+            approval_threads = _build_approval_discussion_threads(wf_logs, str(approval.id))
             return EventDetailsResponse(
                 event=EventResponse(
                     id=event_id,
@@ -358,6 +376,7 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
                 it_requests=[],
                 transport_requests=[],
                 workflow_action_logs=_serialize_workflow_logs(wf_logs),
+                approval_discussion_threads=approval_threads,
             )
 
         event_id = approval.event_id
@@ -391,6 +410,11 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
         event_id=event_id_str,
         approval_request_id=str(approval_request.id) if approval_request else None,
     )
+    approval_threads = (
+        _build_approval_discussion_threads(wf_logs, str(approval_request.id))
+        if approval_request
+        else []
+    )
 
     return EventDetailsResponse(
         event=serialize_event(event),
@@ -406,6 +430,7 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
             _requirement_status_for_event_details(serialize_transport(r)) for r in transport_requests
         ],
         workflow_action_logs=_serialize_workflow_logs(wf_logs),
+        approval_discussion_threads=approval_threads,
     )
 
 
