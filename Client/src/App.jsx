@@ -33,7 +33,7 @@ import PremiumTimePicker from "./components/ui/PremiumTimePicker";
 import SearchableSelect from "./components/ui/SearchableSelect";
 import IqacDataPage from "./components/IqacDataPage";
 import EventDetailsModalBody from "./components/EventDetailsModalBody";
-import ApprovalDetailsModalBody from "./components/ApprovalDetailsModalBody";
+import { ConnectedApprovalDetailsModalBody } from "./components/ApprovalDetailsModalBody";
 import { MessengerProvider, FloatingMessenger } from "./components/messenger";
 import api from "./services/api";
 
@@ -2139,7 +2139,7 @@ export default function App() {
   const handleEventDetailsOpen = async (eventItem) => {
     if (!eventItem?.id) return;
     if (String(eventItem.id).startsWith("approval-")) {
-      setApprovalDetailsModal({ open: true, request: eventItem });
+      handleApprovalDetailsOpen(eventItem);
       return;
     }
     setEventDetailsModal({
@@ -2183,10 +2183,11 @@ export default function App() {
   };
 
   const handleApprovalDetailsOpen = async (requestItem) => {
+    const approvalId = requestItem?.approval_request_id || requestItem?.id;
     const detailsUrl = requestItem?.event_id
       ? `${apiBaseUrl}/events/${requestItem.event_id}/details`
-      : requestItem?.id
-        ? `${apiBaseUrl}/events/approval-${requestItem.id}/details`
+      : approvalId
+        ? `${apiBaseUrl}/events/approval-${String(approvalId).replace(/^approval-/, "")}/details`
         : null;
 
     setApprovalDetailsModal({
@@ -2229,6 +2230,45 @@ export default function App() {
       detailsError: ""
     });
   };
+
+  const refreshApprovalDetails = useCallback(async () => {
+    const requestItem = approvalDetailsModal.request;
+    if (!requestItem?.id) return;
+    const refreshApprovalId = requestItem.approval_request_id || requestItem.id;
+    const detailsUrl = requestItem.event_id
+      ? `${apiBaseUrl}/events/${requestItem.event_id}/details`
+      : `${apiBaseUrl}/events/approval-${String(refreshApprovalId).replace(/^approval-/, "")}/details`;
+    try {
+      const res = await apiFetch(detailsUrl);
+      if (!res.ok) return;
+      const eventDetails = await res.json();
+      setApprovalDetailsModal((prev) => ({
+        ...prev,
+        eventDetails,
+        detailsStatus: "ready",
+        detailsError: ""
+      }));
+    } catch {
+      // ignore
+    }
+  }, [approvalDetailsModal.request, apiBaseUrl]);
+
+  const isDepartmentRole =
+    isFacilityManagerRole || isMarketingRole || isItRole || isTransportRole;
+
+  const approvalDiscussionCanReply = useMemo(() => {
+    const r = approvalDetailsModal.request;
+    if (!r?.id || !user) return false;
+    const st = String(r.status || "").toLowerCase();
+    if (!["pending", "clarification_requested"].includes(st)) return false;
+    if (String(user.id) === String(r.requester_id)) return true;
+    if (isAdmin || isRegistrar) return true;
+    const assigned = (r.requested_to || "").trim().toLowerCase();
+    const em = (user.email || "").trim().toLowerCase();
+    if (assigned && assigned === em && isApproverRole) return true;
+    if (isDepartmentRole) return true;
+    return false;
+  }, [approvalDetailsModal.request, user, isAdmin, isRegistrar, isApproverRole, isDepartmentRole]);
 
   const normalizeMarketingRequirements = (request) => {
     const req = request?.marketing_requirements || {};
@@ -3777,7 +3817,9 @@ export default function App() {
       const token = localStorage.getItem("auth_token");
       const m = workflowActionModal;
       const comment = (m.comment || "").trim();
-      if (!comment) {
+      const commentRequired =
+        m.channel !== "approval" || String(m.status || "").toLowerCase() !== "approved";
+      if (commentRequired && !comment) {
         setWorkflowActionModal((prev) => ({ ...prev, error: "Comment is required." }));
         return;
       }
@@ -3788,7 +3830,7 @@ export default function App() {
 
       setWorkflowActionModal((prev) => ({ ...prev, submitting: true, error: "" }));
 
-      const body = JSON.stringify({ status: m.status, comment });
+      const body = JSON.stringify({ status: m.status, comment: comment || null });
       const headers = { "Content-Type": "application/json" };
       let url;
       try {
@@ -7307,7 +7349,7 @@ export default function App() {
                 </button>
               </div>
               {approvalDetailsModal.request ? (
-                <ApprovalDetailsModalBody
+                <ConnectedApprovalDetailsModalBody
                   request={approvalDetailsModal.request}
                   eventDetails={approvalDetailsModal.eventDetails}
                   detailsStatus={approvalDetailsModal.detailsStatus}
@@ -7316,6 +7358,14 @@ export default function App() {
                   normalizeMarketingRequirements={normalizeMarketingRequirements}
                   getMarketingDeliverableLabel={getMarketingDeliverableLabel}
                   transportRequestTypeLabel={transportRequestTypeLabel}
+                  onRefreshApprovalDetails={refreshApprovalDetails}
+                  approvalDiscussionCanReply={approvalDiscussionCanReply}
+                  currentUserId={user?.id}
+                  viewerRole={
+                    String(user?.id) === String(approvalDetailsModal.request?.requester_id) && !isRegistrar
+                      ? "faculty"
+                      : normalizedUserRole
+                  }
                 />
               ) : (
                 <p className="table-message">Approval request details not available.</p>
@@ -7343,7 +7393,13 @@ export default function App() {
                 <span className="workflow-action-modal-type-value">{workflowActionModal.actionLabel || "—"}</span>
               </p>
               <label className="form-field workflow-action-comment-field">
-                <span>Comment (required)</span>
+                <span>
+                  Comment{" "}
+                  {workflowActionModal.channel === "approval" &&
+                  String(workflowActionModal.status || "").toLowerCase() === "approved"
+                    ? "(optional)"
+                    : "(required)"}
+                </span>
                 <textarea
                   className="workflow-action-textarea"
                   rows={4}

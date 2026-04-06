@@ -79,6 +79,23 @@ async def create_facility_request(
     )
     await request_item.insert()
 
+    # Ensure a discussion thread exists between faculty and facility manager
+    try:
+        ar_for_event = await ApprovalRequest.find_one(ApprovalRequest.event_id == payload.event_id)
+        if ar_for_event:
+            from event_chat_service import ensure_dept_request_thread
+            await ensure_dept_request_thread(
+                approval_request_id=str(ar_for_event.id),
+                department="facility_manager",
+                faculty_user_id=str(user.id),
+                dept_email=requested_to,
+                related_request_id=str(request_item.id),
+                related_kind="facility_request",
+                event_name=request_item.event_name,
+            )
+    except Exception:
+        pass
+
     subject = f"Facility Manager Request: {request_item.event_name}"
     venue_line = f"Venue: {event.venue_name}" if event.venue_name else "Venue: Not specified"
     body = (

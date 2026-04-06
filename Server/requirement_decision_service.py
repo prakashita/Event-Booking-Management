@@ -1,5 +1,6 @@
 """Apply department requirement decisions with workflow logging."""
 
+import logging
 from datetime import datetime
 from typing import Union
 
@@ -8,6 +9,8 @@ from decision_helpers import action_type_for_status
 from workflow_action_service import record_workflow_action
 
 RequirementDoc = Union[FacilityManagerRequest, ItRequest, MarketingRequest, TransportRequest]
+
+logger = logging.getLogger("event-booking.requirement-decision")
 
 
 async def approval_request_id_for_event(event_id: str | None) -> str | None:
@@ -59,4 +62,31 @@ async def apply_requirement_decision(
             await add_participant_to_event_chat(request_item.event_id, str(user.id))
         except Exception:
             pass
+
+    # Ensure a discussion thread exists for this dept+faculty pair on every decision
+    if ar_id:
+        try:
+            from event_chat_service import ensure_approval_thread_chat, DEPARTMENT_LABELS
+
+            dept_label = DEPARTMENT_LABELS.get(role, role.title())
+            event_name = getattr(request_item, "event_name", "") or "Event"
+            initial_msg = ""
+            if normalized_status == "clarification_requested":
+                initial_msg = comment
+
+            await ensure_approval_thread_chat(
+                approval_request_id=ar_id,
+                department=role,
+                faculty_user_id=request_item.requester_id,
+                department_user_id=str(user.id),
+                related_request_id=str(request_item.id),
+                related_kind=related_kind,
+                title=f"{dept_label} – {event_name}",
+                initial_message=initial_msg,
+                sender_name=user.name,
+                sender_email=user.email or "",
+            )
+        except Exception as exc:
+            logger.warning("Thread ensure failed for %s: %s", role, exc)
+
     return True

@@ -8,6 +8,11 @@ import {
   useEffect,
 } from "react";
 import api from "../../services/api";
+import {
+  MAX_CHAT_FILE_SIZE,
+  ALLOWED_CHAT_MIME_TYPES,
+  UPLOAD_ERRORS,
+} from "../../constants/uploadConfig";
 
 const MessengerContext = createContext(null);
 
@@ -67,6 +72,7 @@ export function MessengerProvider({ children, user }) {
   // Input
   const [chatInput, setChatInput] = useState("");
   const [chatFiles, setChatFiles] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Typing
   const [typingUser, setTypingUser] = useState(null);
@@ -87,6 +93,7 @@ export function MessengerProvider({ children, user }) {
   const eventConvIdsRef = useRef(new Set());
   const panelOpenRef = useRef(false);
   const closeChatRef = useRef(() => {});
+  const pendingApprovalThreadRef = useRef(null);
 
   // Keep refs in sync
   useEffect(() => {
@@ -243,6 +250,63 @@ export function MessengerProvider({ children, user }) {
     [loadMessages, markConversationRead]
   );
 
+  const openMessengerForApprovalReply = useCallback(
+    async ({ eventId, commentId, excerpt }) => {
+      const shortRef = commentId ? String(commentId).slice(-8) : "";
+      const line =
+        excerpt && String(excerpt).trim() ? String(excerpt).trim().slice(0, 280) : "";
+      const pre = `Regarding clarification${shortRef ? ` […${shortRef}]` : ""}${line ? `: ${line}` : ""}`;
+      setChatInput(pre);
+      openPanel();
+      if (eventId) {
+        pendingApprovalThreadRef.current = { eventId: String(eventId) };
+        setFilterEventId(String(eventId));
+        await loadConversations({ eventId: String(eventId) });
+      } else {
+        pendingApprovalThreadRef.current = null;
+      }
+    },
+    [openPanel, loadConversations]
+  );
+
+  const openApprovalThread = useCallback(
+    async (conversationId) => {
+      if (!conversationId) return;
+      openPanel();
+      setChatInput("");
+      try {
+        const data = await api.getJson(`/chat/conversations/${conversationId}/messages`);
+        const convData = await api.getJson(`/chat/conversations`);
+        const conv = Array.isArray(convData)
+          ? convData.find((c) => String(c.id) === String(conversationId))
+          : null;
+        if (conv) {
+          setActiveConversation(conv);
+          setActiveEventThread(null);
+          setActiveUser(null);
+          setMessages(Array.isArray(data?.messages) ? data.messages : Array.isArray(data) ? data : []);
+          setChatStatus({ status: "ready", error: "" });
+          await markConversationRead(conversationId);
+        }
+      } catch {
+        // silently fail — user can navigate manually
+      }
+    },
+    [openPanel, markConversationRead]
+  );
+
+  useEffect(() => {
+    const pending = pendingApprovalThreadRef.current;
+    if (!pending?.eventId) return;
+    const thread = conversations.find(
+      (c) => c.thread_kind === "event" && String(c.event_id || "") === String(pending.eventId)
+    );
+    if (thread) {
+      pendingApprovalThreadRef.current = null;
+      openEventThread(thread);
+    }
+  }, [conversations, openEventThread]);
+
   const startConversation = useCallback(
     async (targetUser) => {
       if (!targetUser) return;
@@ -322,7 +386,17 @@ export function MessengerProvider({ children, user }) {
     const formData = new FormData();
     formData.append("file", file);
     const res = await api.post("/chat/upload", formData);
-    if (!res.ok) throw new Error("Upload failed");
+    if (!res.ok) {
+      let message = UPLOAD_ERRORS.UPLOAD_FAILED;
+      try {
+        const data = await res.json();
+        if (typeof data?.message === "string") message = data.message;
+        else if (typeof data?.detail === "string") message = data.detail;
+      } catch {
+        // use default
+      }
+      throw new Error(message);
+    }
     const data = await res.json().catch(() => null);
     return data?.attachment;
   }, []);
@@ -335,16 +409,21 @@ export function MessengerProvider({ children, user }) {
       return;
     }
 
+    // Prevent double-submission
+    if (isUploading) return;
+
     const clientId =
       typeof crypto !== "undefined" && crypto.randomUUID
         ? crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     try {
+      if (chatFiles.length > 0) setIsUploading(true);
       const attachments =
         chatFiles.length > 0
           ? (await Promise.all(chatFiles.map(uploadAttachment))).filter(Boolean)
           : [];
+      setIsUploading(false);
 
       // Optimistic UI
       const optimistic = {
@@ -397,12 +476,13 @@ export function MessengerProvider({ children, user }) {
         );
       }
     } catch (err) {
+      setIsUploading(false);
       setChatStatus({
         status: "error",
-        error: err?.message || "Unable to send message.",
+        error: err?.message || UPLOAD_ERRORS.UPLOAD_FAILED,
       });
     }
-  }, [activeConversation, chatInput, chatFiles, uploadAttachment, user]);
+  }, [activeConversation, chatInput, chatFiles, uploadAttachment, user, isUploading]);
 
   // ---------------------------------------------------------------------------
   // Message actions
@@ -554,8 +634,21 @@ export function MessengerProvider({ children, user }) {
 
   const handleFiles = useCallback((e) => {
     const next = Array.from(e.target.files || []);
-    if (next.length) setChatFiles((prev) => [...prev, ...next]);
     e.target.value = "";
+    if (!next.length) return;
+
+    for (const file of next) {
+      if (file.size > MAX_CHAT_FILE_SIZE) {
+        setChatStatus({ status: "error", error: UPLOAD_ERRORS.FILE_TOO_LARGE });
+        return;
+      }
+      if (!ALLOWED_CHAT_MIME_TYPES.has(file.type)) {
+        setChatStatus({ status: "error", error: UPLOAD_ERRORS.UNSUPPORTED_TYPE });
+        return;
+      }
+    }
+
+    setChatFiles((prev) => [...prev, ...next]);
   }, []);
 
   const removeFile = useCallback((idx) => {
@@ -900,6 +993,7 @@ export function MessengerProvider({ children, user }) {
       // Input
       chatInput,
       chatFiles,
+      isUploading,
 
       // Filters
       searchQuery,
@@ -915,6 +1009,8 @@ export function MessengerProvider({ children, user }) {
       loadMessages,
       openConversation,
       openEventThread,
+      openMessengerForApprovalReply,
+      openApprovalThread,
       startConversation,
       closeChat,
       sendMessage,
@@ -960,6 +1056,7 @@ export function MessengerProvider({ children, user }) {
       typingUser,
       chatInput,
       chatFiles,
+      isUploading,
       searchQuery,
       unreadOnly,
       filterEventId,
@@ -971,6 +1068,8 @@ export function MessengerProvider({ children, user }) {
       loadMessages,
       openConversation,
       openEventThread,
+      openMessengerForApprovalReply,
+      openApprovalThread,
       startConversation,
       closeChat,
       sendMessage,

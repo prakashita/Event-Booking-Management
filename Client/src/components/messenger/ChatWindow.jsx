@@ -14,6 +14,7 @@ export default function ChatWindow() {
     chatStatus,
     chatInput,
     chatFiles,
+    isUploading,
     typingUser,
     hasMore,
     loadingMore,
@@ -212,6 +213,7 @@ export default function ChatWindow() {
         chatInput={chatInput}
         chatFiles={chatFiles}
         disabled={!activeUser && !activeEventThread}
+        isUploading={isUploading}
         onInputChange={handleInputChange}
         onSend={sendMessage}
         onFileChange={handleFiles}

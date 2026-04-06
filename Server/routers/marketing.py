@@ -303,6 +303,24 @@ async def create_marketing_request(
     )
     await request_item.insert()
 
+    # Ensure a discussion thread exists between faculty and Marketing
+    try:
+        ar_for_event = await ApprovalRequest.find_one(ApprovalRequest.event_id == payload.event_id)
+        if ar_for_event:
+            from event_chat_service import ensure_dept_request_thread
+            marketing_email = (payload.requested_to or "").strip().lower() or await get_primary_email_by_role("marketing")
+            await ensure_dept_request_thread(
+                approval_request_id=str(ar_for_event.id),
+                department="marketing",
+                faculty_user_id=str(user.id),
+                dept_email=marketing_email,
+                related_request_id=str(request_item.id),
+                related_kind="marketing_request",
+                event_name=request_item.event_name,
+            )
+    except Exception:
+        pass
+
     subject = f"Marketing Request: {request_item.event_name}"
     body = (
         f"A new marketing request has been submitted for your approval.\n\n"

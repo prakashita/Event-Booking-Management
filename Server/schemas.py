@@ -103,6 +103,7 @@ class EventResponse(BaseModel):
 class ApprovalRequestResponse(BaseModel):
     id: str
     status: str
+    discussion_status: Optional[str] = None
     requester_id: str
     requester_email: str
     requested_to: Optional[str] = None
@@ -409,6 +410,70 @@ class WorkflowActionLogEntry(BaseModel):
     action_by: str
     action_by_user_id: str
     created_at: datetime
+    parent_id: Optional[str] = None
+    thread_id: Optional[str] = None
+    is_deleted: bool = False
+
+
+class WorkflowActionThreadNode(BaseModel):
+    """Nested approval discussion (registrar ↔ requester); mirrors WorkflowActionLogEntry + replies."""
+
+    id: str
+    event_id: Optional[str] = None
+    approval_request_id: Optional[str] = None
+    related_kind: str
+    related_id: str
+    role: str
+    action_type: str
+    comment: str
+    action_by: str
+    action_by_user_id: str
+    created_at: datetime
+    parent_id: Optional[str] = None
+    thread_id: Optional[str] = None
+    is_deleted: bool = False
+    replies: List["WorkflowActionThreadNode"] = Field(default_factory=list)
+
+
+class ApprovalDiscussionReply(BaseModel):
+    """Reply to an approval discussion — either via legacy parent_id or via thread_id."""
+    parent_id: Optional[str] = Field(default=None, max_length=64)
+    thread_id: Optional[str] = Field(default=None, max_length=64)
+    message: str = Field(..., min_length=1, max_length=4000)
+
+
+class ApprovalThreadEnsureRequest(BaseModel):
+    """Create or retrieve a department thread for an approval request."""
+    department: str = Field(..., min_length=1, max_length=50)
+    message: Optional[str] = Field(default=None, max_length=4000)
+
+
+class ApprovalThreadParticipant(BaseModel):
+    id: str
+    name: str
+    email: str
+    role: str
+
+
+class ApprovalThreadMessage(BaseModel):
+    id: str
+    sender_id: str
+    sender_name: str
+    content: Optional[str] = None
+    created_at: datetime
+
+
+class ApprovalThreadInfo(BaseModel):
+    """A department-isolated approval discussion thread backed by a ChatConversation."""
+    id: str  # conversation id
+    department: str
+    department_label: str
+    related_request_id: Optional[str] = None
+    related_kind: Optional[str] = None
+    thread_status: str = "active"
+    participants: list[ApprovalThreadParticipant] = Field(default_factory=list)
+    created_at: datetime
+    messages: list[ApprovalThreadMessage] = Field(default_factory=list)
 
 
 class EventCreateResponse(BaseModel):
@@ -426,6 +491,7 @@ class EventDetailsResponse(BaseModel):
     it_requests: List[ItRequestResponse] = Field(default_factory=list)
     transport_requests: List[TransportRequestResponse] = Field(default_factory=list)
     workflow_action_logs: List[WorkflowActionLogEntry] = Field(default_factory=list)
+    approval_discussion_threads: List[WorkflowActionThreadNode] = Field(default_factory=list)
 
 
 class EventStatusUpdate(BaseModel):
@@ -585,3 +651,6 @@ class PublicationResponse(BaseModel):
     newspaper_name: Optional[str] = None
     website_name: Optional[str] = None
     page_title: Optional[str] = None
+
+
+WorkflowActionThreadNode.model_rebuild()

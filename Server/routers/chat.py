@@ -55,26 +55,23 @@ except OSError:
     UPLOADS_DIR = "/tmp/uploads"
     os.makedirs(UPLOADS_DIR, exist_ok=True)
 
-MAX_CHAT_UPLOAD_BYTES = 25 * 1024 * 1024
-_CHAT_ALLOWED_CT_PREFIXES = ("image/", "video/")
+# ---------------------------------------------------------------------------
+# Upload configuration — keep in sync with Client/src/constants/uploadConfig.js
+# ---------------------------------------------------------------------------
+MAX_CHAT_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 _CHAT_ALLOWED_CT_EXACT = frozenset(
     {
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/webp",
         "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "text/plain",
     }
 )
 
 
 def _is_allowed_chat_upload(content_type: str) -> bool:
     ct = (content_type or "application/octet-stream").split(";")[0].strip().lower()
-    if ct.startswith(_CHAT_ALLOWED_CT_PREFIXES):
-        return True
     return ct in _CHAT_ALLOWED_CT_EXACT
 
 
@@ -791,21 +788,38 @@ async def upload_attachment(
     current_user: User = Depends(get_current_user),
 ):
     if not file.filename:
-        raise HTTPException(status_code=400, detail="Missing filename")
-    ct = file.content_type or "application/octet-stream"
-    if not _is_allowed_chat_upload(ct):
-        raise HTTPException(
+        return JSONResponse(
             status_code=400,
-            detail="Unsupported file type. Use an image, video, or common document format.",
+            content={"success": False, "message": "Missing filename."},
         )
+
+    ct = (file.content_type or "application/octet-stream").split(";")[0].strip().lower()
+    if not _is_allowed_chat_upload(ct):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "message": "Unsupported file type. Please upload an image (JPEG, PNG, WebP) or PDF only.",
+            },
+        )
+
+    # Read content before touching the filesystem so we can reject oversized files early.
+    content = await file.read()
+    if len(content) > MAX_CHAT_UPLOAD_BYTES:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "message": "File size exceeds 5MB. Please upload a smaller file or share a Drive link.",
+            },
+        )
+
     ext = os.path.splitext(file.filename)[1]
     safe_name = f"{uuid.uuid4().hex}{ext}"
     destination = os.path.join(UPLOADS_DIR, safe_name)
-    content = await file.read()
-    if len(content) > MAX_CHAT_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="File too large (max 25 MB)")
     with open(destination, "wb") as out_file:
         out_file.write(content)
+
     attachment = ChatAttachment(
         name=file.filename,
         url=f"/uploads/{safe_name}",

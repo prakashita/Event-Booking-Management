@@ -57,6 +57,7 @@ def serialize_approval(item: ApprovalRequest) -> ApprovalRequestResponse:
     return ApprovalRequestResponse(
         id=str(item.id),
         status=item.status,
+        discussion_status=getattr(item, "discussion_status", None),
         requester_id=item.requester_id,
         requester_email=item.requester_email,
         requested_to=item.requested_to,

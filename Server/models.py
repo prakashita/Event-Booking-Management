@@ -95,6 +95,7 @@ class ApprovalRequest(Document):
     requirements: list[str] = Field(default_factory=list)
     other_notes: Optional[str] = None
     status: str = Field(default="pending")
+    discussion_status: Optional[str] = None  # active | waiting_for_faculty | waiting_for_department
     event_id: Optional[str] = None
     decided_at: Optional[datetime] = None
     decided_by: Optional[str] = None
@@ -316,7 +317,7 @@ class ChatConversation(Document):
     participants: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    # "direct" = 1:1 thread; "event" = group for one event (registrar + creator + acceptors)
+    # "direct" = 1:1; "event" = group for one event; "approval_thread" = dept ↔ faculty
     thread_kind: str = Field(default="direct")
     event_id: Optional[str] = None
     title: Optional[str] = None
@@ -324,6 +325,12 @@ class ChatConversation(Document):
     last_message: Optional[dict] = None  # {text, sender_id, sender_name, created_at}
     deleted_for: List[str] = Field(default_factory=list)  # user_ids who soft-deleted
     participant_unreads: dict = Field(default_factory=dict)  # {user_id: unread_count}
+    # Approval-thread fields (thread_kind="approval_thread")
+    approval_request_id: Optional[str] = None
+    department: Optional[str] = None  # registrar | facility_manager | marketing | it | transport
+    related_request_id: Optional[str] = None  # dept request id (or approval id for registrar)
+    related_kind: Optional[str] = None  # approval_request | facility_request | ...
+    thread_status: Optional[str] = None  # active | resolved
 
     class Settings:
         name = "chat_conversations"
@@ -331,6 +338,7 @@ class ChatConversation(Document):
             "event_id",
             "participants",
             "updated_at",
+            "approval_request_id",
         ]
 
 
@@ -387,13 +395,16 @@ class WorkflowActionLog(Document):
     approval_request_id: Optional[str] = None
     related_kind: str  # approval_request | facility_request | marketing_request | it_request | transport_request
     related_id: str
-    role: str  # registrar | facility_manager | marketing | it | transport
-    action_type: str  # approve | reject | clarification
+    role: str  # registrar | facility_manager | marketing | it | transport | requester
+    action_type: str  # approve | reject | clarification | reply
     comment: str
     action_by: str
     action_by_user_id: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    parent_id: Optional[str] = None
+    thread_id: Optional[str] = None
+    is_deleted: bool = Field(default=False)
 
     class Settings:
         name = "workflow_action_logs"
-        indexes = ["event_id", "approval_request_id", "related_id", "created_at"]
+        indexes = ["event_id", "approval_request_id", "related_id", "created_at", "parent_id", "thread_id"]

@@ -128,6 +128,7 @@ export function formatWorkflowActionTypeLabel(actionType) {
   if (t === "approve") return "Approved";
   if (t === "reject") return "Rejected";
   if (t === "clarification") return "Need clarification";
+  if (t === "reply" || t === "discussion_reply") return "Reply";
   return actionType || "—";
 }
 
@@ -135,12 +136,48 @@ export function formatWorkflowRoleLabel(role) {
   const r = String(role || "").toLowerCase();
   const map = {
     registrar: "Registrar",
+    requester: "Requester",
+    faculty: "Faculty",
     facility_manager: "Facility",
     marketing: "Marketing",
     it: "IT",
-    transport: "Transport"
+    transport: "Transport",
+    iqac: "IQAC"
   };
   return map[r] || role || "—";
+}
+
+/** Build nested discussion from flat logs when API threads are empty (backward compat). */
+export function nestApprovalDiscussionFromLogs(logs, approvalRequestId) {
+  if (!Array.isArray(logs) || !approvalRequestId) return [];
+  const aid = String(approvalRequestId);
+  const scoped = logs.filter(
+    (l) =>
+      (l.related_kind || "") === "approval_request" &&
+      String(l.approval_request_id || "") === aid &&
+      String(l.related_id || "") === aid
+  );
+  if (!scoped.length) return [];
+  const byId = {};
+  for (const l of scoped) {
+    byId[l.id] = { ...l, replies: [] };
+  }
+  const roots = [];
+  for (const l of scoped) {
+    const node = byId[l.id];
+    const pid = l.parent_id;
+    if (pid && byId[pid]) {
+      byId[pid].replies.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  const sortTree = (nodes) => {
+    nodes.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    for (const n of nodes) sortTree(n.replies || []);
+  };
+  sortTree(roots);
+  return roots;
 }
 
 export function formatInboxDecisionStatusLabel(status) {

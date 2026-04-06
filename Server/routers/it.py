@@ -67,6 +67,23 @@ async def create_it_request(
     )
     await request_item.insert()
 
+    # Ensure a discussion thread exists between faculty and IT
+    try:
+        ar_for_event = await ApprovalRequest.find_one(ApprovalRequest.event_id == payload.event_id)
+        if ar_for_event:
+            from event_chat_service import ensure_dept_request_thread
+            await ensure_dept_request_thread(
+                approval_request_id=str(ar_for_event.id),
+                department="it",
+                faculty_user_id=str(user.id),
+                dept_email=requested_to,
+                related_request_id=str(request_item.id),
+                related_kind="it_request",
+                event_name=request_item.event_name,
+            )
+    except Exception:
+        pass
+
     subject = f"IT Request: {request_item.event_name}"
     event_mode_line = f"Event mode: {request_item.event_mode}\n" if request_item.event_mode else ""
     body = (
