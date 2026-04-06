@@ -100,7 +100,7 @@ export default function RequirementsWizardModal({
 
         {wizard.phase === "edit" ? (
           <p className="form-hint" style={{ margin: "0 1rem 0.5rem" }}>
-            Step {wizard.stepIndex + 1} of {total}. Use Next to continue, Previous to go back, or Skip to exclude this
+            Step {wizard.stepIndex + 1} of {total}. Use Next to continue, Prev to go back, or Skip to exclude this
             department.
           </p>
         ) : null}
@@ -518,7 +518,7 @@ export default function RequirementsWizardModal({
               onClick={onPrev}
               disabled={wizard.stepIndex <= 0}
             >
-              Previous
+              Prev
             </button>
             <button type="button" className="secondary-action" onClick={onSkip}>
               Skip
@@ -530,7 +530,7 @@ export default function RequirementsWizardModal({
         ) : (
           <div className="modal-actions requirements-modal-actions">
             <button type="button" className="secondary-action" onClick={onPrev}>
-              Previous
+              Prev
             </button>
             <button
               type="button"

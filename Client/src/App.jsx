@@ -5338,33 +5338,6 @@ export default function App() {
               </div>
             ) : null}
 
-            <RequirementsWizardModal
-              wizard={requirementsWizard}
-              user={user}
-              pendingEvent={pendingEvent}
-              eventForm={eventForm}
-              formatISTTime={formatISTTime}
-              facilityForm={facilityForm}
-              transportForm={transportForm}
-              marketingForm={marketingForm}
-              itForm={itForm}
-              marketingGroups={MARKETING_REQUIREMENT_GROUPS}
-              onClose={handleRequirementsWizardClose}
-              onPrev={handleRequirementsWizardPrev}
-              onNext={handleRequirementsWizardNext}
-              onSkip={handleRequirementsWizardSkip}
-              onSendAll={handleRequirementsWizardSendAll}
-              handleFacilityFieldChange={handleFacilityFieldChange}
-              handleFacilityToggle={handleFacilityToggle}
-              handleTransportFieldChange={handleTransportFieldChange}
-              setTransportForm={setTransportForm}
-              handleMarketingFieldChange={handleMarketingFieldChange}
-              handleMarketingToggle={handleMarketingToggle}
-              handleItFieldChange={handleItFieldChange}
-              handleItToggle={handleItToggle}
-              setItForm={setItForm}
-            />
-
             {!requirementsWizard.open && facilityModal.open ? (
               <div className="approval-overlay" role="dialog" aria-modal="true">
                 <div className="marketing-card">
@@ -8010,6 +7983,33 @@ export default function App() {
           <section className="dashboard-content">
             {renderPrimaryContent()}
           </section>
+
+          <RequirementsWizardModal
+            wizard={requirementsWizard}
+            user={user}
+            pendingEvent={pendingEvent}
+            eventForm={eventForm}
+            formatISTTime={formatISTTime}
+            facilityForm={facilityForm}
+            transportForm={transportForm}
+            marketingForm={marketingForm}
+            itForm={itForm}
+            marketingGroups={MARKETING_REQUIREMENT_GROUPS}
+            onClose={handleRequirementsWizardClose}
+            onPrev={handleRequirementsWizardPrev}
+            onNext={handleRequirementsWizardNext}
+            onSkip={handleRequirementsWizardSkip}
+            onSendAll={handleRequirementsWizardSendAll}
+            handleFacilityFieldChange={handleFacilityFieldChange}
+            handleFacilityToggle={handleFacilityToggle}
+            handleTransportFieldChange={handleTransportFieldChange}
+            setTransportForm={setTransportForm}
+            handleMarketingFieldChange={handleMarketingFieldChange}
+            handleMarketingToggle={handleMarketingToggle}
+            handleItFieldChange={handleItFieldChange}
+            handleItToggle={handleItToggle}
+            setItForm={setItForm}
+          />
 
           <FloatingMessenger />
         </main>
