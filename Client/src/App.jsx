@@ -34,6 +34,7 @@ import SearchableSelect from "./components/ui/SearchableSelect";
 import IqacDataPage from "./components/IqacDataPage";
 import EventDetailsModalBody from "./components/EventDetailsModalBody";
 import { ConnectedApprovalDetailsModalBody } from "./components/ApprovalDetailsModalBody";
+import RequirementsWizardModal from "./components/RequirementsWizardModal";
 import { MessengerProvider, FloatingMessenger } from "./components/messenger";
 import api from "./services/api";
 
@@ -369,6 +370,17 @@ export default function App() {
   const [transportEmail, setTransportEmail] = useState("");
   const loadEventsRef = useRef(null);
   const requirementsFlowQueueRef = useRef([]);
+  const requirementsWizardRef = useRef(null);
+  const [requirementsWizard, setRequirementsWizard] = useState({
+    open: false,
+    steps: [],
+    stepIndex: 0,
+    phase: "edit",
+    skipped: {},
+    visited: {},
+    status: "idle",
+    error: ""
+  });
   const [user, setUser] = useState(() => {
     const storedToken = localStorage.getItem("auth_token");
     const stored = localStorage.getItem("auth_user");
@@ -421,6 +433,10 @@ export default function App() {
     window.addEventListener(api.UNAUTHORIZED_EVENT, onUnauthorized);
     return () => window.removeEventListener(api.UNAUTHORIZED_EVENT, onUnauthorized);
   }, [handleSessionExpired]);
+
+  useEffect(() => {
+    requirementsWizardRef.current = requirementsWizard;
+  }, [requirementsWizard]);
 
   const apiBaseUrl = api.getBaseUrl();
 
@@ -2040,6 +2056,177 @@ export default function App() {
     handleItModalOpen();
   };
 
+  const resetRequirementFormForDepartment = (dept) => {
+    if (dept === "facility") {
+      setFacilityForm({
+        to: facilityManagerEmail,
+        venue_required: true,
+        refreshments: false,
+        other_notes: ""
+      });
+    } else if (dept === "it") {
+      setItForm({
+        to: itEmail,
+        event_mode: "offline",
+        pa_system: true,
+        projection: false,
+        other_notes: ""
+      });
+    } else if (dept === "marketing") {
+      setMarketingForm({
+        to: marketingEmail,
+        marketing_requirements: defaultMarketingRequirements(),
+        other_notes: ""
+      });
+    } else if (dept === "transport") {
+      setTransportForm({
+        to: transportEmail,
+        include_guest_cab: true,
+        include_students: false,
+        guest_pickup_location: "",
+        guest_pickup_date: "",
+        guest_pickup_time: "",
+        guest_dropoff_location: "",
+        guest_dropoff_date: "",
+        guest_dropoff_time: "",
+        student_count: "",
+        student_transport_kind: "",
+        student_date: "",
+        student_time: "",
+        student_pickup_point: "",
+        other_notes: ""
+      });
+    }
+  };
+
+  const getTransportValidationError = (tf) => {
+    const wantsGuest = Boolean(tf.include_guest_cab);
+    const wantsStudents = Boolean(tf.include_students);
+    if (!wantsGuest && !wantsStudents) {
+      return "Select at least one: cab for guest and/or students (off-campus).";
+    }
+    if (wantsGuest) {
+      const missing = [
+        tf.guest_pickup_location,
+        tf.guest_pickup_date,
+        tf.guest_pickup_time,
+        tf.guest_dropoff_location,
+        tf.guest_dropoff_time
+      ].some((v) => !(v || "").trim());
+      if (missing) {
+        return "Fill guest cab: pickup location, pickup date & time, drop-off location, and drop-off time.";
+      }
+    }
+    if (wantsStudents) {
+      const n = parseInt(String(tf.student_count || "").trim(), 10);
+      const missingStudents =
+        !Number.isFinite(n) ||
+        n < 1 ||
+        !(tf.student_transport_kind || "").trim() ||
+        !(tf.student_date || "").trim() ||
+        !(tf.student_time || "").trim() ||
+        !(tf.student_pickup_point || "").trim();
+      if (missingStudents) {
+        return "Fill student transport: number of students, kind, date, time, and pickup point.";
+      }
+    }
+    return null;
+  };
+
+  const handleRequirementsWizardClose = () => {
+    requirementsFlowQueueRef.current = [];
+    setRequirementsWizard({
+      open: false,
+      steps: [],
+      stepIndex: 0,
+      phase: "edit",
+      skipped: {},
+      visited: {},
+      status: "idle",
+      error: ""
+    });
+  };
+
+  const handleRequirementsWizardPrev = () => {
+    const prev = requirementsWizardRef.current;
+    if (!prev?.open) return;
+    if (prev.phase === "review") {
+      setRequirementsWizard({
+        ...prev,
+        phase: "edit",
+        stepIndex: Math.max(0, prev.steps.length - 1),
+        error: ""
+      });
+      return;
+    }
+    if (prev.stepIndex <= 0) return;
+    setRequirementsWizard({
+      ...prev,
+      stepIndex: prev.stepIndex - 1,
+      error: ""
+    });
+  };
+
+  const handleRequirementsWizardNext = () => {
+    const prev = requirementsWizardRef.current;
+    if (!prev?.open || prev.phase !== "edit") return;
+    const dept = prev.steps[prev.stepIndex];
+    if (dept === "transport") {
+      const err = getTransportValidationError(transportForm);
+      if (err) {
+        setRequirementsWizard((w) => (w.open ? { ...w, error: err } : w));
+        return;
+      }
+    }
+    const newSkipped = { ...prev.skipped };
+    delete newSkipped[dept];
+    const isLast = prev.stepIndex >= prev.steps.length - 1;
+    if (isLast) {
+      setRequirementsWizard({ ...prev, skipped: newSkipped, phase: "review", error: "" });
+      return;
+    }
+    const nextIdx = prev.stepIndex + 1;
+    const nextDept = prev.steps[nextIdx];
+    const visited = { ...prev.visited };
+    if (nextDept && !visited[nextDept]) {
+      visited[nextDept] = true;
+      resetRequirementFormForDepartment(nextDept);
+    }
+    setRequirementsWizard({
+      ...prev,
+      skipped: newSkipped,
+      stepIndex: nextIdx,
+      visited,
+      error: ""
+    });
+  };
+
+  const handleRequirementsWizardSkip = () => {
+    const prev = requirementsWizardRef.current;
+    if (!prev?.open || prev.phase !== "edit") return;
+    const dept = prev.steps[prev.stepIndex];
+    const skipped = { ...prev.skipped, [dept]: true };
+    const isLast = prev.stepIndex >= prev.steps.length - 1;
+    if (isLast) {
+      setRequirementsWizard({ ...prev, skipped, phase: "review", error: "" });
+      return;
+    }
+    const nextIdx = prev.stepIndex + 1;
+    const nextDept = prev.steps[nextIdx];
+    const visited = { ...prev.visited };
+    if (nextDept && !visited[nextDept]) {
+      visited[nextDept] = true;
+      resetRequirementFormForDepartment(nextDept);
+    }
+    setRequirementsWizard({
+      ...prev,
+      skipped,
+      stepIndex: nextIdx,
+      visited,
+      error: ""
+    });
+  };
+
   const handleSendRequirements = (eventItem) => {
     if (isEventStarted(eventItem)) return;
     setPendingEvent({ ...eventItem, event_id: eventItem?.id || eventItem?.event_id || "" });
@@ -2050,11 +2237,20 @@ export default function App() {
     if (eventItem.transport_status !== "approved" && eventItem.transport_status !== "pending") {
       queue.push("transport");
     }
+    if (queue.length === 0) return;
     requirementsFlowQueueRef.current = queue;
-    if (queue[0] === "facility") handleFacilityModalOpen();
-    else if (queue[0] === "it") handleItModalOpen();
-    else if (queue[0] === "marketing") handleMarketingModalOpen();
-    else if (queue[0] === "transport") handleTransportModalOpen();
+    const first = queue[0];
+    resetRequirementFormForDepartment(first);
+    setRequirementsWizard({
+      open: true,
+      steps: [...queue],
+      stepIndex: 0,
+      phase: "edit",
+      skipped: {},
+      visited: { [first]: true },
+      status: "idle",
+      error: ""
+    });
   };
 
   const getExpectedReportFilename = (eventName, startDate) => {
@@ -3218,51 +3414,17 @@ export default function App() {
     }
 
     const eventPayload = pendingEvent || eventForm;
-    const wantsGuest = Boolean(transportForm.include_guest_cab);
-    const wantsStudents = Boolean(transportForm.include_students);
-    if (!wantsGuest && !wantsStudents) {
+    const transportErr = getTransportValidationError(transportForm);
+    if (transportErr) {
       setTransportModal({
         open: true,
         status: "error",
-        error: "Select at least one: cab for guest and/or students (off-campus)."
+        error: transportErr
       });
       return;
     }
-    if (wantsGuest) {
-      const missing = [
-        transportForm.guest_pickup_location,
-        transportForm.guest_pickup_date,
-        transportForm.guest_pickup_time,
-        transportForm.guest_dropoff_location,
-        transportForm.guest_dropoff_time
-      ].some((v) => !(v || "").trim());
-      if (missing) {
-        setTransportModal({
-          open: true,
-          status: "error",
-          error: "Fill guest cab: pickup location, pickup date & time, drop-off location, and drop-off time."
-        });
-        return;
-      }
-    }
-    if (wantsStudents) {
-      const n = parseInt(String(transportForm.student_count || "").trim(), 10);
-      const missingStudents =
-        !Number.isFinite(n) ||
-        n < 1 ||
-        !(transportForm.student_transport_kind || "").trim() ||
-        !(transportForm.student_date || "").trim() ||
-        !(transportForm.student_time || "").trim() ||
-        !(transportForm.student_pickup_point || "").trim();
-      if (missingStudents) {
-        setTransportModal({
-          open: true,
-          status: "error",
-          error: "Fill student transport: number of students, kind, date, time, and pickup point."
-        });
-        return;
-      }
-    }
+    const wantsGuest = Boolean(transportForm.include_guest_cab);
+    const wantsStudents = Boolean(transportForm.include_students);
     const transport_type =
       wantsGuest && wantsStudents ? "both" : wantsGuest ? "guest_cab" : "students_off_campus";
 
@@ -3445,6 +3607,7 @@ export default function App() {
         requirementsFlowQueueRef.current = queue.slice(1);
         const next = requirementsFlowQueueRef.current[0];
         if (next === "marketing") handleMarketingModalOpen();
+        else if (next === "transport") handleTransportModalOpen();
       }
     } catch (err) {
       setItModal({
@@ -3452,6 +3615,162 @@ export default function App() {
         status: "error",
         error: err?.message || "Unable to send IT request."
       });
+    }
+  };
+
+  const handleRequirementsWizardSendAll = async () => {
+    const snap = requirementsWizardRef.current;
+    if (!snap?.open || snap.phase !== "review") return;
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      setRequirementsWizard((w) => ({ ...w, status: "error", error: "Please sign in again." }));
+      return;
+    }
+    const toSend = snap.steps.filter((s) => !snap.skipped[s]);
+    if (toSend.length === 0) {
+      handleRequirementsWizardClose();
+      setStatus({ type: "success", message: "No requirements were sent (all steps skipped)." });
+      return;
+    }
+
+    setRequirementsWizard((w) => ({ ...w, status: "loading", error: "" }));
+
+    const eventPayload = pendingEvent || eventForm;
+
+    const postOrThrow = async (url, body, fallbackMessage) => {
+      const res = await apiFetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const detail = errData?.detail;
+        const msg =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((d) => d.msg || JSON.stringify(d)).join(" ")
+              : fallbackMessage;
+        throw new Error(msg);
+      }
+    };
+
+    const deptLabel = (d) =>
+      d === "facility"
+        ? "Facility"
+        : d === "it"
+          ? "IT"
+          : d === "marketing"
+            ? "Marketing"
+            : d === "transport"
+              ? "Transport"
+              : d;
+
+    try {
+      for (const dept of toSend) {
+        if (dept === "facility") {
+          await postOrThrow(
+            `${apiBaseUrl}/facility/requests`,
+            {
+              requested_to: facilityForm.to || undefined,
+              event_id: eventPayload?.event_id || eventPayload?.id || "",
+              event_name: eventPayload?.name || "",
+              start_date: eventPayload?.start_date || "",
+              start_time: eventPayload?.start_time || "",
+              end_date: eventPayload?.end_date || "",
+              end_time: eventPayload?.end_time || "",
+              venue_required: facilityForm.venue_required,
+              refreshments: facilityForm.refreshments,
+              other_notes: facilityForm.other_notes || ""
+            },
+            "Unable to send facility manager request."
+          );
+        } else if (dept === "it") {
+          await postOrThrow(
+            `${apiBaseUrl}/it/requests`,
+            {
+              requested_to: itForm.to,
+              event_id: eventPayload?.event_id || eventPayload?.id || "",
+              event_name: eventPayload?.name || "",
+              start_date: eventPayload?.start_date || "",
+              start_time: eventPayload?.start_time || "",
+              end_date: eventPayload?.end_date || "",
+              end_time: eventPayload?.end_time || "",
+              event_mode: itForm.event_mode || "offline",
+              pa_system: itForm.pa_system,
+              projection: itForm.projection,
+              other_notes: itForm.other_notes
+            },
+            "Unable to send IT request."
+          );
+        } else if (dept === "marketing") {
+          await postOrThrow(
+            `${apiBaseUrl}/marketing/requests`,
+            {
+              requested_to: marketingForm.to,
+              event_id: eventPayload?.event_id || eventPayload?.id || "",
+              event_name: eventPayload?.name || "",
+              start_date: eventPayload?.start_date || "",
+              start_time: eventPayload?.start_time || "",
+              end_date: eventPayload?.end_date || "",
+              end_time: eventPayload?.end_time || "",
+              marketing_requirements: marketingForm.marketing_requirements,
+              other_notes: marketingForm.other_notes
+            },
+            "Unable to send marketing request."
+          );
+        } else if (dept === "transport") {
+          const tErr = getTransportValidationError(transportForm);
+          if (tErr) {
+            throw new Error(tErr);
+          }
+          const wantsGuest = Boolean(transportForm.include_guest_cab);
+          const wantsStudents = Boolean(transportForm.include_students);
+          const transport_type =
+            wantsGuest && wantsStudents ? "both" : wantsGuest ? "guest_cab" : "students_off_campus";
+          const studentCountParsed = parseInt(String(transportForm.student_count || "").trim(), 10);
+          await postOrThrow(
+            `${apiBaseUrl}/transport/requests`,
+            {
+              requested_to: transportForm.to || undefined,
+              event_id: eventPayload?.event_id || eventPayload?.id || "",
+              event_name: eventPayload?.name || "",
+              start_date: eventPayload?.start_date || "",
+              start_time: eventPayload?.start_time || "",
+              end_date: eventPayload?.end_date || "",
+              end_time: eventPayload?.end_time || "",
+              transport_type,
+              guest_pickup_location: wantsGuest ? transportForm.guest_pickup_location || undefined : undefined,
+              guest_pickup_date: wantsGuest ? transportForm.guest_pickup_date || undefined : undefined,
+              guest_pickup_time: wantsGuest ? transportForm.guest_pickup_time || undefined : undefined,
+              guest_dropoff_location: wantsGuest ? transportForm.guest_dropoff_location || undefined : undefined,
+              guest_dropoff_date: wantsGuest ? transportForm.guest_dropoff_date || undefined : undefined,
+              guest_dropoff_time: wantsGuest ? transportForm.guest_dropoff_time || undefined : undefined,
+              student_count:
+                wantsStudents && Number.isFinite(studentCountParsed) ? studentCountParsed : undefined,
+              student_transport_kind: wantsStudents ? transportForm.student_transport_kind || undefined : undefined,
+              student_date: wantsStudents ? transportForm.student_date || undefined : undefined,
+              student_time: wantsStudents ? transportForm.student_time || undefined : undefined,
+              student_pickup_point: wantsStudents ? transportForm.student_pickup_point || undefined : undefined,
+              other_notes: transportForm.other_notes || ""
+            },
+            "Unable to send transport request."
+          );
+        }
+      }
+
+      handleRequirementsWizardClose();
+      setRequirementsModal((prev) => (prev.open ? { ...prev, open: false, event: null } : prev));
+      loadEvents();
+      const names = toSend.map(deptLabel).join(", ");
+      setStatus({ type: "success", message: `Requirements sent to: ${names}.` });
+    } catch (err) {
+      setRequirementsWizard((w) => ({
+        ...w,
+        status: "error",
+        error: err?.message || "Unable to send requirements."
+      }));
     }
   };
 
@@ -5019,7 +5338,34 @@ export default function App() {
               </div>
             ) : null}
 
-            {facilityModal.open ? (
+            <RequirementsWizardModal
+              wizard={requirementsWizard}
+              user={user}
+              pendingEvent={pendingEvent}
+              eventForm={eventForm}
+              formatISTTime={formatISTTime}
+              facilityForm={facilityForm}
+              transportForm={transportForm}
+              marketingForm={marketingForm}
+              itForm={itForm}
+              marketingGroups={MARKETING_REQUIREMENT_GROUPS}
+              onClose={handleRequirementsWizardClose}
+              onPrev={handleRequirementsWizardPrev}
+              onNext={handleRequirementsWizardNext}
+              onSkip={handleRequirementsWizardSkip}
+              onSendAll={handleRequirementsWizardSendAll}
+              handleFacilityFieldChange={handleFacilityFieldChange}
+              handleFacilityToggle={handleFacilityToggle}
+              handleTransportFieldChange={handleTransportFieldChange}
+              setTransportForm={setTransportForm}
+              handleMarketingFieldChange={handleMarketingFieldChange}
+              handleMarketingToggle={handleMarketingToggle}
+              handleItFieldChange={handleItFieldChange}
+              handleItToggle={handleItToggle}
+              setItForm={setItForm}
+            />
+
+            {!requirementsWizard.open && facilityModal.open ? (
               <div className="approval-overlay" role="dialog" aria-modal="true">
                 <div className="marketing-card">
                   <div className="approval-header">
@@ -5123,7 +5469,7 @@ export default function App() {
               </div>
             ) : null}
 
-            {transportModal.open ? (
+            {!requirementsWizard.open && transportModal.open ? (
               <div className="approval-overlay" role="dialog" aria-modal="true">
                 <div className="marketing-card marketing-card--scrollable">
                   <div className="approval-header">
@@ -5412,7 +5758,7 @@ export default function App() {
               </div>
             ) : null}
 
-            {marketingModal.open ? (
+            {!requirementsWizard.open && marketingModal.open ? (
               <div className="marketing-overlay" role="dialog" aria-modal="true">
                 <div className="marketing-card">
                   <div className="approval-header">
@@ -5517,7 +5863,7 @@ export default function App() {
               </div>
             ) : null}
 
-            {itModal.open ? (
+            {!requirementsWizard.open && itModal.open ? (
               <div className="marketing-overlay" role="dialog" aria-modal="true">
                 <div className="marketing-card">
                   <div className="approval-header">
