@@ -14,6 +14,7 @@ const MessageBubble = React.memo(function MessageBubble({
   onEditDraftChange,
   onSaveEdit,
   onCancelEdit,
+  onStartReply,
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const menuRef = useRef(null);
@@ -23,7 +24,8 @@ const MessageBubble = React.memo(function MessageBubble({
   const hasActions =
     onDeleteForMe ||
     (isOwn && onRequestDeleteForEveryone && !isDeleted) ||
-    (canEdit && onStartEdit);
+    (canEdit && onStartEdit) ||
+    (onStartReply && !isDeleted);
 
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -37,7 +39,10 @@ const MessageBubble = React.memo(function MessageBubble({
   }, [dropdownOpen]);
 
   return (
-    <div className={`msger-msg${isOwn ? " own" : ""}${isDeleted ? " deleted" : ""}`}>
+    <div
+      className={`msger-msg${isOwn ? " own" : ""}${isDeleted ? " deleted" : ""}`}
+      data-message-id={message.id}
+    >
       <div className="msger-bubble">
         <div className="msger-msg-meta">
           <span className="msger-msg-author">{message.sender_name}</span>
@@ -65,6 +70,19 @@ const MessageBubble = React.memo(function MessageBubble({
               </button>
               {dropdownOpen ? (
                 <div className="msger-msg-menu" role="menu">
+                  {onStartReply && !isDeleted ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="msger-msg-menu-item"
+                      onClick={() => {
+                        setDropdownOpen(false);
+                        onStartReply(message);
+                      }}
+                    >
+                      Reply
+                    </button>
+                  ) : null}
                   {canEdit && onStartEdit ? (
                     <button
                       type="button"
@@ -133,6 +151,16 @@ const MessageBubble = React.memo(function MessageBubble({
           </div>
         ) : (
           <>
+            {message.reply_to_snapshot ? (
+              <div className="msger-reply-quote">
+                <span className="msger-reply-quote-author">
+                  {message.reply_to_snapshot.sender_name}
+                </span>
+                <p className="msger-reply-quote-preview">
+                  {message.reply_to_snapshot.content_preview}
+                </p>
+              </div>
+            ) : null}
             {message.content ? (
               <p className="msger-msg-text">{message.content}</p>
             ) : null}

@@ -74,6 +74,9 @@ export function MessengerProvider({ children, user }) {
   const [chatFiles, setChatFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
 
+  // Reply state
+  const [replyingTo, setReplyingTo] = useState(null); // { messageId, senderName, contentPreview }
+
   // Typing
   const [typingUser, setTypingUser] = useState(null);
   const typingTimeoutRef = useRef(null);
@@ -117,6 +120,21 @@ export function MessengerProvider({ children, user }) {
   const directConversations = useMemo(
     () => conversations.filter((c) => c.thread_kind === "direct"),
     [conversations]
+  );
+
+  const workflowThreads = useMemo(
+    () => conversations.filter((c) => c.thread_kind === "approval_thread"),
+    [conversations]
+  );
+
+  const activeWorkflowChats = useMemo(
+    () => workflowThreads.filter((c) => !c.thread_status || c.thread_status === "active" || c.thread_status === "waiting_for_faculty" || c.thread_status === "waiting_for_department"),
+    [workflowThreads]
+  );
+
+  const archivedWorkflowChats = useMemo(
+    () => workflowThreads.filter((c) => c.thread_status === "resolved" || c.thread_status === "closed"),
+    [workflowThreads]
   );
 
   useEffect(() => {
@@ -275,24 +293,33 @@ export function MessengerProvider({ children, user }) {
       openPanel();
       setChatInput("");
       try {
-        const data = await api.getJson(`/chat/conversations/${conversationId}/messages`);
-        const convData = await api.getJson(`/chat/conversations`);
-        const conv = Array.isArray(convData)
-          ? convData.find((c) => String(c.id) === String(conversationId))
-          : null;
+        // First, try to find the conversation in already-loaded list
+        let conv = conversations.find((c) => String(c.id) === String(conversationId));
+        if (!conv) {
+          // Refresh conversations and search again
+          const convData = await api.getJson("/chat/conversations/me");
+          if (Array.isArray(convData)) {
+            setConversations(convData);
+            conv = convData.find((c) => String(c.id) === String(conversationId));
+          }
+        }
         if (conv) {
           setActiveConversation(conv);
           setActiveEventThread(null);
           setActiveUser(null);
-          setMessages(Array.isArray(data?.messages) ? data.messages : Array.isArray(data) ? data : []);
-          setChatStatus({ status: "ready", error: "" });
+          setTypingUser(null);
+          setMessages([]);
+          setHasMore(true);
+          setLoadingMore(false);
+          setChatStatus({ status: "loading", error: "" });
+          await loadMessages(conversationId);
           await markConversationRead(conversationId);
         }
       } catch {
         // silently fail — user can navigate manually
       }
     },
-    [openPanel, markConversationRead]
+    [openPanel, conversations, loadMessages, markConversationRead]
   );
 
   useEffect(() => {
@@ -366,12 +393,24 @@ export function MessengerProvider({ children, user }) {
     [openEventThread, startConversation, loadMessages, markConversationRead]
   );
 
+  const startReply = useCallback((msg) => {
+    if (!msg) return;
+    setReplyingTo({
+      messageId: msg.id,
+      senderName: msg.sender_name || "Unknown",
+      contentPreview: (msg.content || "").slice(0, 200),
+    });
+  }, []);
+
+  const clearReply = useCallback(() => setReplyingTo(null), []);
+
   const closeChat = useCallback(() => {
     setActiveUser(null);
     setActiveEventThread(null);
     setActiveConversation(null);
     setMessages([]);
     setTypingUser(null);
+    setReplyingTo(null);
   }, []);
 
   useEffect(() => {
@@ -442,6 +481,9 @@ export function MessengerProvider({ children, user }) {
       };
       setMessages((prev) => [...prev, optimistic]);
 
+      // Capture reply ref before clearing state
+      const replyRef = replyingTo;
+
       // Try WebSocket first, fallback to REST
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -452,6 +494,7 @@ export function MessengerProvider({ children, user }) {
             attachments,
             conversation_id: activeConversation.id,
             client_id: clientId,
+            reply_to_message_id: replyRef?.messageId || undefined,
           })
         );
       } else {
@@ -459,11 +502,13 @@ export function MessengerProvider({ children, user }) {
           conversation_id: activeConversation.id,
           content: trimmed,
           attachments,
+          reply_to_message_id: replyRef?.messageId || undefined,
         });
       }
 
       setChatInput("");
       setChatFiles([]);
+      setReplyingTo(null);
 
       // Stop typing indicator
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -482,7 +527,7 @@ export function MessengerProvider({ children, user }) {
         error: err?.message || UPLOAD_ERRORS.UPLOAD_FAILED,
       });
     }
-  }, [activeConversation, chatInput, chatFiles, uploadAttachment, user, isUploading]);
+  }, [activeConversation, chatInput, chatFiles, uploadAttachment, user, isUploading, replyingTo]);
 
   // ---------------------------------------------------------------------------
   // Message actions
@@ -976,6 +1021,9 @@ export function MessengerProvider({ children, user }) {
       chatUsers,
       chatEventThreads,
       directConversations,
+      workflowThreads,
+      activeWorkflowChats,
+      archivedWorkflowChats,
       totalUnread,
       chatUnreadByUser,
       chatUnreadByConversation,
@@ -994,6 +1042,11 @@ export function MessengerProvider({ children, user }) {
       chatInput,
       chatFiles,
       isUploading,
+
+      // Reply state
+      replyingTo,
+      startReply,
+      clearReply,
 
       // Filters
       searchQuery,
@@ -1043,6 +1096,9 @@ export function MessengerProvider({ children, user }) {
       chatUsers,
       chatEventThreads,
       directConversations,
+      workflowThreads,
+      activeWorkflowChats,
+      archivedWorkflowChats,
       totalUnread,
       chatUnreadByUser,
       chatUnreadByConversation,
@@ -1057,6 +1113,9 @@ export function MessengerProvider({ children, user }) {
       chatInput,
       chatFiles,
       isUploading,
+      replyingTo,
+      startReply,
+      clearReply,
       searchQuery,
       unreadOnly,
       filterEventId,

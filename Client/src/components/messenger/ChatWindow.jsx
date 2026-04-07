@@ -18,6 +18,9 @@ export default function ChatWindow() {
     typingUser,
     hasMore,
     loadingMore,
+    replyingTo,
+    startReply,
+    clearReply,
     handleInputChange,
     sendMessage,
     handleFiles,
@@ -46,6 +49,21 @@ export default function ChatWindow() {
   const activeName = activeEventThread
     ? activeEventThread.title || "Event chat"
     : activeUser?.name || "";
+
+  const isWorkflowThread =
+    activeConversation?.thread_kind === "approval_thread";
+
+  const isThreadLocked =
+    isWorkflowThread &&
+    (activeConversation?.thread_status === "resolved" ||
+      activeConversation?.thread_status === "closed");
+
+  // For workflow threads, show dept label in sub-header
+  const workflowDeptLabel = isWorkflowThread
+    ? activeConversation?.department_label ||
+      activeConversation?.department ||
+      "Workflow Discussion"
+    : null;
 
   const activeStatus = activeEventThread
     ? `Group · ${activeEventThread.participants?.length ?? activeConversation?.participant_count ?? 0} people`
@@ -132,7 +150,9 @@ export default function ChatWindow() {
         </button>
         <div className="msger-chat-info">
           <p className="msger-chat-name">{activeName}</p>
-          {activeStatus ? (
+          {workflowDeptLabel ? (
+            <p className="msger-chat-status msger-workflow-dept-label">{workflowDeptLabel}</p>
+          ) : activeStatus ? (
             <p className="msger-chat-status">{activeStatus}</p>
           ) : null}
           {activeEventThread && participantCount > 0 ? (
@@ -200,6 +220,7 @@ export default function ChatWindow() {
               onEditDraftChange={setEditDraft}
               onSaveEdit={onSaveEdit}
               onCancelEdit={onCancelEdit}
+              onStartReply={isThreadLocked ? null : startReply}
             />
           );
         })}
@@ -209,16 +230,51 @@ export default function ChatWindow() {
         <div className="msger-typing">{typingName} is typing...</div>
       ) : null}
 
-      <MessageInput
-        chatInput={chatInput}
-        chatFiles={chatFiles}
-        disabled={!activeUser && !activeEventThread}
-        isUploading={isUploading}
-        onInputChange={handleInputChange}
-        onSend={sendMessage}
-        onFileChange={handleFiles}
-        onRemoveFile={removeFile}
-      />
+      {isThreadLocked ? (
+        <div className="msger-thread-locked-banner" role="status">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <span>
+            This discussion is{" "}
+            {activeConversation?.thread_status === "closed" ? "closed" : "resolved"}
+            {activeConversation?.closed_at
+              ? ` since ${formatChatTime(activeConversation.closed_at)}`
+              : ""}
+            .
+          </span>
+        </div>
+      ) : (
+        <>
+          {replyingTo && (
+            <div className="msger-reply-bar">
+              <div className="msger-reply-bar-content">
+                <span className="msger-reply-bar-author">{replyingTo.senderName}</span>
+                <p className="msger-reply-bar-preview">{replyingTo.contentPreview}</p>
+              </div>
+              <button
+                type="button"
+                className="msger-reply-bar-dismiss"
+                aria-label="Cancel reply"
+                onClick={clearReply}
+              >
+                ×
+              </button>
+            </div>
+          )}
+          <MessageInput
+            chatInput={chatInput}
+            chatFiles={chatFiles}
+            disabled={!activeUser && !activeEventThread && !isWorkflowThread}
+            isUploading={isUploading}
+            onInputChange={handleInputChange}
+            onSend={sendMessage}
+            onFileChange={handleFiles}
+            onRemoveFile={removeFile}
+          />
+        </>
+      )}
 
       <MessengerConfirmDialog
         open={confirm?.kind === "deleteEveryone"}

@@ -218,10 +218,43 @@ async def resolve_approval_thread_status(
     """Mark all threads for an approval as resolved when approved/rejected."""
     if new_status not in ("approved", "rejected"):
         return
+    now = datetime.now(timezone.utc)
     threads = await list_approval_threads(approval_request_id)
     for t in threads:
-        if (t.thread_status or "active") != "resolved":
+        if (t.thread_status or "active") not in ("resolved", "closed"):
             t.thread_status = "resolved"
+            t.closed_at = now
+            t.closed_reason = new_status
+            await t.save()
+
+
+async def close_threads_for_request(
+    approval_request_id: str,
+    department: str,
+    related_request_id: str,
+    reason: str = "approved",
+) -> None:
+    """Close the specific dept thread when its individual request is finalized."""
+    thread = await get_approval_thread(approval_request_id, department, related_request_id)
+    if thread and (thread.thread_status or "active") not in ("resolved", "closed"):
+        thread.thread_status = "resolved"
+        thread.closed_at = datetime.now(timezone.utc)
+        thread.closed_reason = reason
+        await thread.save()
+
+
+async def close_all_threads_for_approval(
+    approval_request_id: str,
+    reason: str = "event_closed",
+) -> None:
+    """Close all threads linked to an approval (e.g. when event is set to closed)."""
+    now = datetime.now(timezone.utc)
+    threads = await list_approval_threads(approval_request_id)
+    for t in threads:
+        if (t.thread_status or "active") not in ("resolved", "closed"):
+            t.thread_status = "closed"
+            t.closed_at = now
+            t.closed_reason = reason
             await t.save()
 
 

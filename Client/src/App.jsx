@@ -32,7 +32,7 @@ import PremiumDatePicker from "./components/ui/PremiumDatePicker";
 import PremiumTimePicker from "./components/ui/PremiumTimePicker";
 import SearchableSelect from "./components/ui/SearchableSelect";
 import IqacDataPage from "./components/IqacDataPage";
-import EventDetailsModalBody from "./components/EventDetailsModalBody";
+import EventDetailsModalBody, { ConnectedEventDetailsModalBody } from "./components/EventDetailsModalBody";
 import { ConnectedApprovalDetailsModalBody } from "./components/ApprovalDetailsModalBody";
 import RequirementsWizardModal from "./components/RequirementsWizardModal";
 import { MessengerProvider, FloatingMessenger } from "./components/messenger";
@@ -101,7 +101,8 @@ export default function App() {
     name: "",
     facilitator: "",
     venue_name: "",
-    intendedAudience: "",
+    intendedAudience: [],
+    intendedAudienceOther: "",
     description: "",
     budget: ""
   });
@@ -114,6 +115,7 @@ export default function App() {
   const budgetBreakdownInputRef = useRef(null);
   const [conflictState, setConflictState] = useState({ open: false, items: [] });
   const [approvalModal, setApprovalModal] = useState({ open: false, status: "idle", error: "" });
+  const [progChairConfirmed, setProgChairConfirmed] = useState(false);
   const [approvalForm, setApprovalForm] = useState({
     requirements: {
       venue: true,
@@ -1850,6 +1852,7 @@ export default function App() {
   }, [isEventModalOpen]);
 
   const handleApprovalModalOpen = () => {
+    setProgChairConfirmed(false);
     setApprovalForm({
       requirements: {
         venue: true,
@@ -1861,6 +1864,7 @@ export default function App() {
   };
 
   const handleApprovalModalClose = () => {
+    setProgChairConfirmed(false);
     setApprovalModal({ open: false, status: "idle", error: "" });
   };
 
@@ -2001,7 +2005,8 @@ export default function App() {
       name: "",
       facilitator: defaultFacilitator,
       venue_name: "",
-      intendedAudience: "",
+      intendedAudience: [],
+      intendedAudienceOther: "",
       description: "",
       budget: ""
     });
@@ -3220,7 +3225,8 @@ export default function App() {
         name: "",
         facilitator: defaultFacilitator,
         venue_name: "",
-        intendedAudience: "",
+        intendedAudience: [],
+        intendedAudienceOther: "",
         description: "",
         budget: ""
       });
@@ -3266,6 +3272,15 @@ export default function App() {
       return;
     }
 
+    if (!progChairConfirmed) {
+      setApprovalModal({
+        open: true,
+        status: "error",
+        error: "Confirm that you have discussed this event with the Programming Chair."
+      });
+      return;
+    }
+
     setApprovalModal((prev) => ({ ...prev, status: "loading", error: "" }));
 
     try {
@@ -3277,7 +3292,8 @@ export default function App() {
         budget: budgetVal,
         requirements: [],
         other_notes: "",
-        override_conflict: overrideConflict
+        override_conflict: overrideConflict,
+        discussedWithProgrammingChair: progChairConfirmed
       };
 
       const idemKey = generateIdempotencyKey();
@@ -3848,6 +3864,16 @@ export default function App() {
         status: "error",
         error: "Budget breakdown PDF is required. Choose a PDF file before continuing."
       });
+      return;
+    }
+
+    if (!eventForm.intendedAudience || eventForm.intendedAudience.length === 0) {
+      setEventFormStatus({ status: "error", error: "Select at least one intended audience." });
+      return;
+    }
+
+    if (eventForm.intendedAudience.includes("Others") && !eventForm.intendedAudienceOther.trim()) {
+      setEventFormStatus({ status: "error", error: "Specify the audience in the \"Others\" field." });
       return;
     }
 
@@ -5069,6 +5095,7 @@ export default function App() {
                             required
                             emptyMessage="No venues found"
                           />
+                          <p className="form-helper-note">Make sure the venue is verified in DigiCampus.</p>
                           {venuesState.status === "error" ? (
                             <span className="form-error">{venuesState.error}</span>
                           ) : null}
@@ -5076,18 +5103,30 @@ export default function App() {
                         <div className="form-field premium-form-field">
                           <SearchableSelect
                             label="Intended Audience"
-                            value={eventForm.intendedAudience}
-                            onChange={handleEventFieldChange("intendedAudience")}
+                            multiple
+                            values={eventForm.intendedAudience}
+                            onChangeMulti={(vals) => setEventForm((prev) => ({ ...prev, intendedAudience: vals }))}
                             options={[
                               { value: "Students", label: "Students" },
                               { value: "Faculty", label: "Faculty" },
                               { value: "PhD Scholars", label: "PhD Scholars" },
                               { value: "Staffs", label: "Staffs" },
-                              { value: "Everyone at VU", label: "Everyone at VU" }
+                              { value: "Everyone at VU", label: "Everyone at VU" },
+                              { value: "Others", label: "Others" }
                             ]}
-                            placeholder="Select intended audience"
+                            placeholder="Select audience (multi)"
                             required
                           />
+                          {eventForm.intendedAudience.includes("Others") ? (
+                            <input
+                              type="text"
+                              className="premium-input premium-input--others"
+                              placeholder="Specify other audience..."
+                              value={eventForm.intendedAudienceOther}
+                              onChange={(e) => setEventForm((prev) => ({ ...prev, intendedAudienceOther: e.target.value }))}
+                              maxLength={500}
+                            />
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -5308,6 +5347,17 @@ export default function App() {
                       IT, Marketing, and Transport.
                     </p>
 
+                    <label className="approval-progchair-confirm">
+                      <input
+                        type="checkbox"
+                        checked={progChairConfirmed}
+                        onChange={(e) => setProgChairConfirmed(e.target.checked)}
+                      />
+                      <span>
+                        I have discussed this event with the <strong>programming chair</strong> and received confirmation to proceed.
+                      </span>
+                    </label>
+
                     {approvalModal.status === "error" ? (
                       <p className="form-error">{approvalModal.error}</p>
                     ) : null}
@@ -5322,12 +5372,15 @@ export default function App() {
                         disabled={
                           approvalModal.status === "loading" ||
                           !budgetBreakdownFile ||
-                          !isBudgetBreakdownPdf(budgetBreakdownFile)
+                          !isBudgetBreakdownPdf(budgetBreakdownFile) ||
+                          !progChairConfirmed
                         }
                         title={
                           !budgetBreakdownFile || !isBudgetBreakdownPdf(budgetBreakdownFile)
                             ? "Select a budget breakdown PDF in the create event form first"
-                            : undefined
+                            : !progChairConfirmed
+                              ? "Confirm you have discussed this event with the Programming Chair"
+                              : undefined
                         }
                       >
                         {approvalModal.status === "loading" ? "Sending..." : "Send"}
@@ -7632,7 +7685,7 @@ export default function App() {
               ) : eventDetailsModal.status === "error" ? (
                 <p className="form-error">{eventDetailsModal.error}</p>
               ) : eventDetailsModal.details ? (
-                <EventDetailsModalBody
+                <ConnectedEventDetailsModalBody
                   details={eventDetailsModal.details}
                   fallbackEventName={eventDetailsModal.event?.name}
                   formatISTTime={formatISTTime}
@@ -7642,6 +7695,7 @@ export default function App() {
                   transportRequestTypeLabel={transportRequestTypeLabel}
                   isMarketingViewer={isMarketingRole}
                   getMarketingDeliverableUploadFlags={getMarketingDeliverableUploadFlags}
+                  currentUserId={user?.id}
                   onMarketingUpload={(req) => {
                     handleEventDetailsClose();
                     openMarketingDeliverableModal(req);

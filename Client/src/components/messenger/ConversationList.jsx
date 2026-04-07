@@ -8,9 +8,12 @@ export default function ConversationList() {
     conversations,
     chatUsers,
     chatEventThreads,
+    activeWorkflowChats,
+    archivedWorkflowChats,
     chatUnreadByConversation,
     activeUser,
     activeEventThread,
+    activeConversation,
     searchQuery,
     unreadOnly,
     setSearch,
@@ -18,6 +21,7 @@ export default function ConversationList() {
     startConversation,
     openEventThread,
     openConversation,
+    openApprovalThread,
     clearConversationMessages,
     purgeConversation,
     formatChatTime,
@@ -204,6 +208,63 @@ export default function ConversationList() {
                       />
                     );
                   })}
+              </>
+            ) : null}
+
+            {activeWorkflowChats.length > 0 ? (
+              <>
+                <p className="msger-section-label">Workflow Discussions</p>
+                {activeWorkflowChats.map((conv) => {
+                  const deptLabel = conv.department_label || conv.department || "Discussion";
+                  const name = conv.event_title || `Event Discussion`;
+                  const avatarLabel = deptLabel.trim().charAt(0).toUpperCase() || "W";
+                  const unread = conv.unread_count || 0;
+                  const lm = conv.last_message;
+                  const meta = lm ? (lm.text || "").slice(0, 50) : "";
+                  return (
+                    <ConversationItem
+                      key={conv.id}
+                      name={name}
+                      avatarLabel={avatarLabel}
+                      isActive={activeConversation?.id === conv.id}
+                      isWorkflow
+                      isLocked={false}
+                      workflowLabel={deptLabel}
+                      unread={unread}
+                      meta={meta}
+                      time={lm?.created_at ? formatChatTime(lm.created_at) : ""}
+                      onClick={() => openApprovalThread(conv.id)}
+                    />
+                  );
+                })}
+              </>
+            ) : null}
+
+            {archivedWorkflowChats.length > 0 ? (
+              <>
+                <p className="msger-section-label msger-section-label--muted">Archived Discussions</p>
+                {archivedWorkflowChats.map((conv) => {
+                  const deptLabel = conv.department_label || conv.department || "Discussion";
+                  const name = conv.event_title || `Event Discussion`;
+                  const avatarLabel = deptLabel.trim().charAt(0).toUpperCase() || "W";
+                  const lm = conv.last_message;
+                  const meta = lm ? (lm.text || "").slice(0, 50) : "";
+                  return (
+                    <ConversationItem
+                      key={conv.id}
+                      name={name}
+                      avatarLabel={avatarLabel}
+                      isActive={activeConversation?.id === conv.id}
+                      isWorkflow
+                      isLocked
+                      workflowLabel={deptLabel}
+                      unread={0}
+                      meta={meta}
+                      time={lm?.created_at ? formatChatTime(lm.created_at) : ""}
+                      onClick={() => openApprovalThread(conv.id)}
+                    />
+                  );
+                })}
               </>
             ) : null}
           </>

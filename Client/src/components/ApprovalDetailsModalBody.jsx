@@ -43,7 +43,13 @@ export default function ApprovalDetailsModalBody({
   currentUserId,
   viewerRole = "registrar",
 }) {
-  const intendedAudience = request?.intendedAudience ?? request?.intended_audience ?? null;
+  const rawAudience = request?.intendedAudience ?? request?.intended_audience ?? null;
+  const audienceOther = request?.intendedAudienceOther ?? request?.intended_audience_other ?? null;
+  const intendedAudience = Array.isArray(rawAudience)
+    ? rawAudience.join(", ") + (audienceOther ? ` (Others: ${audienceOther})` : "")
+    : rawAudience
+      ? String(rawAudience) + (audienceOther ? ` (Others: ${audienceOther})` : "")
+      : null;
   const realApprovalId = request?.approval_request_id || String(request?.id || "").replace(/^approval-/, "");
   const scheduleStart =
     request?.start_date && request?.start_time

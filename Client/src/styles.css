@@ -975,6 +975,34 @@ body {
   color: #333333;
 }
 
+/* Programming-chair confirmation checkbox inside Registrar Approval modal */
+.approval-progchair-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #f8f9ff;
+  border: 1.5px solid #e2e8ff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #3a4557;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+  user-select: none;
+}
+.approval-progchair-confirm:hover {
+  border-color: #b0c0f8;
+}
+.approval-progchair-confirm input[type="checkbox"] {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  accent-color: #4285f4;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
 .approval-requirements {
   display: grid;
   gap: 10px;
@@ -6347,10 +6375,15 @@ form.approval-form.requirements-scroll-form {
   -webkit-backdrop-filter: blur(6px);
   background: rgba(15, 24, 40, 0.38);
   animation: premiumOverlayIn 0.25s ease-out;
-  overflow: hidden;
+  /* overflow-y:auto + flex-start prevents the card from jumping when
+     the native file picker or on-screen keyboard alters viewport height */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding: 40px 16px;
 }
 
 @keyframes premiumOverlayIn {
@@ -6359,8 +6392,8 @@ form.approval-form.requirements-scroll-form {
 }
 
 .premium-modal-card {
-  width: min(680px, calc(100vw - 32px));
-  max-height: 80vh;
+  width: min(780px, calc(100vw - 32px));
+  max-height: calc(100vh - 80px);
   overflow: hidden;
   border-radius: 20px;
   padding: 0;
@@ -6370,6 +6403,10 @@ form.approval-form.requirements-scroll-form {
   animation: premiumCardIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   display: flex;
   flex-direction: column;
+  /* auto margins center the card vertically inside the scrollable overlay
+     without relying on viewport-height flex centering (which jumps) */
+  flex-shrink: 0;
+  margin: auto 0;
 }
 
 @keyframes premiumCardIn {
@@ -6382,7 +6419,7 @@ form.approval-form.requirements-scroll-form {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px 16px;
+  padding: 22px 28px 18px;
   border-bottom: 1px solid #f0f1f4;
   background: #fff;
   z-index: 2;
@@ -6441,7 +6478,7 @@ form.approval-form.requirements-scroll-form {
   overflow-y: auto;
   overflow-x: hidden;
   scroll-behavior: smooth;
-  padding: 8px 24px 24px;
+  padding: 12px 28px 28px;
   /* Thin modern scrollbar */
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
@@ -6462,12 +6499,12 @@ form.approval-form.requirements-scroll-form {
 
 /* --- Form Sections --- */
 .premium-section {
-  padding-top: 24px;
-  padding-bottom: 8px;
+  padding-top: 28px;
+  padding-bottom: 10px;
   border-bottom: 1px solid #f2f3f6;
 }
 .premium-section:first-of-type {
-  padding-top: 16px;
+  padding-top: 18px;
 }
 .premium-section:last-of-type {
   border-bottom: none;
@@ -6513,7 +6550,7 @@ form.approval-form.requirements-scroll-form {
 .premium-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 20px;
 }
 
 /* --- Premium Form Field --- */
@@ -6610,7 +6647,7 @@ form.approval-form.requirements-scroll-form {
 .premium-budget-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 20px;
   align-items: start;
 }
 
@@ -6678,7 +6715,7 @@ form.approval-form.requirements-scroll-form {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  padding: 16px 24px;
+  padding: 18px 28px;
   border-top: 1px solid #f2f3f6;
   margin-top: 0;
   background: #fff;
@@ -7113,14 +7150,125 @@ form.approval-form.requirements-scroll-form {
   font-size: 0.85rem;
 }
 
+/* Multi-select chips in trigger */
+.ss-trigger--multi {
+  align-items: flex-start;
+  min-height: 42px;
+  padding: 6px 12px;
+}
+.ss-trigger--has-chips { padding: 6px 10px; }
+.ss-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+.ss-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #e8f0fe;
+  color: #4285f4;
+  border-radius: 6px;
+  padding: 2px 6px 2px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.ss-chip-label { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.ss-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(66,133,244,0.15);
+  color: #4285f4;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s;
+}
+.ss-chip-remove:hover { background: rgba(66,133,244,0.35); }
+
+/* Checkbox style inside multi-select dropdown */
+.ss-option--checkable { justify-content: flex-start; gap: 10px; }
+.ss-checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #c8cdd4;
+  border-radius: 4px;
+  background: #fff;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+.ss-checkbox--checked {
+  background: #4285f4;
+  border-color: #4285f4;
+}
+.ss-checkbox svg { width: 11px; height: 11px; color: #fff; }
+
+/* Venue helper note */
+.form-helper-note {
+  margin-top: 5px;
+  font-size: 0.78rem;
+  color: #7a8699;
+  line-height: 1.4;
+}
+
+/* Others audience text input */
+.premium-input--others {
+  margin-top: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Programming Chair confirmation checkbox */
+.premium-checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8f9ff;
+  border: 1.5px solid #e8edff;
+  transition: border-color 0.15s;
+}
+.premium-checkbox-field:hover { border-color: #b8c9f8; }
+.premium-checkbox {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  accent-color: #4285f4;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.premium-checkbox-label {
+  font-size: 0.88rem;
+  color: #3a4557;
+  line-height: 1.5;
+}
+
 /* ============================================================
    PREMIUM FORM — Responsive
    ============================================================ */
 @media (max-width: 640px) {
+  .premium-modal-overlay {
+    padding: 0;
+    align-items: stretch;
+  }
   .premium-modal-card {
     width: 100vw;
     max-height: 100vh;
     border-radius: 0;
+    margin: 0;
     animation: premiumSheetUp 0.3s ease-out;
   }
   @keyframes premiumSheetUp {
@@ -7858,10 +8006,28 @@ form.approval-form.requirements-scroll-form {
   border-top: 1px solid var(--color-border, #e2e8f0);
 }
 
+.adt-participants-block {
+  margin: 0 0 8px;
+}
+
 .adt-participants {
   font-size: 0.72rem;
   color: var(--color-text-muted, #94a3b8);
-  margin: 0 0 8px;
+  margin: 0;
+}
+
+.adt-privacy-notice {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  color: var(--color-text-muted, #94a3b8);
+  margin: 3px 0 0;
+  opacity: 0.75;
+}
+
+.adt-privacy-notice svg {
+  flex-shrink: 0;
 }
 
 .adt-empty {
@@ -8075,311 +8241,328 @@ form.approval-form.requirements-scroll-form {
   border-color: var(--color-primary, #7c3aed);
 }
 
-/* ═══════════════════════════════════════════════
-   Approval Discussion Tree — .adt-* components
-   (thread-first chat UI, replaces .evt-thread-*)
-   ═══════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════════
+   DiscussionPanel: reply quotes, locked banner, per-bubble reply button
+   ════════════════════════════════════════════════════════════════════════════ */
 
-.adt-section {
-  margin-top: 28px;
-}
-
-/* ─── Panel (one per department thread) ── */
-.adt-panel {
-  border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: 10px;
-  margin-bottom: 12px;
-  background: var(--color-surface, #fff);
+/* Inline reply quote inside a message bubble */
+.dp-msg-reply-quote {
+  background: var(--color-border, #e2e8f0);
+  border-left: 3px solid var(--color-primary, #7c3aed);
+  border-radius: 4px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+  max-width: 100%;
   overflow: hidden;
 }
-
-.adt-panel--resolved {
-  opacity: 0.75;
-  border-color: var(--color-success-border, #86efac);
-}
-
-.adt-panel-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 14px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  color: var(--color-text-primary, #1e293b);
-  font-size: 0.85rem;
-  transition: background 0.15s;
-}
-
-.adt-panel-header:hover {
-  background: var(--color-surface-hover, #f8fafc);
-}
-
-.adt-dept-badge {
-  font-weight: 600;
-  font-size: 0.8rem;
-  padding: 2px 8px;
-  border-radius: 12px;
-  background: var(--color-primary-light, #ede9fe);
-  color: var(--color-primary, #7c3aed);
-}
-
-.adt-msg-count {
-  font-size: 0.75rem;
-  color: var(--color-text-muted, #64748b);
-}
-
-.adt-resolved-chip {
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 1px 7px;
-  border-radius: 10px;
-  background: var(--color-success-bg, #dcfce7);
-  color: var(--color-success, #16a34a);
-  margin-left: auto;
-}
-
-.adt-turn-chip {
-  font-size: 0.7rem;
-  font-weight: 500;
-  padding: 1px 7px;
-  border-radius: 10px;
-  background: var(--color-warning-bg, #fef9c3);
-  color: var(--color-warning, #a16207);
-  margin-left: auto;
-}
-
-.adt-chevron {
-  font-size: 0.75rem;
-  margin-left: auto;
-  display: inline-block;
-  transition: transform 0.2s;
-  color: var(--color-text-muted, #94a3b8);
-}
-.adt-chevron--open {
-  transform: rotate(90deg);
-}
-
-.adt-panel-body {
-  padding: 10px 14px 14px;
-  border-top: 1px solid var(--color-border, #e2e8f0);
-}
-
-.adt-participants {
-  font-size: 0.72rem;
-  color: var(--color-text-muted, #94a3b8);
-  margin: 0 0 8px;
-}
-
-.adt-empty {
-  font-size: 0.8rem;
-  color: var(--color-text-muted, #94a3b8);
-  font-style: italic;
-  margin: 4px 0 10px;
-}
-
-/* ─── Bubble list ── */
-.adt-bubble-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.adt-bubble-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.adt-bubble-row--own {
-  flex-direction: row-reverse;
-}
-
-.adt-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--color-primary-light, #ede9fe);
-  color: var(--color-primary, #7c3aed);
-  font-size: 0.75rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.adt-bubble {
-  max-width: 75%;
-  background: var(--color-surface-2, #f1f5f9);
-  border-radius: 12px 12px 12px 2px;
-  padding: 7px 11px;
-  font-size: 0.82rem;
-}
-
-.adt-bubble-row--own .adt-bubble {
-  background: var(--color-primary, #7c3aed);
-  color: #fff;
-  border-radius: 12px 12px 2px 12px;
-}
-
-.adt-bubble-sender {
+.dp-msg-reply-author {
   display: block;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--color-primary, #7c3aed);
   margin-bottom: 2px;
 }
-
-.adt-bubble-text {
+.dp-msg-reply-preview {
   margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.adt-bubble-time {
-  display: block;
-  font-size: 0.65rem;
-  color: var(--color-text-muted, #94a3b8);
-  margin-top: 3px;
-  text-align: right;
-}
-
-.adt-bubble-row--own .adt-bubble-time {
-  color: rgba(255,255,255,0.65);
-}
-
-/* ─── Action bar (Reply / Open in chat) ── */
-.adt-action-bar {
-  display: flex;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.adt-reply-btn,
-.adt-chat-btn {
   font-size: 0.78rem;
-  padding: 5px 12px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background 0.15s;
+  color: var(--color-text-secondary, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.adt-reply-btn {
-  background: var(--color-primary, #7c3aed);
-  color: #fff;
-}
-.adt-reply-btn:hover {
-  background: var(--color-primary-dark, #6d28d9);
-}
-
-.adt-chat-btn {
-  background: var(--color-surface-2, #f1f5f9);
-  color: var(--color-text-secondary, #475569);
-}
-.adt-chat-btn:hover {
-  background: var(--color-surface-hover, #e2e8f0);
-}
-
-/* ─── Composer ── */
-.adt-composer {
-  margin-top: 10px;
-}
-
-.adt-composer-textarea {
-  width: 100%;
-  border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: 8px;
-  padding: 9px 11px;
-  font-size: 0.83rem;
-  resize: vertical;
-  min-height: 68px;
-  box-sizing: border-box;
-  color: var(--color-text-primary, #1e293b);
-  background: var(--color-surface, #fff);
-  transition: border-color 0.15s;
-}
-.adt-composer-textarea:focus {
-  outline: none;
-  border-color: var(--color-primary, #7c3aed);
-}
-
-.adt-composer-actions {
+/* Reply bar above composer (DiscussionPanel) */
+.dp-reply-bar {
   display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--color-surface-alt, #f1f5f9);
+  border-left: 3px solid var(--color-primary, #7c3aed);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+.dp-reply-bar-content { flex: 1; min-width: 0; }
+.dp-reply-bar-author {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-primary, #7c3aed);
+  margin-bottom: 2px;
+}
+.dp-reply-bar-preview {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dp-reply-bar-dismiss {
+  background: none; border: none; cursor: pointer;
+  font-size: 1rem; color: var(--color-text-muted, #94a3b8);
+  padding: 0 2px; line-height: 1; flex-shrink: 0;
+}
+.dp-reply-bar-dismiss:hover { color: var(--color-text-primary, #1e293b); }
+
+/* Locked thread banner (DiscussionPanel) */
+.dp-locked-banner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--color-surface-alt, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #64748b);
+  margin-bottom: 10px;
+}
+
+/* Per-bubble reply button */
+.adt-bubble-footer {
+  display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 2px;
+}
+.adt-bubble-reply-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.72rem; color: var(--color-text-muted, #94a3b8);
+  padding: 0; line-height: 1; opacity: 0; transition: opacity 0.15s;
+}
+.adt-bubble-row:hover .adt-bubble-reply-btn,
+.adt-bubble-row:focus-within .adt-bubble-reply-btn { opacity: 1; }
+.adt-bubble-reply-btn:hover { color: var(--color-primary, #7c3aed); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Messenger: reply bar, thread-locked banner, workflow items
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.msger-reply-bar {
+  display: flex; align-items: flex-start; gap: 8px;
+  background: var(--color-surface-alt, #f1f5f9);
+  border-top: 1px solid var(--color-border, #e2e8f0);
+  border-left: 3px solid var(--color-primary, #7c3aed);
+  padding: 8px 14px;
+}
+.msger-reply-bar-content { flex: 1; min-width: 0; }
+.msger-reply-bar-author {
+  display: block; font-size: 0.72rem; font-weight: 600;
+  color: var(--color-primary, #7c3aed); margin-bottom: 2px;
+}
+.msger-reply-bar-preview {
+  margin: 0; font-size: 0.78rem; color: var(--color-text-secondary, #64748b);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.msger-reply-bar-dismiss {
+  background: none; border: none; cursor: pointer;
+  font-size: 1.1rem; color: var(--color-text-muted, #94a3b8);
+  padding: 0 2px; line-height: 1; flex-shrink: 0;
+}
+.msger-reply-bar-dismiss:hover { color: var(--color-text-primary, #1e293b); }
+
+.msger-thread-locked-banner {
+  display: flex; align-items: center; gap: 8px; justify-content: center;
+  padding: 12px 16px;
+  background: var(--color-surface-alt, #f8fafc);
+  border-top: 1px solid var(--color-border, #e2e8f0);
+  font-size: 0.82rem; color: var(--color-text-secondary, #64748b);
 }
 
-.adt-post-error {
-  font-size: 0.78rem;
-  margin: 4px 0;
+.msger-reply-quote {
+  background: var(--color-surface-alt, #f1f5f9);
+  border-left: 3px solid var(--color-primary, #7c3aed);
+  border-radius: 4px; padding: 5px 8px; margin-bottom: 6px; cursor: pointer;
+}
+.msger-reply-quote-author {
+  display: block; font-size: 0.72rem; font-weight: 600;
+  color: var(--color-primary, #7c3aed); margin-bottom: 2px;
+}
+.msger-reply-quote-preview {
+  margin: 0; font-size: 0.78rem; color: var(--color-text-secondary, #64748b);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-/* ─── Empty state ── */
-.adt-empty-state {
-  font-size: 0.82rem;
-  color: var(--color-text-muted, #94a3b8);
-  padding: 8px 2px 16px;
-}
+.msger-section-label--muted { opacity: 0.65; }
 
-.adt-loading {
-  padding: 8px 2px;
+.msger-conv-item.workflow {
+  border-left: 2px solid var(--color-primary, #7c3aed);
 }
+.msger-conv-item.workflow.locked { opacity: 0.7; }
 
-/* ─── New-thread panel ── */
-.adt-new-thread {
-  margin-top: 14px;
-}
-
-.adt-new-thread-btn {
-  font-size: 0.8rem;
-  font-weight: 500;
-  padding: 7px 14px;
-  border-radius: 8px;
-  border: 1.5px dashed var(--color-primary, #7c3aed);
-  background: none;
+.msger-avatar.msger-avatar-workflow {
+  background: linear-gradient(135deg, #7c3aed22, #7c3aed44);
   color: var(--color-primary, #7c3aed);
-  cursor: pointer;
-  transition: background 0.15s;
 }
-.adt-new-thread-btn:hover {
-  background: var(--color-primary-light, #ede9fe);
+.msger-conv-workflow-label {
+  font-size: 0.72rem; color: var(--color-primary, #7c3aed);
+  font-weight: 500; margin: 0;
 }
-
-.adt-new-thread-form {
-  background: var(--color-surface-2, #f8fafc);
-  border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: 10px;
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.msger-workflow-dept-label {
+  font-size: 0.76rem; color: var(--color-primary, #7c3aed); font-weight: 500;
 }
 
-.adt-new-thread-label {
-  font-size: 0.82rem;
+/* ════════════════════════════════════════════════════════════════════════════
+   DiscussionPanel: reply quotes, locked banner, per-bubble reply button
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Inline reply quote inside a message bubble */
+.dp-msg-reply-quote {
+  background: var(--color-border, #e2e8f0);
+  border-left: 3px solid var(--color-primary, #7c3aed);
+  border-radius: 4px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+  max-width: 100%;
+  overflow: hidden;
+}
+.dp-msg-reply-author {
+  display: block;
+  font-size: 0.72rem;
   font-weight: 600;
-  color: var(--color-text-primary, #1e293b);
+  color: var(--color-primary, #7c3aed);
+  margin-bottom: 2px;
+}
+.dp-msg-reply-preview {
   margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.adt-new-thread-select {
-  padding: 8px 10px;
-  font-size: 0.83rem;
-  border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: 7px;
-  background: var(--color-surface, #fff);
-  color: var(--color-text-primary, #1e293b);
+/* Reply bar above composer (DiscussionPanel) */
+.dp-reply-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--color-surface-alt, #f1f5f9);
+  border-left: 3px solid var(--color-primary, #7c3aed);
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
 }
-.adt-new-thread-select:focus {
-  outline: none;
-  border-color: var(--color-primary, #7c3aed);
+.dp-reply-bar-content { flex: 1; min-width: 0; }
+.dp-reply-bar-author {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-primary, #7c3aed);
+  margin-bottom: 2px;
+}
+.dp-reply-bar-preview {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-secondary, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dp-reply-bar-dismiss {
+  background: none; border: none; cursor: pointer;
+  font-size: 1rem; color: var(--color-text-muted, #94a3b8);
+  padding: 0 2px; line-height: 1; flex-shrink: 0;
+}
+.dp-reply-bar-dismiss:hover { color: var(--color-text-primary, #1e293b); }
+
+/* Locked thread banner (DiscussionPanel) */
+.dp-locked-banner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--color-surface-alt, #f8fafc);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary, #64748b);
+  margin-bottom: 10px;
+}
+
+/* Per-bubble reply button */
+.adt-bubble-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+.adt-bubble-reply-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.72rem; color: var(--color-text-muted, #94a3b8);
+  padding: 0; line-height: 1; opacity: 0; transition: opacity 0.15s;
+}
+.adt-bubble-row:hover .adt-bubble-reply-btn,
+.adt-bubble-row:focus-within .adt-bubble-reply-btn { opacity: 1; }
+.adt-bubble-reply-btn:hover { color: var(--color-primary, #7c3aed); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Messenger: reply bar, thread-locked banner, workflow items
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.msger-reply-bar {
+  display: flex; align-items: flex-start; gap: 8px;
+  background: var(--color-surface-alt, #f1f5f9);
+  border-top: 1px solid var(--color-border, #e2e8f0);
+  border-left: 3px solid var(--color-primary, #7c3aed);
+  padding: 8px 14px;
+}
+.msger-reply-bar-content { flex: 1; min-width: 0; }
+.msger-reply-bar-author {
+  display: block; font-size: 0.72rem; font-weight: 600;
+  color: var(--color-primary, #7c3aed); margin-bottom: 2px;
+}
+.msger-reply-bar-preview {
+  margin: 0; font-size: 0.78rem; color: var(--color-text-secondary, #64748b);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.msger-reply-bar-dismiss {
+  background: none; border: none; cursor: pointer;
+  font-size: 1.1rem; color: var(--color-text-muted, #94a3b8);
+  padding: 0 2px; line-height: 1; flex-shrink: 0;
+}
+.msger-reply-bar-dismiss:hover { color: var(--color-text-primary, #1e293b); }
+
+.msger-thread-locked-banner {
+  display: flex; align-items: center; gap: 8px; justify-content: center;
+  padding: 12px 16px;
+  background: var(--color-surface-alt, #f8fafc);
+  border-top: 1px solid var(--color-border, #e2e8f0);
+  font-size: 0.82rem; color: var(--color-text-secondary, #64748b);
+}
+
+.msger-reply-quote {
+  background: var(--color-surface-alt, #f1f5f9);
+  border-left: 3px solid var(--color-primary, #7c3aed);
+  border-radius: 4px; padding: 5px 8px; margin-bottom: 6px; cursor: pointer;
+}
+.msger-reply-quote-author {
+  display: block; font-size: 0.72rem; font-weight: 600;
+  color: var(--color-primary, #7c3aed); margin-bottom: 2px;
+}
+.msger-reply-quote-preview {
+  margin: 0; font-size: 0.78rem; color: var(--color-text-secondary, #64748b);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.msger-section-label--muted { opacity: 0.65; }
+
+.msger-conv-item.workflow {
+  border-left: 2px solid var(--color-primary, #7c3aed);
+}
+.msger-conv-item.workflow.locked { opacity: 0.7; }
+
+.msger-avatar.msger-avatar-workflow {
+  background: linear-gradient(135deg, #7c3aed22, #7c3aed44);
+  color: var(--color-primary, #7c3aed);
+}
+.msger-conv-workflow-label {
+  font-size: 0.72rem; color: var(--color-primary, #7c3aed);
+  font-weight: 500; margin: 0;
+}
+.msger-workflow-dept-label {
+  font-size: 0.76rem; color: var(--color-primary, #7c3aed); font-weight: 500;
 }
