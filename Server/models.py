@@ -104,6 +104,8 @@ class ApprovalRequest(Document):
     decided_by: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     override_conflict: bool = Field(default=False)
+    # Emails copied on the initial approval notification (not approvers on the request).
+    approval_cc: List[str] = Field(default_factory=list)
 
     class Settings:
         name = "approval_requests"

@@ -132,6 +132,7 @@ class ApprovalRequestResponse(BaseModel):
     decided_at: Optional[datetime] = None
     decided_by: Optional[str] = None
     created_at: datetime
+    approval_cc: List[str] = Field(default_factory=list)
 
 
 class ApprovalDecision(BaseModel):

@@ -81,6 +81,7 @@ def serialize_approval(item: ApprovalRequest) -> ApprovalRequestResponse:
         decided_at=item.decided_at,
         decided_by=item.decided_by,
         created_at=item.created_at,
+        approval_cc=list(getattr(item, "approval_cc", None) or []),
     )
 
 

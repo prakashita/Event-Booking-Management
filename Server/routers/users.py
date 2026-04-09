@@ -20,7 +20,7 @@ def serialize_user(user: User) -> UserAdminResponse:
     )
 
 
-ADD_USER_ALLOWED_ROLES = {"registrar", "facility_manager", "marketing", "it", "transport"}
+ADD_USER_ALLOWED_ROLES = {"registrar", "vice_chancellor", "facility_manager", "marketing", "it", "transport"}
 
 
 @router.get("", response_model=list[UserAdminResponse])

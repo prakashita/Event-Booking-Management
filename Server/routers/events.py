@@ -57,6 +57,9 @@ from workflow_action_service import (
 router = APIRouter(prefix="/events", tags=["Events"])
 logger = logging.getLogger("event-booking.events")
 
+# Above this budget (Rs), the vice chancellor is the primary approver; registrar is CC only.
+BUDGET_VC_PRIMARY_THRESHOLD = 30000.0
+
 
 def _requested_to_matches_user_email(email: str) -> dict:
     """Case-insensitive exact match on requested_to (handles legacy casing in DB)."""
@@ -68,7 +71,7 @@ async def user_may_view_event_details(user: User, event: Event) -> bool:
     if event.created_by == str(user.id):
         return True
     role = (user.role or "").strip().lower()
-    if role in ("admin", "registrar"):
+    if role in ("admin", "registrar", "vice_chancellor"):
         return True
     if is_admin_email(user.email or ""):
         return True
@@ -226,21 +229,34 @@ def serialize_conflict(event: Event) -> dict:
     }
 
 
-def _build_raw_email(to_email: str, subject: str, body: str) -> str:
+def _build_raw_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    cc_emails: Optional[list[str]] = None,
+) -> str:
+    cc_clean = [e.strip() for e in (cc_emails or []) if e and str(e).strip()]
     headers = [
         f"To: {to_email}",
-        f"Subject: {subject}",
-        "Content-Type: text/plain; charset=\"UTF-8\"",
     ]
+    if cc_clean:
+        headers.append(f"Cc: {', '.join(cc_clean)}")
+    headers.extend(
+        [
+            f"Subject: {subject}",
+            "Content-Type: text/plain; charset=\"UTF-8\"",
+        ]
+    )
     return "\r\n".join(headers) + "\r\n\r\n" + body
 
 
 async def notify_registrar_for_approval(
     requester: User,
-    registrar_email: str,
+    primary_approver_email: str,
     approval: ApprovalRequest,
+    cc_emails: Optional[list[str]] = None,
 ) -> None:
-    """Send email to registrar when a new event requires approval. Uses registrar's Gmail first, then requester's."""
+    """Notify primary approver (To) and CC others. Uses VC/registrar/requester Gmail in that order."""
     subject = f"Event Approval Request: {approval.event_name}"
     budget_line = f"Budget: Rs {approval.budget:,.0f}\n" if getattr(approval, "budget", None) is not None else ""
     body = (
@@ -254,12 +270,15 @@ async def notify_registrar_for_approval(
         f"End: {approval.end_date} {approval.end_time}\n"
         f"\nPlease approve or reject this event from your dashboard."
     )
-    raw_message = _build_raw_email(registrar_email, subject, body)
+    raw_message = _build_raw_email(primary_approver_email, subject, body, cc_emails)
     encoded_message = base64.urlsafe_b64encode(raw_message.encode("utf-8")).decode("utf-8")
 
-    # Try registrar's Gmail first (they usually have it connected for approvals), then requester's
     access_token = None
-    for sender_user in [await get_user_by_role("registrar"), requester]:
+    for sender_user in [
+        await get_user_by_role("vice_chancellor"),
+        await get_user_by_role("registrar"),
+        requester,
+    ]:
         if not sender_user:
             continue
         try:
@@ -271,7 +290,7 @@ async def notify_registrar_for_approval(
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Unable to send registrar notification: registrar or requester must connect Google.",
+            detail="Unable to send approval notification: connect Google on a vice chancellor, registrar, or your account.",
         )
 
     response = requests.post(
@@ -281,7 +300,7 @@ async def notify_registrar_for_approval(
         timeout=15,
     )
     if response.status_code not in {200, 202}:
-        detail = "Unable to send registrar notification email"
+        detail = "Unable to send approval notification email"
         try:
             payload = response.json()
             detail = payload.get("error", {}).get("message", detail)
@@ -333,7 +352,7 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
             approval.requested_to
             and approval.requested_to.strip().lower() == (user.email or "").strip().lower()
         )
-        is_privileged = role in ("registrar", "admin") or is_admin_email(user.email or "")
+        is_privileged = role in ("registrar", "vice_chancellor", "admin") or is_admin_email(user.email or "")
         if not (is_requester or is_assigned_approver or is_privileged):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to view this event")
 
@@ -513,19 +532,35 @@ async def create_event(request: Request, payload: EventCreate, user: User = Depe
             detail="Upload reports for at least some completed events (5 or more have report pending) before creating a new one.",
         )
 
-    registrar_email = await get_primary_email_by_role("registrar")
+    registrar_email = (await get_primary_email_by_role("registrar") or "").strip()
     if not registrar_email:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registrar email is not configured",
         )
 
-    # Registrar receives only event details for approve/reject. Requirements (venue, refreshments)
-    # go to Facility Manager after approval.
+    vc_email = (await get_primary_email_by_role("vice_chancellor") or "").strip()
+    budget_amount = float(payload.budget) if payload.budget is not None else 0.0
+
+    if budget_amount > BUDGET_VC_PRIMARY_THRESHOLD:
+        if not vc_email:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Vice Chancellor email is not configured (required for events over Rs 30,000).",
+            )
+        primary_approver_email = vc_email
+        cc_list = [registrar_email]
+        pending_status = "pending_vice_chancellor_approval"
+    else:
+        primary_approver_email = registrar_email
+        cc_list = [vc_email] if vc_email else []
+        pending_status = "pending_registrar_approval"
+
+    # Primary addressee approves in-app; CC list is notification-only on this email.
     approval = ApprovalRequest(
         requester_id=str(user.id),
         requester_email=user.email,
-        requested_to=registrar_email,
+        requested_to=primary_approver_email,
         event_name=payload.name,
         facilitator=payload.facilitator,
         description=payload.description,
@@ -541,15 +576,16 @@ async def create_event(request: Request, payload: EventCreate, user: User = Depe
         requirements=[],
         other_notes=None,
         override_conflict=payload.override_conflict,
+        approval_cc=cc_list,
     )
     await approval.insert()
 
-    status_label = "pending_registrar_approval"
+    status_label = pending_status
     try:
-        await notify_registrar_for_approval(user, registrar_email, approval)
+        await notify_registrar_for_approval(user, primary_approver_email, approval, cc_emails=cc_list)
     except Exception as exc:
-        logger.warning("Registrar email notification failed approval_id=%s error=%s", str(approval.id), exc)
-        status_label = "pending_registrar_approval_email_failed"
+        logger.warning("Approval email notification failed approval_id=%s error=%s", str(approval.id), exc)
+        status_label = f"{pending_status}_email_failed"
 
     response_body = EventCreateResponse(
         status=status_label,

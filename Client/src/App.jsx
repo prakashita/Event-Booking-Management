@@ -367,6 +367,7 @@ export default function App() {
     missing: []
   });
   const [registrarEmail, setRegistrarEmail] = useState("");
+  const [viceChancellorEmail, setViceChancellorEmail] = useState("");
   const [facilityManagerEmail, setFacilityManagerEmail] = useState("");
   const [marketingEmail, setMarketingEmail] = useState("");
   const [itEmail, setItEmail] = useState("");
@@ -400,18 +401,31 @@ export default function App() {
   const normalizedUserRole = (user?.role || "").toLowerCase();
   const isAdmin = normalizedUserRole === "admin";
   const isRegistrar = normalizedUserRole === "registrar";
-  const isApproverRole = normalizedUserRole === "approver" || isRegistrar;
+  const isViceChancellor = normalizedUserRole === "vice_chancellor";
+  const isRegistrarDashboard = isRegistrar || isViceChancellor;
+  const isApproverRole = normalizedUserRole === "approver" || isRegistrarDashboard;
   const isFacilityManagerRole = normalizedUserRole === "facility_manager";
   const isMarketingRole = normalizedUserRole === "marketing";
   const isItRole = normalizedUserRole === "it";
   const isTransportRole = normalizedUserRole === "transport";
-  const canAccessAdminConsole = isAdmin || isRegistrar;
-  const canAccessApprovals = isRegistrar;
+  const canAccessAdminConsole = isAdmin || isRegistrarDashboard;
+  const canAccessApprovals = isRegistrarDashboard;
   const canAccessRequirements =
     isFacilityManagerRole || isMarketingRole || isItRole || isTransportRole;
   const canAccessIqac = ROLES_WITH_IQAC_ACCESS.includes(normalizedUserRole);
   const canDeleteIqacFiles = ROLES_WITH_IQAC_DELETE_ACCESS.includes(normalizedUserRole);
   const defaultFacilitator = (user?.name || "").trim();
+
+  const APPROVAL_BUDGET_VC_THRESHOLD = 30000;
+  const eventFormBudgetAmount = (() => {
+    const b = eventForm.budget;
+    if (b === "" || b == null) return 0;
+    const n = parseFloat(String(b));
+    return Number.isNaN(n) ? 0 : n;
+  })();
+  const eventApprovalRoutesToVc = eventFormBudgetAmount > APPROVAL_BUDGET_VC_THRESHOLD;
+  const eventApprovalToEmail = eventApprovalRoutesToVc ? viceChancellorEmail : registrarEmail;
+  const eventApprovalCcEmail = eventApprovalRoutesToVc ? registrarEmail : viceChancellorEmail;
 
   const googleClientId =
     import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -1189,7 +1203,8 @@ export default function App() {
     setEventsState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
       const role = (user?.role || "").toLowerCase();
-      const isAdminOrRegistrar = role === "admin" || role === "registrar";
+      const isAdminOrRegistrar =
+        role === "admin" || role === "registrar" || role === "vice_chancellor";
       if (activeView === "event-reports" && user && isAdminOrRegistrar) {
         const reportsRes = await apiFetch(`${apiBaseUrl}/admin/event-reports`);
         if (!reportsRes.ok) {
@@ -1485,17 +1500,19 @@ export default function App() {
     }
   }, [apiBaseUrl, apiFetch]);
 
-  const loadRegistrarEmail = useCallback(async () => {
+  const loadEventApprovalEmails = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
     if (!token) return;
     try {
-      const res = await apiFetch(`${apiBaseUrl}/auth/registrar-email`);
+      const res = await apiFetch(`${apiBaseUrl}/auth/event-approval-emails`);
       if (res.ok) {
         const data = await res.json();
-        setRegistrarEmail(data?.email || "");
+        setRegistrarEmail(data?.registrar_email || "");
+        setViceChancellorEmail(data?.vice_chancellor_email || "");
       }
     } catch {
       setRegistrarEmail("");
+      setViceChancellorEmail("");
     }
   }, [apiBaseUrl, apiFetch]);
 
@@ -1662,19 +1679,20 @@ export default function App() {
 
   useEffect(() => {
     if (user) {
-      loadRegistrarEmail();
+      loadEventApprovalEmails();
       loadFacilityManagerEmail();
       loadMarketingEmail();
       loadItEmail();
       loadTransportEmail();
     } else {
       setRegistrarEmail("");
+      setViceChancellorEmail("");
       setFacilityManagerEmail("");
       setMarketingEmail("");
       setItEmail("");
       setTransportEmail("");
     }
-  }, [user, loadRegistrarEmail, loadFacilityManagerEmail, loadMarketingEmail, loadItEmail, loadTransportEmail]);
+  }, [user, loadEventApprovalEmails, loadFacilityManagerEmail, loadMarketingEmail, loadItEmail, loadTransportEmail]);
 
   useEffect(() => {
     if (!user) return;
@@ -1755,12 +1773,12 @@ export default function App() {
     if (
       (activeView === "approvals" && !canAccessApprovals) ||
       (activeView === "requirements" && !canAccessRequirements) ||
-      (activeView === "event-reports" && !isAdmin && !isRegistrar) ||
+      (activeView === "event-reports" && !isAdmin && !isRegistrarDashboard) ||
       (activeView === "iqac-data" && !canAccessIqac)
     ) {
       navigate(ROUTES.DASHBOARD);
     }
-  }, [activeView, canAccessApprovals, canAccessRequirements, canAccessIqac, isAdmin, isRegistrar, navigate]);
+  }, [activeView, canAccessApprovals, canAccessRequirements, canAccessIqac, isAdmin, isRegistrarDashboard, navigate]);
 
   useEffect(() => {
     const showApprovalsOrRequirements =
@@ -2464,13 +2482,13 @@ export default function App() {
     const st = String(r.status || "").toLowerCase();
     if (!["pending", "clarification_requested"].includes(st)) return false;
     if (String(user.id) === String(r.requester_id)) return true;
-    if (isAdmin || isRegistrar) return true;
+    if (isAdmin || isRegistrarDashboard) return true;
     const assigned = (r.requested_to || "").trim().toLowerCase();
     const em = (user.email || "").trim().toLowerCase();
     if (assigned && assigned === em && isApproverRole) return true;
     if (isDepartmentRole) return true;
     return false;
-  }, [approvalDetailsModal.request, user, isAdmin, isRegistrar, isApproverRole, isDepartmentRole]);
+  }, [approvalDetailsModal.request, user, isAdmin, isRegistrarDashboard, isApproverRole, isDepartmentRole]);
 
   const normalizeMarketingRequirements = (request) => {
     const req = request?.marketing_requirements || {};
@@ -3282,12 +3300,24 @@ export default function App() {
       return;
     }
 
+    const budgetVal = eventForm.budget && !isNaN(parseFloat(eventForm.budget)) && parseFloat(eventForm.budget) >= 0
+      ? parseFloat(eventForm.budget) : null;
+    const routesToVc =
+      budgetVal != null && budgetVal > APPROVAL_BUDGET_VC_THRESHOLD;
+    if (routesToVc && !(viceChancellorEmail || "").trim()) {
+      setApprovalModal({
+        open: true,
+        status: "error",
+        error:
+          "Vice Chancellor email is not configured. An admin must assign a Vice Chancellor user before high-budget events can be submitted."
+      });
+      return;
+    }
+
     setApprovalModal((prev) => ({ ...prev, status: "loading", error: "" }));
 
     try {
-      // Registrar receives only event details. Requirements go to Facility Manager after approval.
-      const budgetVal = eventForm.budget && !isNaN(parseFloat(eventForm.budget)) && parseFloat(eventForm.budget) >= 0
-        ? parseFloat(eventForm.budget) : null;
+      // Primary approver is chosen server-side from budget; CC is notified by email only.
       const payload = {
         ...eventForm,
         budget: budgetVal,
@@ -3318,7 +3348,16 @@ export default function App() {
       }
 
       if (!res.ok) {
-        throw new Error("Unable to send approval request.");
+        let msg = "Unable to send approval request.";
+        try {
+          const errBody = await res.json();
+          if (typeof errBody?.detail === "string") {
+            msg = errBody.detail;
+          }
+        } catch {
+          /* ignore */
+        }
+        throw new Error(msg);
       }
 
       const data = await res.json();
@@ -3342,7 +3381,12 @@ export default function App() {
       setIsEventModalOpen(false);
       setConflictState({ open: false, items: [] });
       loadEvents();
-      setStatus({ type: "success", message: "Event sent to registrar for approval." });
+      setStatus({
+        type: "success",
+        message: routesToVc
+          ? "Event sent to the Vice Chancellor for approval. The Registrar has been copied by email."
+          : "Event sent to the Registrar for approval. The Vice Chancellor has been copied by email when configured."
+      });
     } catch (err) {
       setApprovalModal({
         open: true,
@@ -4118,7 +4162,7 @@ export default function App() {
       if (item.id === "admin" && !canAccessAdminConsole) {
         return false;
       }
-      if (item.id === "event-reports" && !isAdmin && !isRegistrar) {
+      if (item.id === "event-reports" && !isAdmin && !isRegistrarDashboard) {
         return false;
       }
       if (item.id === "approvals" && !canAccessApprovals) {
@@ -4363,6 +4407,7 @@ export default function App() {
                             <option value="admin">Admin</option>
                             <option value="faculty">Faculty</option>
                             <option value="registrar">Registrar</option>
+                            <option value="vice_chancellor">Vice Chancellor</option>
                             <option value="facility_manager">Facility Manager</option>
                             <option value="marketing">Marketing</option>
                             <option value="it">IT</option>
@@ -5310,20 +5355,40 @@ export default function App() {
               <div className="approval-overlay" role="dialog" aria-modal="true">
                 <div className="approval-card">
                   <div className="approval-header">
-                    <h3>REGISTRAR APPROVAL</h3>
+                    <h3>
+                      {eventApprovalRoutesToVc ? "VICE CHANCELLOR APPROVAL" : "REGISTRAR APPROVAL"}
+                    </h3>
                     <button type="button" className="modal-close" onClick={handleApprovalModalClose}>
                       &times;
                     </button>
                   </div>
                   <form className="approval-form" onSubmit={submitApprovalRequest}>
-                    <div className="approval-grid">
-                      <label className="approval-field">
+                    <div className="approval-grid approval-grid--event-routing">
+                      <label className="approval-field" style={{ gridColumn: "1 / -1" }}>
                         <span>From</span>
                         <input type="email" value={user?.email || ""} readOnly />
                       </label>
                       <label className="approval-field">
                         <span>To</span>
-                        <input type="text" value={registrarEmail || "Registrar email"} readOnly />
+                        <input
+                          type="text"
+                          readOnly
+                          value={
+                            eventApprovalToEmail ||
+                            (eventApprovalRoutesToVc ? "Vice Chancellor email" : "Registrar email")
+                          }
+                        />
+                      </label>
+                      <label className="approval-field">
+                        <span>CC</span>
+                        <input
+                          type="text"
+                          readOnly
+                          value={
+                            (eventApprovalCcEmail || "").trim() ||
+                            (eventApprovalRoutesToVc ? "Registrar (not configured)" : "Vice Chancellor (optional)")
+                          }
+                        />
                       </label>
                     </div>
 
@@ -5352,8 +5417,21 @@ export default function App() {
                     </div>
 
                     <p className="approval-note">
-                      Registrar will approve or reject this event. After approval, you can send requirements to Facility,
-                      IT, Marketing, and Transport.
+                      {eventApprovalRoutesToVc ? (
+                        <>
+                          Budget is above Rs {APPROVAL_BUDGET_VC_THRESHOLD.toLocaleString("en-IN")}. The{" "}
+                          <strong>Vice Chancellor</strong> will approve or reject this event in the portal. The{" "}
+                          <strong>Registrar</strong> is copied on the email for information only. After approval, you can
+                          send requirements to Facility, IT, Marketing, and Transport.
+                        </>
+                      ) : (
+                        <>
+                          Budget is Rs {APPROVAL_BUDGET_VC_THRESHOLD.toLocaleString("en-IN")} or below. The{" "}
+                          <strong>Registrar</strong> will approve or reject this event in the portal. The{" "}
+                          <strong>Vice Chancellor</strong> is copied on the email when configured. After approval, you can
+                          send requirements to Facility, IT, Marketing, and Transport.
+                        </>
+                      )}
                     </p>
 
                     <label className="approval-progchair-confirm">
@@ -7387,6 +7465,7 @@ export default function App() {
                     onChange={(e) => setAddUserModal((prev) => ({ ...prev, role: e.target.value }))}
                   >
                     <option value="registrar">Registrar</option>
+                    <option value="vice_chancellor">Vice Chancellor</option>
                     <option value="facility_manager">Facility Manager</option>
                     <option value="marketing">Marketing</option>
                     <option value="it">IT</option>
@@ -7475,7 +7554,7 @@ export default function App() {
                   approvalDiscussionCanReply={approvalDiscussionCanReply}
                   currentUserId={user?.id}
                   viewerRole={
-                    String(user?.id) === String(approvalDetailsModal.request?.requester_id) && !isRegistrar
+                    String(user?.id) === String(approvalDetailsModal.request?.requester_id) && !isRegistrarDashboard
                       ? "faculty"
                       : normalizedUserRole
                   }

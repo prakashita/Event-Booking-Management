@@ -53,6 +53,7 @@ async def get_user_by_role(role: str):
 # Roles that receive Google Calendar invitations when an event is approved (organizer excluded).
 CALENDAR_INVITE_STAFF_ROLES = (
     "registrar",
+    "vice_chancellor",
     "facility_manager",
     "marketing",
     "it",

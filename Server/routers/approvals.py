@@ -9,7 +9,7 @@ from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 import requests
 
-from auth import ensure_google_access_token, is_admin_email
+from auth import ensure_google_access_token, get_primary_email_by_role, is_admin_email
 from drive import upload_report_file
 from idempotency import get_cached_response, get_idempotency_key, store_response
 from models import (
@@ -150,7 +150,19 @@ async def list_inbox(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
-    email = (user.email or "").strip()
+    role = (user.role or "").strip().lower()
+    if role == "vice_chancellor":
+        email = (await get_primary_email_by_role("vice_chancellor") or "").strip()
+    else:
+        email = (user.email or "").strip()
+    if not email:
+        return PaginatedResponse[ApprovalRequestResponse](
+            items=[],
+            total=0,
+            limit=limit,
+            offset=offset,
+            next_offset=None,
+        )
     regex = re.compile(f"^{re.escape(email)}$", re.IGNORECASE)
     query = ApprovalRequest.find({"requested_to": {"$regex": regex}}).sort("-created_at")
     total = await query.count()
@@ -257,6 +269,7 @@ async def get_approval_threads(
     role = (user.role or "").strip().lower()
     uid = str(user.id)
     is_admin = role == "admin" or is_admin_email(user.email or "")
+    is_vc = role == "vice_chancellor"
 
     conversations = await list_approval_threads(str(approval.id))
 
@@ -273,6 +286,8 @@ async def get_approval_threads(
             pass  # admin oversight
         elif user_is_participant:
             pass  # direct participant
+        elif is_vc and (conv.department or "").strip().lower() == "registrar":
+            pass  # vice chancellor: same oversight as registrar dashboard for registrar threads
         else:
             continue  # PRIVACY: skip threads user is not part of
 
@@ -344,7 +359,7 @@ async def ensure_department_thread(
     uid = str(user.id)
     role = (user.role or "").strip().lower()
     is_requester = str(approval.requester_id) == uid
-    is_admin_or_reg = role in ("registrar", "admin") or is_admin_email(user.email or "")
+    is_admin_or_reg = role in ("registrar", "vice_chancellor", "admin") or is_admin_email(user.email or "")
 
     # Determine who the two parties are
     faculty_user_id = str(approval.requester_id)
@@ -494,7 +509,7 @@ async def reopen_approval_thread(
     Restricted to registrar and admin roles.
     """
     role = (user.role or "").strip().lower()
-    if role not in ("registrar", "admin") and not is_admin_email(user.email or ""):
+    if role not in ("registrar", "vice_chancellor", "admin") and not is_admin_email(user.email or ""):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only registrar or admin can reopen threads")
 
     try:
@@ -690,7 +705,7 @@ async def post_approval_discussion_reply(
     approver_email = (approval.requested_to or "").strip().lower()
     user_email = (user.email or "").strip().lower()
     is_assigned_approver = bool(approver_email and approver_email == user_email)
-    is_privileged = role in ("registrar", "admin") or is_admin_email(user.email or "")
+    is_privileged = role in ("registrar", "vice_chancellor", "admin") or is_admin_email(user.email or "")
 
     if not (is_requester or is_assigned_approver or is_privileged):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
@@ -757,7 +772,9 @@ async def decide_request(
         )
 
     approver_email = (user.email or "").strip().lower()
-    if approval.requested_to and approval.requested_to.strip().lower() != approver_email:
+    requested_to = (approval.requested_to or "").strip().lower()
+    role_normalized = (user.role or "").strip().lower()
+    if not (requested_to and approver_email == requested_to):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
     if approval.status in ("approved", "rejected"):
@@ -772,11 +789,12 @@ async def decide_request(
             detail="This approval request is no longer actionable.",
         )
 
+    audit_role = role_normalized if role_normalized in ("registrar", "vice_chancellor") else "registrar"
     ar_log_kwargs = dict(
         approval_request_id=str(approval.id),
         related_kind="approval_request",
         related_id=str(approval.id),
-        role="registrar",
+        role=audit_role,
         comment=comment,
         action_by_email=user.email or "",
         action_by_user_id=str(user.id),

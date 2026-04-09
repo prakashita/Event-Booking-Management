@@ -192,7 +192,7 @@ async def list_publications(
     offset: int = Query(0, ge=0),
 ):
     role = (user.role or "").strip().lower()
-    if role in ("admin", "registrar"):
+    if role in ("admin", "registrar", "vice_chancellor"):
         query = Publication.find_all()
     else:
         query = Publication.find(Publication.created_by == str(user.id))
