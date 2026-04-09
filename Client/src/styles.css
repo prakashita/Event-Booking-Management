@@ -1061,8 +1061,11 @@ body {
   background: rgba(16, 20, 32, 0.45);
   display: grid;
   place-items: center;
+  align-content: center;
   padding: 24px;
   z-index: 1200;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .approval-card {
@@ -1205,8 +1208,11 @@ body {
   background: rgba(16, 20, 32, 0.45);
   display: grid;
   place-items: center;
+  align-content: center;
   padding: 24px;
   z-index: 1250;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .marketing-card {
@@ -1233,7 +1239,21 @@ body {
   flex-shrink: 0;
 }
 
-form.approval-form.requirements-scroll-form {
+.marketing-card.marketing-card--scrollable > .wizard-step-hint {
+  flex-shrink: 0;
+  margin: 0 1rem 0.5rem;
+}
+
+.marketing-card.marketing-card--scrollable > .wizard-form-error {
+  flex-shrink: 0;
+  margin: 0 1rem;
+}
+
+.marketing-card.marketing-card--scrollable > .modal-actions {
+  flex-shrink: 0;
+}
+
+.approval-form.requirements-scroll-form {
   display: flex;
   flex-direction: column;
   flex: 1;

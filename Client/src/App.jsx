@@ -5402,14 +5402,15 @@ export default function App() {
 
             {!requirementsWizard.open && facilityModal.open ? (
               <div className="approval-overlay" role="dialog" aria-modal="true">
-                <div className="marketing-card">
+                <div className="marketing-card marketing-card--scrollable">
                   <div className="approval-header">
                     <h3>FACILITY MANAGER REQUEST</h3>
                     <button type="button" className="modal-close" onClick={handleFacilityModalClose}>
                       &times;
                     </button>
                   </div>
-                  <form className="approval-form" onSubmit={submitFacilityRequest}>
+                  <form className="approval-form requirements-scroll-form" onSubmit={submitFacilityRequest}>
+                    <div className="requirements-form-scroll">
                     <div className="approval-grid">
                       <label className="approval-field">
                         <span>From</span>
@@ -5479,12 +5480,13 @@ export default function App() {
                         onChange={handleFacilityFieldChange("other_notes")}
                       />
                     </label>
+                    </div>
 
                     {facilityModal.status === "error" ? (
                       <p className="form-error">{facilityModal.error}</p>
                     ) : null}
 
-                    <div className="modal-actions">
+                    <div className="modal-actions requirements-modal-actions">
                       <button type="button" className="secondary-action" onClick={handleFacilitySkip}>
                         Skip
                       </button>
@@ -5704,11 +5706,11 @@ export default function App() {
                         onChange={handleTransportFieldChange("other_notes")}
                       />
                     </label>
+                    </div>
 
                     {transportModal.status === "error" ? (
                       <p className="form-error">{transportModal.error}</p>
                     ) : null}
-                    </div>
 
                     <div className="modal-actions requirements-modal-actions">
                       <button type="button" className="secondary-action" onClick={handleTransportSkip}>
@@ -5795,14 +5797,15 @@ export default function App() {
 
             {!requirementsWizard.open && marketingModal.open ? (
               <div className="marketing-overlay" role="dialog" aria-modal="true">
-                <div className="marketing-card">
+                <div className="marketing-card marketing-card--scrollable">
                   <div className="approval-header">
                     <h3>MARKETING REQUEST</h3>
                     <button type="button" className="modal-close" onClick={handleMarketingModalClose}>
                       &times;
                     </button>
                   </div>
-                  <form className="approval-form" onSubmit={submitMarketingRequest}>
+                  <form className="approval-form requirements-scroll-form" onSubmit={submitMarketingRequest}>
+                    <div className="requirements-form-scroll">
                     <div className="approval-grid">
                       <label className="approval-field">
                         <span>From</span>
@@ -5873,12 +5876,13 @@ export default function App() {
                         onChange={handleMarketingFieldChange("other_notes")}
                       />
                     </label>
+                    </div>
 
                     {marketingModal.status === "error" ? (
                       <p className="form-error">{marketingModal.error}</p>
                     ) : null}
 
-                    <div className="modal-actions">
+                    <div className="modal-actions requirements-modal-actions">
                       <button type="button" className="secondary-action" onClick={handleMarketingSkip}>
                         Skip
                       </button>
@@ -5900,14 +5904,15 @@ export default function App() {
 
             {!requirementsWizard.open && itModal.open ? (
               <div className="marketing-overlay" role="dialog" aria-modal="true">
-                <div className="marketing-card">
+                <div className="marketing-card marketing-card--scrollable">
                   <div className="approval-header">
                     <h3>IT SUPPORT REQUEST</h3>
                     <button type="button" className="modal-close" onClick={handleItModalClose}>
                       &times;
                     </button>
                   </div>
-                  <form className="approval-form" onSubmit={submitItRequest}>
+                  <form className="approval-form requirements-scroll-form" onSubmit={submitItRequest}>
+                    <div className="requirements-form-scroll">
                     <div className="approval-grid">
                       <label className="approval-field">
                         <span>From</span>
@@ -6005,12 +6010,13 @@ export default function App() {
                         onChange={handleItFieldChange("other_notes")}
                       />
                     </label>
+                    </div>
 
                     {itModal.status === "error" ? (
                       <p className="form-error">{itModal.error}</p>
                     ) : null}
 
-                    <div className="modal-actions">
+                    <div className="modal-actions requirements-modal-actions">
                       <button type="button" className="secondary-action" onClick={handleItSkip}>
                         Skip
                       </button>

@@ -84,13 +84,7 @@ export default function RequirementsWizardModal({
 
   return (
     <div className="approval-overlay" role="dialog" aria-modal="true">
-      <div
-        className={
-          wizard.phase === "edit" && stepKey === "transport"
-            ? "marketing-card marketing-card--scrollable"
-            : "marketing-card"
-        }
-      >
+      <div className="marketing-card marketing-card--scrollable">
         <div className="approval-header">
           <h3>{wizard.phase === "review" ? "Review requirements" : DEPT_TITLE[stepKey] || "Requirements"}</h3>
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
@@ -99,14 +93,16 @@ export default function RequirementsWizardModal({
         </div>
 
         {wizard.phase === "edit" ? (
-          <p className="form-hint" style={{ margin: "0 1rem 0.5rem" }}>
+          <p className="form-hint wizard-step-hint">
             Step {wizard.stepIndex + 1} of {total}. Use Next to continue, Prev to go back, or Skip to exclude this
             department.
           </p>
         ) : null}
 
+        <div className="approval-form requirements-scroll-form">
+          <div className="requirements-form-scroll">
         {wizard.phase === "edit" && stepKey === "facility" ? (
-          <div className="approval-form">
+          <>
             <div className="approval-grid">
               <label className="approval-field">
                 <span>From</span>
@@ -151,11 +147,11 @@ export default function RequirementsWizardModal({
                 onChange={handleFacilityFieldChange("other_notes")}
               />
             </label>
-          </div>
+          </>
         ) : null}
 
         {wizard.phase === "edit" && stepKey === "it" ? (
-          <div className="approval-form">
+          <>
             <div className="approval-grid">
               <label className="approval-field">
                 <span>From</span>
@@ -219,11 +215,11 @@ export default function RequirementsWizardModal({
                 onChange={handleItFieldChange("other_notes")}
               />
             </label>
-          </div>
+          </>
         ) : null}
 
         {wizard.phase === "edit" && stepKey === "marketing" ? (
-          <div className="approval-form">
+          <>
             <div className="approval-grid">
               <label className="approval-field">
                 <span>From</span>
@@ -269,12 +265,11 @@ export default function RequirementsWizardModal({
                 onChange={handleMarketingFieldChange("other_notes")}
               />
             </label>
-          </div>
+          </>
         ) : null}
 
         {wizard.phase === "edit" && stepKey === "transport" ? (
-          <div className="approval-form requirements-scroll-form">
-            <div className="requirements-form-scroll">
+          <>
               <div className="approval-grid">
                 <label className="approval-field">
                   <span>From</span>
@@ -437,13 +432,11 @@ export default function RequirementsWizardModal({
                   onChange={handleTransportFieldChange("other_notes")}
                 />
               </label>
-            </div>
-          </div>
+          </>
         ) : null}
 
         {wizard.phase === "review" ? (
-          <div className="approval-form requirements-scroll-form">
-            <div className="requirements-form-scroll">
+          <>
               <EventSummary pendingEvent={pendingEvent} eventForm={eventForm} formatISTTime={formatISTTime} />
               {wizard.steps.map((dept) => (
                 <div key={dept} className="approval-summary" style={{ marginTop: "1rem" }}>
@@ -504,11 +497,12 @@ export default function RequirementsWizardModal({
                   All departments were skipped. Close or go back to include at least one request.
                 </p>
               ) : null}
-            </div>
-          </div>
+          </>
         ) : null}
+          </div>
+        </div>
 
-        {wizard.error ? <p className="form-error">{wizard.error}</p> : null}
+        {wizard.error ? <p className="form-error wizard-form-error">{wizard.error}</p> : null}
 
         {wizard.phase === "edit" ? (
           <div className="modal-actions requirements-modal-actions">
