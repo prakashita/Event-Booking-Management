@@ -228,6 +228,13 @@ class MarketingDeliverableResponse(BaseModel):
     is_na: bool = False
 
 
+class MarketingRequesterAttachmentResponse(BaseModel):
+    file_id: str
+    file_name: str
+    web_view_link: Optional[str] = None
+    uploaded_at: datetime
+
+
 class MarketingRequestResponse(BaseModel):
     id: str
     requester_id: str
@@ -252,6 +259,7 @@ class MarketingRequestResponse(BaseModel):
     decided_at: Optional[datetime] = None
     decided_by: Optional[str] = None
     deliverables: List[MarketingDeliverableResponse] = Field(default_factory=list)
+    requester_attachments: List[MarketingRequesterAttachmentResponse] = Field(default_factory=list)
     created_at: datetime
 
 

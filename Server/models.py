@@ -111,6 +111,14 @@ class ApprovalRequest(Document):
         name = "approval_requests"
 
 
+class MarketingRequesterAttachment(BaseModel):
+    """Reference files supplied by the faculty requester for marketing (briefs, brand assets, etc.)."""
+    file_id: str
+    file_name: str
+    web_view_link: Optional[str] = None
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class MarketingDeliverable(BaseModel):
     """A file uploaded by marketing for a request (poster, photo, video, etc.), or marked NA."""
     deliverable_type: str  # poster, photography, video, recording, linkedin, other
@@ -166,6 +174,7 @@ class MarketingRequest(Document):
     decided_at: Optional[datetime] = None
     decided_by: Optional[str] = None
     deliverables: List[MarketingDeliverable] = Field(default_factory=list)
+    requester_attachments: List[MarketingRequesterAttachment] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Settings:

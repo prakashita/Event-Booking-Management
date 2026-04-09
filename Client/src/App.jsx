@@ -159,6 +159,10 @@ export default function App() {
     marketing_requirements: defaultMarketingRequirements(),
     other_notes: ""
   });
+  const [marketingAttachmentFiles, setMarketingAttachmentFiles] = useState([]);
+  const marketingAttachmentsInputRef = useRef(null);
+  const MAX_MARKETING_REQUESTER_FILES = 10;
+  const MAX_MARKETING_REQUESTER_FILE_MB = 25;
   const [itModal, setItModal] = useState({ open: false, status: "idle", error: "" });
   const [itForm, setItForm] = useState({
     to: "",
@@ -1908,6 +1912,10 @@ export default function App() {
   };
 
   const handleMarketingModalOpen = () => {
+    setMarketingAttachmentFiles([]);
+    if (marketingAttachmentsInputRef.current) {
+      marketingAttachmentsInputRef.current.value = "";
+    }
     setMarketingForm({
       to: marketingEmail,
       marketing_requirements: defaultMarketingRequirements(),
@@ -1924,6 +1932,10 @@ export default function App() {
         if (next === "transport") handleTransportModalOpen();
       } else {
         requirementsFlowQueueRef.current = [];
+      }
+      setMarketingAttachmentFiles([]);
+      if (marketingAttachmentsInputRef.current) {
+        marketingAttachmentsInputRef.current.value = "";
       }
       setMarketingModal({ open: false, status: "idle", error: "" });
   };
@@ -2036,6 +2048,10 @@ export default function App() {
   };
 
   const handleMarketingSkip = () => {
+    setMarketingAttachmentFiles([]);
+    if (marketingAttachmentsInputRef.current) {
+      marketingAttachmentsInputRef.current.value = "";
+    }
     setMarketingModal({ open: false, status: "idle", error: "" });
     const queue = requirementsFlowQueueRef.current;
     if (queue[0] === "marketing") {
@@ -2097,6 +2113,10 @@ export default function App() {
         other_notes: ""
       });
     } else if (dept === "marketing") {
+      setMarketingAttachmentFiles([]);
+      if (marketingAttachmentsInputRef.current) {
+        marketingAttachmentsInputRef.current.value = "";
+      }
       setMarketingForm({
         to: marketingEmail,
         marketing_requirements: defaultMarketingRequirements(),
@@ -2159,6 +2179,10 @@ export default function App() {
 
   const handleRequirementsWizardClose = () => {
     requirementsFlowQueueRef.current = [];
+    setMarketingAttachmentFiles([]);
+    if (marketingAttachmentsInputRef.current) {
+      marketingAttachmentsInputRef.current.value = "";
+    }
     setRequirementsWizard({
       open: false,
       steps: [],
@@ -3596,6 +3620,35 @@ export default function App() {
         throw new Error("Unable to send marketing request.");
       }
 
+      const created = await res.json();
+      try {
+        await uploadMarketingRequesterAttachmentsIfAny(created?.id, marketingAttachmentFiles);
+      } catch (uploadErr) {
+        setMarketingModal({ open: false, status: "idle", error: "" });
+        setMarketingAttachmentFiles([]);
+        if (marketingAttachmentsInputRef.current) {
+          marketingAttachmentsInputRef.current.value = "";
+        }
+        setStatus({
+          type: "error",
+          message: `${uploadErr?.message || "Document upload failed."} Your marketing request was still created.`
+        });
+        loadEvents();
+        const queue = requirementsFlowQueueRef.current;
+        if (queue[0] === "marketing") {
+          requirementsFlowQueueRef.current = queue.slice(1);
+          const next = requirementsFlowQueueRef.current[0];
+          if (next === "transport") handleTransportModalOpen();
+        } else {
+          requirementsFlowQueueRef.current = [];
+        }
+        return;
+      }
+
+      setMarketingAttachmentFiles([]);
+      if (marketingAttachmentsInputRef.current) {
+        marketingAttachmentsInputRef.current.value = "";
+      }
       setMarketingModal({ open: false, status: "idle", error: "" });
       setStatus({ type: "success", message: "Marketing request submitted." });
       loadEvents();
@@ -3766,9 +3819,10 @@ export default function App() {
             "Unable to send IT request."
           );
         } else if (dept === "marketing") {
-          await postOrThrow(
-            `${apiBaseUrl}/marketing/requests`,
-            {
+          const mRes = await apiFetch(`${apiBaseUrl}/marketing/requests`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
               requested_to: marketingForm.to,
               event_id: eventPayload?.event_id || eventPayload?.id || "",
               event_name: eventPayload?.name || "",
@@ -3778,9 +3832,25 @@ export default function App() {
               end_time: eventPayload?.end_time || "",
               marketing_requirements: marketingForm.marketing_requirements,
               other_notes: marketingForm.other_notes
-            },
-            "Unable to send marketing request."
-          );
+            })
+          });
+          if (!mRes.ok) {
+            const errData = await mRes.json().catch(() => ({}));
+            const detail = errData?.detail;
+            const msg =
+              typeof detail === "string"
+                ? detail
+                : Array.isArray(detail)
+                  ? detail.map((d) => d.msg || JSON.stringify(d)).join(" ")
+                  : "Unable to send marketing request.";
+            throw new Error(msg);
+          }
+          const mData = await mRes.json();
+          await uploadMarketingRequesterAttachmentsIfAny(mData?.id, marketingAttachmentFiles);
+          setMarketingAttachmentFiles([]);
+          if (marketingAttachmentsInputRef.current) {
+            marketingAttachmentsInputRef.current.value = "";
+          }
         } else if (dept === "transport") {
           const tErr = getTransportValidationError(transportForm);
           if (tErr) {
@@ -4074,6 +4144,58 @@ export default function App() {
       }
     }));
   };
+
+  const handleMarketingAttachmentsPick = (event) => {
+    const picked = event.target.files ? Array.from(event.target.files) : [];
+    event.target.value = "";
+    if (!picked.length) return;
+    const maxBytes = MAX_MARKETING_REQUESTER_FILE_MB * 1024 * 1024;
+    for (const f of picked) {
+      if (f.size > maxBytes) {
+        setStatus({
+          type: "error",
+          message: `${f.name} is larger than ${MAX_MARKETING_REQUESTER_FILE_MB}MB.`
+        });
+        return;
+      }
+    }
+    setMarketingAttachmentFiles((prev) => {
+      const next = [...prev, ...picked];
+      if (next.length > MAX_MARKETING_REQUESTER_FILES) {
+        setStatus({
+          type: "error",
+          message: `You can attach at most ${MAX_MARKETING_REQUESTER_FILES} files.`
+        });
+        return prev;
+      }
+      return next;
+    });
+  };
+
+  const removeMarketingAttachmentAt = (index) => {
+    setMarketingAttachmentFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadMarketingRequesterAttachmentsIfAny = useCallback(async (requestId, files) => {
+    if (!requestId || !files?.length) return;
+    const fd = new FormData();
+    for (const f of files) {
+      fd.append("files", f);
+    }
+    const res = await api.post(`/marketing/requests/${requestId}/requester-attachments`, fd);
+    if (!res.ok) {
+      let msg = "Could not upload attached documents.";
+      try {
+        const errBody = await res.json();
+        if (typeof errBody?.detail === "string") {
+          msg = errBody.detail;
+        }
+      } catch {
+        /* ignore */
+      }
+      throw new Error(msg);
+    }
+  }, []);
 
   const handleItFieldChange = (field) => (event) => {
     setItForm((prev) => ({
@@ -5953,6 +6075,37 @@ export default function App() {
                         value={marketingForm.other_notes}
                         onChange={handleMarketingFieldChange("other_notes")}
                       />
+                    </label>
+                    <label className="approval-field">
+                      <span>Any necessary documents (optional)</span>
+                      <input
+                        ref={marketingAttachmentsInputRef}
+                        type="file"
+                        multiple
+                        className="marketing-requester-docs-input"
+                        onChange={handleMarketingAttachmentsPick}
+                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.txt,application/pdf"
+                      />
+                      <p className="form-hint">
+                        Up to {MAX_MARKETING_REQUESTER_FILES} files, {MAX_MARKETING_REQUESTER_FILE_MB} MB each (PDF, Word,
+                        images, text). Files upload after the request is created; Google must be connected.
+                      </p>
+                      {marketingAttachmentFiles.length ? (
+                        <ul className="marketing-attachment-chips">
+                          {marketingAttachmentFiles.map((f, i) => (
+                            <li key={`${f.name}-${i}-${f.size}`}>
+                              <span>{f.name}</span>
+                              <button
+                                type="button"
+                                className="link-button marketing-attachment-remove"
+                                onClick={() => removeMarketingAttachmentAt(i)}
+                              >
+                                Remove
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
                     </label>
                     </div>
 
@@ -7880,6 +8033,12 @@ export default function App() {
             setTransportForm={setTransportForm}
             handleMarketingFieldChange={handleMarketingFieldChange}
             handleMarketingToggle={handleMarketingToggle}
+            marketingAttachmentFiles={marketingAttachmentFiles}
+            marketingAttachmentsInputRef={marketingAttachmentsInputRef}
+            onMarketingAttachmentsPick={handleMarketingAttachmentsPick}
+            onRemoveMarketingAttachment={removeMarketingAttachmentAt}
+            maxMarketingAttachmentFiles={MAX_MARKETING_REQUESTER_FILES}
+            maxMarketingAttachmentFileMb={MAX_MARKETING_REQUESTER_FILE_MB}
             handleItFieldChange={handleItFieldChange}
             handleItToggle={handleItToggle}
             setItForm={setItForm}

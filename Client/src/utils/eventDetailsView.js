@@ -333,6 +333,7 @@ export function collectDepartmentRequirementSections(
         decidedBy: req.decided_by,
         decidedAt: req.decided_at,
         deliverables: req.deliverables || [],
+        requesterAttachments: req.requester_attachments || [],
         marketingRequest: req
       }))
     });

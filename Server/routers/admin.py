@@ -11,6 +11,7 @@ from schemas import (
     InviteResponse,
     ItRequestResponse,
     MarketingDeliverableResponse,
+    MarketingRequesterAttachmentResponse,
     MarketingRequestResponse,
     PaginatedResponse,
     PublicationResponse,
@@ -155,6 +156,28 @@ def _normalize_marketing_requirements(item: MarketingRequest):
     return normalized, flags
 
 
+def _serialize_requester_attachments_admin(raw) -> list[MarketingRequesterAttachmentResponse]:
+    out: list[MarketingRequesterAttachmentResponse] = []
+    for d in raw or []:
+        file_id = d.get("file_id") if isinstance(d, dict) else getattr(d, "file_id", None)
+        if not file_id:
+            continue
+        file_name = (d.get("file_name") if isinstance(d, dict) else getattr(d, "file_name", None)) or ""
+        web_view_link = d.get("web_view_link") if isinstance(d, dict) else getattr(d, "web_view_link", None)
+        uploaded_at = d.get("uploaded_at") if isinstance(d, dict) else getattr(d, "uploaded_at", None)
+        if uploaded_at is None:
+            uploaded_at = datetime.utcnow()
+        out.append(
+            MarketingRequesterAttachmentResponse(
+                file_id=file_id,
+                file_name=file_name,
+                web_view_link=web_view_link,
+                uploaded_at=uploaded_at,
+            )
+        )
+    return out
+
+
 def serialize_marketing(item: MarketingRequest) -> MarketingRequestResponse:
     raw = getattr(item, "deliverables", None) or []
     deliverables = [x for d in raw if (x := _deliverable_to_response(d))]
@@ -184,6 +207,7 @@ def serialize_marketing(item: MarketingRequest) -> MarketingRequestResponse:
         decided_at=item.decided_at,
         decided_by=item.decided_by,
         deliverables=deliverables,
+        requester_attachments=_serialize_requester_attachments_admin(getattr(item, "requester_attachments", None)),
         created_at=item.created_at,
     )
 

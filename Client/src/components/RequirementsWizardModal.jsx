@@ -60,6 +60,12 @@ export default function RequirementsWizardModal({
   setTransportForm,
   handleMarketingFieldChange,
   handleMarketingToggle,
+  marketingAttachmentFiles = [],
+  marketingAttachmentsInputRef,
+  onMarketingAttachmentsPick,
+  onRemoveMarketingAttachment,
+  maxMarketingAttachmentFiles = 10,
+  maxMarketingAttachmentFileMb = 25,
   handleItFieldChange,
   handleItToggle,
   setItForm
@@ -265,6 +271,37 @@ export default function RequirementsWizardModal({
                 onChange={handleMarketingFieldChange("other_notes")}
               />
             </label>
+            <label className="approval-field">
+              <span>Any necessary documents (optional)</span>
+              <input
+                ref={marketingAttachmentsInputRef}
+                type="file"
+                multiple
+                className="marketing-requester-docs-input"
+                onChange={onMarketingAttachmentsPick}
+                accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.txt,application/pdf"
+              />
+              <p className="form-hint">
+                Up to {maxMarketingAttachmentFiles} files, {maxMarketingAttachmentFileMb} MB each (PDF, Word, images,
+                text). Files upload after the request is created; Google must be connected.
+              </p>
+              {marketingAttachmentFiles.length ? (
+                <ul className="marketing-attachment-chips">
+                  {marketingAttachmentFiles.map((f, i) => (
+                    <li key={`${f.name}-${i}-${f.size}`}>
+                      <span>{f.name}</span>
+                      <button
+                        type="button"
+                        className="link-button marketing-attachment-remove"
+                        onClick={() => onRemoveMarketingAttachment(i)}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </label>
           </>
         ) : null}
 
@@ -469,6 +506,11 @@ export default function RequirementsWizardModal({
                         <li>No items selected</li>
                       )}
                       {marketingForm.other_notes?.trim() ? <li>Notes: {marketingForm.other_notes.trim()}</li> : null}
+                      {marketingAttachmentFiles.length ? (
+                        <li>
+                          Attached files: {marketingAttachmentFiles.length} (uploads after send)
+                        </li>
+                      ) : null}
                     </ul>
                   ) : dept === "transport" ? (
                     <ul className="form-hint" style={{ margin: "0.25rem 0 0 1rem" }}>

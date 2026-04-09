@@ -13,14 +13,23 @@ logger = logging.getLogger(__name__)
 from auth import ensure_google_access_token, get_primary_email_by_role
 from drive import upload_report_file
 from event_status import event_has_ended, event_has_started
-from models import ApprovalRequest, Event, MarketingDeliverable, MarketingRequest, User
+from models import ApprovalRequest, Event, MarketingDeliverable, MarketingRequest, MarketingRequesterAttachment, User
 from notifications import send_notification_email
 from routers.deps import get_current_user
 from decision_helpers import parse_requirement_decision_status, requirement_decision_comment
 from requirement_decision_service import apply_requirement_decision
-from schemas import MarketingDecision, MarketingRequestCreate, MarketingRequestResponse, MarketingDeliverableResponse
+from schemas import (
+    MarketingDecision,
+    MarketingDeliverableResponse,
+    MarketingRequestCreate,
+    MarketingRequesterAttachmentResponse,
+    MarketingRequestResponse,
+)
 
 router = APIRouter(prefix="/marketing", tags=["Marketing"])
+
+MAX_REQUESTER_MARKETING_FILES = 10
+MAX_REQUESTER_MARKETING_FILE_BYTES = 25 * 1024 * 1024
 
 
 def _as_bool(value) -> bool:
@@ -83,6 +92,26 @@ def _deliverable_field(d, key: str, default=None):
     if isinstance(d, dict):
         return d.get(key, default)
     return getattr(d, key, default)
+
+
+def _serialize_requester_attachments(raw) -> list[MarketingRequesterAttachmentResponse]:
+    out: list[MarketingRequesterAttachmentResponse] = []
+    for d in raw or []:
+        file_id = _deliverable_field(d, "file_id")
+        if not file_id:
+            continue
+        uploaded_at = _deliverable_field(d, "uploaded_at")
+        if uploaded_at is None:
+            uploaded_at = datetime.utcnow()
+        out.append(
+            MarketingRequesterAttachmentResponse(
+                file_id=file_id,
+                file_name=_deliverable_field(d, "file_name", ""),
+                web_view_link=_deliverable_field(d, "web_view_link"),
+                uploaded_at=uploaded_at,
+            )
+        )
+    return out
 
 
 def _serialize_deliverables(deliverables_list):
@@ -231,6 +260,7 @@ def _serialize_marketing_response(item: MarketingRequest) -> MarketingRequestRes
         decided_at=item.decided_at,
         decided_by=item.decided_by,
         deliverables=_serialize_deliverables(getattr(item, "deliverables", None) or []),
+        requester_attachments=_serialize_requester_attachments(getattr(item, "requester_attachments", None)),
         created_at=item.created_at,
     )
 
@@ -336,7 +366,11 @@ async def create_marketing_request(
     )
     if request_item.other_notes:
         body += f"\nAdditional notes: {request_item.other_notes}\n"
-    body += "\nPlease approve or reject this request from your dashboard."
+    body += (
+        "\nThe requester may attach reference documents (briefs, logos, etc.) from the portal; "
+        "when present, they appear on this request in your dashboard.\n"
+        "\nPlease approve or reject this request from your dashboard."
+    )
     await send_notification_email(
         recipient_email=requested_to,
         subject=subject,
@@ -345,6 +379,108 @@ async def create_marketing_request(
         fallback_role="marketing",
     )
 
+    return _serialize_marketing_response(request_item)
+
+
+@router.post("/requests/{request_id}/requester-attachments", response_model=MarketingRequestResponse)
+@limiter.limit("30/minute")
+async def upload_marketing_requester_attachments(
+    request: Request,
+    request_id: str,
+    files: list[UploadFile] = File(...),
+    user: User = Depends(get_current_user),
+):
+    """Faculty requester uploads optional reference documents for marketing (multiple files, Drive-backed)."""
+    if not files:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one file is required")
+    if len(files) > MAX_REQUESTER_MARKETING_FILES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"At most {MAX_REQUESTER_MARKETING_FILES} files per upload",
+        )
+
+    request_item = await MarketingRequest.get(request_id)
+    if not request_item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    if str(request_item.requester_id) != str(user.id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the requester can upload these documents",
+        )
+    if (request_item.status or "").strip().lower() != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Documents can only be added while the request is pending approval",
+        )
+    if event_has_started(request_item.start_date, request_item.start_time):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Event has already started; cannot add documents",
+        )
+
+    folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
+    if not folder_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Google Drive folder is not configured",
+        )
+
+    existing = list(getattr(request_item, "requester_attachments", None) or [])
+    if len(existing) + len(files) > MAX_REQUESTER_MARKETING_FILES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"At most {MAX_REQUESTER_MARKETING_FILES} files total on this request",
+        )
+
+    try:
+        access_token = await ensure_google_access_token(user)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("requester attachment: no Google token: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Connect Google in Settings to upload files.",
+        ) from exc
+
+    new_rows: list[MarketingRequesterAttachment] = []
+    for file in files:
+        if not file.filename:
+            continue
+        contents = await file.read()
+        if len(contents) > MAX_REQUESTER_MARKETING_FILE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File {file.filename!s} is too large (max 25MB per file)",
+            )
+        try:
+            drive_file = upload_report_file(
+                access_token=access_token,
+                file_name=file.filename,
+                file_bytes=contents,
+                mime_type=file.content_type or "application/octet-stream",
+                folder_id=folder_id,
+            )
+        except Exception as exc:
+            logger.exception("Marketing requester attachment Drive upload failed")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Unable to upload {file.filename!s}: {exc!s}",
+            ) from exc
+        new_rows.append(
+            MarketingRequesterAttachment(
+                file_id=drive_file.get("id", ""),
+                file_name=drive_file.get("name", file.filename),
+                web_view_link=drive_file.get("webViewLink"),
+                uploaded_at=datetime.utcnow(),
+            )
+        )
+
+    if not new_rows:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid files provided")
+
+    request_item.requester_attachments = existing + new_rows
+    await request_item.save()
     return _serialize_marketing_response(request_item)
 
 

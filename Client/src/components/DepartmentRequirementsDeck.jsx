@@ -145,6 +145,24 @@ export default function DepartmentRequirementsDeck({
                           </a>
                         </p>
                       ) : null}
+                      {section.key === "marketing" && block.requesterAttachments?.length ? (
+                        <div className="evt-req-deliverables evt-req-requester-docs">
+                          <p className="evt-req-phase-title">Requester reference documents</p>
+                          <ul className="evt-req-items">
+                            {block.requesterAttachments.map((a, j) => (
+                              <li key={a.file_id || j}>
+                                {a.web_view_link ? (
+                                  <a href={a.web_view_link} target="_blank" rel="noreferrer">
+                                    {a.file_name || "Document"}
+                                  </a>
+                                ) : (
+                                  <span>{a.file_name || "Document"}</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
                       {section.key === "marketing" ? (
                         <div className="evt-req-deliverables">
                           <p className="evt-req-phase-title">Uploaded deliverables</p>
