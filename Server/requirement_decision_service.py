@@ -63,6 +63,33 @@ async def apply_requirement_decision(
         except Exception:
             pass
 
+    # Notify requester via email when department requests clarification
+    if normalized_status == "clarification_requested":
+        try:
+            from notifications import send_notification_email
+            from event_chat_service import DEPARTMENT_LABELS
+
+            dept_label = DEPARTMENT_LABELS.get(role, role.title())
+            event_name = getattr(request_item, "event_name", "") or "Event"
+            subject = f"Clarification needed from {dept_label}: {event_name}"
+            body = (
+                f"The {dept_label} team needs clarification for your event \"{event_name}\".\n\n"
+                f"Message:\n{comment}\n\n"
+                "Please log in to the Event Booking portal, review the feedback, "
+                "and reply in the discussion thread."
+            )
+            requester_email = getattr(request_item, "requester_email", "")
+            if requester_email:
+                await send_notification_email(
+                    recipient_email=requester_email,
+                    subject=subject,
+                    body=body,
+                    requester=user,
+                    fallback_role=role,
+                )
+        except Exception as exc:
+            logger.warning("Clarification notification failed for %s: %s", role, exc)
+
     # Ensure a discussion thread exists for this dept+faculty pair on every decision
     if ar_id:
         try:

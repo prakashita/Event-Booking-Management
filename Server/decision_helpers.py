@@ -41,6 +41,19 @@ def require_decision_comment(comment_val: str | None) -> str:
     return c
 
 
+def requirement_decision_comment(normalized_status: str, comment_val: str | None) -> str:
+    """Approve allows an empty comment; reject and clarification require a non-empty comment."""
+    if normalized_status == "approved":
+        c = (comment_val or "").strip()
+        if len(c) > 4000:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Comment must be at most 4000 characters.",
+            )
+        return c
+    return require_decision_comment(comment_val)
+
+
 def registrar_decision_comment(normalized_status: str, comment_val: str | None) -> str:
     """Approve allows an empty comment; reject and clarification require a non-empty comment."""
     if normalized_status == "approved":

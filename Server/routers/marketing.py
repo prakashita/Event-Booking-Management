@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -15,7 +16,7 @@ from event_status import event_has_ended, event_has_started
 from models import ApprovalRequest, Event, MarketingDeliverable, MarketingRequest, User
 from notifications import send_notification_email
 from routers.deps import get_current_user
-from decision_helpers import parse_requirement_decision_status, require_decision_comment
+from decision_helpers import parse_requirement_decision_status, requirement_decision_comment
 from requirement_decision_service import apply_requirement_decision
 from schemas import MarketingDecision, MarketingRequestCreate, MarketingRequestResponse, MarketingDeliverableResponse
 
@@ -350,8 +351,9 @@ async def create_marketing_request(
 @router.get("/inbox", response_model=list[MarketingRequestResponse])
 async def list_marketing_inbox(user: User = Depends(get_current_user)):
     requested_to = (user.email or "").strip().lower()
+    regex = re.compile(f"^{re.escape(requested_to)}$", re.IGNORECASE)
     requests = await MarketingRequest.find(
-        MarketingRequest.requested_to == requested_to
+        {"requested_to": {"$regex": regex}}
     ).sort("-created_at").to_list()
     return [_serialize_marketing_response(item) for item in requests]
 
@@ -362,8 +364,8 @@ async def decide_marketing_request(
     payload: MarketingDecision,
     user: User = Depends(get_current_user),
 ):
-    comment = require_decision_comment(payload.comment)
     normalized_status = parse_requirement_decision_status(payload.status)
+    comment = requirement_decision_comment(normalized_status, payload.comment)
 
     request_item = await MarketingRequest.get(request_id)
     if not request_item:
@@ -375,7 +377,8 @@ async def decide_marketing_request(
             detail="Event has already started; approval or rejection is no longer allowed.",
         )
 
-    if request_item.requested_to and request_item.requested_to != (user.email or "").strip().lower():
+    approver_email = (user.email or "").strip().lower()
+    if request_item.requested_to and request_item.requested_to.strip().lower() != approver_email:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
     await apply_requirement_decision(
