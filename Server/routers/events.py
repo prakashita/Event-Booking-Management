@@ -531,6 +531,8 @@ async def create_event(request: Request, payload: EventCreate, user: User = Depe
         description=payload.description,
         venue_name=payload.venue_name,
         intendedAudience=payload.intendedAudience,
+        intendedAudienceOther=payload.intendedAudienceOther,
+        discussedWithProgrammingChair=payload.discussedWithProgrammingChair,
         budget=payload.budget,
         start_date=payload.start_date.isoformat(),
         start_time=payload.start_time.isoformat(),
@@ -710,4 +712,15 @@ async def update_event_status(
 
     event.status = "closed"
     await event.save()
+
+    # Close all workflow discussion threads tied to this event's approval
+    try:
+        from event_chat_service import close_all_threads_for_approval
+        from models import ApprovalRequest as _AR
+        _approval = await _AR.find_one({"event_id": str(event.id)})
+        if _approval:
+            await close_all_threads_for_approval(str(_approval.id), reason="event_closed")
+    except Exception as _exc:
+        logger.warning("close_all_threads_for_approval on event close failed: %s", _exc)
+
     return serialize_event(event)

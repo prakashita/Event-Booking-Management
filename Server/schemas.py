@@ -1,5 +1,5 @@
 from datetime import date, time, datetime
-from typing import Generic, List, Literal, Optional, TypeVar
+from typing import Generic, List, Literal, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -47,7 +47,9 @@ class EventCreate(BaseModel):
     facilitator: str = Field(..., min_length=1, max_length=120)
     description: Optional[str] = Field(default=None, max_length=2000)
     venue_name: str = Field(..., min_length=1, max_length=120)
-    intendedAudience: Optional[Literal["Students", "Faculty", "PhD Scholars", "Staffs", "Everyone at VU"]] = None
+    intendedAudience: Optional[List[str]] = None
+    intendedAudienceOther: Optional[str] = Field(default=None, max_length=500)
+    discussedWithProgrammingChair: bool = False
     budget: Optional[float] = Field(default=None, ge=0)  # Event budget in Rs
 
     @field_validator("budget", mode="before")
@@ -79,7 +81,8 @@ class EventResponse(BaseModel):
     facilitator: str
     description: Optional[str] = None
     venue_name: str
-    intendedAudience: Optional[str] = None
+    intendedAudience: Optional[Union[List[str], str]] = None
+    intendedAudienceOther: Optional[str] = None
     budget: Optional[float] = None
     start_date: str
     start_time: str
@@ -116,7 +119,9 @@ class ApprovalRequestResponse(BaseModel):
     budget_breakdown_uploaded_at: Optional[datetime] = None
     description: Optional[str] = None
     venue_name: str
-    intendedAudience: Optional[str] = None
+    intendedAudience: Optional[Union[List[str], str]] = None
+    intendedAudienceOther: Optional[str] = None
+    discussedWithProgrammingChair: bool = False
     start_date: str
     start_time: str
     end_date: str
@@ -440,6 +445,7 @@ class ApprovalDiscussionReply(BaseModel):
     parent_id: Optional[str] = Field(default=None, max_length=64)
     thread_id: Optional[str] = Field(default=None, max_length=64)
     message: str = Field(..., min_length=1, max_length=4000)
+    reply_to_message_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class ApprovalThreadEnsureRequest(BaseModel):
@@ -461,6 +467,9 @@ class ApprovalThreadMessage(BaseModel):
     sender_name: str
     content: Optional[str] = None
     created_at: datetime
+    is_legacy: bool = False  # True for WorkflowActionLog-sourced messages
+    reply_to_message_id: Optional[str] = None
+    reply_to_snapshot: Optional[dict] = None
 
 
 class ApprovalThreadInfo(BaseModel):
@@ -474,6 +483,8 @@ class ApprovalThreadInfo(BaseModel):
     participants: list[ApprovalThreadParticipant] = Field(default_factory=list)
     created_at: datetime
     messages: list[ApprovalThreadMessage] = Field(default_factory=list)
+    closed_at: Optional[datetime] = None
+    closed_reason: Optional[str] = None
 
 
 class EventCreateResponse(BaseModel):
@@ -528,6 +539,7 @@ class ChatMessageCreate(BaseModel):
     conversation_id: str
     content: Optional[str] = Field(default=None, max_length=4000)
     attachments: list[ChatAttachment] = Field(default_factory=list)
+    reply_to_message_id: Optional[str] = None
 
 
 class ChatMessageEdit(BaseModel):
@@ -549,6 +561,8 @@ class ChatMessageResponse(BaseModel):
     deleted_for_everyone: bool = False
     edited: bool = False
     edited_at: Optional[datetime] = None
+    reply_to_message_id: Optional[str] = None
+    reply_to_snapshot: Optional[dict] = None  # {sender_name, content_preview, is_deleted}
 
 
 class ChatReadReceipt(BaseModel):
@@ -596,6 +610,14 @@ class ChatConversationListItem(BaseModel):
     last_message: Optional[dict] = None  # {text, sender_id, sender_name, created_at, message_id?}
     participant_count: int = 0
     participants_preview: list[ChatParticipantSummary] = Field(default_factory=list)
+    # Workflow thread fields (approval_thread kind)
+    thread_status: Optional[str] = None
+    department: Optional[str] = None
+    department_label: Optional[str] = None
+    related_kind: Optional[str] = None
+    approval_request_id: Optional[str] = None
+    closed_at: Optional[datetime] = None
+    closed_reason: Optional[str] = None
 
 
 class ChatSendMessage(BaseModel):

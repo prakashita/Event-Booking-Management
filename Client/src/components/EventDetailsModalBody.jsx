@@ -10,11 +10,12 @@ import {
   IconWallet
 } from "./icons/EventModalIcons";
 import DepartmentRequirementsDeck from "./DepartmentRequirementsDeck";
+import ApprovalDiscussionTree from "./ApprovalDiscussionTree";
+import { useMessenger } from "./messenger/MessengerContext";
 import {
   buildWorkflowStepperSteps,
   collectDepartmentRequirementSections,
   formatModalDateTime,
-  formatWorkflowActionTypeLabel,
   formatWorkflowRoleLabel,
   orderDepartmentSectionsForRole,
   wfBadgeClass,
@@ -31,13 +32,20 @@ export default function EventDetailsModalBody({
   transportRequestTypeLabel,
   isMarketingViewer = false,
   onMarketingUpload,
-  getMarketingDeliverableUploadFlags
+  getMarketingDeliverableUploadFlags,
+  currentUserId,
+  openApprovalThread,
 }) {
   const event = details?.event;
   const eventName = event?.name || fallbackEventName || "—";
-  const intendedAudience = event?.intendedAudience ?? event?.intended_audience ?? null;
+  const rawAudience = event?.intendedAudience ?? event?.intended_audience ?? null;
+  const audienceOther = event?.intendedAudienceOther ?? event?.intended_audience_other ?? null;
+  const intendedAudience = Array.isArray(rawAudience)
+    ? rawAudience.join(", ") + (audienceOther ? ` (Others: ${audienceOther})` : "")
+    : rawAudience
+      ? String(rawAudience) + (audienceOther ? ` (Others: ${audienceOther})` : "")
+      : null;
   const steps = buildWorkflowStepperSteps(details);
-  const actionLogs = Array.isArray(details?.workflow_action_logs) ? details.workflow_action_logs : [];
   const deptSections = orderDepartmentSectionsForRole(
     viewerRole,
     collectDepartmentRequirementSections(details, normalizeMarketingRequirements, transportRequestTypeLabel)
@@ -213,34 +221,6 @@ export default function EventDetailsModalBody({
         </ol>
       </section>
 
-      {actionLogs.length > 0 ? (
-        <section className="evt-action-history-section" aria-labelledby="evt-action-history-heading">
-          <div className="evt-section-head">
-            <span className="evt-section-head-icon" aria-hidden>
-              <IconFlow size={22} />
-            </span>
-            <h4 id="evt-action-history-heading" className="evt-section-title evt-section-title--large">
-              Action history / comments
-            </h4>
-          </div>
-          <ul className="evt-action-history-list">
-            {actionLogs.map((log) => (
-              <li key={log.id} className="evt-action-history-item">
-                <div className="evt-action-history-head">
-                  <span className="evt-action-history-role">{formatWorkflowRoleLabel(log.role)}</span>
-                  <span className="evt-action-history-action">{formatWorkflowActionTypeLabel(log.action_type)}</span>
-                </div>
-                <p className="evt-action-history-comment">{log.comment}</p>
-                <div className="evt-action-history-meta">
-                  <span>By {log.action_by || "—"}</span>
-                  <span>{formatModalDateTime(log.created_at) || "—"}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
       <DepartmentRequirementsDeck
         deptSections={deptSections}
         viewerRole={viewerRole}
@@ -250,6 +230,25 @@ export default function EventDetailsModalBody({
         getMarketingDeliverableUploadFlags={getMarketingDeliverableUploadFlags}
         deckSubtitle="Expand each card for phased requirements. Your department is listed first."
       />
+
+      {details?.approval_request?.id && currentUserId ? (
+        <ApprovalDiscussionTree
+          approvalRequestId={details.approval_request.id}
+          currentUserId={currentUserId}
+          isFacultyViewer={viewerRole === "faculty"}
+          openApprovalThread={openApprovalThread}
+        />
+      ) : null}
     </div>
+  );
+}
+
+export function ConnectedEventDetailsModalBody(props) {
+  const { openApprovalThread } = useMessenger();
+  return (
+    <EventDetailsModalBody
+      {...props}
+      openApprovalThread={openApprovalThread}
+    />
   );
 }
