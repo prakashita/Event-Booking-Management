@@ -4,7 +4,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from auth import get_primary_email_by_role
-from decision_helpers import parse_requirement_decision_status, require_decision_comment
+from decision_helpers import parse_requirement_decision_status, requirement_decision_comment
 from event_status import event_has_started
 from models import ApprovalRequest, Event, TransportRequest, User
 from notifications import send_notification_email
@@ -191,8 +191,8 @@ async def decide_transport_request(
     payload: TransportDecision,
     user: User = Depends(get_current_user),
 ):
-    comment = require_decision_comment(payload.comment)
     normalized_status = parse_requirement_decision_status(payload.status)
+    comment = requirement_decision_comment(normalized_status, payload.comment)
 
     request_item = await TransportRequest.get(request_id)
     if not request_item:

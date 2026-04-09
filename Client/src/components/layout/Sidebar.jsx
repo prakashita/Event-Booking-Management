@@ -1,5 +1,11 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { preferenceItems, VIEW_TO_PATH } from "../../constants";
+import {
+  preferenceItems,
+  VIEW_TO_PATH,
+  MENU_ICONS,
+  PREFERENCE_ICONS,
+  SIDEBAR_TOGGLE_ICONS,
+} from "../../constants";
 import { SimpleIcon } from "../icons";
 
 export default function Sidebar({
@@ -7,7 +13,9 @@ export default function Sidebar({
   onLogout,
   className = "",
   onNavigate,
-  user
+  user,
+  collapsed = false,
+  onToggleCollapse,
 }) {
   const navigate = useNavigate();
 
@@ -16,64 +24,111 @@ export default function Sidebar({
     .toUpperCase();
 
   return (
-    <aside className={`sidebar ${className}`.trim()}>
-      <div className="brand">
-        <div className="brand-icon">
-          <SimpleIcon path="M6 12a6 6 0 1 1 6 6H6v-6Z" />
+    <aside
+      className={`sidebar ${collapsed ? "collapsed" : ""} ${className}`.trim()}
+      aria-label="Main navigation"
+    >
+      {/* Header: brand + collapse toggle */}
+      <div className="sidebar-header">
+        <div className="brand">
+          <div className="brand-icon" aria-hidden="true">
+            <SimpleIcon path="M6 12a6 6 0 1 1 6 6H6v-6Z" />
+          </div>
+          <span className="brand-label">{roleLabel}</span>
         </div>
-        <span>{roleLabel}</span>
+        {onToggleCollapse && (
+          <button
+            type="button"
+            className="sidebar-toggle"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <SimpleIcon
+              path={
+                collapsed
+                  ? SIDEBAR_TOGGLE_ICONS.expand
+                  : SIDEBAR_TOGGLE_ICONS.collapse
+              }
+            />
+          </button>
+        )}
       </div>
 
-      <div className="menu-block">
-        <p className="menu-title">Menu</p>
-        <nav className="menu-list">
+      {/* Main menu */}
+      <nav className="sidebar-nav" aria-label="Main menu">
+        <p className="menu-title">
+          <span className="menu-title-text">Menu</span>
+        </p>
+        <ul className="menu-list" role="list">
           {visibleMenuItems.map((item) => {
             const path = VIEW_TO_PATH[item.id] ?? "/";
-            const iconPath = item.icon || "M3 10.5 12 3l9 7.5v9.5H3z";
+            const iconPath =
+              MENU_ICONS[item.id] || "M3 10.5 12 3l9 7.5v9.5H3z";
             return (
-              <NavLink
-                key={item.id}
-                to={path}
-                className={({ isActive }) => `menu-item ${isActive ? "active" : ""}`}
-                onClick={() => onNavigate?.()}
-              >
-                <span className="menu-icon">
-                  <SimpleIcon path={iconPath} />
-                </span>
-                {item.label}
-              </NavLink>
+              <li key={item.id} role="listitem">
+                <NavLink
+                  to={path}
+                  className={({ isActive }) =>
+                    `menu-item ${isActive ? "active" : ""}`
+                  }
+                  onClick={() => onNavigate?.()}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <span className="menu-icon" aria-hidden="true">
+                    <SimpleIcon path={iconPath} />
+                  </span>
+                  <span className="menu-label">{item.label}</span>
+                </NavLink>
+              </li>
             );
           })}
-        </nav>
-      </div>
+        </ul>
+      </nav>
 
-      <div className="menu-block">
-        <p className="menu-title">Preferences</p>
-        <nav className="menu-list">
+      {/* Preferences */}
+      <div className="sidebar-nav" aria-label="Preferences">
+        <p className="menu-title">
+          <span className="menu-title-text">Preferences</span>
+        </p>
+        <ul className="menu-list" role="list">
           {preferenceItems.map((item) => (
-            <button key={item.id} type="button" className="menu-item">
-              <span className="menu-icon">
-                <SimpleIcon path="M12 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Zm0 14c4.4 0 8 2 8 4v2H4v-2c0-2 3.6-4 8-4Z" />
-              </span>
-              {item.label}
-            </button>
+            <li key={item.id} role="listitem">
+              <button
+                type="button"
+                className="menu-item"
+                title={collapsed ? item.label : undefined}
+              >
+                <span className="menu-icon" aria-hidden="true">
+                  <SimpleIcon
+                    path={
+                      PREFERENCE_ICONS[item.id] ||
+                      "M12 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Zm0 14c4.4 0 8 2 8 4v2H4v-2c0-2 3.6-4 8-4Z"
+                    }
+                  />
+                </span>
+                <span className="menu-label">{item.label}</span>
+              </button>
+            </li>
           ))}
-        </nav>
+        </ul>
       </div>
 
+      {/* Logout */}
       <button
         type="button"
         className="menu-item logout"
+        title={collapsed ? "Logout" : undefined}
         onClick={() => {
           onLogout();
           onNavigate?.();
           navigate("/");
         }}
       >
-        <span className="menu-icon">
+        <span className="menu-icon" aria-hidden="true">
           <SimpleIcon path="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-4-4 4-4M6 13h12" />
         </span>
-        Logout
+        <span className="menu-label">Logout</span>
       </button>
     </aside>
   );

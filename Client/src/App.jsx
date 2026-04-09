@@ -84,6 +84,7 @@ export default function App() {
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [myEventsTab, setMyEventsTab] = useState("all");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [venuesState, setVenuesState] = useState({ status: "idle", items: [], error: "" });
@@ -4163,7 +4164,7 @@ export default function App() {
       const m = workflowActionModal;
       const comment = (m.comment || "").trim();
       const commentRequired =
-        m.channel !== "approval" || String(m.status || "").toLowerCase() !== "approved";
+        String(m.status || "").toLowerCase() !== "approved";
       if (commentRequired && !comment) {
         setWorkflowActionModal((prev) => ({ ...prev, error: "Comment is required." }));
         return;
@@ -4206,11 +4207,19 @@ export default function App() {
         }
 
         closeWorkflowActionModal();
+        setStatus({ type: "success", message: `${m.actionLabel || "Action"} submitted successfully.` });
         if (m.channel === "approval") loadApprovalsInbox();
         else if (m.channel === "facility") loadFacilityInbox();
         else if (m.channel === "marketing") loadMarketingInbox();
         else if (m.channel === "it") loadItInbox();
         else if (m.channel === "transport") loadTransportInbox();
+
+        // Refresh any open details modal so its data reflects the new decision
+        if (eventDetailsModal.open && eventDetailsModal.event?.id) {
+          handleEventDetailsOpen(eventDetailsModal.event);
+        } else if (approvalDetailsModal.open && approvalDetailsModal.request) {
+          handleApprovalDetailsOpen(approvalDetailsModal.request);
+        }
       } catch (err) {
         const msg = err?.message || "Unable to submit action.";
         setWorkflowActionModal((prev) => ({ ...prev, submitting: false, error: msg }));
@@ -6987,6 +6996,103 @@ export default function App() {
       }
 
       if (isApprovals || isRequirements) {
+        const renderWorkflowTable = ({ title, state, loadFn, channel, onDetailsClick, detailsDisabled, renderExtraActions }) => (
+          <div className="events-table-card appr-card">
+            <div className="table-header table-header--toolbar appr-toolbar">
+              <div className="appr-toolbar-left">
+                <h3 className="appr-section-title">{title}</h3>
+                {state.status === "ready" ? (
+                  <span className="appr-section-count">
+                    {state.items.length} request{state.items.length !== 1 ? "s" : ""}
+                  </span>
+                ) : null}
+              </div>
+              <button type="button" className="appr-refresh-btn" onClick={loadFn} aria-label={`Refresh ${title.toLowerCase()}`}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6"/><path d="M21.34 13a10 10 0 1 1-2.82-7.5L21.5 8"/></svg>
+                Refresh
+              </button>
+            </div>
+            <div className="appr-table" role="table" aria-label={title}>
+              <div className="appr-table-row appr-table-header" role="row">
+                <span role="columnheader">Event</span>
+                <span role="columnheader">Requester</span>
+                <span role="columnheader">Status</span>
+                <span role="columnheader">Details</span>
+                <span role="columnheader">Actions</span>
+              </div>
+              {state.status === "loading" ? (
+                <p className="table-message appr-table-message">Loading {title.toLowerCase()}...</p>
+              ) : null}
+              {state.status === "error" ? (
+                <p className="table-message appr-table-message">{state.error}</p>
+              ) : null}
+              {state.status === "ready" && state.items.length === 0 ? (
+                <p className="table-message appr-table-message">No {title.toLowerCase()} yet.</p>
+              ) : null}
+              {state.status === "ready"
+                ? state.items.map((item) => {
+                    const statusLabel = formatInboxDecisionStatusLabel(item.status);
+                    const eventHasStarted = isEventStarted(item);
+                    const rowAttention = canActOnWorkflowRow(item.status);
+                    const hasExtra = renderExtraActions != null;
+                    return (
+                      <div
+                        key={item.id}
+                        className={`appr-table-row${rowAttention ? " appr-row--attention" : ""}`}
+                        role="row"
+                      >
+                        <span className="appr-col-event" role="cell">{item.event_name}</span>
+                        <span className="appr-col-meta" role="cell">{item.requester_email}</span>
+                        <span role="cell">
+                          <span className={`appr-status-badge appr-status--${item.status}`}>{statusLabel}</span>
+                        </span>
+                        <span role="cell">
+                          <button
+                            type="button"
+                            className="appr-detail-btn"
+                            onClick={() => onDetailsClick(item)}
+                            disabled={detailsDisabled ? detailsDisabled(item) : false}
+                            title={detailsDisabled && detailsDisabled(item) ? "Event details available after approval" : "View details"}
+                          >
+                            Details
+                          </button>
+                        </span>
+                        <div className="appr-col-action" role="cell">
+                          {hasExtra ? renderExtraActions(item) : null}
+                          {rowAttention && !eventHasStarted ? (
+                            <div className="appr-action-select-wrap">
+                              <select
+                                className="appr-action-select"
+                                aria-label={`Choose ${channel} action`}
+                                defaultValue=""
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  e.target.value = "";
+                                  if (v === "approved") openWorkflowActionModal(channel, item.id, "approved", "Approve");
+                                  else if (v === "rejected") openWorkflowActionModal(channel, item.id, "rejected", "Reject");
+                                  else if (v === "clarification_requested") {
+                                    openWorkflowActionModal(channel, item.id, "clarification_requested", "Need clarification");
+                                  }
+                                }}
+                              >
+                                <option value="">Action</option>
+                                <option value="approved">Approve</option>
+                                <option value="rejected">Reject</option>
+                                <option value="clarification_requested">Need clarification</option>
+                              </select>
+                            </div>
+                          ) : !hasExtra ? (
+                            <span className="appr-no-action" aria-hidden="true">No action</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })
+                : null}
+            </div>
+          </div>
+        );
+
         return (
           <div className="primary-column">
             {!showApprovalsOrRequirementsContent ? (
@@ -7060,451 +7166,79 @@ export default function App() {
                 </button>
               ) : null}
             </div>
-            {isApproverRole && approvalsTab === "approval-requests" ? (
-            <div className="events-table-card">
-              <div className="table-header table-header--toolbar">
-                <h3>Approval Requests</h3>
-                <button type="button" className="refresh-toolbar-btn" onClick={loadApprovalsInbox}>
-                  Refresh
-                </button>
-              </div>
-              <div className="events-table">
-                <div className="events-table-row header approvals">
-                  <span>Event</span>
-                  <span>Requester</span>
-                  <span>Status</span>
-                  <span>Actions</span>
-                </div>
-                {approvalsState.status === "loading" ? (
-                  <p className="table-message">Loading approvals...</p>
-                ) : null}
-                {approvalsState.status === "error" ? (
-                  <p className="table-message">{approvalsState.error}</p>
-                ) : null}
-                {approvalsState.status === "ready" && approvalsState.items.length === 0 ? (
-                  <p className="table-message">No approval requests yet.</p>
-                ) : null}
-                {approvalsState.status === "ready"
-                    ? approvalsState.items.map((item) => {
-                        const statusLabel = formatInboxDecisionStatusLabel(item.status);
-                        const eventHasStarted = isEventStarted(item);
-                        const rowAttention = canActOnWorkflowRow(item.status);
-                        return (
-                          <div
-                            key={item.id}
-                            className={`events-table-row approvals${rowAttention ? " approvals-row--pending" : ""}`}
-                          >
-                            <span className="approvals-col-event">{item.event_name}</span>
-                            <span className="approvals-col-requester">{item.requester_email}</span>
-                            <div className="req-inbox-status-with-details">
-                              <span className={`status-pill registrar-status-pill ${item.status}`}>{statusLabel}</span>
-                              <button
-                                type="button"
-                                className="details-button details-button--primary"
-                                onClick={() => handleApprovalDetailsOpen(item)}
-                              >
-                                Details
-                              </button>
-                            </div>
-                            <div className="approval-actions registrar-approval-actions req-inbox-actions">
-                              {rowAttention && !eventHasStarted ? (
-                                <select
-                                  className="workflow-action-select"
-                                  aria-label="Choose approval action"
-                                  defaultValue=""
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    e.target.value = "";
-                                    if (v === "approved") openWorkflowActionModal("approval", item.id, "approved", "Approve");
-                                    else if (v === "rejected") openWorkflowActionModal("approval", item.id, "rejected", "Reject");
-                                    else if (v === "clarification_requested") {
-                                      openWorkflowActionModal(
-                                        "approval",
-                                        item.id,
-                                        "clarification_requested",
-                                        "Need clarification"
-                                      );
-                                    }
-                                  }}
-                                >
-                                  <option value="">Action</option>
-                                  <option value="approved">Approve</option>
-                                  <option value="rejected">Reject</option>
-                                  <option value="clarification_requested">Need clarification</option>
-                                </select>
-                              ) : (
-                                <span className="req-inbox-actions-placeholder" aria-hidden>
-                                  —
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                    })
-                    : null}
-              </div>
-            </div>
-            ) : null}
+            {isApproverRole && approvalsTab === "approval-requests"
+              ? renderWorkflowTable({
+                  title: "Approval Requests",
+                  state: approvalsState,
+                  loadFn: loadApprovalsInbox,
+                  channel: "approval",
+                  onDetailsClick: (item) => handleApprovalDetailsOpen(item),
+                })
+              : null}
 
-            {isFacilityManagerRole && approvalsTab === "facility" ? (
-            <div className="events-table-card">
-              <div className="table-header table-header--toolbar">
-                <h3>Facility Manager Requests</h3>
-                <button type="button" className="refresh-toolbar-btn" onClick={loadFacilityInbox}>
-                  Refresh
-                </button>
-              </div>
-              <div className="events-table">
-                <div className="events-table-row header inbox-req-row">
-                  <span>Event</span>
-                  <span>Requester</span>
-                  <span>Status</span>
-                  <span>Actions</span>
-                </div>
-                {facilityState.status === "loading" ? (
-                  <p className="table-message">Loading facility requests...</p>
-                ) : null}
-                {facilityState.status === "error" ? (
-                  <p className="table-message">{facilityState.error}</p>
-                ) : null}
-                {facilityState.status === "ready" && facilityState.items.length === 0 ? (
-                  <p className="table-message">No facility requests yet.</p>
-                ) : null}
-                {facilityState.status === "ready"
-                  ? facilityState.items.map((item) => {
-                      const statusLabel = formatInboxDecisionStatusLabel(item.status);
-                      const eventHasStarted = isEventStarted(item);
-                      const rowAttention = canActOnWorkflowRow(item.status);
-                      return (
-                        <div
-                          key={item.id}
-                          className={`events-table-row inbox-req-row${rowAttention ? " inbox-req-row--pending" : ""}`}
-                        >
-                          <span>{item.event_name}</span>
-                          <span>{item.requester_email}</span>
-                          <div className="req-inbox-status-with-details">
-                            <span className={`status-pill ${item.status}`}>{statusLabel}</span>
-                            <button
-                              type="button"
-                              className="details-button details-button--primary"
-                              onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
-                              title={item.event_id ? "View event details" : "Event details available after approval"}
-                              disabled={!item.event_id}
-                            >
-                              Details
-                            </button>
-                          </div>
-                          <div className="req-inbox-actions">
-                            {rowAttention && !eventHasStarted ? (
-                              <select
-                                className="workflow-action-select"
-                                aria-label="Choose facility action"
-                                defaultValue=""
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  e.target.value = "";
-                                  if (v === "approved") openWorkflowActionModal("facility", item.id, "approved", "Approve");
-                                  else if (v === "rejected") openWorkflowActionModal("facility", item.id, "rejected", "Reject");
-                                  else if (v === "clarification_requested") {
-                                    openWorkflowActionModal(
-                                      "facility",
-                                      item.id,
-                                      "clarification_requested",
-                                      "Need clarification"
-                                    );
-                                  }
-                                }}
-                              >
-                                <option value="">Action</option>
-                                <option value="approved">Approve</option>
-                                <option value="rejected">Reject</option>
-                                <option value="clarification_requested">Need clarification</option>
-                              </select>
-                            ) : (
-                              <span className="req-inbox-actions-placeholder">—</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  : null}
-              </div>
-            </div>
-            ) : null}
+            {isFacilityManagerRole && approvalsTab === "facility"
+              ? renderWorkflowTable({
+                  title: "Facility Manager Requests",
+                  state: facilityState,
+                  loadFn: loadFacilityInbox,
+                  channel: "facility",
+                  onDetailsClick: (item) => item.event_id && handleEventDetailsOpen({ id: item.event_id }),
+                  detailsDisabled: (item) => !item.event_id,
+                })
+              : null}
 
-            {isMarketingRole && approvalsTab === "marketing" ? (
-            <div className="events-table-card">
-              <div className="table-header table-header--toolbar">
-                <h3>Marketing Requests</h3>
-                <button type="button" className="refresh-toolbar-btn" onClick={loadMarketingInbox}>
-                  Refresh
-                </button>
-              </div>
-              <div className="events-table">
-                <div className="events-table-row header inbox-req-row">
-                  <span>Event</span>
-                  <span>Requester</span>
-                  <span>Status</span>
-                  <span>Actions</span>
-                </div>
-                {marketingState.status === "loading" ? (
-                  <p className="table-message">Loading marketing requests...</p>
-                ) : null}
-                {marketingState.status === "error" ? (
-                  <p className="table-message">{marketingState.error}</p>
-                ) : null}
-                {marketingState.status === "ready" && marketingState.items.length === 0 ? (
-                  <p className="table-message">No marketing requests yet.</p>
-                ) : null}
-                {marketingState.status === "ready"
-                  ? marketingState.items.map((item) => {
-                      const statusLabel = formatInboxDecisionStatusLabel(item.status);
-                      const eventHasStarted = isEventStarted(item);
-                      const rowAttention = canActOnWorkflowRow(item.status);
-                      const marketingHasFileUploads = REQUIREMENT_OPTIONS.some(
-                        (opt) => getMarketingDeliverableUploadFlags(item)[opt.key]
-                      );
-                      return (
-                        <div
-                          key={item.id}
-                          className={`events-table-row inbox-req-row${rowAttention ? " inbox-req-row--pending" : ""}`}
-                        >
-                          <span>{item.event_name}</span>
-                          <span>{item.requester_email}</span>
-                          <div className="req-inbox-status-with-details">
-                            <span className={`status-pill ${item.status}`}>{statusLabel}</span>
-                            <button
-                              type="button"
-                              className="details-button details-button--primary"
-                              onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
-                              title={item.event_id ? "View event details" : "Event details available after approval"}
-                              disabled={!item.event_id}
-                            >
-                              Details
-                            </button>
-                          </div>
-                          <div className="req-inbox-actions">
-                            <button
-                              type="button"
-                              className="details-button upload"
-                              disabled={!marketingHasFileUploads}
-                              title={
-                                marketingHasFileUploads
-                                  ? ""
-                                  : "No file uploads for this request (during-event videoshoot / photoshoot only)."
-                              }
-                              onClick={() => openMarketingDeliverableModal(item)}
-                            >
-                              Upload
-                            </button>
-                            {rowAttention && !eventHasStarted ? (
-                              <select
-                                className="workflow-action-select"
-                                aria-label="Choose marketing action"
-                                defaultValue=""
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  e.target.value = "";
-                                  if (v === "approved") openWorkflowActionModal("marketing", item.id, "approved", "Approve");
-                                  else if (v === "rejected") openWorkflowActionModal("marketing", item.id, "rejected", "Reject");
-                                  else if (v === "clarification_requested") {
-                                    openWorkflowActionModal(
-                                      "marketing",
-                                      item.id,
-                                      "clarification_requested",
-                                      "Need clarification"
-                                    );
-                                  }
-                                }}
-                              >
-                                <option value="">Action</option>
-                                <option value="approved">Approve</option>
-                                <option value="rejected">Reject</option>
-                                <option value="clarification_requested">Need clarification</option>
-                              </select>
-                            ) : (
-                              <span className="req-inbox-actions-placeholder">—</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  : null}
-              </div>
-            </div>
-            ) : null}
+            {isMarketingRole && approvalsTab === "marketing"
+              ? renderWorkflowTable({
+                  title: "Marketing Requests",
+                  state: marketingState,
+                  loadFn: loadMarketingInbox,
+                  channel: "marketing",
+                  onDetailsClick: (item) => item.event_id && handleEventDetailsOpen({ id: item.event_id }),
+                  detailsDisabled: (item) => !item.event_id,
+                  renderExtraActions: (item) => {
+                    const marketingHasFileUploads = REQUIREMENT_OPTIONS.some(
+                      (opt) => getMarketingDeliverableUploadFlags(item)[opt.key]
+                    );
+                    return (
+                      <button
+                        type="button"
+                        className="appr-upload-btn"
+                        disabled={!marketingHasFileUploads}
+                        title={
+                          marketingHasFileUploads
+                            ? ""
+                            : "No file uploads for this request (during-event videoshoot / photoshoot only)."
+                        }
+                        onClick={() => openMarketingDeliverableModal(item)}
+                      >
+                        Upload
+                      </button>
+                    );
+                  },
+                })
+              : null}
 
-            {isTransportRole && approvalsTab === "transport" ? (
-            <div className="events-table-card">
-              <div className="table-header table-header--toolbar">
-                <h3>Transport Requests</h3>
-                <button type="button" className="refresh-toolbar-btn" onClick={loadTransportInbox}>
-                  Refresh
-                </button>
-              </div>
-              <div className="events-table">
-                <div className="events-table-row header inbox-req-row">
-                  <span>Event</span>
-                  <span>Requester</span>
-                  <span>Status</span>
-                  <span>Actions</span>
-                </div>
-                {transportState.status === "loading" ? (
-                  <p className="table-message">Loading transport requests...</p>
-                ) : null}
-                {transportState.status === "error" ? (
-                  <p className="table-message">{transportState.error}</p>
-                ) : null}
-                {transportState.status === "ready" && transportState.items.length === 0 ? (
-                  <p className="table-message">No transport requests yet.</p>
-                ) : null}
-                {transportState.status === "ready"
-                  ? transportState.items.map((item) => {
-                      const statusLabel = formatInboxDecisionStatusLabel(item.status);
-                      const eventHasStarted = isEventStarted(item);
-                      const rowAttention = canActOnWorkflowRow(item.status);
-                      return (
-                        <div
-                          key={item.id}
-                          className={`events-table-row inbox-req-row${rowAttention ? " inbox-req-row--pending" : ""}`}
-                        >
-                          <span>{item.event_name}</span>
-                          <span>{item.requester_email}</span>
-                          <div className="req-inbox-status-with-details">
-                            <span className={`status-pill ${item.status}`}>{statusLabel}</span>
-                            <button
-                              type="button"
-                              className="details-button details-button--primary"
-                              onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
-                              title={item.event_id ? "View event details" : "Event details available after approval"}
-                              disabled={!item.event_id}
-                            >
-                              Details
-                            </button>
-                          </div>
-                          <div className="req-inbox-actions">
-                            {rowAttention && !eventHasStarted ? (
-                              <select
-                                className="workflow-action-select"
-                                aria-label="Choose transport action"
-                                defaultValue=""
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  e.target.value = "";
-                                  if (v === "approved") openWorkflowActionModal("transport", item.id, "approved", "Approve");
-                                  else if (v === "rejected") openWorkflowActionModal("transport", item.id, "rejected", "Reject");
-                                  else if (v === "clarification_requested") {
-                                    openWorkflowActionModal(
-                                      "transport",
-                                      item.id,
-                                      "clarification_requested",
-                                      "Need clarification"
-                                    );
-                                  }
-                                }}
-                              >
-                                <option value="">Action</option>
-                                <option value="approved">Approve</option>
-                                <option value="rejected">Reject</option>
-                                <option value="clarification_requested">Need clarification</option>
-                              </select>
-                            ) : (
-                              <span className="req-inbox-actions-placeholder">—</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  : null}
-              </div>
-            </div>
-            ) : null}
+            {isTransportRole && approvalsTab === "transport"
+              ? renderWorkflowTable({
+                  title: "Transport Requests",
+                  state: transportState,
+                  loadFn: loadTransportInbox,
+                  channel: "transport",
+                  onDetailsClick: (item) => item.event_id && handleEventDetailsOpen({ id: item.event_id }),
+                  detailsDisabled: (item) => !item.event_id,
+                })
+              : null}
 
-            {isItRole && approvalsTab === "it" ? (
-            <div className="events-table-card">
-              <div className="table-header table-header--toolbar">
-                <h3>IT Requests</h3>
-                <button type="button" className="refresh-toolbar-btn" onClick={loadItInbox}>
-                  Refresh
-                </button>
-              </div>
-              <div className="events-table">
-                <div className="events-table-row header inbox-req-row">
-                  <span>Event</span>
-                  <span>Requester</span>
-                  <span>Status</span>
-                  <span>Actions</span>
-                </div>
-                {itState.status === "loading" ? (
-                  <p className="table-message">Loading IT requests...</p>
-                ) : null}
-                {itState.status === "error" ? (
-                  <p className="table-message">{itState.error}</p>
-                ) : null}
-                {itState.status === "ready" && itState.items.length === 0 ? (
-                  <p className="table-message">No IT requests yet.</p>
-                ) : null}
-                {itState.status === "ready"
-                  ? itState.items.map((item) => {
-                      const statusLabel = formatInboxDecisionStatusLabel(item.status);
-                      const eventHasStarted = isEventStarted(item);
-                      const rowAttention = canActOnWorkflowRow(item.status);
-                      return (
-                        <div
-                          key={item.id}
-                          className={`events-table-row inbox-req-row${rowAttention ? " inbox-req-row--pending" : ""}`}
-                        >
-                          <span>{item.event_name}</span>
-                          <span>{item.requester_email}</span>
-                          <div className="req-inbox-status-with-details">
-                            <span className={`status-pill ${item.status}`}>{statusLabel}</span>
-                            <button
-                              type="button"
-                              className="details-button details-button--primary"
-                              onClick={() => item.event_id && handleEventDetailsOpen({ id: item.event_id })}
-                              title={item.event_id ? "View event details" : "Event details available after approval"}
-                              disabled={!item.event_id}
-                            >
-                              Details
-                            </button>
-                          </div>
-                          <div className="req-inbox-actions">
-                            {rowAttention && !eventHasStarted ? (
-                              <select
-                                className="workflow-action-select"
-                                aria-label="Choose IT action"
-                                defaultValue=""
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  e.target.value = "";
-                                  if (v === "approved") openWorkflowActionModal("it", item.id, "approved", "Approve");
-                                  else if (v === "rejected") openWorkflowActionModal("it", item.id, "rejected", "Reject");
-                                  else if (v === "clarification_requested") {
-                                    openWorkflowActionModal(
-                                      "it",
-                                      item.id,
-                                      "clarification_requested",
-                                      "Need clarification"
-                                    );
-                                  }
-                                }}
-                              >
-                                <option value="">Action</option>
-                                <option value="approved">Approve</option>
-                                <option value="rejected">Reject</option>
-                                <option value="clarification_requested">Need clarification</option>
-                              </select>
-                            ) : (
-                              <span className="req-inbox-actions-placeholder">—</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })
-                  : null}
-              </div>
-            </div>
-            ) : null}
+            {isItRole && approvalsTab === "it"
+              ? renderWorkflowTable({
+                  title: "IT Requests",
+                  state: itState,
+                  loadFn: loadItInbox,
+                  channel: "it",
+                  onDetailsClick: (item) => item.event_id && handleEventDetailsOpen({ id: item.event_id }),
+                  detailsDisabled: (item) => !item.event_id,
+                })
+              : null}
             </>
             ) : null}
           </div>
@@ -7580,7 +7314,7 @@ export default function App() {
 
     return (
       <MessengerProvider user={user}>
-      <div className={`dashboard-page ${mobileMenuOpen ? "mobile-menu-open" : ""}`}>
+      <div className={`dashboard-page ${mobileMenuOpen ? "mobile-menu-open" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
         {googleScopeModal.open ? (
           <div className="modal-overlay" role="dialog" aria-modal="true">
             <div className="modal-card">
@@ -7768,8 +7502,7 @@ export default function App() {
               <label className="form-field workflow-action-comment-field">
                 <span>
                   Comment{" "}
-                  {workflowActionModal.channel === "approval" &&
-                  String(workflowActionModal.status || "").toLowerCase() === "approved"
+                  {String(workflowActionModal.status || "").toLowerCase() === "approved"
                     ? "(optional)"
                     : "(required)"}
                 </span>
@@ -7940,6 +7673,8 @@ export default function App() {
           className={mobileMenuOpen ? "mobile-open" : ""}
           onNavigate={() => setMobileMenuOpen(false)}
           user={user}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         />
         {mobileMenuOpen ? (
           <button
