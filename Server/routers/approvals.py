@@ -2,7 +2,8 @@ import base64
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Optional
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
@@ -233,12 +234,17 @@ async def upload_budget_breakdown(
 @router.get("/{request_id}/threads", response_model=list[ApprovalThreadInfo])
 async def get_approval_threads(
     request_id: str,
+    department: Optional[str] = Query(default=None, description="Filter to a specific department thread"),
     user: User = Depends(get_current_user),
 ):
-    """Return all department-isolated approval threads with their chat messages.
+    """Return department-isolated approval threads visible to the current user.
 
-    Access: requester sees all threads, privileged (registrar/admin) sees all,
-    department users see only threads they participate in.
+    Visibility rules (strict conversation isolation):
+    - Faculty requester: sees only threads where they are a participant.
+    - Department user: sees only threads where they are a participant.
+    - Admin: sees all threads for oversight.
+    - Registrar: sees only threads where they are a participant (registrar
+      threads) — NOT other department threads unless explicitly added.
     """
     try:
         oid = PydanticObjectId(request_id)
@@ -250,20 +256,25 @@ async def get_approval_threads(
 
     role = (user.role or "").strip().lower()
     uid = str(user.id)
-    is_requester = str(approval.requester_id) == uid
-    is_privileged = role in ("registrar", "admin") or is_admin_email(user.email or "")
+    is_admin = role == "admin" or is_admin_email(user.email or "")
 
     conversations = await list_approval_threads(str(approval.id))
+
+    # Filter to specific department if requested
+    if department:
+        conversations = [c for c in conversations if c.department == department.strip().lower()]
 
     result: list[ApprovalThreadInfo] = []
     for conv in conversations:
         user_is_participant = uid in conv.participants
-        if is_privileged or is_requester:
-            pass  # sees every thread
+
+        # Strict visibility: participant or admin only
+        if is_admin:
+            pass  # admin oversight
         elif user_is_participant:
-            pass  # department user sees own thread
+            pass  # direct participant
         else:
-            continue
+            continue  # PRIVACY: skip threads user is not part of
 
         participants: list[ApprovalThreadParticipant] = []
         for pid in conv.participants:
@@ -283,6 +294,8 @@ async def get_approval_threads(
                 sender_name=m.sender_name,
                 content=m.content,
                 created_at=m.created_at,
+                reply_to_message_id=getattr(m, "reply_to_message_id", None),
+                reply_to_snapshot=getattr(m, "reply_to_snapshot", None),
             )
             for m in raw_messages
         ]
@@ -297,6 +310,8 @@ async def get_approval_threads(
             participants=participants,
             created_at=conv.created_at,
             messages=messages,
+            closed_at=getattr(conv, "closed_at", None),
+            closed_reason=getattr(conv, "closed_reason", None),
         ))
     return result
 
@@ -463,6 +478,95 @@ async def ensure_department_thread(
         participants=participants,
         created_at=conv.created_at,
         messages=messages,
+        closed_at=getattr(conv, "closed_at", None),
+        closed_reason=getattr(conv, "closed_reason", None),
+    )
+
+
+@router.post("/{request_id}/threads/{conv_id}/reopen", response_model=ApprovalThreadInfo)
+async def reopen_approval_thread(
+    request_id: str,
+    conv_id: str,
+    user: User = Depends(get_current_user),
+):
+    """Reopen a resolved/closed approval discussion thread.
+
+    Restricted to registrar and admin roles.
+    """
+    role = (user.role or "").strip().lower()
+    if role not in ("registrar", "admin") and not is_admin_email(user.email or ""):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only registrar or admin can reopen threads")
+
+    try:
+        oid = PydanticObjectId(request_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    approval = await ApprovalRequest.get(oid)
+    if not approval:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+
+    try:
+        coid = PydanticObjectId(conv_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+    conv = await ChatConversation.get(coid)
+    if not conv or conv.thread_kind != "approval_thread":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Thread not found")
+    if str(conv.approval_request_id) != str(approval.id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thread does not belong to this approval")
+
+    conv.thread_status = "active"
+    conv.closed_at = None
+    conv.closed_reason = None
+    await conv.save()
+
+    # Log the reopen action for audit
+    try:
+        await record_workflow_action(
+            event_id=approval.event_id,
+            approval_request_id=str(approval.id),
+            related_kind=conv.related_kind or "approval_request",
+            related_id=conv.related_request_id or str(approval.id),
+            role=user.role or "registrar",
+            action_type="reopen",
+            comment="Thread reopened",
+            action_by_email=user.email or "",
+            action_by_user_id=str(user.id),
+        )
+    except Exception as exc:
+        logger.warning("reopen_approval_thread: audit log failed: %s", exc)
+
+    participants: list[ApprovalThreadParticipant] = []
+    for pid in conv.participants:
+        pu = await User.get(pid)
+        if pu:
+            participants.append(ApprovalThreadParticipant(
+                id=str(pu.id), name=pu.name, email=pu.email, role=pu.role or "",
+            ))
+    raw_msgs = await ChatMessage.find(
+        {"conversation_id": str(conv.id), "is_deleted": {"$ne": True}},
+    ).sort("created_at").to_list()
+    messages = [
+        ApprovalThreadMessage(
+            id=str(m.id), sender_id=m.sender_id, sender_name=m.sender_name,
+            content=m.content, created_at=m.created_at,
+            reply_to_message_id=getattr(m, "reply_to_message_id", None),
+            reply_to_snapshot=getattr(m, "reply_to_snapshot", None),
+        )
+        for m in raw_msgs
+    ]
+    return ApprovalThreadInfo(
+        id=str(conv.id),
+        department=conv.department or "",
+        department_label=DEPARTMENT_LABELS.get(conv.department or "", conv.department or ""),
+        related_request_id=conv.related_request_id,
+        related_kind=conv.related_kind,
+        thread_status="active",
+        participants=participants,
+        created_at=conv.created_at,
+        messages=messages,
+        closed_at=None,
+        closed_reason=None,
     )
 
 
@@ -494,14 +598,27 @@ async def post_approval_discussion_reply(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Thread does not belong to this approval")
         if str(user.id) not in conv.participants:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a participant of this thread")
-        if (conv.thread_status or "active") == "resolved":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This thread has been resolved")
+        if (conv.thread_status or "active") in ("resolved", "closed"):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This thread has been resolved or closed")
 
         from event_chat_service import (
             build_last_message_snapshot,
             increment_participant_unreads,
             notify_thread_reply,
         )
+
+        reply_snapshot: dict | None = None
+        if payload.reply_to_message_id:
+            try:
+                orig = await ChatMessage.get(PydanticObjectId(payload.reply_to_message_id))
+                if orig and not orig.is_deleted:
+                    reply_snapshot = {
+                        "message_id": str(orig.id),
+                        "sender_name": orig.sender_name,
+                        "content_preview": (orig.content or "")[:200],
+                    }
+            except Exception:
+                pass
 
         msg = ChatMessage(
             conversation_id=str(conv.id),
@@ -511,6 +628,8 @@ async def post_approval_discussion_reply(
             content=payload.message.strip(),
             read_by=[str(user.id)],
             created_at=datetime.utcnow(),
+            reply_to_message_id=payload.reply_to_message_id or None,
+            reply_to_snapshot=reply_snapshot,
         )
         await msg.insert()
         conv.last_message = build_last_message_snapshot(msg)

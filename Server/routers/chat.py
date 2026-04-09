@@ -20,7 +20,7 @@ from event_chat_service import (
     reset_unread_for_user,
 )
 from models import ChatAttachment, ChatConversation, ChatMessage, User
-from routers.deps import get_current_user
+from routers.deps import can_view_conversation, get_current_user, require_conversation_access
 from schemas import (
     ChatConversationCreate,
     ChatConversationListItem,
@@ -116,6 +116,8 @@ def serialize_message(
         deleted_for_everyone=deleted_for_everyone,
         edited=edited,
         edited_at=edited_at,
+        reply_to_message_id=getattr(message, "reply_to_message_id", None),
+        reply_to_snapshot=getattr(message, "reply_to_snapshot", None),
     )
 
 
@@ -220,6 +222,38 @@ async def get_chat_message_by_id(message_id: str) -> Optional[ChatMessage]:
         return None
 
 
+async def _resolve_reply_snapshot(
+    reply_to_message_id: Optional[str],
+    conversation_id: str,
+) -> tuple[Optional[str], Optional[dict]]:
+    """Resolve and freeze a reply snapshot for a given parent message id.
+
+    Returns (canonical_id, snapshot_dict) or (None, None) if not applicable.
+    The snapshot is frozen at write time so it survives future edits/deletes.
+    """
+    if not reply_to_message_id:
+        return None, None
+    try:
+        orig = await ChatMessage.get(PydanticObjectId(reply_to_message_id))
+        if not orig or orig.conversation_id != conversation_id:
+            return None, None
+        if getattr(orig, "deleted_for_everyone", False):
+            snapshot = {
+                "sender_name": orig.sender_name,
+                "content_preview": "[Original message was deleted]",
+                "is_deleted": True,
+            }
+        else:
+            snapshot = {
+                "sender_name": orig.sender_name,
+                "content_preview": (orig.content or "")[:120],
+                "is_deleted": False,
+            }
+        return str(orig.id), snapshot
+    except Exception:
+        return None, None
+
+
 @router.get("/conversations/me", response_model=list[ChatConversationListItem])
 async def list_my_conversations(
     current_user: User = Depends(get_current_user),
@@ -227,6 +261,8 @@ async def list_my_conversations(
     unread_only: bool = Query(default=False),
     event_id: Optional[str] = Query(default=None),
 ):
+    from event_chat_service import DEPARTMENT_LABELS
+
     uid = str(current_user.id)
 
     # Base filter: user is participant AND hasn't soft-deleted
@@ -307,6 +343,9 @@ async def list_my_conversations(
                 )
         preview_list.sort(key=lambda s: (s.name or "").lower())
 
+        dept = getattr(conv, "department", None)
+        dept_label = DEPARTMENT_LABELS.get(dept or "", None) if dept else None
+
         items.append(
             ChatConversationListItem(
                 id=str(conv.id),
@@ -320,6 +359,13 @@ async def list_my_conversations(
                 last_message=getattr(conv, "last_message", None),
                 participant_count=len(conv.participants),
                 participants_preview=preview_list,
+                thread_status=getattr(conv, "thread_status", None),
+                department=dept,
+                department_label=dept_label,
+                related_kind=getattr(conv, "related_kind", None),
+                approval_request_id=getattr(conv, "approval_request_id", None),
+                closed_at=getattr(conv, "closed_at", None),
+                closed_reason=getattr(conv, "closed_reason", None),
             )
         )
     return items
@@ -360,9 +406,7 @@ async def get_messages(
     before: Optional[datetime] = Query(default=None),
     current_user: User = Depends(get_current_user),
 ):
-    conversation = await ChatConversation.get(conversation_id)
-    if not conversation or str(current_user.id) not in conversation.participants:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = await require_conversation_access(current_user, conversation_id)
 
     uid = str(current_user.id)
     # Hide messages this user removed for themselves; still show "deleted for everyone" tombstones
@@ -388,9 +432,12 @@ async def create_message(
 ):
     if not payload.content and not payload.attachments:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
-    conversation = await ChatConversation.get(payload.conversation_id)
-    if not conversation or str(current_user.id) not in conversation.participants:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = await require_conversation_access(current_user, payload.conversation_id, write=True)
+
+    reply_id, reply_snapshot = await _resolve_reply_snapshot(
+        getattr(payload, "reply_to_message_id", None), payload.conversation_id
+    )
+
     message = ChatMessage(
         conversation_id=payload.conversation_id,
         sender_id=str(current_user.id),
@@ -400,6 +447,8 @@ async def create_message(
         attachments=[ChatAttachment(**item.model_dump()) for item in payload.attachments],
         read_by=[str(current_user.id)],
         created_at=datetime.now(timezone.utc),
+        reply_to_message_id=reply_id,
+        reply_to_snapshot=reply_snapshot,
     )
     await message.insert()
 
@@ -496,9 +545,7 @@ async def mark_conversation_read(
     """Reset unread count for the current user in the given conversation and
     mark all messages in it as read by this user."""
     uid = str(current_user.id)
-    conversation = await ChatConversation.get(conversation_id)
-    if not conversation or uid not in conversation.participants:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = await require_conversation_access(current_user, conversation_id)
 
     # Reset unread counter
     await reset_unread_for_user(conversation, uid)
@@ -604,9 +651,7 @@ async def edit_message(
     msg.edited_at = datetime.now(timezone.utc)
     await msg.save()
 
-    conversation = await ChatConversation.get(msg.conversation_id)
-    if not conversation or uid not in conversation.participants:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = await require_conversation_access(current_user, msg.conversation_id)
 
     lm = getattr(conversation, "last_message", None) or {}
     mid = str(msg.id)
@@ -642,9 +687,7 @@ async def delete_message_for_me(
     msg = await get_chat_message_by_id(message_id)
     if not msg:
         raise HTTPException(status_code=404, detail="Message not found")
-    conversation = await ChatConversation.get(msg.conversation_id)
-    if not conversation or uid not in conversation.participants:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = await require_conversation_access(current_user, msg.conversation_id)
 
     deleted_for = list(getattr(msg, "deleted_for", None) or [])
     if uid not in deleted_for:
@@ -674,9 +717,7 @@ async def clear_conversation_messages(
     current_user: User = Depends(get_current_user),
 ):
     uid = str(current_user.id)
-    conversation = await ChatConversation.get(conversation_id)
-    if not conversation or uid not in conversation.participants:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = await require_conversation_access(current_user, conversation_id)
 
     await ChatMessage.find(ChatMessage.conversation_id == conversation_id).delete()
     conversation.last_message = None
@@ -703,9 +744,7 @@ async def purge_conversation(
     current_user: User = Depends(get_current_user),
 ):
     uid = str(current_user.id)
-    conversation = await ChatConversation.get(conversation_id)
-    if not conversation or uid not in conversation.participants:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = await require_conversation_access(current_user, conversation_id)
 
     participants = list(conversation.participants)
     cid = str(conversation.id)
@@ -731,9 +770,7 @@ async def delete_conversation(
     """Soft-delete a conversation for the current user.  The conversation is
     hidden from the user's list but remains for other participants."""
     uid = str(current_user.id)
-    conversation = await ChatConversation.get(conversation_id)
-    if not conversation or uid not in conversation.participants:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = await require_conversation_access(current_user, conversation_id)
 
     deleted_for = list(getattr(conversation, "deleted_for", None) or [])
     if uid not in deleted_for:
@@ -851,14 +888,29 @@ async def websocket_chat(websocket: WebSocket, token: Optional[str] = Query(defa
                 conversation_id = data.get("conversation_id")
                 if not conversation_id:
                     continue
-                conversation = await ChatConversation.get(conversation_id)
-                if not conversation or str(user.id) not in conversation.participants:
+                try:
+                    conversation = await ChatConversation.get(conversation_id)
+                except Exception:
+                    continue
+                if not conversation or not can_view_conversation(user, conversation):
+                    continue
+                # Block sending to closed/resolved workflow threads
+                if (
+                    getattr(conversation, "thread_kind", None) == "approval_thread"
+                    and getattr(conversation, "thread_status", None) in ("resolved", "closed")
+                ):
+                    continue
+                if str(user.id) not in conversation.participants:
                     continue
                 client_id = data.get("client_id")
                 content = (data.get("text") or "").strip()
                 attachments = data.get("attachments") or []
                 if not content and not attachments:
                     continue
+                # Resolve reply snapshot for WS path
+                ws_reply_id, ws_reply_snapshot = await _resolve_reply_snapshot(
+                    data.get("reply_to_message_id"), conversation_id
+                )
                 message = ChatMessage(
                     conversation_id=conversation_id,
                     sender_id=str(user.id),
@@ -868,6 +920,8 @@ async def websocket_chat(websocket: WebSocket, token: Optional[str] = Query(defa
                     attachments=[ChatAttachment(**item) for item in attachments],
                     read_by=[str(user.id)],
                     created_at=datetime.now(timezone.utc),
+                    reply_to_message_id=ws_reply_id,
+                    reply_to_snapshot=ws_reply_snapshot,
                 )
                 await message.insert()
 
@@ -894,8 +948,11 @@ async def websocket_chat(websocket: WebSocket, token: Optional[str] = Query(defa
                 conversation_id = data.get("conversation_id")
                 if not conversation_id:
                     continue
-                conversation = await ChatConversation.get(conversation_id)
-                if not conversation or str(user.id) not in conversation.participants:
+                try:
+                    conversation = await ChatConversation.get(conversation_id)
+                except Exception:
+                    continue
+                if not conversation or not can_view_conversation(user, conversation):
                     continue
                 is_typing = bool(data.get("is_typing"))
                 recipients = [uid for uid in conversation.participants if uid != str(user.id)]

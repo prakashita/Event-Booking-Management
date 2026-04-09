@@ -5,6 +5,9 @@ const ConversationItem = React.memo(function ConversationItem({
   avatarLabel,
   isActive,
   isEvent,
+  isWorkflow,
+  isLocked,
+  workflowLabel,
   unread,
   meta,
   time,
@@ -34,16 +37,23 @@ const ConversationItem = React.memo(function ConversationItem({
   return (
     <button
       type="button"
-      className={`msger-conv-item${isActive ? " active" : ""}${isEvent ? " event" : ""}`}
+      className={`msger-conv-item${isActive ? " active" : ""}${isEvent ? " event" : ""}${isWorkflow ? " workflow" : ""}${isLocked ? " locked" : ""}`}
       onClick={onClick}
       title={participantNamesTitle || undefined}
     >
       <span
-        className={`msger-avatar${isEvent ? " msger-avatar-event" : ""}`}
+        className={`msger-avatar${isEvent ? " msger-avatar-event" : ""}${isWorkflow ? " msger-avatar-workflow" : ""}`}
         aria-hidden="true"
       >
-        {avatarLabel}
-        {!isEvent && (
+        {isWorkflow && isLocked ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+        ) : (
+          avatarLabel
+        )}
+        {!isEvent && !isWorkflow && (
           <span className={`msger-presence${online ? " online" : ""}`} />
         )}
       </span>
@@ -52,6 +62,9 @@ const ConversationItem = React.memo(function ConversationItem({
           {name}
           {unread > 0 ? <span className="msger-unread">{unread}</span> : null}
         </p>
+        {workflowLabel ? (
+          <p className="msger-conv-workflow-label">{workflowLabel}</p>
+        ) : null}
         {memberCountLabel ? (
           <p className="msger-conv-members">{memberCountLabel}</p>
         ) : null}

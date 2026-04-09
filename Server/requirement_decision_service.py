@@ -89,4 +89,17 @@ async def apply_requirement_decision(
         except Exception as exc:
             logger.warning("Thread ensure failed for %s: %s", role, exc)
 
+    # Close the per-dept thread when its specific request is finalized
+    if normalized_status in ("approved", "rejected") and ar_id:
+        try:
+            from event_chat_service import close_threads_for_request
+            await close_threads_for_request(
+                approval_request_id=ar_id,
+                department=role,
+                related_request_id=str(request_item.id),
+                reason=normalized_status,
+            )
+        except Exception as exc:
+            logger.warning("close_threads_for_request failed for %s: %s", role, exc)
+
     return True

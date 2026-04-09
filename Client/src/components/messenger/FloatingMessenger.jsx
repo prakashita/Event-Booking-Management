@@ -12,11 +12,12 @@ export default function FloatingMessenger() {
     totalUnread,
     activeUser,
     activeEventThread,
+    activeConversation,
     loadConversations,
     loadChatUsers,
   } = useMessenger();
 
-  const hasActiveChat = !!(activeUser || activeEventThread);
+  const hasActiveChat = !!(activeUser || activeEventThread || activeConversation);
 
   useEffect(() => {
     if (!panelOpen) return;

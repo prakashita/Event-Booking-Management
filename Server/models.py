@@ -1,7 +1,7 @@
 from beanie import Document, Indexed
 from pydantic import Field
 from datetime import datetime, date, time
-from typing import Optional, List
+from typing import Optional, List, Union
 from pydantic import BaseModel
 
 class User(Document):
@@ -50,7 +50,8 @@ class Event(Document):
     facilitator: str
     description: Optional[str] = None
     venue_name: str
-    intendedAudience: Optional[str] = None
+    intendedAudience: Optional[Union[List[str], str]] = None
+    intendedAudienceOther: Optional[str] = None
     budget: Optional[float] = None  # Event budget in Rs
     budget_breakdown_file_id: Optional[str] = None
     budget_breakdown_file_name: Optional[str] = None
@@ -87,7 +88,9 @@ class ApprovalRequest(Document):
     budget_breakdown_uploaded_at: Optional[datetime] = None
     description: Optional[str] = None
     venue_name: str
-    intendedAudience: Optional[str] = None
+    intendedAudience: Optional[Union[List[str], str]] = None
+    intendedAudienceOther: Optional[str] = None
+    discussedWithProgrammingChair: bool = Field(default=False)
     start_date: str
     start_time: str
     end_date: str
@@ -330,7 +333,9 @@ class ChatConversation(Document):
     department: Optional[str] = None  # registrar | facility_manager | marketing | it | transport
     related_request_id: Optional[str] = None  # dept request id (or approval id for registrar)
     related_kind: Optional[str] = None  # approval_request | facility_request | ...
-    thread_status: Optional[str] = None  # active | resolved
+    thread_status: Optional[str] = None  # active | waiting_for_faculty | waiting_for_department | resolved | closed
+    closed_at: Optional[datetime] = None
+    closed_reason: Optional[str] = None  # "approved" | "rejected" | "event_closed" | "manual"
 
     class Settings:
         name = "chat_conversations"
@@ -357,6 +362,9 @@ class ChatMessage(Document):
     deleted_for: List[str] = Field(default_factory=list)  # user_ids — hidden for these users only
     edited: bool = Field(default=False)
     edited_at: Optional[datetime] = None
+    # Reply threading
+    reply_to_message_id: Optional[str] = None
+    reply_to_snapshot: Optional[dict] = None  # frozen at write time: {sender_name, content_preview, is_deleted}
 
     class Settings:
         name = "chat_messages"

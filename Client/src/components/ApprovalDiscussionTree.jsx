@@ -1,178 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import api from "../services/api";
 import { IconShieldCheck } from "./icons/EventModalIcons";
-import { formatModalDateTime } from "../utils/eventDetailsView";
-
-/* ─────────────────────────────────────────────
-   Chat bubble for messages inside a thread
-   ───────────────────────────────────────────── */
-function ThreadMessage({ msg, isOwn }) {
-  return (
-    <li className={`adt-bubble-row${isOwn ? " adt-bubble-row--own" : ""}`}>
-      {!isOwn && (
-        <span className="adt-avatar" aria-hidden>
-          {(msg.sender_name || "?")[0].toUpperCase()}
-        </span>
-      )}
-      <div className="adt-bubble">
-        {!isOwn && <span className="adt-bubble-sender">{msg.sender_name}</span>}
-        <p className="adt-bubble-text">{msg.content || "\u2014"}</p>
-        <span className="adt-bubble-time">
-          {formatModalDateTime(msg.created_at) || ""}
-        </span>
-      </div>
-    </li>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   Single department conversation panel.
-   canReply is ONLY based on participant membership,
-   never on approval status.
-   ───────────────────────────────────────────── */
-function ThreadPanel({
-  thread,
-  currentUserId,
-  approvalRequestId,
-  activeReplyId,
-  replyDraft,
-  replySubmitting,
-  postError,
-  onStartReply,
-  onChangeDraft,
-  onCancelReply,
-  onSubmitReply,
-  onOpenInChat,
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const isReplying = activeReplyId === thread.id;
-  const isResolved = thread.thread_status === "resolved";
-
-  const userIsParticipant =
-    Array.isArray(thread.participants) &&
-    thread.participants.some((p) => String(p.id) === String(currentUserId));
-
-  const canReply = userIsParticipant && !isResolved;
-
-  const statusLabel =
-    thread.thread_status === "waiting_for_faculty"
-      ? "Waiting for faculty"
-      : thread.thread_status === "waiting_for_department"
-        ? "Waiting for department"
-        : null;
-
-  return (
-    <div
-      className={`adt-panel${isResolved ? " adt-panel--resolved" : ""}`}
-      data-dept={thread.department}
-    >
-      <button
-        type="button"
-        className="adt-panel-header"
-        onClick={() => setExpanded((v) => !v)}
-        aria-expanded={expanded}
-      >
-        <span className="adt-dept-badge">{thread.department_label}</span>
-        <span className="adt-msg-count">
-          {thread.messages.length} msg{thread.messages.length !== 1 ? "s" : ""}
-        </span>
-        {isResolved && <span className="adt-resolved-chip">Resolved</span>}
-        {!isResolved && statusLabel && (
-          <span className="adt-turn-chip">{statusLabel}</span>
-        )}
-        <span
-          className={`adt-chevron${expanded ? " adt-chevron--open" : ""}`}
-          aria-hidden
-        >
-          &#9658;
-        </span>
-      </button>
-
-      {expanded && (
-        <div className="adt-panel-body">
-          {thread.participants.length > 0 && (
-            <p className="adt-participants">
-              {thread.participants
-                .map((p) => `${p.name}${p.role ? ` (${p.role})` : ""}`)
-                .join(" \u00b7 ")}
-            </p>
-          )}
-
-          {thread.messages.length === 0 && (
-            <p className="adt-empty">No messages yet.</p>
-          )}
-
-          <ul
-            className="adt-bubble-list"
-            aria-label={`${thread.department_label} messages`}
-          >
-            {thread.messages.map((msg) => (
-              <ThreadMessage
-                key={msg.id}
-                msg={msg}
-                isOwn={String(msg.sender_id) === String(currentUserId)}
-              />
-            ))}
-          </ul>
-
-          {canReply && !isReplying && (
-            <div className="adt-action-bar">
-              <button
-                type="button"
-                className="adt-reply-btn"
-                onClick={() => onStartReply(thread.id)}
-              >
-                Reply
-              </button>
-              <button
-                type="button"
-                className="adt-chat-btn"
-                onClick={() => onOpenInChat(thread.id)}
-              >
-                Open in chat
-              </button>
-            </div>
-          )}
-
-          {isReplying && (
-            <div className="adt-composer">
-              <textarea
-                className="adt-composer-textarea"
-                rows={3}
-                value={replyDraft}
-                placeholder={`Reply to ${thread.department_label}\u2026`}
-                onChange={(e) => onChangeDraft(e.target.value)}
-                disabled={replySubmitting}
-                autoFocus
-              />
-              {postError && (
-                <p className="form-error adt-post-error">{postError}</p>
-              )}
-              <div className="adt-composer-actions">
-                <button
-                  type="button"
-                  className="secondary-action"
-                  onClick={onCancelReply}
-                  disabled={replySubmitting}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="primary-action"
-                  onClick={() => onSubmitReply(thread.id)}
-                  disabled={replySubmitting || !replyDraft.trim()}
-                >
-                  {replySubmitting ? "Sending\u2026" : "Send"}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import DiscussionPanel from "./DiscussionPanel";
 
 /* ─────────────────────────────────────────────
    "Start new discussion" — lets faculty open a
@@ -299,10 +128,6 @@ export default function ApprovalDiscussionTree({
 }) {
   const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [activeReplyId, setActiveReplyId] = useState(null);
-  const [replyDraft, setReplyDraft] = useState("");
-  const [replySubmitting, setReplySubmitting] = useState(false);
-  const [postError, setPostError] = useState("");
 
   const fetchThreads = useCallback(async () => {
     if (!approvalRequestId) return;
@@ -321,56 +146,31 @@ export default function ApprovalDiscussionTree({
     fetchThreads();
   }, [fetchThreads]);
 
-  const onStartReply = useCallback((threadId) => {
-    setPostError("");
-    setActiveReplyId(threadId);
-    setReplyDraft("");
-  }, []);
-
-  const onCancelReply = useCallback(() => {
-    setActiveReplyId(null);
-    setReplyDraft("");
-    setPostError("");
-  }, []);
-
-  const onSubmitReply = useCallback(
-    async (threadId) => {
-      const text = replyDraft.trim();
-      if (!text || !approvalRequestId || !threadId) return;
-      setReplySubmitting(true);
-      setPostError("");
-      try {
-        await api.postJson(`/approvals/${approvalRequestId}/reply`, {
-          thread_id: threadId,
-          message: text,
-        });
-        setActiveReplyId(null);
-        setReplyDraft("");
-        await fetchThreads();
-        onRefresh?.();
-      } catch (e) {
-        setPostError(e?.message || "Could not post reply.");
-      } finally {
-        setReplySubmitting(false);
-      }
+  const handleSubmitReply = useCallback(
+    async (threadId, message, replyToMessageId) => {
+      if (!approvalRequestId || !threadId) return;
+      await api.postJson(`/approvals/${approvalRequestId}/reply`, {
+        thread_id: threadId,
+        message,
+        reply_to_message_id: replyToMessageId || undefined,
+      });
+      await fetchThreads();
+      onRefresh?.();
     },
-    [replyDraft, approvalRequestId, fetchThreads, onRefresh]
+    [approvalRequestId, fetchThreads, onRefresh]
   );
 
-  const onOpenInChat = useCallback(
+  const handleOpenInChat = useCallback(
     (threadConvId) => openApprovalThread?.(threadConvId),
     [openApprovalThread]
   );
 
-  const handleThreadCreated = useCallback(
-    (newThread) => {
-      setThreads((prev) => {
-        const exists = prev.some((t) => t.id === newThread.id);
-        return exists ? prev : [...prev, newThread];
-      });
-    },
-    []
-  );
+  const handleThreadCreated = useCallback((newThread) => {
+    setThreads((prev) => {
+      const exists = prev.some((t) => t.id === newThread.id);
+      return exists ? prev : [...prev, newThread];
+    });
+  }, []);
 
   if (!approvalRequestId) return null;
 
@@ -401,20 +201,12 @@ export default function ApprovalDiscussionTree({
       )}
 
       {threads.map((thread) => (
-        <ThreadPanel
+        <DiscussionPanel
           key={thread.id}
           thread={thread}
           currentUserId={currentUserId}
-          approvalRequestId={approvalRequestId}
-          activeReplyId={activeReplyId}
-          replyDraft={replyDraft}
-          replySubmitting={replySubmitting}
-          postError={activeReplyId === thread.id ? postError : ""}
-          onStartReply={onStartReply}
-          onChangeDraft={setReplyDraft}
-          onCancelReply={onCancelReply}
-          onSubmitReply={onSubmitReply}
-          onOpenInChat={onOpenInChat}
+          onSubmitReply={handleSubmitReply}
+          onOpenInChat={handleOpenInChat}
         />
       ))}
 
