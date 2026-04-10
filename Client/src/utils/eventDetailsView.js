@@ -318,6 +318,13 @@ export function collectDepartmentRequirementSections(
   transportTypeLabel
 ) {
   const sections = [];
+  // Index dept_request_threads by related_request_id for O(1) look-up per block.
+  const deptThreads = details?.dept_request_threads || [];
+  const threadByRequestId = {};
+  for (const t of deptThreads) {
+    if (t.related_request_id) threadByRequestId[t.related_request_id] = t;
+  }
+
   const marketing = details?.marketing_requests;
   if (marketing?.length) {
     sections.push({
@@ -334,7 +341,8 @@ export function collectDepartmentRequirementSections(
         decidedAt: req.decided_at,
         deliverables: req.deliverables || [],
         requesterAttachments: req.requester_attachments || [],
-        marketingRequest: req
+        marketingRequest: req,
+        discussionThread: threadByRequestId[req.id] || null
       }))
     });
   }
@@ -353,7 +361,8 @@ export function collectDepartmentRequirementSections(
         requestedTo: req.requested_to || null,
         decidedBy: req.decided_by,
         decidedAt: req.decided_at,
-        deliverables: []
+        deliverables: [],
+        discussionThread: threadByRequestId[req.id] || null
       }))
     });
   }
@@ -372,7 +381,8 @@ export function collectDepartmentRequirementSections(
         requestedTo: req.requested_to || null,
         decidedBy: req.decided_by,
         decidedAt: req.decided_at,
-        deliverables: []
+        deliverables: [],
+        discussionThread: threadByRequestId[req.id] || null
       }))
     });
   }
@@ -391,7 +401,8 @@ export function collectDepartmentRequirementSections(
         requestedTo: req.requested_to || null,
         decidedBy: req.decided_by,
         decidedAt: req.decided_at,
-        deliverables: []
+        deliverables: [],
+        discussionThread: threadByRequestId[req.id] || null
       }))
     });
   }

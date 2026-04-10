@@ -34,7 +34,10 @@ export default function EventDetailsModalBody({
   onMarketingUpload,
   getMarketingDeliverableUploadFlags,
   currentUserId,
+  currentUserEmail,
   openApprovalThread,
+  onOpenActionModal,
+  onRefreshDetails,
 }) {
   const event = details?.event;
   const eventName = event?.name || fallbackEventName || "—";
@@ -221,6 +224,18 @@ export default function EventDetailsModalBody({
         </ol>
       </section>
 
+      {details?.approval_request?.id && currentUserId ? (
+        <ApprovalDiscussionTree
+          approvalRequestId={details.approval_request.id}
+          currentUserId={currentUserId}
+          isFacultyViewer={viewerRole === "faculty"}
+          viewerRole={viewerRole}
+          onRefresh={onRefreshDetails}
+          openApprovalThread={openApprovalThread}
+          onOpenActionModal={onOpenActionModal}
+        />
+      ) : null}
+
       <DepartmentRequirementsDeck
         deptSections={deptSections}
         viewerRole={viewerRole}
@@ -230,15 +245,6 @@ export default function EventDetailsModalBody({
         getMarketingDeliverableUploadFlags={getMarketingDeliverableUploadFlags}
         deckSubtitle="Expand each card for phased requirements. Your department is listed first."
       />
-
-      {details?.approval_request?.id && currentUserId ? (
-        <ApprovalDiscussionTree
-          approvalRequestId={details.approval_request.id}
-          currentUserId={currentUserId}
-          isFacultyViewer={viewerRole === "faculty"}
-          openApprovalThread={openApprovalThread}
-        />
-      ) : null}
     </div>
   );
 }

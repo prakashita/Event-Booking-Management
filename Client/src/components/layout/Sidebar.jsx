@@ -114,10 +114,10 @@ export default function Sidebar({
         </ul>
       </div>
 
-      {/* Logout */}
+      {/* Logout (secondary — primary logout is in the top-right account menu) */}
       <button
         type="button"
-        className="menu-item logout"
+        className="menu-item sidebar-logout"
         title={collapsed ? "Logout" : undefined}
         onClick={() => {
           onLogout();

@@ -79,7 +79,21 @@ export default function App() {
     setMobileMenuOpen(false);
   }, [pathname]);
 
+  // Close account menu on click outside
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const handler = (e) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [accountMenuOpen]);
+
   const googleButtonRef = useRef(null);
+  const accountMenuRef = useRef(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [status, setStatus] = useState({ type: "idle", message: "" });
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -7668,6 +7682,9 @@ export default function App() {
                   isMarketingViewer={isMarketingRole}
                   getMarketingDeliverableUploadFlags={getMarketingDeliverableUploadFlags}
                   currentUserId={user?.id}
+                  currentUserEmail={user?.email}
+                  onRefreshDetails={() => handleEventDetailsOpen(eventDetailsModal.event)}
+                  onOpenActionModal={openWorkflowActionModal}
                   onMarketingUpload={(req) => {
                     handleEventDetailsClose();
                     openMarketingDeliverableModal(req);
@@ -7706,6 +7723,8 @@ export default function App() {
                   onRefreshApprovalDetails={refreshApprovalDetails}
                   approvalDiscussionCanReply={approvalDiscussionCanReply}
                   currentUserId={user?.id}
+                  currentUserEmail={user?.email}
+                  onOpenActionModal={openWorkflowActionModal}
                   viewerRole={
                     String(user?.id) === String(approvalDetailsModal.request?.requester_id) && !isRegistrarDashboard
                       ? "faculty"
@@ -7997,12 +8016,74 @@ export default function App() {
               <button type="button" className="icon-button">
                 <SimpleIcon path="M12 3a6 6 0 0 1 6 6v4l2 3H4l2-3V9a6 6 0 0 1 6-6Zm0 18a2.5 2.5 0 0 0 2.45-2H9.55A2.5 2.5 0 0 0 12 21Z" />
               </button>
-              <div className="profile">
-                <div>
-                  <p className="profile-name">{profileName}</p>
-                  <p className="profile-role">{profileRole}</p>
-                </div>
-                <div className="profile-avatar" />
+              <div
+                className="account-menu-root"
+                ref={accountMenuRef}
+              >
+                <button
+                  type="button"
+                  className={`profile account-trigger${accountMenuOpen ? " account-trigger--open" : ""}`}
+                  aria-haspopup="menu"
+                  aria-expanded={accountMenuOpen}
+                  aria-label="Account menu"
+                  onClick={() => setAccountMenuOpen((v) => !v)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") { setAccountMenuOpen(false); }
+                  }}
+                >
+                  <div>
+                    <p className="profile-name">{profileName}</p>
+                    <p className="profile-role">{profileRole}</p>
+                  </div>
+                  <div className="profile-avatar" aria-hidden="true" />
+                  <span className="account-trigger-chevron" aria-hidden="true" />
+                </button>
+                {accountMenuOpen && (
+                  <>
+                    <div
+                      className="account-overlay"
+                      aria-hidden="true"
+                      onClick={() => setAccountMenuOpen(false)}
+                    />
+                    <div
+                      className="account-dropdown"
+                      role="menu"
+                      aria-label="Account options"
+                    >
+                      <div className="account-dropdown-header">
+                        <div className="account-dropdown-avatar" aria-hidden="true" />
+                        <div className="account-dropdown-meta">
+                          <p className="account-dropdown-name">{profileName}</p>
+                          <p className="account-dropdown-role">{profileRole}</p>
+                        </div>
+                      </div>
+                      <div className="account-dropdown-divider" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="account-dropdown-item"
+                        onClick={() => { setAccountMenuOpen(false); }}
+                      >
+                        <span className="account-dropdown-icon" aria-hidden="true">
+                          <SimpleIcon path="M12 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm-7 18a7 7 0 0 1 14 0H5Z" />
+                        </span>
+                        Settings
+                      </button>
+                      <div className="account-dropdown-divider" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="account-dropdown-item account-dropdown-item--danger"
+                        onClick={() => { setAccountMenuOpen(false); handleLogout(); navigate("/"); }}
+                      >
+                        <span className="account-dropdown-icon" aria-hidden="true">
+                          <SimpleIcon path="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-4-4 4-4M6 13h12" />
+                        </span>
+                        Logout
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </header>
