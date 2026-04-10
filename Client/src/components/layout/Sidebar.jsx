@@ -1,9 +1,7 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import {
-  preferenceItems,
   VIEW_TO_PATH,
   MENU_ICONS,
-  PREFERENCE_ICONS,
   SIDEBAR_TOGGLE_ICONS,
 } from "../../constants";
 import { SimpleIcon } from "../icons";
@@ -85,51 +83,6 @@ export default function Sidebar({
           })}
         </ul>
       </nav>
-
-      {/* Preferences */}
-      <div className="sidebar-nav" aria-label="Preferences">
-        <p className="menu-title">
-          <span className="menu-title-text">Preferences</span>
-        </p>
-        <ul className="menu-list" role="list">
-          {preferenceItems.map((item) => (
-            <li key={item.id} role="listitem">
-              <button
-                type="button"
-                className="menu-item"
-                title={collapsed ? item.label : undefined}
-              >
-                <span className="menu-icon" aria-hidden="true">
-                  <SimpleIcon
-                    path={
-                      PREFERENCE_ICONS[item.id] ||
-                      "M12 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12Zm0 14c4.4 0 8 2 8 4v2H4v-2c0-2 3.6-4 8-4Z"
-                    }
-                  />
-                </span>
-                <span className="menu-label">{item.label}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Logout (secondary — primary logout is in the top-right account menu) */}
-      <button
-        type="button"
-        className="menu-item sidebar-logout"
-        title={collapsed ? "Logout" : undefined}
-        onClick={() => {
-          onLogout();
-          onNavigate?.();
-          navigate("/");
-        }}
-      >
-        <span className="menu-icon" aria-hidden="true">
-          <SimpleIcon path="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-4-4 4-4M6 13h12" />
-        </span>
-        <span className="menu-label">Logout</span>
-      </button>
     </aside>
   );
 }

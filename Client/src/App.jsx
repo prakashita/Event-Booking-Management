@@ -36,6 +36,7 @@ import EventDetailsModalBody, { ConnectedEventDetailsModalBody } from "./compone
 import { ConnectedApprovalDetailsModalBody } from "./components/ApprovalDetailsModalBody";
 import RequirementsWizardModal from "./components/RequirementsWizardModal";
 import { MessengerProvider, FloatingMessenger } from "./components/messenger";
+import SettingsModal from "./components/SettingsModal";
 import api from "./services/api";
 
 /** Normalize path so "/event reports" or "/event%20reports" map to canonical routes. */
@@ -69,6 +70,13 @@ export default function App() {
   const pathname = normalizePathname(location.pathname);
   const activeView = PATH_TO_VIEW[pathname] ?? "dashboard";
 
+  const googleButtonRef = useRef(null);
+  const accountMenuRef = useRef(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [status, setStatus] = useState({ type: "idle", message: "" });
+
   useEffect(() => {
     if (pathname !== location.pathname && PATH_TO_VIEW[pathname]) {
       navigate(pathname, { replace: true });
@@ -90,14 +98,8 @@ export default function App() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [accountMenuOpen]);
-
-  const googleButtonRef = useRef(null);
-  const accountMenuRef = useRef(null);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const [status, setStatus] = useState({ type: "idle", message: "" });
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [myEventsTab, setMyEventsTab] = useState("all");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -8062,7 +8064,7 @@ export default function App() {
                         type="button"
                         role="menuitem"
                         className="account-dropdown-item"
-                        onClick={() => { setAccountMenuOpen(false); }}
+                        onClick={() => { setAccountMenuOpen(false); setSettingsOpen(true); }}
                       >
                         <span className="account-dropdown-icon" aria-hidden="true">
                           <SimpleIcon path="M12 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm-7 18a7 7 0 0 1 14 0H5Z" />
@@ -8125,6 +8127,7 @@ export default function App() {
             setItForm={setItForm}
           />
 
+          <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
           <FloatingMessenger />
         </main>
       </div>
