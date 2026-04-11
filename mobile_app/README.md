@@ -2,6 +2,23 @@
 
 Flutter mobile client for Event Booking Management.
 
+## Local Run (Server + Client + Mobile)
+
+1. Start backend from [../Server](../Server) on port 8000.
+2. For Android emulator, mobile app uses `http://10.0.2.2:8000` by default.
+3. For physical Android device, pass your machine LAN IP:
+
+```bash
+flutter run -d <device-id> --dart-define=API_BASE_URL=http://<lan-ip>:8000
+```
+
+4. Optional: keep local defines in a json file and reuse:
+
+```bash
+cp env.local.example.json env.local.json
+flutter run -d <device-id> --dart-define-from-file=env.local.json
+```
+
 ## Google Login Flow
 
 This app uses the same token flow for web/mobile:
@@ -113,3 +130,12 @@ Already configured in repo:
 2. `ios/Runner/Info.plist`: URL scheme uses `$(GOOGLE_REVERSED_CLIENT_ID)`.
 3. `ios/Flutter/Debug.xcconfig`: has `GOOGLE_REVERSED_CLIENT_ID` placeholder.
 4. `ios/Flutter/Release.xcconfig`: has `GOOGLE_REVERSED_CLIENT_ID` placeholder.
+
+## Android Google Sign-In Fix
+
+If Android sign-in fails with `ApiException: 10`, add an Android OAuth client in Google Cloud with:
+
+- Package name: `com.example.mobile_app`
+- Debug SHA-1: `69:AE:0E:84:7A:53:1D:46:0D:1D:1C:66:CA:4F:EC:03:F3:51:6C:49`
+
+Then keep using the web client ID for `GOOGLE_CLIENT_ID` and `GOOGLE_SERVER_CLIENT_ID`.

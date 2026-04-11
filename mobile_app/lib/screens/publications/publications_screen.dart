@@ -1,356 +1,322 @@
 import 'package:flutter/material.dart';
-
-import '../../core/api_client.dart';
-import '../../core/theme.dart';
-import '../../widgets/common.dart';
+import 'package:intl/intl.dart';
+import '../../constants/app_colors.dart';
+import '../../constants/app_constants.dart';
+import '../../models/models.dart';
+import '../../services/api_service.dart';
+import '../../widgets/common/app_widgets.dart';
 
 class PublicationsScreen extends StatefulWidget {
-  const PublicationsScreen({super.key, required this.api});
-
-  final ApiClient api;
+  const PublicationsScreen({super.key});
 
   @override
   State<PublicationsScreen> createState() => _PublicationsScreenState();
 }
 
 class _PublicationsScreenState extends State<PublicationsScreen> {
-  late Future<List<dynamic>> _future;
-  String _searchQuery = '';
-  String _typeFilter = 'all';
+  final _api = ApiService();
+  List<Publication> _pubs = [];
+  bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    _loadPublications();
   }
 
-  Future<List<dynamic>> _load() async {
-    final res = await widget.api.get('/publications?sort=latest');
-    return asList(res);
-  }
-
-  Future<void> _create() async {
-    final payload = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (_) => const _CreatePublicationDialog(),
-    );
-    if (payload == null) return;
+  Future<void> _loadPublications() async {
+    setState(() => _isLoading = true);
     try {
-      await widget.api.post('/publications', payload);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Publication created successfully.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      setState(() => _future = _load());
+      final data = await _api.get<Map<String, dynamic>>('/publications');
+      setState(() {
+        _pubs = (data['items'] as List? ?? [])
+            .map((p) => Publication.fromJson(p))
+            .toList();
+        _isLoading = false;
+      });
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return PageShell(
-      title: 'Publications',
-      subtitle: 'Publication feed and submission from website APIs.',
-      action: FilledButton.icon(
-        onPressed: _create,
-        icon: const Icon(Icons.add_rounded, size: 18),
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('Publications')),
+      body: _isLoading
+          ? _buildLoading()
+          : _error != null
+              ? ErrorState(message: _error!, onRetry: _loadPublications)
+              : _pubs.isEmpty
+                  ? EmptyState(
+                      icon: Icons.menu_book_outlined,
+                      title: 'No publications',
+                      message: 'Research publications will appear here.',
+                      actionLabel: 'Add Publication',
+                      onAction: () => _showAddDialog(context),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: _loadPublications,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                        itemCount: _pubs.length,
+                        itemBuilder: (ctx, i) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _PublicationCard(pub: _pubs[i]),
+                        ),
+                      ),
+                    ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddDialog(context),
+        icon: const Icon(Icons.add),
         label: const Text('Add Publication'),
       ),
-      child: Column(
-        children: [
-          Row(
+    );
+  }
+
+  Widget _buildLoading() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 5,
+      itemBuilder: (_, i) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: ShimmerBox(width: double.infinity, height: 110, radius: 12),
+      ),
+    );
+  }
+
+  void _showAddDialog(BuildContext context) {
+    String type = AppConstants.publicationTypes.first;
+    final titleCtrl = TextEditingController();
+    final authorsCtrl = TextEditingController();
+    final urlCtrl = TextEditingController();
+    final journalCtrl = TextEditingController();
+    final yearCtrl = TextEditingController(text: DateTime.now().year.toString());
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(
+              20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Expanded(
-                child: TextField(
-                  decoration: const InputDecoration(
-                    hintText: 'Search publications…',
-                    prefixIcon: Icon(Icons.search_rounded, size: 20),
-                  ),
-                  onChanged: (v) => setState(() => _searchQuery = v),
+              const Text('Add Publication',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 20),
+              DropdownButtonFormField<String>(
+                value: type,
+                decoration: const InputDecoration(labelText: 'Type'),
+                items: AppConstants.publicationTypes
+                    .map((t) => DropdownMenuItem(
+                          value: t,
+                          child: Text(t.replaceAll('_', ' ').toUpperCase()),
+                        ))
+                    .toList(),
+                onChanged: (v) => setS(() => type = v!),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: titleCtrl,
+                decoration: const InputDecoration(labelText: 'Title *'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: authorsCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Authors (comma-separated)',
+                  hintText: 'John Doe, Jane Smith',
                 ),
               ),
-              const SizedBox(width: 10),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _typeFilter,
-                  borderRadius: BorderRadius.circular(12),
-                  items: const [
-                    DropdownMenuItem(value: 'all', child: Text('All Types')),
-                    DropdownMenuItem(value: 'journal', child: Text('Journal')),
-                    DropdownMenuItem(
-                        value: 'conference', child: Text('Conference')),
-                    DropdownMenuItem(value: 'book', child: Text('Book')),
-                    DropdownMenuItem(value: 'chapter', child: Text('Chapter')),
-                  ],
-                  onChanged: (v) => setState(() => _typeFilter = v ?? 'all'),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: yearCtrl,
+                      decoration: const InputDecoration(labelText: 'Year'),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: journalCtrl,
+                      decoration:
+                          const InputDecoration(labelText: 'Journal/Publisher'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: urlCtrl,
+                decoration: const InputDecoration(labelText: 'URL'),
+                keyboardType: TextInputType.url,
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    try {
+                      await _api.post('/publications', data: {
+                        'type': type,
+                        'title': titleCtrl.text.trim(),
+                        'authors': authorsCtrl.text
+                            .split(',')
+                            .map((a) => a.trim())
+                            .where((a) => a.isNotEmpty)
+                            .toList(),
+                        'year': int.tryParse(yearCtrl.text),
+                        'url': urlCtrl.text.trim(),
+                        'journal': journalCtrl.text.trim(),
+                      });
+                      _loadPublications();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Publication added!')),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(e.toString()),
+                          backgroundColor: AppColors.error,
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Add Publication'),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          FutureBuilder<List<dynamic>>(
-            future: _future,
-            builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const ShimmerLoader();
-              }
-              if (snap.hasError) {
-                return ErrorCard(
-                  error: snap.error.toString(),
-                  onRetry: () => setState(() => _future = _load()),
-                );
-              }
-
-              final pubs = (snap.data ?? []).where((p) {
-                final m = asMap(p);
-                final title = (m['title'] ?? m['name'] ?? '')
-                    .toString()
-                    .toLowerCase();
-                final type = (m['pubType'] ?? m['publication_type'] ?? '')
-                    .toString()
-                    .toLowerCase();
-                final matchSearch = _searchQuery.isEmpty ||
-                    title.contains(_searchQuery.toLowerCase());
-                final matchType = _typeFilter == 'all' ||
-                    type.contains(_typeFilter.toLowerCase());
-                return matchSearch && matchType;
-              }).toList();
-
-              if (pubs.isEmpty) {
-                return const EmptyCard(
-                  message: 'No publications found.',
-                  icon: Icons.menu_book_rounded,
-                );
-              }
-
-              return Column(
-                children: pubs.map((p) {
-                  final m = asMap(p);
-                  final title = m['title']?.toString() ??
-                      m['name']?.toString() ??
-                      'Publication';
-                  final type = m['pubType']?.toString() ??
-                      m['publication_type']?.toString() ??
-                      '-';
-                  return _PublicationCard(title: title, type: type, data: m);
-                }).toList(),
-              );
-            },
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
 class _PublicationCard extends StatelessWidget {
-  const _PublicationCard({
-    required this.title,
-    required this.type,
-    required this.data,
-  });
+  final Publication pub;
+  const _PublicationCard({required this.pub});
 
-  final String title;
-  final String type;
-  final Map<String, dynamic> data;
+  IconData get _typeIcon {
+    switch (pub.type) {
+      case 'journal_article': return Icons.article_outlined;
+      case 'book': return Icons.menu_book_outlined;
+      case 'video': return Icons.video_library_outlined;
+      case 'webpage': return Icons.language;
+      case 'newspaper': return Icons.newspaper_outlined;
+      default: return Icons.description_outlined;
+    }
+  }
 
-  static const _typeColors = {
-    'journal': Color(0xFF007BFF),
-    'conference': Color(0xFF8B5CF6),
-    'book': Color(0xFF10B981),
-    'chapter': Color(0xFFF59E0B),
-  };
+  Color get _typeColor {
+    switch (pub.type) {
+      case 'journal_article': return AppColors.primary;
+      case 'book': return AppColors.success;
+      case 'video': return AppColors.error;
+      case 'webpage': return AppColors.info;
+      default: return AppColors.textSecondary;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final color = _typeColors[type.toLowerCase()] ?? AppColors.textSecondary;
-    final year = data['year']?.toString() ?? data['published_year']?.toString();
-    final authors = data['authors']?.toString();
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: color.withAlpha(22),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(Icons.article_rounded, color: color, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  if (authors != null)
-                    Text(
-                      authors,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: color.withAlpha(22),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          type.toUpperCase(),
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.8,
-                          ),
-                        ),
-                      ),
-                      if (year != null) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          year,
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
       ),
-    );
-  }
-}
-
-// ─── Create Publication Dialog ────────────────────────────────────────────────
-
-class _CreatePublicationDialog extends StatefulWidget {
-  const _CreatePublicationDialog();
-
-  @override
-  State<_CreatePublicationDialog> createState() =>
-      _CreatePublicationDialogState();
-}
-
-class _CreatePublicationDialogState extends State<_CreatePublicationDialog> {
-  final _name = TextEditingController();
-  final _title = TextEditingController();
-  final _authors = TextEditingController();
-  final _year = TextEditingController(text: DateTime.now().year.toString());
-  String _type = 'journal';
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _title.dispose();
-    _authors.dispose();
-    _year.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Add Publication'),
-      content: SizedBox(
-        width: 400,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              dialogInput('Name / Author Name *', _name),
-              dialogInput('Title *', _title),
-              dialogInput('Authors', _authors),
-              dialogInput(
-                'Year',
-                _year,
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 4),
-              DropdownButtonFormField<String>(
-                value: _type,
-                decoration: InputDecoration(
-                  labelText: 'Publication Type',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  isDense: true,
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'journal', child: Text('Journal')),
-                  DropdownMenuItem(
-                      value: 'conference', child: Text('Conference')),
-                  DropdownMenuItem(value: 'book', child: Text('Book')),
-                  DropdownMenuItem(value: 'chapter', child: Text('Chapter')),
-                  DropdownMenuItem(value: 'other', child: Text('Other')),
-                ],
-                onChanged: (v) => setState(() => _type = v ?? 'journal'),
-              ),
-            ],
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: _typeColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(_typeIcon, size: 22, color: _typeColor),
           ),
-        ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  pub.title,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if (pub.authors.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    pub.authors.join(', '),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _typeColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(100),
+                      ),
+                      child: Text(
+                        pub.type.replaceAll('_', ' ').toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: _typeColor,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
+                    if (pub.year != null) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        '${pub.year}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () {
-            if (_name.text.trim().isEmpty || _title.text.trim().isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Name and Title are required.')),
-              );
-              return;
-            }
-            Navigator.pop(context, {
-              'name': _name.text.trim(),
-              'title': _title.text.trim(),
-              'authors': _authors.text.trim(),
-              'year': int.tryParse(_year.text.trim()),
-              'publication_type': _type,
-              'pubType': _type,
-            });
-          },
-          child: const Text('Add Publication'),
-        ),
-      ],
     );
   }
 }
