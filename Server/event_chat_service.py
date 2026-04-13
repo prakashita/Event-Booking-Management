@@ -120,8 +120,34 @@ async def ensure_approval_thread_chat(
     if existing:
         # Ensure both participants are present
         merged = sorted(set(existing.participants + [faculty_user_id, department_user_id]))
-        if merged != sorted(existing.participants):
+        participants_changed = merged != sorted(existing.participants)
+        if participants_changed:
             existing.participants = merged
+
+        # Always post the initial_message to the existing thread when provided.
+        # This handles the common case where the thread was pre-created at request
+        # submission time (via ensure_dept_request_thread) and the dept user later
+        # submits a clarification comment — the comment must still be persisted.
+        if initial_message and department_user_id and sender_name:
+            msg = ChatMessage(
+                conversation_id=str(existing.id),
+                sender_id=department_user_id,
+                sender_name=sender_name,
+                sender_email=sender_email,
+                content=initial_message.strip(),
+                read_by=[department_user_id],
+                created_at=datetime.now(timezone.utc),
+            )
+            await msg.insert()
+            existing.last_message = build_last_message_snapshot(msg)
+            existing.participant_unreads = {
+                pid: (0 if pid == department_user_id else 1)
+                for pid in (existing.participants or [])
+            }
+            existing.thread_status = "waiting_for_faculty"
+            existing.updated_at = datetime.now(timezone.utc)
+            await existing.save()
+        elif participants_changed:
             existing.updated_at = datetime.now(timezone.utc)
             await existing.save()
         return existing

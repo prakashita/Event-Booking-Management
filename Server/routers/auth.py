@@ -11,7 +11,7 @@ from auth import (
     create_access_token,
     is_admin_email,
 )
-from routers.deps import get_current_user
+from routers.deps import get_current_user, get_current_user_any_status
 import requests
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -33,24 +33,55 @@ async def google_login(request: Request, payload: TokenRequest):
     # Find user by google_id
     user = await User.find_one(User.google_id == google_id)
 
+    is_new_user = False
     if not user:
-        # Create new user if doesn't exist
-        user = User(
-            name=name,
-            email=email,
-            google_id=google_id
-        )
-        await user.insert()
-        # Apply pre-assigned role from Add User (pending role assignment)
-        pending = await PendingRoleAssignment.find_one(PendingRoleAssignment.email == email.lower().strip())
-        if pending and pending.role:
-            user.role = (pending.role or "").strip().lower()
+        is_new_user = True
+        # Determine initial approval status:
+        # - Admin emails get immediate "approved" status
+        # - Users with a pre-assigned role (via Add User) get "approved" status
+        # - Everyone else starts as "pending"
+        pending_role = await PendingRoleAssignment.find_one(PendingRoleAssignment.email == email.lower().strip())
+        if is_admin_email(email):
+            user = User(
+                name=name,
+                email=email,
+                google_id=google_id,
+                role="admin",
+                approval_status="approved",
+            )
+            await user.insert()
+        elif pending_role and pending_role.role:
+            user = User(
+                name=name,
+                email=email,
+                google_id=google_id,
+                role=(pending_role.role or "").strip().lower(),
+                approval_status="approved",
+            )
+            await user.insert()
+            await pending_role.delete()
+        else:
+            user = User(
+                name=name,
+                email=email,
+                google_id=google_id,
+                role="faculty",
+                approval_status="pending",
+                requested_role="faculty",
+            )
+            await user.insert()
+    else:
+        # Existing user: backfill approval_status if missing (pre-existing users treated as approved)
+        if not getattr(user, "approval_status", None):
+            user.approval_status = "approved"
             await user.save()
-            await pending.delete()
 
+    # Always enforce admin email -> admin role
     normalized_role = (user.role or "").strip().lower()
     if is_admin_email(email) and normalized_role != "admin":
         user.role = "admin"
+        if (getattr(user, "approval_status", None) or "") != "approved":
+            user.approval_status = "approved"
         await user.save()
 
     jwt_token = create_access_token({"user_id": str(user.id)})
@@ -61,13 +92,17 @@ async def google_login(request: Request, payload: TokenRequest):
             "id": str(user.id),
             "name": user.name,
             "email": user.email,
-            "role": user.role
+            "role": user.role,
+            "approval_status": getattr(user, "approval_status", None) or "approved",
         }
     }
 
 
 @router.get("/google/status")
 async def google_oauth_status(user: User = Depends(get_current_user)):
+    # Allow even pending/rejected users to check Google OAuth status
+    # (get_current_user_any_status is not needed here since this is  
+    #  already behind authentication; but approval gate is at app level)
     if not user.google_refresh_token:
         return {"connected": False, "missing_scopes": REQUIRED_GOOGLE_SCOPES}
 
@@ -137,3 +172,16 @@ async def get_transport_email(user: User = Depends(get_current_user)):
     """Return the transport coordinator email for prefilling request forms."""
     email = await get_primary_email_by_role("transport")
     return {"email": email or ""}
+
+
+@router.get("/me")
+async def get_current_user_info(user: User = Depends(get_current_user_any_status)):
+    """Return current user info including approval_status. Accessible by any authenticated user
+    regardless of approval state (needed for holding/rejection screens)."""
+    return {
+        "id": str(user.id),
+        "name": user.name,
+        "email": user.email,
+        "role": user.role,
+        "approval_status": getattr(user, "approval_status", None) or "approved",
+    }

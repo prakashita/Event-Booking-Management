@@ -29,8 +29,8 @@ export default function ConversationList() {
 
   const [actionDialog, setActionDialog] = useState(null);
 
-  // Local tab: "conversations" | "people"
-  const [tab, setTab] = useState("conversations");
+  // Tabs: "messages" | "workflow" | "people"
+  const [tab, setTab] = useState("messages");
 
   // People-tab local search (doesn't hit API)
   const [peopleSearch, setPeopleSearch] = useState("");
@@ -40,6 +40,17 @@ export default function ConversationList() {
     const q = peopleSearch.toLowerCase();
     return chatUsers.filter((u) => (u.name || "").toLowerCase().includes(q));
   }, [chatUsers, peopleSearch]);
+
+  // Unread counts per tab for badges
+  const directConvs = conversations.filter((c) => c.thread_kind === "direct");
+  const messagesUnread = chatEventThreads.reduce(
+    (acc, t) => acc + (chatUnreadByConversation[t.id] || 0),
+    0
+  ) + directConvs.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+  const workflowUnread = activeWorkflowChats.reduce(
+    (acc, c) => acc + (c.unread_count || 0),
+    0
+  );
 
   return (
     <div className="msger-convos">
@@ -60,25 +71,38 @@ export default function ConversationList() {
         </svg>
         <input
           type="text"
-          placeholder="Search conversations..."
-          value={tab === "conversations" ? searchQuery : peopleSearch}
+          placeholder={tab === "people" ? "Search people..." : "Search conversations..."}
+          value={tab === "people" ? peopleSearch : searchQuery}
           onChange={(e) =>
-            tab === "conversations"
-              ? setSearch(e.target.value)
-              : setPeopleSearch(e.target.value)
+            tab === "people"
+              ? setPeopleSearch(e.target.value)
+              : setSearch(e.target.value)
           }
           className="msger-search-input"
         />
       </div>
 
-      {/* Filter bar */}
+      {/* Filter bar — Tabs: Messages | Workflow | People */}
       <div className="msger-filters">
         <button
           type="button"
-          className={`msger-filter-tab${tab === "conversations" ? " active" : ""}`}
-          onClick={() => setTab("conversations")}
+          className={`msger-filter-tab${tab === "messages" ? " active" : ""}`}
+          onClick={() => setTab("messages")}
         >
           Chats
+          {messagesUnread > 0 && (
+            <span className="msger-filter-count">{messagesUnread > 99 ? "99+" : messagesUnread}</span>
+          )}
+        </button>
+        <button
+          type="button"
+          className={`msger-filter-tab${tab === "workflow" ? " active" : ""}`}
+          onClick={() => setTab("workflow")}
+        >
+          Workflow
+          {workflowUnread > 0 && (
+            <span className="msger-filter-count">{workflowUnread > 99 ? "99+" : workflowUnread}</span>
+          )}
         </button>
         <button
           type="button"
@@ -87,7 +111,7 @@ export default function ConversationList() {
         >
           People
         </button>
-        {tab === "conversations" && (
+        {tab === "messages" && (
           <button
             type="button"
             className={`msger-filter-btn${unreadOnly ? " active" : ""}`}
@@ -100,7 +124,7 @@ export default function ConversationList() {
       </div>
 
       <div className="msger-convo-list">
-        {tab === "conversations" ? (
+        {tab === "messages" ? (
           <>
             {conversations.length === 0 ? (
               <p className="msger-note">
@@ -163,12 +187,10 @@ export default function ConversationList() {
               </>
             ) : null}
 
-            {conversations.filter((c) => c.thread_kind === "direct").length > 0 ? (
+            {directConvs.length > 0 ? (
               <>
                 <p className="msger-section-label">Direct Messages</p>
-                {conversations
-                  .filter((c) => c.thread_kind === "direct")
-                  .map((conv) => {
+                {directConvs.map((conv) => {
                     const ou = conv.other_user;
                     const name = ou?.name || "Unknown";
                     const avatarLabel = name.trim().charAt(0).toUpperCase() || "?";
@@ -211,9 +233,15 @@ export default function ConversationList() {
               </>
             ) : null}
 
+            {chatEventThreads.length === 0 && directConvs.length === 0 && (
+              <p className="msger-note">No chats yet.</p>
+            )}
+          </>
+        ) : tab === "workflow" ? (
+          <>
             {activeWorkflowChats.length > 0 ? (
               <>
-                <p className="msger-section-label">Workflow Discussions</p>
+                <p className="msger-section-label">Active Discussions</p>
                 {activeWorkflowChats.map((conv) => {
                   const deptLabel = conv.department_label || conv.department || "Discussion";
                   const name = conv.event_title || `Event Discussion`;
@@ -267,6 +295,10 @@ export default function ConversationList() {
                 })}
               </>
             ) : null}
+
+            {activeWorkflowChats.length === 0 && archivedWorkflowChats.length === 0 && (
+              <p className="msger-note">No workflow discussions.</p>
+            )}
           </>
         ) : (
           <>

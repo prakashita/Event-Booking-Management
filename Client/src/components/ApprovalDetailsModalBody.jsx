@@ -41,7 +41,9 @@ export default function ApprovalDetailsModalBody({
   onRefreshApprovalDetails,
   approvalDiscussionCanReply = false,
   currentUserId,
+  currentUserEmail,
   viewerRole = "registrar",
+  onOpenActionModal,
 }) {
   const rawAudience = request?.intendedAudience ?? request?.intended_audience ?? null;
   const audienceOther = request?.intendedAudienceOther ?? request?.intended_audience_other ?? null;
@@ -296,8 +298,10 @@ export default function ApprovalDetailsModalBody({
           approvalRequestId={realApprovalId}
           currentUserId={currentUserId}
           isFacultyViewer={isFacultyViewer}
+          viewerRole={viewerRole}
           onRefresh={onRefreshApprovalDetails}
           openApprovalThread={openApprovalThread}
+          onOpenActionModal={onOpenActionModal}
           rootsFromApi={eventDetails?.approval_discussion_threads}
           workflowLogs={actionLogs}
           approvalStatus={request?.status}

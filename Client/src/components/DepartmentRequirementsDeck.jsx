@@ -26,7 +26,7 @@ export default function DepartmentRequirementsDeck({
   getMarketingDeliverableUploadFlags,
   deckSubtitle,
   deckEmptyMessage,
-  sectionId = "evt-req-heading"
+  sectionId = "evt-req-heading",
 }) {
   const highlightDept = viewerDepartmentKey(viewerRole);
 
@@ -204,6 +204,16 @@ export default function DepartmentRequirementsDeck({
                             </div>
                           ) : null}
                         </div>
+                      ) : null}
+
+                      {/* Clarification-requested hint — no chat UI here; see Discussion panel above */}
+                      {block.status === "clarification_requested" ? (
+                        <p className="evt-req-clarification-hint">
+                          <span className="evt-req-discussion-tag evt-req-discussion-tag--clarification">
+                            Clarification requested
+                          </span>
+                          {" "}See the Discussion section above to respond.
+                        </p>
                       ) : null}
                     </div>
                   );

@@ -9,6 +9,15 @@ class User(Document):
     email: str = Field(unique=True)
     google_id: str = Field(unique=True)
     role: str = Field(default="faculty")
+    # Approval workflow: "approved" | "pending" | "rejected"
+    # Existing users without this field are treated as approved (see backfill in auth).
+    approval_status: str = Field(default="approved")
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    rejected_by: Optional[str] = None
+    rejected_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    requested_role: Optional[str] = None  # role requested at sign-up before approval
     created_at: datetime = Field(default_factory=datetime.utcnow)
     last_seen: Optional[datetime] = None
     google_refresh_token: Optional[str] = None

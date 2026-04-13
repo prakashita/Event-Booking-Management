@@ -40,6 +40,40 @@ async def get_current_user(
     if not user:
         logger.warning("get_current_user: User not found user_id=%s", user_id)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    # Enforce approval status: only "approved" users (or missing field = legacy approved) can access protected APIs
+    approval = (getattr(user, "approval_status", None) or "approved").strip().lower()
+    if approval not in ("approved",):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account not yet approved")
+
+    return user
+
+
+async def get_current_user_any_status(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> User:
+    """Like get_current_user but does NOT enforce approval_status.
+    Used only for /auth/me so pending/rejected users can query their own status."""
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
+
+    try:
+        payload = decode_access_token(credentials.credentials)
+    except HTTPException:
+        raise
+
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    try:
+        oid = PydanticObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    user = await User.get(oid)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
 
 async def require_admin(
