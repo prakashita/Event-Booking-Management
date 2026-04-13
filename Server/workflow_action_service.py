@@ -76,7 +76,7 @@ async def list_workflow_actions_for_scope(
         or_conditions.append({"approval_request_id": approval_request_id})
     if not or_conditions:
         return []
-    return await WorkflowActionLog.find({"$or": or_conditions}).sort(-WorkflowActionLog.created_at).to_list()
+    return await WorkflowActionLog.find({"$or": or_conditions}).sort(+WorkflowActionLog.created_at).to_list()
 
 
 def filter_logs_for_approval_discussion(

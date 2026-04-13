@@ -36,6 +36,8 @@ import EventDetailsModalBody, { ConnectedEventDetailsModalBody } from "./compone
 import { ConnectedApprovalDetailsModalBody } from "./components/ApprovalDetailsModalBody";
 import RequirementsWizardModal from "./components/RequirementsWizardModal";
 import { MessengerProvider, FloatingMessenger } from "./components/messenger";
+import SettingsModal from "./components/SettingsModal";
+import NotificationBell from "./components/NotificationBell";
 import api from "./services/api";
 
 /** Normalize path so "/event reports" or "/event%20reports" map to canonical routes. */
@@ -69,6 +71,13 @@ export default function App() {
   const pathname = normalizePathname(location.pathname);
   const activeView = PATH_TO_VIEW[pathname] ?? "dashboard";
 
+  const googleButtonRef = useRef(null);
+  const accountMenuRef = useRef(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [status, setStatus] = useState({ type: "idle", message: "" });
+
   useEffect(() => {
     if (pathname !== location.pathname && PATH_TO_VIEW[pathname]) {
       navigate(pathname, { replace: true });
@@ -79,11 +88,19 @@ export default function App() {
     setMobileMenuOpen(false);
   }, [pathname]);
 
-  const googleButtonRef = useRef(null);
-  const [status, setStatus] = useState({ type: "idle", message: "" });
+  // Close account menu on click outside
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const handler = (e) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target)) {
+        setAccountMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [accountMenuOpen]);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [myEventsTab, setMyEventsTab] = useState("all");
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
@@ -358,6 +375,11 @@ export default function App() {
   const [adminTransportState, setAdminTransportState] = useState({ status: "idle", items: [], error: "" });
   const [adminInvitesState, setAdminInvitesState] = useState({ status: "idle", items: [], error: "" });
   const [adminPublicationsState, setAdminPublicationsState] = useState({ status: "idle", items: [], error: "" });
+  const [adminPendingUsersState, setAdminPendingUsersState] = useState({ status: "idle", items: [], error: "" });
+  const [adminRejectedUsersState, setAdminRejectedUsersState] = useState({ status: "idle", items: [], error: "" });
+  const [approvalActionStatus, setApprovalActionStatus] = useState({ id: null, status: "idle", error: "" });
+  const [rejectReasonModal, setRejectReasonModal] = useState({ open: false, userId: null, reason: "" });
+  const [approveRoleModal, setApproveRoleModal] = useState({ open: false, userId: null, role: "faculty" });
   const [adminVenueName, setAdminVenueName] = useState("");
   const [addUserModal, setAddUserModal] = useState({
     open: false,
@@ -546,6 +568,62 @@ export default function App() {
       setAdminUsersState({ status: "error", items: [], error: err?.message || "Unable to load users." });
     }
   }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
+
+  const loadAdminPendingUsers = useCallback(async () => {
+    if (!canAccessAdminConsole) return;
+    setAdminPendingUsersState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/users/pending-approvals`);
+      if (!res.ok) throw new Error("Unable to load pending users.");
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : (data?.items ?? []);
+      setAdminPendingUsersState({ status: "ready", items, error: "" });
+    } catch (err) {
+      setAdminPendingUsersState({ status: "error", items: [], error: err?.message || "Unable to load pending users." });
+    }
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
+
+  const loadAdminRejectedUsers = useCallback(async () => {
+    if (!canAccessAdminConsole) return;
+    setAdminRejectedUsersState({ status: "loading", items: [], error: "" });
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/users/rejected-users`);
+      if (!res.ok) throw new Error("Unable to load rejected users.");
+      const data = await res.json();
+      const items = Array.isArray(data) ? data : (data?.items ?? []);
+      setAdminRejectedUsersState({ status: "ready", items, error: "" });
+    } catch (err) {
+      setAdminRejectedUsersState({ status: "error", items: [], error: err?.message || "Unable to load rejected users." });
+    }
+  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
+
+  const handleUserApproval = useCallback(async (userId, action, role, rejectionReason) => {
+    setApprovalActionStatus({ id: userId, status: "loading", error: "" });
+    try {
+      const body = { action };
+      if (action === "approve" && role) body.role = role;
+      if (action === "reject" && rejectionReason) body.rejection_reason = rejectionReason;
+      const res = await apiFetch(`${apiBaseUrl}/users/${userId}/approval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.detail || "Action failed.");
+      }
+      setApprovalActionStatus({ id: null, status: "idle", error: "" });
+      // Refresh lists
+      loadAdminPendingUsers();
+      loadAdminRejectedUsers();
+      loadAdminUsers();
+      loadAdminOverview();
+      setStatus({ type: "success", message: `User ${action === "approve" ? "approved" : "rejected"} successfully.` });
+    } catch (err) {
+      setApprovalActionStatus({ id: userId, status: "error", error: err?.message || "Action failed." });
+      setStatus({ type: "error", message: err?.message || "Action failed." });
+    }
+  }, [apiBaseUrl, apiFetch, loadAdminPendingUsers, loadAdminRejectedUsers, loadAdminUsers, loadAdminOverview]);
 
   const loadAdminVenues = useCallback(async () => {
     if (!canAccessAdminConsole) {
@@ -1819,6 +1897,8 @@ export default function App() {
     loadAdminTransport();
     loadAdminInvites();
     loadAdminPublications();
+    loadAdminPendingUsers();
+    loadAdminRejectedUsers();
   }, [
     activeView,
     canAccessAdminConsole,
@@ -1832,6 +1912,8 @@ export default function App() {
     loadAdminInvites,
     loadAdminUsers,
     loadAdminVenues,
+    loadAdminPendingUsers,
+    loadAdminRejectedUsers,
     user
   ]);
 
@@ -4244,6 +4326,107 @@ export default function App() {
   };
 
   if (user) {
+    // --- Approval gate: pending / rejected users see holding screens ---
+    const approvalStatus = (user.approval_status || "approved").toLowerCase();
+
+    if (approvalStatus === "pending") {
+      return (
+        <div className="approval-gate">
+          <div className="approval-gate-card">
+            <div className="approval-gate-icon pending">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12 6 12 12 16 14" />
+              </svg>
+            </div>
+            <h1>Approval Pending</h1>
+            <p className="approval-gate-message">
+              Your account is awaiting administrator approval. You will be able to
+              access the application once an admin reviews and approves your account.
+            </p>
+            <p className="approval-gate-contact">
+              If you need immediate access, please contact your system administrator.
+            </p>
+            <div className="approval-gate-info">
+              <span>Signed in as <strong>{user.email}</strong></span>
+            </div>
+            <button
+              type="button"
+              className="approval-gate-logout"
+              onClick={() => {
+                localStorage.removeItem("auth_token");
+                localStorage.removeItem("auth_user");
+                setUser(null);
+                navigate(ROUTES.DASHBOARD);
+              }}
+            >
+              Sign out
+            </button>
+            <button
+              type="button"
+              className="approval-gate-refresh"
+              onClick={async () => {
+                try {
+                  const res = await api.get("/auth/me");
+                  if (res.ok) {
+                    const data = await res.json();
+                    const nextUser = { ...user, ...data };
+                    localStorage.setItem("auth_user", JSON.stringify(nextUser));
+                    setUser(nextUser);
+                  }
+                } catch {}
+              }}
+            >
+              Check status
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (approvalStatus === "rejected") {
+      return (
+        <div className="approval-gate">
+          <div className="approval-gate-card">
+            <div className="approval-gate-icon rejected">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            </div>
+            <h1>Access Denied</h1>
+            <p className="approval-gate-message">
+              Your account access request has been declined by an administrator.
+            </p>
+            {user.rejection_reason ? (
+              <p className="approval-gate-reason">
+                <strong>Reason:</strong> {user.rejection_reason}
+              </p>
+            ) : null}
+            <p className="approval-gate-contact">
+              If you believe this is an error, please contact your system administrator.
+            </p>
+            <div className="approval-gate-info">
+              <span>Signed in as <strong>{user.email}</strong></span>
+            </div>
+            <button
+              type="button"
+              className="approval-gate-logout"
+              onClick={() => {
+                localStorage.removeItem("auth_token");
+                localStorage.removeItem("auth_user");
+                setUser(null);
+                navigate(ROUTES.DASHBOARD);
+              }}
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     const profileName = user?.name || "Annisa Thalia";
     const profileRole = (user?.role || "Event Manager").toUpperCase();
     const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -4482,6 +4665,16 @@ export default function App() {
                 onClick={() => setAdminTab("publications")}
               >
                 Publications
+              </button>
+              <button
+                type="button"
+                className={`tab-button ${adminTab === "user-approvals" ? "active" : ""}`}
+                onClick={() => setAdminTab("user-approvals")}
+              >
+                User Approvals
+                {(adminOverview.data?.pending_user_approvals ?? 0) > 0 ? (
+                  <span className="tab-badge">{adminOverview.data.pending_user_approvals}</span>
+                ) : null}
               </button>
             </div>
 
@@ -4867,6 +5060,183 @@ export default function App() {
                   </div>
                 </div>
               </div>
+            ) : null}
+
+            {adminTab === "user-approvals" ? (
+              <div className="admin-panel">
+                <div className="admin-panel-header">
+                  <h3>User Approvals</h3>
+                  <button type="button" className="secondary-action" onClick={() => { loadAdminPendingUsers(); loadAdminRejectedUsers(); }}>
+                    Refresh
+                  </button>
+                </div>
+
+                <h4 style={{ margin: "16px 0 8px" }}>Pending Approval ({adminPendingUsersState.items.length})</h4>
+                {adminPendingUsersState.status === "loading" ? <p className="table-message">Loading pending users...</p> : null}
+                {adminPendingUsersState.status === "error" ? <p className="table-message">{adminPendingUsersState.error}</p> : null}
+                <div className="admin-table">
+                  <div className="admin-row header">
+                    <span>User</span>
+                    <span>Requested</span>
+                    <span>Actions</span>
+                  </div>
+                  {adminPendingUsersState.items.map((item) => {
+                    const initial = (item.name || item.email || "?").trim().charAt(0).toUpperCase();
+                    const isActing = approvalActionStatus.id === item.id && approvalActionStatus.status === "loading";
+                    return (
+                      <div className="admin-row" key={item.id}>
+                        <div className="admin-cell">
+                          <div className="admin-user">
+                            <span className="admin-avatar" aria-hidden="true">{initial}</span>
+                            <div>
+                              <p className="admin-name">{item.name || "Unnamed"}</p>
+                              <p className="admin-email">{item.email}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="admin-cell">
+                          <span className="admin-email">{new Date(item.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div className="admin-cell" style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            className="details-button approve"
+                            disabled={isActing}
+                            onClick={() => setApproveRoleModal({ open: true, userId: item.id, role: item.requested_role || item.role || "faculty" })}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            className="details-button reject"
+                            disabled={isActing}
+                            onClick={() => setRejectReasonModal({ open: true, userId: item.id, reason: "" })}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {adminPendingUsersState.items.length === 0 && adminPendingUsersState.status === "ready" ? (
+                    <p className="table-message">No users pending approval.</p>
+                  ) : null}
+                </div>
+
+                <h4 style={{ margin: "24px 0 8px" }}>Rejected Users ({adminRejectedUsersState.items.length})</h4>
+                {adminRejectedUsersState.status === "loading" ? <p className="table-message">Loading rejected users...</p> : null}
+                <div className="admin-table">
+                  <div className="admin-row header">
+                    <span>User</span>
+                    <span>Reason</span>
+                    <span>Actions</span>
+                  </div>
+                  {adminRejectedUsersState.items.map((item) => {
+                    const initial = (item.name || item.email || "?").trim().charAt(0).toUpperCase();
+                    const isActing = approvalActionStatus.id === item.id && approvalActionStatus.status === "loading";
+                    return (
+                      <div className="admin-row" key={item.id}>
+                        <div className="admin-cell">
+                          <div className="admin-user">
+                            <span className="admin-avatar" aria-hidden="true">{initial}</span>
+                            <div>
+                              <p className="admin-name">{item.name || "Unnamed"}</p>
+                              <p className="admin-email">{item.email}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="admin-cell">
+                          <span className="admin-email">{item.rejection_reason || "No reason given"}</span>
+                        </div>
+                        <div className="admin-cell">
+                          <button
+                            type="button"
+                            className="details-button approve"
+                            disabled={isActing}
+                            onClick={() => setApproveRoleModal({ open: true, userId: item.id, role: item.requested_role || item.role || "faculty" })}
+                          >
+                            Approve
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {adminRejectedUsersState.items.length === 0 && adminRejectedUsersState.status === "ready" ? (
+                    <p className="table-message">No rejected users.</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Approve role confirmation modal */}
+            {approveRoleModal.open ? (
+              <Modal onClose={() => setApproveRoleModal({ open: false, userId: null, role: "faculty" })}>
+                <div className="modal-body" style={{ padding: "24px", maxWidth: "400px" }}>
+                  <h3>Approve User</h3>
+                  <p style={{ margin: "12px 0" }}>Select the role to assign:</p>
+                  <select
+                    value={approveRoleModal.role}
+                    onChange={(e) => setApproveRoleModal((prev) => ({ ...prev, role: e.target.value }))}
+                    style={{ width: "100%", padding: "8px", marginBottom: "16px" }}
+                  >
+                    <option value="faculty">Faculty</option>
+                    <option value="registrar">Registrar</option>
+                    <option value="vice_chancellor">Vice Chancellor</option>
+                    <option value="facility_manager">Facility Manager</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="it">IT</option>
+                    <option value="transport">Transport</option>
+                    <option value="iqac">IQAC</option>
+                  </select>
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                    <button type="button" className="secondary-action" onClick={() => setApproveRoleModal({ open: false, userId: null, role: "faculty" })}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-action"
+                      onClick={() => {
+                        handleUserApproval(approveRoleModal.userId, "approve", approveRoleModal.role);
+                        setApproveRoleModal({ open: false, userId: null, role: "faculty" });
+                      }}
+                    >
+                      Confirm Approve
+                    </button>
+                  </div>
+                </div>
+              </Modal>
+            ) : null}
+
+            {/* Reject reason modal */}
+            {rejectReasonModal.open ? (
+              <Modal onClose={() => setRejectReasonModal({ open: false, userId: null, reason: "" })}>
+                <div className="modal-body" style={{ padding: "24px", maxWidth: "400px" }}>
+                  <h3>Reject User</h3>
+                  <p style={{ margin: "12px 0" }}>Optionally provide a reason:</p>
+                  <textarea
+                    value={rejectReasonModal.reason}
+                    onChange={(e) => setRejectReasonModal((prev) => ({ ...prev, reason: e.target.value }))}
+                    placeholder="Reason for rejection (optional)"
+                    rows={3}
+                    style={{ width: "100%", padding: "8px", marginBottom: "16px", resize: "vertical" }}
+                  />
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                    <button type="button" className="secondary-action" onClick={() => setRejectReasonModal({ open: false, userId: null, reason: "" })}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="details-button reject"
+                      onClick={() => {
+                        handleUserApproval(rejectReasonModal.userId, "reject", null, rejectReasonModal.reason);
+                        setRejectReasonModal({ open: false, userId: null, reason: "" });
+                      }}
+                    >
+                      Confirm Reject
+                    </button>
+                  </div>
+                </div>
+              </Modal>
             ) : null}
           </div>
         );
@@ -7550,7 +7920,7 @@ export default function App() {
     };
 
     return (
-      <MessengerProvider user={user}>
+      <MessengerProvider user={user} onOpenWorkflowAction={openWorkflowActionModal}>
       <div className={`dashboard-page ${mobileMenuOpen ? "mobile-menu-open" : ""} ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
         {googleScopeModal.open ? (
           <div className="modal-overlay" role="dialog" aria-modal="true">
@@ -7668,6 +8038,9 @@ export default function App() {
                   isMarketingViewer={isMarketingRole}
                   getMarketingDeliverableUploadFlags={getMarketingDeliverableUploadFlags}
                   currentUserId={user?.id}
+                  currentUserEmail={user?.email}
+                  onRefreshDetails={() => handleEventDetailsOpen(eventDetailsModal.event)}
+                  onOpenActionModal={openWorkflowActionModal}
                   onMarketingUpload={(req) => {
                     handleEventDetailsClose();
                     openMarketingDeliverableModal(req);
@@ -7706,6 +8079,8 @@ export default function App() {
                   onRefreshApprovalDetails={refreshApprovalDetails}
                   approvalDiscussionCanReply={approvalDiscussionCanReply}
                   currentUserId={user?.id}
+                  currentUserEmail={user?.email}
+                  onOpenActionModal={openWorkflowActionModal}
                   viewerRole={
                     String(user?.id) === String(approvalDetailsModal.request?.requester_id) && !isRegistrarDashboard
                       ? "faculty"
@@ -7994,15 +8369,75 @@ export default function App() {
               </button>
             </div>
             <div className="header-actions">
-              <button type="button" className="icon-button">
-                <SimpleIcon path="M12 3a6 6 0 0 1 6 6v4l2 3H4l2-3V9a6 6 0 0 1 6-6Zm0 18a2.5 2.5 0 0 0 2.45-2H9.55A2.5 2.5 0 0 0 12 21Z" />
-              </button>
-              <div className="profile">
-                <div>
-                  <p className="profile-name">{profileName}</p>
-                  <p className="profile-role">{profileRole}</p>
-                </div>
-                <div className="profile-avatar" />
+              <NotificationBell />
+              <div
+                className="account-menu-root"
+                ref={accountMenuRef}
+              >
+                <button
+                  type="button"
+                  className={`profile account-trigger${accountMenuOpen ? " account-trigger--open" : ""}`}
+                  aria-haspopup="menu"
+                  aria-expanded={accountMenuOpen}
+                  aria-label="Account menu"
+                  onClick={() => setAccountMenuOpen((v) => !v)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") { setAccountMenuOpen(false); }
+                  }}
+                >
+                  <div>
+                    <p className="profile-name">{profileName}</p>
+                    <p className="profile-role">{profileRole}</p>
+                  </div>
+                  <div className="profile-avatar" aria-hidden="true" />
+                  <span className="account-trigger-chevron" aria-hidden="true" />
+                </button>
+                {accountMenuOpen && (
+                  <>
+                    <div
+                      className="account-overlay"
+                      aria-hidden="true"
+                      onClick={() => setAccountMenuOpen(false)}
+                    />
+                    <div
+                      className="account-dropdown"
+                      role="menu"
+                      aria-label="Account options"
+                    >
+                      <div className="account-dropdown-header">
+                        <div className="account-dropdown-avatar" aria-hidden="true" />
+                        <div className="account-dropdown-meta">
+                          <p className="account-dropdown-name">{profileName}</p>
+                          <p className="account-dropdown-role">{profileRole}</p>
+                        </div>
+                      </div>
+                      <div className="account-dropdown-divider" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="account-dropdown-item"
+                        onClick={() => { setAccountMenuOpen(false); setSettingsOpen(true); }}
+                      >
+                        <span className="account-dropdown-icon" aria-hidden="true">
+                          <SimpleIcon path="M12 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm-7 18a7 7 0 0 1 14 0H5Z" />
+                        </span>
+                        Settings
+                      </button>
+                      <div className="account-dropdown-divider" />
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="account-dropdown-item account-dropdown-item--danger"
+                        onClick={() => { setAccountMenuOpen(false); handleLogout(); navigate("/"); }}
+                      >
+                        <span className="account-dropdown-icon" aria-hidden="true">
+                          <SimpleIcon path="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l-4-4 4-4M6 13h12" />
+                        </span>
+                        Logout
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </header>
@@ -8044,6 +8479,7 @@ export default function App() {
             setItForm={setItForm}
           />
 
+          <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
           <FloatingMessenger />
         </main>
       </div>

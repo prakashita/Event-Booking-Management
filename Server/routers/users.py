@@ -1,10 +1,11 @@
 from beanie import PydanticObjectId
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 
 from models import ApprovalRequest, Event, FacilityManagerRequest, Invite, ItRequest, MarketingRequest, PendingRoleAssignment, Publication, TransportRequest, User
 from routers.deps import require_admin
-from schemas import AddUserRequest, UserAdminResponse, UserRoleUpdate
+from schemas import AddUserRequest, PaginatedResponse, UserAdminResponse, UserApprovalAction, UserRoleUpdate
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -15,6 +16,13 @@ def serialize_user(user: User) -> UserAdminResponse:
         name=user.name,
         email=user.email,
         role=user.role,
+        approval_status=getattr(user, "approval_status", None) or "approved",
+        approved_by=getattr(user, "approved_by", None),
+        approved_at=getattr(user, "approved_at", None),
+        rejected_by=getattr(user, "rejected_by", None),
+        rejected_at=getattr(user, "rejected_at", None),
+        rejection_reason=getattr(user, "rejection_reason", None),
+        requested_role=getattr(user, "requested_role", None),
         created_at=user.created_at,
         last_seen=user.last_seen,
     )
@@ -48,6 +56,11 @@ async def add_user(
     existing = await User.find_one(User.email == email)
     if existing:
         existing.role = role
+        # If user was pending/rejected, adding them via admin console also approves them
+        if (getattr(existing, "approval_status", None) or "approved") != "approved":
+            existing.approval_status = "approved"
+            existing.approved_by = str(admin.id)
+            existing.approved_at = datetime.utcnow()
         await existing.save()
         return serialize_user(existing)
 
@@ -120,3 +133,115 @@ async def delete_user(user_id: str, admin: User = Depends(require_admin)):
 
     await user.delete()
     return {"status": "deleted", "id": user_id}
+
+
+# ---------------------------------------------------------------------------
+# User Approval workflow endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/pending-approvals", response_model=list[UserAdminResponse])
+async def list_pending_users(admin: User = Depends(require_admin)):
+    """List users awaiting approval."""
+    users = await User.find(User.approval_status == "pending").sort("-created_at").to_list()
+    return [serialize_user(u) for u in users]
+
+
+@router.get("/rejected-users", response_model=list[UserAdminResponse])
+async def list_rejected_users(admin: User = Depends(require_admin)):
+    """List rejected users for audit history."""
+    users = await User.find(User.approval_status == "rejected").sort("-rejected_at").to_list()
+    return [serialize_user(u) for u in users]
+
+
+@router.get("/pending-approvals/count")
+async def pending_approvals_count(admin: User = Depends(require_admin)):
+    """Quick count of pending users for badge display."""
+    count = await User.find(User.approval_status == "pending").count()
+    return {"count": count}
+
+
+@router.post("/{user_id}/approval", response_model=UserAdminResponse)
+async def decide_user_approval(
+    user_id: str,
+    payload: UserApprovalAction,
+    admin: User = Depends(require_admin),
+):
+    """Approve or reject a pending user."""
+    try:
+        oid = PydanticObjectId(user_id)
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user id")
+
+    user = await User.get(oid)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    current_status = (getattr(user, "approval_status", None) or "approved").strip().lower()
+
+    if payload.action == "approve":
+        if current_status == "approved":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is already approved")
+        role = (payload.role or user.role or "faculty").strip().lower()
+        user.role = role
+        user.approval_status = "approved"
+        user.approved_by = str(admin.id)
+        user.approved_at = datetime.utcnow()
+        # Clear any previous rejection
+        user.rejected_by = None
+        user.rejected_at = None
+        user.rejection_reason = None
+        await user.save()
+
+        # Send approval email (best-effort)
+        from notifications import send_notification_email
+        try:
+            await send_notification_email(
+                recipient_email=user.email,
+                subject="Your account has been approved",
+                body=(
+                    f"Hello {user.name},\n\n"
+                    f"Your account on the Event Booking Management system has been approved.\n"
+                    f"Your assigned role is: {role}.\n\n"
+                    f"You can now sign in and access the application.\n\n"
+                    f"Regards,\nEvent Booking Management"
+                ),
+                requester=admin,
+                fallback_role="admin",
+            )
+        except Exception:
+            pass  # email failure should not block the approval
+
+        return serialize_user(user)
+
+    elif payload.action == "reject":
+        if current_status == "rejected":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is already rejected")
+        user.approval_status = "rejected"
+        user.rejected_by = str(admin.id)
+        user.rejected_at = datetime.utcnow()
+        user.rejection_reason = (payload.rejection_reason or "").strip() or None
+        await user.save()
+
+        # Send rejection email (best-effort)
+        from notifications import send_notification_email
+        reason_line = f"\nReason: {user.rejection_reason}\n" if user.rejection_reason else "\n"
+        try:
+            await send_notification_email(
+                recipient_email=user.email,
+                subject="Account access request update",
+                body=(
+                    f"Hello {user.name},\n\n"
+                    f"We regret to inform you that your access request for the Event Booking "
+                    f"Management system has not been approved at this time.{reason_line}\n"
+                    f"If you believe this is an error, please contact the administrator.\n\n"
+                    f"Regards,\nEvent Booking Management"
+                ),
+                requester=admin,
+                fallback_role="admin",
+            )
+        except Exception:
+            pass
+
+        return serialize_user(user)
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="action must be 'approve' or 'reject'")

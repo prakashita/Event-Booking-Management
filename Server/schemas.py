@@ -20,12 +20,26 @@ class UserAdminResponse(BaseModel):
     name: str
     email: str
     role: str
+    approval_status: Optional[str] = "approved"
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    rejected_by: Optional[str] = None
+    rejected_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    requested_role: Optional[str] = None
     created_at: datetime
     last_seen: Optional[datetime] = None
 
 
 class UserRoleUpdate(BaseModel):
     role: str
+
+
+class UserApprovalAction(BaseModel):
+    """Admin action to approve or reject a pending user."""
+    action: Literal["approve", "reject"]
+    role: Optional[str] = None  # final role when approving
+    rejection_reason: Optional[str] = Field(default=None, max_length=1000)
 
 
 class AddUserRequest(BaseModel):
@@ -489,6 +503,9 @@ class ApprovalThreadInfo(BaseModel):
     related_request_id: Optional[str] = None
     related_kind: Optional[str] = None
     thread_status: str = "active"
+    # Workflow status of the related dept request (pending/approved/rejected/clarification_requested).
+    # Populated for facility/it/marketing/transport threads; None for registrar/approval threads.
+    dept_request_status: Optional[str] = None
     participants: list[ApprovalThreadParticipant] = Field(default_factory=list)
     created_at: datetime
     messages: list[ApprovalThreadMessage] = Field(default_factory=list)
@@ -512,6 +529,9 @@ class EventDetailsResponse(BaseModel):
     transport_requests: List[TransportRequestResponse] = Field(default_factory=list)
     workflow_action_logs: List[WorkflowActionLogEntry] = Field(default_factory=list)
     approval_discussion_threads: List[WorkflowActionThreadNode] = Field(default_factory=list)
+    # Per-dept-request discussion threads (facility/IT/marketing/transport clarifications).
+    # Each entry is keyed by related_request_id matching the resp. dept request's id.
+    dept_request_threads: List[ApprovalThreadInfo] = Field(default_factory=list)
 
 
 class EventStatusUpdate(BaseModel):

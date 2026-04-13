@@ -315,6 +315,29 @@ async def get_approval_threads(
             for m in raw_messages
         ]
 
+        # Look up the dept request's current workflow status so the frontend can
+        # decide whether to show action buttons (approve/reject/clarification).
+        dept_request_status: Optional[str] = None
+        rk = (conv.related_kind or "").lower()
+        rid = conv.related_request_id
+        if rid:
+            try:
+                oid_rid = PydanticObjectId(rid)
+                if rk == "facility_request":
+                    dr = await FacilityManagerRequest.get(oid_rid)
+                    dept_request_status = dr.status if dr else None
+                elif rk == "it_request":
+                    dr = await ItRequest.get(oid_rid)
+                    dept_request_status = dr.status if dr else None
+                elif rk == "marketing_request":
+                    dr = await MarketingRequest.get(oid_rid)
+                    dept_request_status = dr.status if dr else None
+                elif rk == "transport_request":
+                    dr = await TransportRequest.get(oid_rid)
+                    dept_request_status = dr.status if dr else None
+            except Exception:
+                dept_request_status = None
+
         result.append(ApprovalThreadInfo(
             id=str(conv.id),
             department=conv.department or "",
@@ -322,6 +345,7 @@ async def get_approval_threads(
             related_request_id=conv.related_request_id,
             related_kind=conv.related_kind,
             thread_status=conv.thread_status or "active",
+            dept_request_status=dept_request_status,
             participants=participants,
             created_at=conv.created_at,
             messages=messages,

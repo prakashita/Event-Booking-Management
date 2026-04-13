@@ -77,16 +77,18 @@ function ThreadMessage({ msg, isOwn, onStartReply }) {
    Renders a single department conversation thread inline.
 
    Props:
-     thread        – ApprovalThreadInfo from GET /approvals/{id}/threads
-     currentUserId – the viewer's user ID
-     onSubmitReply – async (threadId, message, replyToMessageId?) => void
-     onOpenInChat  – (conversationId) => void
+     thread              – ApprovalThreadInfo from GET /approvals/{id}/threads
+     currentUserId       – the viewer's user ID
+     onSubmitReply       – async (threadId, message, replyToMessageId?) => void
+     onOpenInChat        – (conversationId) => void
+     onOpenActionModal   – (status, actionLabel) => void  (dept action buttons)
 ──────────────────────────────────────────────────────────────────────── */
 export default function DiscussionPanel({
   thread,
   currentUserId,
   onSubmitReply,
   onOpenInChat,
+  onOpenActionModal,
 }) {
   const [expanded, setExpanded] = useState(true);
   const [replyingToMsg, setReplyingToMsg] = useState(null); // full message object
@@ -269,6 +271,31 @@ export default function DiscussionPanel({
                     Open in chat
                   </button>
                 )}
+                {onOpenActionModal && (
+                  <span className="dp-action-btns">
+                    <button
+                      type="button"
+                      className="dp-action-btn dp-action-btn--approve"
+                      onClick={() => onOpenActionModal("approved", "Approve")}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="dp-action-btn dp-action-btn--reject"
+                      onClick={() => onOpenActionModal("rejected", "Reject")}
+                    >
+                      Reject
+                    </button>
+                    <button
+                      type="button"
+                      className="dp-action-btn dp-action-btn--clarify"
+                      onClick={() => onOpenActionModal("clarification_requested", "Need confirmation")}
+                    >
+                      Need confirmation
+                    </button>
+                  </span>
+                )}
                 <button
                   type="button"
                   className="primary-action"
@@ -281,16 +308,43 @@ export default function DiscussionPanel({
             </div>
           )}
 
-          {/* When viewer is not a participant, just offer Open in chat */}
-          {!canReply && onOpenInChat && (
+          {/* When viewer is not a participant, just offer Open in chat + action */}
+          {!canReply && (onOpenInChat || onOpenActionModal) && (
             <div className="adt-action-bar">
-              <button
-                type="button"
-                className="adt-chat-btn"
-                onClick={() => onOpenInChat(thread.id)}
-              >
-                Open in chat
-              </button>
+              {onOpenInChat && (
+                <button
+                  type="button"
+                  className="adt-chat-btn"
+                  onClick={() => onOpenInChat(thread.id)}
+                >
+                  Open in chat
+                </button>
+              )}
+              {onOpenActionModal && (
+                <span className="dp-action-btns">
+                  <button
+                    type="button"
+                    className="dp-action-btn dp-action-btn--approve"
+                    onClick={() => onOpenActionModal("approved", "Approve")}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="dp-action-btn dp-action-btn--reject"
+                    onClick={() => onOpenActionModal("rejected", "Reject")}
+                  >
+                    Reject
+                  </button>
+                  <button
+                    type="button"
+                    className="dp-action-btn dp-action-btn--clarify"
+                    onClick={() => onOpenActionModal("clarification_requested", "Need confirmation")}
+                  >
+                    Need confirmation
+                  </button>
+                </span>
+              )}
             </div>
           )}
         </div>

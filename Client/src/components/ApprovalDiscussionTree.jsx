@@ -3,6 +3,25 @@ import api from "../services/api";
 import { IconShieldCheck } from "./icons/EventModalIcons";
 import DiscussionPanel from "./DiscussionPanel";
 
+// Maps viewer role to the department string used in threads.
+const ROLE_TO_DEPT = {
+  facility_manager: "facility_manager",
+  it: "it",
+  marketing: "marketing",
+  transport: "transport",
+};
+
+// Maps dept thread channel name to the channel used by openWorkflowActionModal.
+const DEPT_TO_CHANNEL = {
+  facility_manager: "facility",
+  it: "it",
+  marketing: "marketing",
+  transport: "transport",
+};
+
+// Request statuses that allow dept actions.
+const ACTIONABLE_STATUSES = new Set(["pending", "clarification_requested"]);
+
 /* ─────────────────────────────────────────────
    "Start new discussion" — lets faculty open a
    thread with a dept that has no thread yet.
@@ -118,6 +137,9 @@ export default function ApprovalDiscussionTree({
   isFacultyViewer,
   onRefresh,
   openApprovalThread,
+  // Dept action support
+  viewerRole,
+  onOpenActionModal,
   // legacy props (ignored — kept for backward compat)
   rootsFromApi: _rootsFromApi,
   workflowLogs: _workflowLogs,
@@ -165,6 +187,24 @@ export default function ApprovalDiscussionTree({
     [openApprovalThread]
   );
 
+  // Determine if the current viewer's dept matches a given thread, and if the
+  // request is in an actionable state, so we can surface dept action buttons.
+  const getThreadActionModal = useCallback(
+    (thread) => {
+      if (!onOpenActionModal || !viewerRole) return undefined;
+      const myDept = ROLE_TO_DEPT[viewerRole];
+      if (!myDept || thread.department !== myDept) return undefined;
+      const reqStatus = thread.dept_request_status;
+      if (!reqStatus || !ACTIONABLE_STATUSES.has(reqStatus)) return undefined;
+      const channel = DEPT_TO_CHANNEL[myDept];
+      const requestId = thread.related_request_id;
+      if (!channel || !requestId) return undefined;
+      return (actionStatus, actionLabel) =>
+        onOpenActionModal(channel, requestId, actionStatus, actionLabel);
+    },
+    [onOpenActionModal, viewerRole]
+  );
+
   const handleThreadCreated = useCallback((newThread) => {
     setThreads((prev) => {
       const exists = prev.some((t) => t.id === newThread.id);
@@ -207,6 +247,7 @@ export default function ApprovalDiscussionTree({
           currentUserId={currentUserId}
           onSubmitReply={handleSubmitReply}
           onOpenInChat={handleOpenInChat}
+          onOpenActionModal={getThreadActionModal(thread)}
         />
       ))}
 

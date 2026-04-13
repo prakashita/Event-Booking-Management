@@ -24,6 +24,8 @@ export function useMessenger() {
 // Helpers
 // ---------------------------------------------------------------------------
 
+const IST_LOCALE_OPTS = { timeZone: "Asia/Kolkata" };
+
 function formatChatTime(dateStr) {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -33,7 +35,7 @@ function formatChatTime(dateStr) {
   if (diff < 60_000) return "Just now";
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return d.toLocaleDateString("en-IN", { ...IST_LOCALE_OPTS, month: "short", day: "numeric" });
 }
 
 function resolveAttachmentUrl(url) {
@@ -47,7 +49,7 @@ function resolveAttachmentUrl(url) {
 // Provider
 // ---------------------------------------------------------------------------
 
-export function MessengerProvider({ children, user }) {
+export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
   // Panel visibility
   const [panelOpen, setPanelOpen] = useState(false);
   const togglePanel = useCallback(() => setPanelOpen((v) => !v), []);
@@ -1084,11 +1086,15 @@ export function MessengerProvider({ children, user }) {
       formatChatTime,
       resolveAttachmentUrl,
 
+      // Workflow action callback (passed from App.jsx)
+      onOpenWorkflowAction: onOpenWorkflowAction || null,
+
       // For backward compat with App.jsx
       user,
     }),
     [
       panelOpen,
+      onOpenWorkflowAction,
       togglePanel,
       openPanel,
       closePanel,

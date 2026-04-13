@@ -23,7 +23,7 @@ from drive import delete_drive_file, upload_report_file
 from errors import error_payload
 from idempotency import get_cached_response, get_idempotency_key, store_response
 from event_status import combine_datetime, sync_event_status
-from models import ApprovalRequest, Event, FacilityManagerRequest, ItRequest, MarketingRequest, TransportRequest, User
+from models import ApprovalRequest, ChatConversation, ChatMessage, Event, FacilityManagerRequest, ItRequest, MarketingRequest, TransportRequest, User
 from routers.admin import (
     serialize_approval,
     serialize_event,
@@ -35,6 +35,9 @@ from routers.admin import (
 from routers.deps import IQAC_ALLOWED_ROLES, get_current_user
 from routers.iqac import persist_iqac_upload, validate_iqac_path
 from schemas import (
+    ApprovalThreadInfo,
+    ApprovalThreadMessage,
+    ApprovalThreadParticipant,
     EventCreate,
     EventCreateResponse,
     EventDetailsResponse,
@@ -120,6 +123,81 @@ def _build_approval_discussion_threads(wf_logs, approval_request_id: str) -> lis
     scoped = filter_logs_for_approval_discussion(wf_logs, approval_request_id)
     trees = nest_workflow_logs_as_trees(scoped)
     return [WorkflowActionThreadNode.model_validate(t) for t in trees]
+
+
+# Dept-request thread kinds the event details view should expose inline.
+_DEPT_REQUEST_THREAD_KINDS = frozenset({
+    "facility_request", "it_request", "marketing_request", "transport_request",
+})
+
+
+async def _build_dept_request_threads(
+    approval_request_id: str,
+    user: User,
+    event_created_by: str,
+) -> list[ApprovalThreadInfo]:
+    """Return per-dept-request discussion threads for the event details view.
+
+    Visibility rules:
+    - Admin: all dept-request threads.
+    - Event creator (requester/faculty): all dept threads for their event.
+    - Dept user: only threads they participate in.
+    All other roles get threads they participate in directly.
+    """
+    from event_chat_service import DEPARTMENT_LABELS, list_approval_threads
+
+    all_threads = await list_approval_threads(approval_request_id)
+    dept_threads = [t for t in all_threads if (t.related_kind or "") in _DEPT_REQUEST_THREAD_KINDS]
+
+    uid = str(user.id)
+    role = (user.role or "").strip().lower()
+    is_admin_user = role == "admin" or is_admin_email(user.email or "")
+    is_requester = uid == str(event_created_by)
+
+    result: list[ApprovalThreadInfo] = []
+    for conv in dept_threads:
+        user_is_participant = uid in (conv.participants or [])
+        # Visibility check: admin or requester sees all; others only their threads
+        if not (is_admin_user or is_requester or user_is_participant):
+            continue
+
+        participants: list[ApprovalThreadParticipant] = []
+        for pid in conv.participants:
+            u = await User.get(pid)
+            if u:
+                participants.append(ApprovalThreadParticipant(
+                    id=str(u.id), name=u.name, email=u.email, role=u.role or "",
+                ))
+
+        raw_messages = await ChatMessage.find(
+            {"conversation_id": str(conv.id), "is_deleted": {"$ne": True}},
+        ).sort("created_at").to_list()
+        messages = [
+            ApprovalThreadMessage(
+                id=str(m.id),
+                sender_id=m.sender_id,
+                sender_name=m.sender_name,
+                content=m.content,
+                created_at=m.created_at,
+                reply_to_message_id=getattr(m, "reply_to_message_id", None),
+                reply_to_snapshot=getattr(m, "reply_to_snapshot", None),
+            )
+            for m in raw_messages
+        ]
+        result.append(ApprovalThreadInfo(
+            id=str(conv.id),
+            department=conv.department or "",
+            department_label=DEPARTMENT_LABELS.get(conv.department or "", conv.department or ""),
+            related_request_id=conv.related_request_id,
+            related_kind=conv.related_kind,
+            thread_status=conv.thread_status or "active",
+            participants=participants,
+            created_at=conv.created_at,
+            messages=messages,
+            closed_at=getattr(conv, "closed_at", None),
+            closed_reason=getattr(conv, "closed_reason", None),
+        ))
+    return result
 
 
 def _requirement_status_for_event_details(
@@ -396,6 +474,7 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
                 transport_requests=[],
                 workflow_action_logs=_serialize_workflow_logs(wf_logs),
                 approval_discussion_threads=approval_threads,
+                dept_request_threads=[],
             )
 
         event_id = approval.event_id
@@ -434,6 +513,13 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
         if approval_request
         else []
     )
+    dept_request_threads = (
+        await _build_dept_request_threads(
+            str(approval_request.id), user, str(event.created_by)
+        )
+        if approval_request
+        else []
+    )
 
     return EventDetailsResponse(
         event=serialize_event(event),
@@ -450,6 +536,7 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
         ],
         workflow_action_logs=_serialize_workflow_logs(wf_logs),
         approval_discussion_threads=approval_threads,
+        dept_request_threads=dept_request_threads,
     )
 
 

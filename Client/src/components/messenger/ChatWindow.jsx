@@ -32,13 +32,28 @@ export default function ChatWindow() {
     editMessage,
     formatChatTime,
     resolveAttachmentUrl,
+    onOpenWorkflowAction,
   } = useMessenger();
 
   const listRef = useRef(null);
+  const actionMenuRef = useRef(null);
   const [confirm, setConfirm] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState("");
   const [editError, setEditError] = useState("");
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+
+  // Close action menu on outside click
+  useEffect(() => {
+    if (!actionMenuOpen) return;
+    function handleOutside(e) {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(e.target)) {
+        setActionMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [actionMenuOpen]);
 
   useEffect(() => {
     if (listRef.current) {
@@ -171,6 +186,73 @@ export default function ChatWindow() {
             </div>
           ) : null}
         </div>
+
+        {isWorkflowThread && !isThreadLocked && onOpenWorkflowAction && (
+          <div className="msger-wf-action-root" ref={actionMenuRef}>
+            <button
+              type="button"
+              className={`msger-wf-action-trigger${actionMenuOpen ? " open" : ""}`}
+              onClick={() => setActionMenuOpen((v) => !v)}
+              aria-haspopup="true"
+              aria-expanded={actionMenuOpen}
+              title="Take workflow action"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+              Action
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{marginLeft:2}}>
+                <path d="M6 9l6 6 6-6"/>
+              </svg>
+            </button>
+            {actionMenuOpen && (
+              <div className="msger-wf-action-menu" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="msger-wf-action-item msger-wf-action-item--approve"
+                  onClick={() => {
+                    setActionMenuOpen(false);
+                    const channel = activeConversation?.department || "registrar";
+                    const requestId = activeConversation?.related_request_id || activeConversation?.approval_request_id;
+                    onOpenWorkflowAction(channel, requestId, "approved", "Approve");
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="msger-wf-action-item msger-wf-action-item--clarify"
+                  onClick={() => {
+                    setActionMenuOpen(false);
+                    const channel = activeConversation?.department || "registrar";
+                    const requestId = activeConversation?.related_request_id || activeConversation?.approval_request_id;
+                    onOpenWorkflowAction(channel, requestId, "clarification_requested", "Need clarification");
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+                  Need clarification
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="msger-wf-action-item msger-wf-action-item--reject"
+                  onClick={() => {
+                    setActionMenuOpen(false);
+                    const channel = activeConversation?.department || "registrar";
+                    const requestId = activeConversation?.related_request_id || activeConversation?.approval_request_id;
+                    onOpenWorkflowAction(channel, requestId, "rejected", "Reject");
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  Reject
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="msger-messages" ref={listRef}>
