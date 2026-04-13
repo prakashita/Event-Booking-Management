@@ -5,7 +5,8 @@ class User {
   final String email;
   final String name;
   final String? picture;
-  final String role;
+  final UserRole role;
+  final String? department;
 
   const User({
     required this.id,
@@ -13,23 +14,44 @@ class User {
     required this.name,
     this.picture,
     required this.role,
+    this.department,
   });
 
   factory User.fromJson(Map<String, dynamic> json) => User(
-        id: json['id'] ?? json['_id'] ?? '',
-        email: json['email'] ?? '',
-        name: json['name'] ?? json['email'] ?? '',
-        picture: json['picture'],
-        role: json['role'] ?? 'faculty',
-      );
+    id: json['id'] ?? json['_id'] ?? '',
+    email: json['email'] ?? '',
+    name: json['name'] ?? json['email'] ?? '',
+    picture: json['picture'],
+    role: _parseRole(json['role']),
+    department: json['department'],
+  );
+
+  static UserRole _parseRole(String? role) {
+    switch (role?.toLowerCase()) {
+      case 'admin':
+        return UserRole.admin;
+      case 'iqac':
+        return UserRole.iqac;
+      case 'faculty':
+      default:
+        return UserRole.faculty;
+    }
+  }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'email': email,
-        'name': name,
-        'picture': picture,
-        'role': role,
-      };
+    'id': id,
+    'email': email,
+    'name': name,
+    'picture': picture,
+    'role': role.name,
+    'department': department,
+  };
+}
+
+enum UserRole {
+  admin,
+  iqac,
+  faculty,
 }
 
 // ─── Event ────────────────────────────────────────────────────────────────────
@@ -39,8 +61,8 @@ class Event {
   final String title;
   final String? description;
   final String venueName;
-  final DateTime startDatetime;
-  final DateTime endDatetime;
+  final DateTime startTime;
+  final DateTime endTime;
   final String status;
   final String createdBy;
   final String? reportFileId;
@@ -52,8 +74,8 @@ class Event {
     required this.title,
     this.description,
     required this.venueName,
-    required this.startDatetime,
-    required this.endDatetime,
+    required this.startTime,
+    required this.endTime,
     required this.status,
     required this.createdBy,
     this.reportFileId,
@@ -62,24 +84,26 @@ class Event {
   });
 
   factory Event.fromJson(Map<String, dynamic> json) => Event(
-        id: json['id'] ?? json['_id'] ?? '',
-        title: json['title'] ?? '',
-        description: json['description'],
-        venueName: json['venue_name'] ?? '',
-        startDatetime: DateTime.tryParse(json['start_datetime'] ?? '') ??
-            DateTime.now(),
-        endDatetime:
-            DateTime.tryParse(json['end_datetime'] ?? '') ?? DateTime.now(),
-        status: json['status'] ?? 'upcoming',
-        createdBy: json['created_by'] ?? '',
-        reportFileId: json['report_file_id'],
-        audienceCount: json['audience_count'],
-        notes: json['notes'],
-      );
+    id: json['id'] ?? json['_id'] ?? '',
+    title: json['title'] ?? json['summary'] ?? 'Untitled event',
+    description: json['description'],
+    venueName: json['venue_name'] ?? json['location'] ?? '',
+    startTime:
+        DateTime.tryParse(json['start_datetime'] ?? json['start_time'] ?? json['start'] ?? '')?.toLocal() ??
+        DateTime.now(),
+    endTime:
+        DateTime.tryParse(json['end_datetime'] ?? json['end_time'] ?? json['end'] ?? '')?.toLocal() ??
+        DateTime.now(),
+    status: json['status'] ?? 'approved',
+    createdBy: json['created_by'] ?? '',
+    reportFileId: json['report_file_id'],
+    audienceCount: json['audience_count'],
+    notes: json['notes'] ?? json['htmlLink'],
+  );
 }
 
 // ─── Approval Request ─────────────────────────────────────────────────────────
-
+// ... existing code ...
 class ApprovalRequest {
   final String id;
   final String eventTitle;
@@ -115,37 +139,37 @@ class ApprovalRequest {
         eventTitle: json['event_title'] ?? '',
         description: json['description'],
         venueName: json['venue_name'] ?? '',
-        startDatetime: DateTime.tryParse(json['start_datetime'] ?? '') ??
-            DateTime.now(),
+        startDatetime:
+            DateTime.tryParse(json['start_datetime'] ?? '')?.toLocal() ?? DateTime.now(),
         endDatetime:
-            DateTime.tryParse(json['end_datetime'] ?? '') ?? DateTime.now(),
+            DateTime.tryParse(json['end_datetime'] ?? '')?.toLocal() ?? DateTime.now(),
         status: json['status'] ?? 'pending',
         requestedBy: json['requested_by'] ?? '',
         requestedTo: json['requested_to'] ?? '',
         overrideConflict: json['override_conflict'] ?? false,
         notes: json['notes'],
         createdAt:
-            DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+            DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
       );
 }
 
 // ─── Venue ────────────────────────────────────────────────────────────────────
 
 class Venue {
+// ... existing code ...
   final String id;
   final String name;
 
   const Venue({required this.id, required this.name});
 
-  factory Venue.fromJson(Map<String, dynamic> json) => Venue(
-        id: json['id'] ?? json['_id'] ?? '',
-        name: json['name'] ?? '',
-      );
+  factory Venue.fromJson(Map<String, dynamic> json) =>
+      Venue(id: json['id'] ?? json['_id'] ?? '', name: json['name'] ?? '');
 }
 
 // ─── Facility Request ─────────────────────────────────────────────────────────
 
 class FacilityRequest {
+// ... existing code ...
   final String id;
   final String? eventId;
   final String eventTitle;
@@ -176,13 +200,14 @@ class FacilityRequest {
         status: json['status'] ?? 'pending',
         requestedBy: json['requested_by'] ?? '',
         createdAt:
-            DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+            DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
       );
 }
 
 // ─── IT Request ───────────────────────────────────────────────────────────────
 
 class ITRequest {
+// ... existing code ...
   final String id;
   final String? eventId;
   final String eventTitle;
@@ -208,23 +233,23 @@ class ITRequest {
   });
 
   factory ITRequest.fromJson(Map<String, dynamic> json) => ITRequest(
-        id: json['id'] ?? json['_id'] ?? '',
-        eventId: json['event_id'],
-        eventTitle: json['event_title'] ?? '',
-        mode: json['mode'] ?? 'offline',
-        paSystem: json['pa_system'] ?? false,
-        projection: json['projection'] ?? false,
-        notes: json['notes'],
-        status: json['status'] ?? 'pending',
-        requestedBy: json['requested_by'] ?? '',
-        createdAt:
-            DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-      );
+    id: json['id'] ?? json['_id'] ?? '',
+    eventId: json['event_id'],
+    eventTitle: json['event_title'] ?? '',
+    mode: json['mode'] ?? 'offline',
+    paSystem: json['pa_system'] ?? false,
+    projection: json['projection'] ?? false,
+    notes: json['notes'],
+    status: json['status'] ?? 'pending',
+    requestedBy: json['requested_by'] ?? '',
+    createdAt: DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
+  );
 }
 
 // ─── Marketing Request ────────────────────────────────────────────────────────
 
 class MarketingRequest {
+// ... existing code ...
   final String id;
   final String? eventId;
   final String eventTitle;
@@ -260,11 +285,12 @@ class MarketingRequest {
             .map((d) => MarketingDeliverable.fromJson(d))
             .toList(),
         createdAt:
-            DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+            DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
       );
 }
 
 class MarketingDeliverable {
+// ... existing code ...
   final String type;
   final String? driveFileId;
   final String? link;
@@ -289,6 +315,7 @@ class MarketingDeliverable {
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 class ChatConversation {
+// ... existing code ...
   final String id;
   final String kind;
   final List<String> participants;
@@ -325,6 +352,7 @@ class ChatConversation {
       );
 
   static String? _extractLastMessage(dynamic lastMessageField) {
+// ... existing code ...
     if (lastMessageField is String) return lastMessageField;
     if (lastMessageField is Map<String, dynamic>) {
       final text = lastMessageField['text'];
@@ -334,21 +362,23 @@ class ChatConversation {
   }
 
   static DateTime? _extractLastMessageAt(Map<String, dynamic> json) {
+// ... existing code ...
     final direct = json['last_message_at'];
-    if (direct is String) return DateTime.tryParse(direct);
+    if (direct is String) return DateTime.tryParse(direct)?.toLocal();
 
     final lastMessage = json['last_message'];
     if (lastMessage is Map<String, dynamic>) {
       final createdAt = lastMessage['created_at'];
-      if (createdAt is String) return DateTime.tryParse(createdAt);
+      if (createdAt is String) return DateTime.tryParse(createdAt)?.toLocal();
     }
 
     final updatedAt = json['updated_at'];
-    if (updatedAt is String) return DateTime.tryParse(updatedAt);
+    if (updatedAt is String) return DateTime.tryParse(updatedAt)?.toLocal();
     return null;
   }
 
   static List<String> _extractParticipantNames(Map<String, dynamic> json) {
+// ... existing code ...
     final directNames = json['participant_names'];
     if (directNames is List) {
       return directNames.map((e) => e.toString()).toList();
@@ -373,6 +403,7 @@ class ChatConversation {
 }
 
 class ChatMessage {
+// ... existing code ...
   final String id;
   final String conversationId;
   final String senderId;
@@ -392,20 +423,20 @@ class ChatMessage {
   });
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
-        id: json['id'] ?? json['_id'] ?? '',
-        conversationId: json['conversation_id'] ?? '',
-        senderId: json['sender_id'] ?? '',
-        senderName: json['sender_name'] ?? '',
-        content: json['content'] ?? '',
-        createdAt:
-            DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-        readBy: List<String>.from(json['read_by'] ?? []),
-      );
+    id: json['id'] ?? json['_id'] ?? '',
+    conversationId: json['conversation_id'] ?? '',
+    senderId: json['sender_id'] ?? '',
+    senderName: json['sender_name'] ?? '',
+    content: json['content'] ?? '',
+    createdAt: DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
+    readBy: List<String>.from(json['read_by'] ?? []),
+  );
 }
 
 // ─── Publication ──────────────────────────────────────────────────────────────
 
 class Publication {
+// ... existing code ...
   final String id;
   final String type;
   final String title;
@@ -429,22 +460,22 @@ class Publication {
   });
 
   factory Publication.fromJson(Map<String, dynamic> json) => Publication(
-        id: json['id'] ?? json['_id'] ?? '',
-        type: json['type'] ?? 'journal_article',
-        title: json['title'] ?? '',
-        authors: List<String>.from(json['authors'] ?? []),
-        year: json['year'],
-        url: json['url'],
-        journal: json['journal'],
-        createdBy: json['created_by'] ?? '',
-        createdAt:
-            DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-      );
+    id: json['id'] ?? json['_id'] ?? '',
+    type: json['type'] ?? 'journal_article',
+    title: json['title'] ?? '',
+    authors: List<String>.from(json['authors'] ?? []),
+    year: json['year'],
+    url: json['url'],
+    journal: json['journal'],
+    createdBy: json['created_by'] ?? '',
+    createdAt: DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
+  );
 }
 
 // ─── IQAC ─────────────────────────────────────────────────────────────────────
 
 class IQACFile {
+// ... existing code ...
   final String id;
   final String criterion;
   final String subfolder;
@@ -466,21 +497,21 @@ class IQACFile {
   });
 
   factory IQACFile.fromJson(Map<String, dynamic> json) => IQACFile(
-        id: json['id'] ?? json['_id'] ?? '',
-        criterion: json['criterion'] ?? '',
-        subfolder: json['subfolder'] ?? '',
-        item: json['item'] ?? '',
-        filename: json['filename'] ?? '',
-        uploadedBy: json['uploaded_by'] ?? '',
-        createdAt:
-            DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
-        size: json['size'],
-      );
+    id: json['id'] ?? json['_id'] ?? '',
+    criterion: json['criterion'] ?? '',
+    subfolder: json['subfolder'] ?? '',
+    item: json['item'] ?? '',
+    filename: json['filename'] ?? '',
+    uploadedBy: json['uploaded_by'] ?? '',
+    createdAt: DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
+    size: json['size'],
+  );
 }
 
 // ─── Dashboard Stats ──────────────────────────────────────────────────────────
 
 class DashboardStats {
+// ... existing code ...
   final int totalEvents;
   final int upcomingEvents;
   final int ongoingEvents;
@@ -496,10 +527,10 @@ class DashboardStats {
   });
 
   factory DashboardStats.fromJson(Map<String, dynamic> json) => DashboardStats(
-        totalEvents: json['total_events'] ?? 0,
-        upcomingEvents: json['upcoming_events'] ?? 0,
-        ongoingEvents: json['ongoing_events'] ?? 0,
-        completedEvents: json['completed_events'] ?? 0,
-        pendingApprovals: json['pending_approvals'] ?? 0,
-      );
+    totalEvents: json['total_events'] ?? 0,
+    upcomingEvents: json['upcoming_events'] ?? 0,
+    ongoingEvents: json['ongoing_events'] ?? 0,
+    completedEvents: json['completed_events'] ?? 0,
+    pendingApprovals: json['pending_approvals'] ?? 0,
+  );
 }
