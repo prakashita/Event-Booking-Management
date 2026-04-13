@@ -1,5 +1,8 @@
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import ipaddress
+import logging
+from urllib.parse import urlparse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 import requests
 
@@ -18,10 +21,58 @@ from routers.institution_calendar import institution_entry_to_calendar_item, lis
 from routers.deps import get_current_user
 
 router = APIRouter(prefix="/calendar", tags=["Calendar"])
+logger = logging.getLogger("event-booking.calendar")
 
 
-def build_google_oauth_url(state: str) -> str:
-    if not GOOGLE_CLIENT_ID or not GOOGLE_REDIRECT_URI:
+def _safe_client_id() -> str:
+    if not GOOGLE_CLIENT_ID:
+        return ""
+    if len(GOOGLE_CLIENT_ID) <= 8:
+        return GOOGLE_CLIENT_ID
+    return f"{GOOGLE_CLIENT_ID[:6]}...{GOOGLE_CLIENT_ID[-6:]}"
+
+
+def _resolve_redirect_uri(request: Request) -> str:
+    explicit = (GOOGLE_REDIRECT_URI or "").strip()
+    if explicit:
+        return explicit
+
+    request_base = f"{request.url.scheme}://{request.url.netloc}"
+    return f"{request_base}/api/v1/calendar/oauth/callback"
+
+
+def _is_private_ip_redirect(redirect_uri: str) -> bool:
+    try:
+        host = (urlparse(redirect_uri).hostname or "").strip()
+        if not host:
+            return False
+        ip = ipaddress.ip_address(host)
+        return ip.is_private and not ip.is_loopback
+    except ValueError:
+        return False
+
+
+def _parse_range_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+    # Event datetimes in DB are naive. Normalize query bounds to naive UTC for safe comparison.
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
+def build_google_oauth_url(
+    state: str,
+    redirect_uri: str,
+    *,
+    device_id: str | None = None,
+    device_name: str | None = None,
+) -> str:
+    if not GOOGLE_CLIENT_ID or not redirect_uri:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Google OAuth not configured"
@@ -29,7 +80,7 @@ def build_google_oauth_url(state: str) -> str:
 
     params = {
         "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": GOOGLE_OAUTH_SCOPE,
         "access_type": "offline",
@@ -37,15 +88,33 @@ def build_google_oauth_url(state: str) -> str:
         "include_granted_scopes": "true",
         "state": state,
     }
+    if _is_private_ip_redirect(redirect_uri):
+        params["device_id"] = device_id or "event-booking-mobile"
+        params["device_name"] = device_name or "Event Booking Mobile"
     query = "&".join([f"{key}={requests.utils.quote(str(value))}" for key, value in params.items()])
     return f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
 
 
 
 @router.get("/connect-url")
-async def get_connect_url(user: User = Depends(get_current_user)):
-    state = create_oauth_state(str(user.id))
-    return {"url": build_google_oauth_url(state)}
+async def get_connect_url(request: Request, user: User = Depends(get_current_user)):
+    redirect_uri = _resolve_redirect_uri(request)
+    state = create_oauth_state(str(user.id), redirect_uri=redirect_uri)
+    logger.info(
+        "google_oauth_connect_url user_id=%s redirect_uri=%s private_ip_redirect=%s client_id=%s",
+        str(user.id),
+        redirect_uri,
+        _is_private_ip_redirect(redirect_uri),
+        _safe_client_id(),
+    )
+    return {
+        "url": build_google_oauth_url(
+            state,
+            redirect_uri=redirect_uri,
+            device_id=str(user.id),
+            device_name="Event Booking Mobile",
+        )
+    }
 
 
 @router.get("/status")
@@ -57,8 +126,17 @@ async def get_calendar_status(user: User = Depends(get_current_user)):
 async def oauth_callback(code: str, state: str):
     payload = decode_oauth_state(state)
     user_id = payload.get("user_id")
+    redirect_uri = payload.get("redirect_uri") or GOOGLE_REDIRECT_URI
     if not user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid state")
+
+    logger.info(
+        "google_oauth_callback_start user_id=%s redirect_uri=%s code_len=%s client_id=%s",
+        str(user_id),
+        redirect_uri,
+        len(code or ""),
+        _safe_client_id(),
+    )
 
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise HTTPException(
@@ -73,12 +151,18 @@ async def oauth_callback(code: str, state: str):
             "client_secret": GOOGLE_CLIENT_SECRET,
             "code": code,
             "grant_type": "authorization_code",
-            "redirect_uri": GOOGLE_REDIRECT_URI,
+            "redirect_uri": redirect_uri,
         },
         timeout=15,
     )
 
     if token_response.status_code != 200:
+        logger.error(
+            "google_oauth_token_exchange_failed status=%s redirect_uri=%s response=%s",
+            token_response.status_code,
+            redirect_uri,
+            (token_response.text or "")[:800],
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Failed to exchange code",
@@ -100,6 +184,13 @@ async def oauth_callback(code: str, state: str):
         user.google_token_expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
     await user.save()
+
+    logger.info(
+        "google_oauth_callback_success user_id=%s refresh_token_saved=%s access_token_saved=%s",
+        str(user_id),
+        bool(refresh_token),
+        bool(access_token),
+    )
 
     return HTMLResponse(
         """
@@ -155,14 +246,8 @@ async def get_app_calendar_events(
     all_events = await Event.find_all().sort("start_date", "start_time").to_list()
     events_payload = []
 
-    try:
-        range_start = datetime.fromisoformat(start.replace("Z", "+00:00")) if start else None
-    except (ValueError, AttributeError):
-        range_start = None
-    try:
-        range_end = datetime.fromisoformat(end.replace("Z", "+00:00")) if end else None
-    except (ValueError, AttributeError):
-        range_end = None
+    range_start = _parse_range_datetime(start)
+    range_end = _parse_range_datetime(end)
 
     for event in all_events:
         item = _event_to_calendar_item(event)
