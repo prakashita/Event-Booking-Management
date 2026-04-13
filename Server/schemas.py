@@ -20,12 +20,26 @@ class UserAdminResponse(BaseModel):
     name: str
     email: str
     role: str
+    approval_status: Optional[str] = "approved"
+    approved_by: Optional[str] = None
+    approved_at: Optional[datetime] = None
+    rejected_by: Optional[str] = None
+    rejected_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    requested_role: Optional[str] = None
     created_at: datetime
     last_seen: Optional[datetime] = None
 
 
 class UserRoleUpdate(BaseModel):
     role: str
+
+
+class UserApprovalAction(BaseModel):
+    """Admin action to approve or reject a pending user."""
+    action: Literal["approve", "reject"]
+    role: Optional[str] = None  # final role when approving
+    rejection_reason: Optional[str] = Field(default=None, max_length=1000)
 
 
 class AddUserRequest(BaseModel):

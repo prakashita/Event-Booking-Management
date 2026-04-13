@@ -330,6 +330,7 @@ async def admin_overview(admin: User = Depends(require_admin)):
         "transport": await TransportRequest.find_all().count(),
         "invites": await Invite.find_all().count(),
         "publications": await Publication.find_all().count(),
+        "pending_user_approvals": await User.find(User.approval_status == "pending").count(),
     }
 
 
