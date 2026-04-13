@@ -40,24 +40,18 @@ void main() {
   );
 }
 
-class EventBookingApp extends StatefulWidget {
+class EventBookingApp extends StatelessWidget {
   const EventBookingApp({super.key});
 
   @override
-  State<EventBookingApp> createState() => _EventBookingAppState();
-}
-
-class _EventBookingAppState extends State<EventBookingApp> {
-  late final _router = AppRouter.createRouter(
-    context.read<AuthProvider>(),
-  );
-
-  @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final router = AppRouter.createRouter(authProvider);
+
     return MaterialApp.router(
       title: 'Event Booking Management',
       theme: AppTheme.lightTheme,
-      routerConfig: _router,
+      routerConfig: router,
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
         // Global error boundary

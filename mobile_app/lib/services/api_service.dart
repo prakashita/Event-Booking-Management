@@ -12,7 +12,12 @@ class ApiService {
   String? _cachedToken;
 
   ApiService._internal() {
-    _dio = Dio();
+    _dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 15),
+      ),
+    );
     _setupInterceptors();
   }
 

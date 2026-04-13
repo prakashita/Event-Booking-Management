@@ -1,141 +1,172 @@
-# Event Booking Mobile App
+# Event Booking Management — Flutter App
 
-Flutter mobile client for Event Booking Management.
+A complete Flutter/Dart mobile application for institutional event booking and management.
 
-## Local Run (Server + Client + Mobile)
+## Features
 
-1. Start backend from [../Server](../Server) on port 8000.
-2. For Android emulator, mobile app uses `http://10.0.2.2:8000` by default.
-3. For physical Android device, pass your machine LAN IP:
+- **Google Sign-In** with role-based access (Admin, Registrar, Faculty, Facility Manager, Marketing, IT, IQAC, Transport)
+- **Dashboard** with stats grid, quick actions, and upcoming events
+- **Event Management** — create (3-step wizard), list (tabbed by status), detail view
+- **Approvals** — Registrar inbox for event approval/rejection with conflict override support
+- **Requirements** — Facility, IT, and Marketing service request management
+- **Calendar** — TableCalendar view with event markers and daily event list
+- **Real-time Chat** — WebSocket-powered group and direct messaging
+- **Publications** — Research publication tracker
+- **IQAC** — NAAC accreditation file browser (7 criteria with sub-folders)
+- **Admin Console** — User management (roles) and venue management
 
-```bash
-flutter run -d <device-id> --dart-define=API_BASE_URL=http://<lan-ip>:8000
-```
+## Tech Stack
 
-4. Optional: keep local defines in a json file and reuse:
+| Layer | Technology |
+|-------|------------|
+| Framework | Flutter 3.x (Dart 3.3+) |
+| Navigation | go_router 13 |
+| State | Provider + ChangeNotifier |
+| HTTP | Dio 5 with interceptors |
+| WebSocket | web_socket_channel |
+| Auth | google_sign_in + flutter_secure_storage |
+| UI | Material 3, Google Fonts Inter |
+| Calendar | table_calendar |
+| Animations | Built-in Flutter animations |
 
-```bash
-cp env.local.example.json env.local.json
-flutter run -d <device-id> --dart-define-from-file=env.local.json
-```
+## Getting Started
 
-## Google Login Flow
+### Prerequisites
+- Flutter SDK 3.16+
+- Dart 3.3+
+- Android Studio / Xcode
+- Google Sign-In credentials
 
-This app uses the same token flow for web/mobile:
-1. User signs in with Google.
-2. App receives Google ID token.
-3. App sends token to backend endpoint `/api/v1/auth/google`.
-4. Backend verifies token and returns app JWT + user profile.
+### Setup
 
-## Create New Google Cloud Project (Step-by-Step)
+1. **Clone and install dependencies**
+   ```bash
+   cd artifacts/flutter-app
+   flutter pub get
+   ```
 
-### 1) Create project
-1. Open Google Cloud Console.
-2. Create a new project (example: `Event Booking Management`).
-3. Select that project.
+2. **Configure Google Sign-In**
+   - Go to [Google Cloud Console](https://console.cloud.google.com)
+   - Create an OAuth 2.0 Client ID (Android + iOS)
+   - Android: Add SHA-1 fingerprint, place `google-services.json` in `android/app/`
+   - iOS: Update `Info.plist` with your `GIDClientID` and URL scheme
 
-### 2) Configure OAuth consent screen
-1. Go to APIs and Services -> OAuth consent screen.
-2. Select `External` (or `Internal` for Workspace-only).
-3. Fill app name, support email, developer email.
-4. Add scopes: `openid`, `email`, `profile`.
-5. Add your own account as a Test user.
+3. **Configure API URL**
+   
+   In `lib/main.dart`, change:
+   ```dart
+   const String kApiBaseUrl = 'http://YOUR_API_SERVER:8000';
+   ```
+   Or pass it via `--dart-define`:
+   ```bash
+   flutter run --dart-define=API_BASE_URL=https://your-api.example.com
+   ```
 
-### 3) Create OAuth clients
-Create all three:
-1. Web application
-2. Android
-3. iOS
+4. **Run the app**
+   ```bash
+   # Android
+   flutter run -d android
 
-## Your Project OAuth Values
+   # iOS
+   flutter run -d ios
 
-**Web OAuth Client ID:**
-```
-1051124848059-c1si7f3i0njmhm2baeit8oacri1cin19.apps.googleusercontent.com
-```
+   # Debug
+   flutter run
+   ```
 
-**Android OAuth Client ID:**
-```
-1051124848059-9imqmepcd8m2rppa98nsor5j7bpvsugs.apps.googleusercontent.com
-```
-
-**Android Package & SHA-1:**
-- Package: `com.example.mobile_app`
-- SHA-1: `69:AE:0E:84:7A:53:1D:46:0D:1D:1C:66:CA:4F:EC:03:F3:51:6C:49`
-
-### Web OAuth client
-Use this for Flutter web login and backend audience checks.
-
-Set JavaScript origins at least for local:
-- `http://localhost`
-- `http://localhost:44065`
-
-Copy generated client ID (format `....apps.googleusercontent.com`).
-
-### Android OAuth client
-Use these repo values when creating Android OAuth client:
-- Package name: `com.example.mobile_app`
-- SHA-1/SHA-256: from debug or release keystore
-
-Get debug SHA values:
+### Build for Release
 
 ```bash
-cd android
-./gradlew signingReport
+# Android APK
+flutter build apk --release
+
+# Android App Bundle
+flutter build appbundle --release
+
+# iOS
+flutter build ios --release
 ```
 
-### iOS OAuth client
-Use this repo bundle ID when creating iOS OAuth client:
-- Bundle ID: `com.example.mobileApp`
+## Project Structure
 
-Then copy the reversed client ID into both:
-- `ios/Flutter/Debug.xcconfig`
-- `ios/Flutter/Release.xcconfig`
-
-Example:
-
-```ini
-GOOGLE_REVERSED_CLIENT_ID=com.googleusercontent.apps.1234567890-abcxyz
+```
+lib/
+├── main.dart                  # App entry point
+├── constants/
+│   ├── app_colors.dart        # Color palette + status/role colors
+│   ├── app_theme.dart         # Material 3 theme
+│   └── app_constants.dart     # Routes, roles, lists
+├── models/
+│   └── models.dart            # All data models
+├── services/
+│   ├── api_service.dart       # Dio HTTP client (singleton)
+│   └── auth_service.dart      # Google Sign-In + token storage
+├── providers/
+│   └── auth_provider.dart     # Auth state (ChangeNotifier)
+├── router/
+│   └── app_router.dart        # GoRouter config + ShellRoute nav
+├── widgets/
+│   └── common/
+│       └── app_widgets.dart   # Shared UI components
+└── screens/
+    ├── auth/login_screen.dart
+    ├── dashboard/dashboard_screen.dart
+    ├── events/
+    │   ├── events_screen.dart
+    │   └── create_event_screen.dart
+    ├── approvals/approvals_screen.dart
+    ├── requirements/requirements_screen.dart
+    ├── calendar/calendar_screen.dart
+    ├── chat/
+    │   ├── chat_list_screen.dart
+    │   └── chat_screen.dart
+    ├── publications/publications_screen.dart
+    ├── iqac/iqac_screen.dart
+    └── admin/admin_screen.dart
 ```
 
-## Required App Configuration
+## API Endpoints Used
 
-### 1) Web fallback meta tag
-File `web/index.html` includes:
+All endpoints relative to `/api/v1`:
 
-```html
-<meta name="google-signin-client_id" content="REPLACE_WITH_WEB_CLIENT_ID.apps.googleusercontent.com">
-```
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/auth/google` | Google OAuth login |
+| GET | `/events/me` | My events |
+| POST | `/events` | Create event |
+| POST | `/events/conflicts` | Check venue conflicts |
+| GET | `/approvals/inbox` | Pending approvals |
+| PATCH | `/approvals/:id` | Approve/reject |
+| GET | `/facility/inbox` | Facility requests |
+| GET | `/it/requests/me` | IT requests |
+| GET | `/marketing/requests/me` | Marketing requests |
+| GET | `/calendar/app-events` | All events for calendar |
+| GET | `/chat/conversations/me` | Chat list |
+| GET | `/chat/conversations/:id/messages` | Messages |
+| WS | `/chat/ws?token=<JWT>` | Real-time chat |
+| GET | `/publications` | Publications list |
+| POST | `/publications` | Add publication |
+| GET | `/iqac/files` | IQAC file browser |
+| GET | `/users` | User list (admin) |
+| GET | `/venues` | Venue list |
+| POST | `/venues` | Add venue |
 
-Replace it with your real Web OAuth client ID.
+## Design
 
-### 2) Run with dart-define
+- **Primary color**: Deep Navy Blue `#1565C0`
+- **Accent**: Gold `#FFD54F`
+- **Font**: Google Fonts Inter
+- **Design system**: Material 3
 
-```bash
-flutter run -d chrome \
-  --dart-define=API_BASE_URL=http://localhost:8000 \
-  --dart-define=GOOGLE_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com \
-  --dart-define=GOOGLE_SERVER_CLIENT_ID=YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
-```
+## Role-Based Access
 
-Notes:
-- `GOOGLE_CLIENT_ID`: used by Google Sign-In web client initialization.
-- `GOOGLE_SERVER_CLIENT_ID`: used when requesting ID token for backend verification.
-- In this architecture, both are typically your Web OAuth client ID.
-
-## Platform Integration Status
-
-Already configured in repo:
-1. `android/app/src/main/AndroidManifest.xml`: internet permission is present.
-2. `ios/Runner/Info.plist`: URL scheme uses `$(GOOGLE_REVERSED_CLIENT_ID)`.
-3. `ios/Flutter/Debug.xcconfig`: has `GOOGLE_REVERSED_CLIENT_ID` placeholder.
-4. `ios/Flutter/Release.xcconfig`: has `GOOGLE_REVERSED_CLIENT_ID` placeholder.
-
-## Android Google Sign-In Fix
-
-If Android sign-in fails with `ApiException: 10`, add an Android OAuth client in Google Cloud with:
-
-- Package name: `com.example.mobile_app`
-- Debug SHA-1: `69:AE:0E:84:7A:53:1D:46:0D:1D:1C:66:CA:4F:EC:03:F3:51:6C:49`
-
-Then keep using the web client ID for `GOOGLE_CLIENT_ID` and `GOOGLE_SERVER_CLIENT_ID`.
+| Role | Features |
+|------|----------|
+| `admin` | All features + Admin Console |
+| `registrar` | Events, Approvals, All features |
+| `faculty` | Events, Requirements, Chat, Calendar, Publications |
+| `facility_manager` | Requirements (Facility inbox), Chat |
+| `marketing` | Requirements (Marketing inbox), Chat |
+| `it` | Requirements (IT inbox), Chat |
+| `iqac` | IQAC Data Collection, Events, Chat |
+| `transport` | Events, Chat |

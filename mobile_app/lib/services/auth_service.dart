@@ -17,9 +17,11 @@ class AuthService {
     clientId: kIsWeb && AppConstants.googleClientId.isNotEmpty
         ? AppConstants.googleClientId
         : null,
-    serverClientId: AppConstants.googleServerClientId.isNotEmpty
-        ? AppConstants.googleServerClientId
-        : (AppConstants.googleClientId.isNotEmpty ? AppConstants.googleClientId : null),
+    serverClientId: kIsWeb 
+        ? null 
+        : (AppConstants.googleServerClientId.isNotEmpty
+            ? AppConstants.googleServerClientId
+            : (AppConstants.googleClientId.isNotEmpty ? AppConstants.googleClientId : null)),
   );
 
   AuthService._internal();

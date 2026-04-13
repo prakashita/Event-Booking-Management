@@ -227,17 +227,17 @@ class _AdminScreenState extends State<AdminScreen>
   }
 
   void _showChangeRoleDialog(User user) {
-    String role = user.role;
+    UserRole role = user.role;
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => AlertDialog(
           title: Text('Change Role – ${user.name}'),
-          content: DropdownButtonFormField<String>(
+          content: DropdownButtonFormField<UserRole>(
             value: role,
-            items: ['admin', 'registrar', 'faculty', 'facility_manager', 'marketing', 'it', 'iqac', 'transport']
+            items: UserRole.values
                 .map((r) => DropdownMenuItem(
-                    value: r, child: Text(r.toUpperCase())))
+                    value: r, child: Text(r.name.toUpperCase())))
                 .toList(),
             onChanged: (v) => setS(() => role = v!),
           ),
@@ -250,7 +250,7 @@ class _AdminScreenState extends State<AdminScreen>
               onPressed: () async {
                 Navigator.pop(ctx);
                 try {
-                  await _api.patch('/users/${user.id}/role', data: {'role': role});
+                  await _api.patch('/users/${user.id}/role', data: {'role': role.name});
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Role updated!')),
                   );
@@ -432,7 +432,7 @@ class _UserTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(100),
             ),
             child: Text(
-              user.role.toUpperCase(),
+              user.role.name.toUpperCase(),
               style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w700,

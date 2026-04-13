@@ -14,6 +14,7 @@ import '../screens/chat/chat_screen.dart';
 import '../screens/publications/publications_screen.dart';
 import '../screens/iqac/iqac_screen.dart';
 import '../screens/admin/admin_screen.dart';
+import '../screens/home_screen.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_constants.dart';
 
@@ -21,6 +22,7 @@ class AppRouter {
   static GoRouter createRouter(AuthProvider authProvider) {
     return GoRouter(
       refreshListenable: authProvider,
+      initialLocation: '/dashboard',
       redirect: (context, state) {
         final isAuth = authProvider.isAuthenticated;
         final isLoading = authProvider.isLoading;
@@ -28,7 +30,7 @@ class AppRouter {
 
         if (isLoading) return null;
         if (!isAuth && !goingToLogin) return '/login';
-        if (isAuth && goingToLogin) return '/';
+        if (isAuth && goingToLogin) return '/dashboard';
         return null;
       },
       routes: [
@@ -38,11 +40,11 @@ class AppRouter {
         ),
         ShellRoute(
           builder: (context, state, child) {
-            return _AppShell(child: child);
+            return HomeScreen(child: child);
           },
           routes: [
             GoRoute(
-              path: '/',
+              path: '/dashboard',
               builder: (_, __) => const DashboardScreen(),
             ),
             GoRoute(
@@ -98,151 +100,6 @@ class AppRouter {
   }
 }
 
-class _AppShell extends StatelessWidget {
-  final Widget child;
-  const _AppShell({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final role = auth.user?.role ?? 'faculty';
-    final location = GoRouterState.of(context).matchedLocation;
-
-    // Don't show nav bar on sub-screens
-    final hideNavBar = location.startsWith('/events/') ||
-        location.startsWith('/chat/') ||
-        location == '/events/create';
-
-    if (hideNavBar) return child;
-
-    final navItems = _getNavItems(role);
-    final currentIndex = _getCurrentIndex(location, navItems);
-
-    return Scaffold(
-      body: child,
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            color: AppColors.surface,
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-            child: TextButton.icon(
-              onPressed: () {
-                context.read<AuthProvider>().signOut();
-              },
-              icon: const Icon(Icons.logout, size: 18),
-              label: const Text('Logout'),
-            ),
-          ),
-          NavigationBar(
-            selectedIndex: currentIndex < 0 ? 0 : currentIndex,
-            onDestinationSelected: (i) {
-              context.go(navItems[i]['route'] as String);
-            },
-            destinations: navItems.map((item) {
-              return NavigationDestination(
-                icon: Icon(item['icon'] as IconData),
-                selectedIcon: Icon(item['selectedIcon'] as IconData),
-                label: item['label'] as String,
-              );
-            }).toList(),
-            backgroundColor: AppColors.surface,
-            indicatorColor: AppColors.primaryContainer,
-            height: 70,
-            labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Map<String, dynamic>> _getNavItems(String role) {
-    final items = <Map<String, dynamic>>[
-      {
-        'route': '/',
-        'label': 'Home',
-        'icon': Icons.home_outlined,
-        'selectedIcon': Icons.home,
-        'roles': null,
-      },
-      {
-        'route': '/events',
-        'label': 'Events',
-        'icon': Icons.event_outlined,
-        'selectedIcon': Icons.event,
-        'roles': null,
-      },
-      {
-        'route': '/approvals',
-        'label': 'Approvals',
-        'icon': Icons.approval_outlined,
-        'selectedIcon': Icons.approval,
-        'roles': AppConstants.adminRoles,
-      },
-      {
-        'route': '/requirements',
-        'label': 'Requirements',
-        'icon': Icons.assignment_outlined,
-        'selectedIcon': Icons.assignment,
-        'roles': ['facility_manager', 'marketing', 'it', 'faculty', 'registrar', 'admin'],
-      },
-      {
-        'route': '/calendar',
-        'label': 'Calendar',
-        'icon': Icons.calendar_month_outlined,
-        'selectedIcon': Icons.calendar_month,
-        'roles': null,
-      },
-      {
-        'route': '/chat',
-        'label': 'Chat',
-        'icon': Icons.chat_bubble_outline,
-        'selectedIcon': Icons.chat_bubble,
-        'roles': null,
-      },
-      {
-        'route': '/publications',
-        'label': 'Publications',
-        'icon': Icons.menu_book_outlined,
-        'selectedIcon': Icons.menu_book,
-        'roles': null,
-      },
-      {
-        'route': '/iqac',
-        'label': 'IQAC',
-        'icon': Icons.folder_outlined,
-        'selectedIcon': Icons.folder,
-        'roles': AppConstants.iqacAllowedRoles,
-      },
-      {
-        'route': '/admin',
-        'label': 'Admin',
-        'icon': Icons.admin_panel_settings_outlined,
-        'selectedIcon': Icons.admin_panel_settings,
-        'roles': AppConstants.adminRoles,
-      },
-    ];
-
-    return items.where((item) {
-      final roles = item['roles'] as List<String>?;
-      if (roles == null) return true;
-      return roles.contains(role);
-    }).take(5).toList(); // Max 5 nav items
-  }
-
-  int _getCurrentIndex(String location, List<Map<String, dynamic>> items) {
-    for (int i = 0; i < items.length; i++) {
-      final route = items[i]['route'] as String;
-      if (route == '/' ? location == '/' : location.startsWith(route)) {
-        return i;
-      }
-    }
-    return 0;
-  }
-}
-
-// Placeholder for event detail screen
 class _EventDetailPlaceholder extends StatelessWidget {
   final String id;
   const _EventDetailPlaceholder({required this.id});
@@ -250,17 +107,8 @@ class _EventDetailPlaceholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Event Details')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.event, size: 64, color: AppColors.primary),
-            const SizedBox(height: 16),
-            Text('Event ID: $id'),
-          ],
-        ),
-      ),
+      appBar: AppBar(title: Text('Event $id')),
+      body: Center(child: Text('Details for event $id')),
     );
   }
 }

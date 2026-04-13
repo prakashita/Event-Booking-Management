@@ -72,21 +72,30 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   DateTime? get _startDateTime {
     if (_startDate == null || _startTime == null) return null;
     return DateTime(
-      _startDate!.year, _startDate!.month, _startDate!.day,
-      _startTime!.hour, _startTime!.minute,
+      _startDate!.year,
+      _startDate!.month,
+      _startDate!.day,
+      _startTime!.hour,
+      _startTime!.minute,
     );
   }
 
   DateTime? get _endDateTime {
     if (_endDate == null || _endTime == null) return null;
     return DateTime(
-      _endDate!.year, _endDate!.month, _endDate!.day,
-      _endTime!.hour, _endTime!.minute,
+      _endDate!.year,
+      _endDate!.month,
+      _endDate!.day,
+      _endTime!.hour,
+      _endTime!.minute,
     );
   }
 
   Future<void> _checkConflicts() async {
-    if (_selectedVenue == null || _startDateTime == null || _endDateTime == null) return;
+    if (_selectedVenue == null ||
+        _startDateTime == null ||
+        _endDateTime == null)
+      return;
     setState(() {
       _checkingConflicts = true;
       _hasConflict = false;
@@ -94,11 +103,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     });
     try {
       final iso = (DateTime dt) => dt.toIso8601String();
-      final data = await _api.post<Map<String, dynamic>>('/events/conflicts', data: {
-        'venue_name': _selectedVenue!.name,
-        'start_datetime': iso(_startDateTime!),
-        'end_datetime': iso(_endDateTime!),
-      });
+      final data = await _api.post<Map<String, dynamic>>(
+        '/events/conflicts',
+        data: {
+          'venue_name': _selectedVenue!.name,
+          'start_datetime': iso(_startDateTime!),
+          'end_datetime': iso(_endDateTime!),
+        },
+      );
       final conflicts = data['conflicts'] as List? ?? [];
       setState(() {
         _conflicts = conflicts;
@@ -114,16 +126,19 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     setState(() => _submitting = true);
     try {
       final iso = (DateTime dt) => dt.toIso8601String();
-      await _api.post('/events', data: {
-        'title': _titleCtrl.text.trim(),
-        'description': _descCtrl.text.trim(),
-        'venue_name': _selectedVenue!.name,
-        'start_datetime': iso(_startDateTime!),
-        'end_datetime': iso(_endDateTime!),
-        'notes': _notesCtrl.text.trim(),
-        'audience_count': int.tryParse(_audienceCtrl.text.trim()) ?? 0,
-        'override_conflict': _overrideConflict,
-      });
+      await _api.post(
+        '/events',
+        data: {
+          'title': _titleCtrl.text.trim(),
+          'description': _descCtrl.text.trim(),
+          'venue_name': _selectedVenue!.name,
+          'start_datetime': iso(_startDateTime!),
+          'end_datetime': iso(_endDateTime!),
+          'notes': _notesCtrl.text.trim(),
+          'audience_count': int.tryParse(_audienceCtrl.text.trim()) ?? 0,
+          'override_conflict': _overrideConflict,
+        },
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Event submitted for approval!')),
@@ -167,17 +182,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         message: 'Submitting event...',
         child: Column(
           children: [
-            _StepIndicator(currentStep: _step, steps: const ['Details', 'Schedule', 'Review']),
+            _StepIndicator(
+              currentStep: _step,
+              steps: const ['Details', 'Schedule', 'Review'],
+            ),
             Expanded(
               child: Form(
                 key: _formKey,
                 child: IndexedStack(
                   index: _step,
-                  children: [
-                    _buildStep1(),
-                    _buildStep2(),
-                    _buildStep3(),
-                  ],
+                  children: [_buildStep1(), _buildStep2(), _buildStep3()],
                 ),
               ),
             ),
@@ -194,9 +208,19 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Event Details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const Text(
+            'Event Details',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 4),
-          const Text('Provide basic information about your event.', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+          const Text(
+            'Provide basic information about your event.',
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+          ),
           const SizedBox(height: 24),
           _FieldLabel('Event Title *'),
           const SizedBox(height: 6),
@@ -211,7 +235,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           const SizedBox(height: 6),
           TextFormField(
             controller: _descCtrl,
-            decoration: const InputDecoration(hintText: 'Describe the event...'),
+            decoration: const InputDecoration(
+              hintText: 'Describe the event...',
+            ),
             maxLines: 4,
             textCapitalization: TextCapitalization.sentences,
           ),
@@ -228,7 +254,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           const SizedBox(height: 6),
           TextFormField(
             controller: _notesCtrl,
-            decoration: const InputDecoration(hintText: 'Any additional notes...'),
+            decoration: const InputDecoration(
+              hintText: 'Any additional notes...',
+            ),
             maxLines: 3,
           ),
         ],
@@ -245,9 +273,19 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Schedule & Venue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const Text(
+            'Schedule & Venue',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 4),
-          const Text('Choose venue and set event dates/times.', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+          const Text(
+            'Choose venue and set event dates/times.',
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+          ),
           const SizedBox(height: 24),
           _FieldLabel('Venue *'),
           const SizedBox(height: 6),
@@ -256,7 +294,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               : DropdownButtonFormField<Venue>(
                   value: _selectedVenue,
                   decoration: const InputDecoration(hintText: 'Select a venue'),
-                  items: _venues.map((v) => DropdownMenuItem(value: v, child: Text(v.name))).toList(),
+                  items: _venues
+                      .map(
+                        (v) => DropdownMenuItem(value: v, child: Text(v.name)),
+                      )
+                      .toList(),
                   onChanged: (v) => setState(() {
                     _selectedVenue = v;
                     _hasConflict = false;
@@ -274,14 +316,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     _FieldLabel('Start Date *'),
                     const SizedBox(height: 6),
                     _DateTile(
-                      label: _startDate != null ? df.format(_startDate!) : 'Select',
+                      label: _startDate != null
+                          ? df.format(_startDate!)
+                          : 'Select',
                       icon: Icons.calendar_today,
                       onTap: () async {
                         final d = await showDatePicker(
                           context: context,
                           initialDate: DateTime.now(),
                           firstDate: DateTime.now(),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 365),
+                          ),
                         );
                         if (d != null) setState(() => _startDate = d);
                       },
@@ -297,7 +343,17 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     _FieldLabel('Start Time *'),
                     const SizedBox(height: 6),
                     _DateTile(
-                      label: _startTime != null ? tf.format(DateTime(0, 1, 1, _startTime!.hour, _startTime!.minute)) : 'Select',
+                      label: _startTime != null
+                          ? tf.format(
+                              DateTime(
+                                0,
+                                1,
+                                1,
+                                _startTime!.hour,
+                                _startTime!.minute,
+                              ),
+                            )
+                          : 'Select',
                       icon: Icons.access_time,
                       onTap: () async {
                         final t = await showTimePicker(
@@ -329,7 +385,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           context: context,
                           initialDate: _startDate ?? DateTime.now(),
                           firstDate: _startDate ?? DateTime.now(),
-                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 365),
+                          ),
                         );
                         if (d != null) setState(() => _endDate = d);
                       },
@@ -345,7 +403,17 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     _FieldLabel('End Time *'),
                     const SizedBox(height: 6),
                     _DateTile(
-                      label: _endTime != null ? tf.format(DateTime(0, 1, 1, _endTime!.hour, _endTime!.minute)) : 'Select',
+                      label: _endTime != null
+                          ? tf.format(
+                              DateTime(
+                                0,
+                                1,
+                                1,
+                                _endTime!.hour,
+                                _endTime!.minute,
+                              ),
+                            )
+                          : 'Select',
                       icon: Icons.access_time,
                       onTap: () async {
                         final t = await showTimePicker(
@@ -367,11 +435,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               onPressed: _checkingConflicts ? null : _checkConflicts,
               icon: _checkingConflicts
                   ? const SizedBox(
-                      width: 16, height: 16,
+                      width: 16,
+                      height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.search),
-              label: Text(_checkingConflicts ? 'Checking...' : 'Check for Conflicts'),
+              label: Text(
+                _checkingConflicts ? 'Checking...' : 'Check for Conflicts',
+              ),
             ),
           ),
           if (_hasConflict) ...[
@@ -388,28 +459,45 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.warning_amber, size: 18, color: AppColors.warning),
+                      Icon(
+                        Icons.warning_amber,
+                        size: 18,
+                        color: AppColors.warning,
+                      ),
                       SizedBox(width: 8),
-                      Text('Scheduling Conflict Detected', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.warning)),
+                      Text(
+                        'Scheduling Conflict Detected',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.warning,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '${_conflicts.length} event(s) already scheduled at ${_selectedVenue?.name} during this time.',
-                    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
                       Checkbox(
                         value: _overrideConflict,
-                        onChanged: (v) => setState(() => _overrideConflict = v ?? false),
+                        onChanged: (v) =>
+                            setState(() => _overrideConflict = v ?? false),
                         activeColor: AppColors.warning,
                       ),
                       const Expanded(
                         child: Text(
                           'Override conflict and proceed anyway',
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
@@ -417,13 +505,23 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 ],
               ),
             ),
-          ] else if (!_hasConflict && _conflicts.isEmpty && _selectedVenue != null && _startDateTime != null) ...[
+          ] else if (!_hasConflict &&
+              _conflicts.isEmpty &&
+              _selectedVenue != null &&
+              _startDateTime != null) ...[
             const SizedBox(height: 12),
             const Row(
               children: [
                 Icon(Icons.check_circle, size: 16, color: AppColors.success),
                 SizedBox(width: 6),
-                Text('No conflicts detected', style: TextStyle(fontSize: 13, color: AppColors.success, fontWeight: FontWeight.w500)),
+                Text(
+                  'No conflicts detected',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.success,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ],
             ),
           ],
@@ -439,9 +537,19 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Review & Submit', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          const Text(
+            'Review & Submit',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 4),
-          const Text('Review your event details before submitting for approval.', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+          const Text(
+            'Review your event details before submitting for approval.',
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+          ),
           const SizedBox(height: 24),
           Container(
             padding: const EdgeInsets.all(20),
@@ -454,16 +562,31 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _ReviewRow('Title', _titleCtrl.text),
-                _ReviewRow('Description', _descCtrl.text.isEmpty ? 'Not provided' : _descCtrl.text),
+                _ReviewRow(
+                  'Description',
+                  _descCtrl.text.isEmpty ? 'Not provided' : _descCtrl.text,
+                ),
                 _ReviewRow('Venue', _selectedVenue?.name ?? 'Not selected'),
-                _ReviewRow('Start', _startDateTime != null ? df.format(_startDateTime!) : 'Not set'),
-                _ReviewRow('End', _endDateTime != null ? df.format(_endDateTime!) : 'Not set'),
+                _ReviewRow(
+                  'Start',
+                  _startDateTime != null
+                      ? df.format(_startDateTime!)
+                      : 'Not set',
+                ),
+                _ReviewRow(
+                  'End',
+                  _endDateTime != null ? df.format(_endDateTime!) : 'Not set',
+                ),
                 if (_audienceCtrl.text.isNotEmpty)
                   _ReviewRow('Audience', _audienceCtrl.text),
                 if (_notesCtrl.text.isNotEmpty)
                   _ReviewRow('Notes', _notesCtrl.text),
                 if (_overrideConflict)
-                  const _ReviewRow('Conflict', 'Override requested', valueColor: AppColors.warning),
+                  const _ReviewRow(
+                    'Conflict',
+                    'Override requested',
+                    valueColor: AppColors.warning,
+                  ),
               ],
             ),
           ),
@@ -481,7 +604,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 Expanded(
                   child: Text(
                     'Your event will be sent to the Registrar for approval. You will be notified once a decision is made.',
-                    style: TextStyle(fontSize: 13, color: AppColors.primary, height: 1.5),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.primary,
+                      height: 1.5,
+                    ),
                   ),
                 ),
               ],
@@ -521,16 +648,21 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       );
                       return;
                     }
-                    if (_step == 1 && (_startDateTime == null || _endDateTime == null)) {
+                    if (_step == 1 &&
+                        (_startDateTime == null || _endDateTime == null)) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please set start and end times')),
+                        const SnackBar(
+                          content: Text('Please set start and end times'),
+                        ),
                       );
                       return;
                     }
                     if (_step == 1 && _hasConflict && !_overrideConflict) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Please resolve the conflict or enable override'),
+                          content: Text(
+                            'Please resolve the conflict or enable override',
+                          ),
                           backgroundColor: AppColors.warning,
                         ),
                       );
@@ -573,7 +705,9 @@ class _StepIndicator extends StatelessWidget {
                   height: 28,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: isActive ? AppColors.primary : AppColors.surfaceVariant,
+                    color: isActive
+                        ? AppColors.primary
+                        : AppColors.surfaceVariant,
                     border: isCurrent
                         ? Border.all(color: AppColors.primary, width: 2)
                         : null,
@@ -586,7 +720,9 @@ class _StepIndicator extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: isActive ? Colors.white : AppColors.textMuted,
+                              color: isActive
+                                  ? Colors.white
+                                  : AppColors.textMuted,
                             ),
                           ),
                   ),
@@ -597,7 +733,9 @@ class _StepIndicator extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: isCurrent ? FontWeight.w600 : FontWeight.w400,
-                    color: isCurrent ? AppColors.primary : AppColors.textSecondary,
+                    color: isCurrent
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
                   ),
                 ),
                 if (e.key < steps.length - 1) ...[
@@ -638,7 +776,11 @@ class _DateTile extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-  const _DateTile({required this.label, required this.icon, required this.onTap});
+  const _DateTile({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -657,7 +799,10 @@ class _DateTile extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               label,
-              style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textPrimary,
+              ),
             ),
           ],
         ),

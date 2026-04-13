@@ -253,7 +253,7 @@ class _EventCard extends StatelessWidget {
                   child: InfoRow(
                     icon: Icons.schedule,
                     text:
-                        '${df.format(event.startDatetime)} · ${tf.format(event.startDatetime)}',
+                        '${df.format(event.startTime)} · ${tf.format(event.startTime)}',
                   ),
                 ),
                 if (event.status == 'completed' && event.reportFileId == null)

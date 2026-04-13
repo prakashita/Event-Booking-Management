@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/models.dart';
 
 class AppColors {
   // Primary palette — deep institutional navy blue
@@ -46,24 +47,14 @@ class AppColors {
   static const Color overlay = Color(0x80000000);
 
   // Role-based colors
-  static Color roleColor(String role) {
-    switch (role.toLowerCase()) {
-      case 'admin':
+  static Color roleColor(UserRole role) {
+    switch (role) {
+      case UserRole.admin:
         return const Color(0xFF6A1B9A);
-      case 'registrar':
-        return const Color(0xFF00695C);
-      case 'faculty':
-        return primary;
-      case 'facility_manager':
-        return const Color(0xFFE65100);
-      case 'marketing':
-        return const Color(0xFFAD1457);
-      case 'it':
-        return const Color(0xFF1565C0);
-      case 'iqac':
+      case UserRole.iqac:
         return const Color(0xFF283593);
-      case 'transport':
-        return const Color(0xFF4E342E);
+      case UserRole.faculty:
+        return primary;
       default:
         return textSecondary;
     }
