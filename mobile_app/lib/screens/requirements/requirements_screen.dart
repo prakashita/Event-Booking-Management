@@ -30,10 +30,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
   void initState() {
     super.initState();
     _role = context.read<AuthProvider>().user?.role.name ?? 'faculty';
-    _tabController = TabController(
-      length: _showInbox ? 2 : 1,
-      vsync: this,
-    );
+    _tabController = TabController(length: _showInbox ? 2 : 1, vsync: this);
     _tabController.addListener(() {
       if (_tabController.index == 1 && !_mineLoaded) _loadMine();
     });
@@ -59,15 +56,19 @@ class _RequirementsScreenState extends State<RequirementsScreen>
   }
 
   String get _minePath {
-    if (AppConstants.facilityRoles.contains(_role)) return '/facility/requests/me';
-    if (AppConstants.marketingRoles.contains(_role)) return '/marketing/requests/me';
+    if (AppConstants.facilityRoles.contains(_role))
+      return '/facility/requests/me';
+    if (AppConstants.marketingRoles.contains(_role))
+      return '/marketing/requests/me';
     if (AppConstants.itRoles.contains(_role)) return '/it/requests/me';
     return '/facility/requests/me';
   }
 
   String _patchPath(String id) {
-    if (AppConstants.facilityRoles.contains(_role)) return '/facility/requests/$id';
-    if (AppConstants.marketingRoles.contains(_role)) return '/marketing/requests/$id';
+    if (AppConstants.facilityRoles.contains(_role))
+      return '/facility/requests/$id';
+    if (AppConstants.marketingRoles.contains(_role))
+      return '/marketing/requests/$id';
     return '/it/requests/$id';
   }
 
@@ -111,9 +112,10 @@ class _RequirementsScreenState extends State<RequirementsScreen>
 
   Future<void> _decide(String id, bool accept) async {
     try {
-      await _api.patch(_patchPath(id), data: {
-        'status': accept ? 'accepted' : 'rejected',
-      });
+      await _api.patch(
+        _patchPath(id),
+        data: {'status': accept ? 'accepted' : 'rejected'},
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(accept ? 'Request accepted!' : 'Request rejected.'),
@@ -131,9 +133,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final tabLabels = _showInbox
-        ? ['Inbox', 'My Requests']
-        : ['My Requests'];
+    final tabLabels = _showInbox ? ['Inbox', 'My Requests'] : ['My Requests'];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -151,50 +151,50 @@ class _RequirementsScreenState extends State<RequirementsScreen>
           _loadingInbox
               ? _buildLoading()
               : _inboxItems.isEmpty
-                  ? const EmptyState(
-                      icon: Icons.check_circle_outline,
-                      title: 'All caught up',
-                      message: 'No pending requests in your inbox.',
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _loadInbox,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                        itemCount: _inboxItems.length,
-                        itemBuilder: (ctx, i) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _RequestCard(
-                            item: _inboxItems[i],
-                            role: _role,
-                            showActions: true,
-                            onAccept: () => _decide(_itemId(_inboxItems[i]), true),
-                            onReject: () => _decide(_itemId(_inboxItems[i]), false),
-                          ),
-                        ),
+              ? const EmptyState(
+                  icon: Icons.check_circle_outline,
+                  title: 'All caught up',
+                  message: 'No pending requests in your inbox.',
+                )
+              : RefreshIndicator(
+                  onRefresh: _loadInbox,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                    itemCount: _inboxItems.length,
+                    itemBuilder: (ctx, i) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _RequestCard(
+                        item: _inboxItems[i],
+                        role: _role,
+                        showActions: true,
+                        onAccept: () => _decide(_itemId(_inboxItems[i]), true),
+                        onReject: () => _decide(_itemId(_inboxItems[i]), false),
                       ),
                     ),
+                  ),
+                ),
 
           if (_showInbox)
             _loadingMine
                 ? _buildLoading()
                 : _myItems.isEmpty
-                    ? const EmptyState(
-                        icon: Icons.assignment_outlined,
-                        title: 'No requests',
-                        message: 'Requests you submit will appear here.',
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                        itemCount: _myItems.length,
-                        itemBuilder: (ctx, i) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: _RequestCard(
-                            item: _myItems[i],
-                            role: _role,
-                            showActions: false,
-                          ),
-                        ),
+                ? const EmptyState(
+                    icon: Icons.assignment_outlined,
+                    title: 'No requests',
+                    message: 'Requests you submit will appear here.',
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+                    itemCount: _myItems.length,
+                    itemBuilder: (ctx, i) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _RequestCard(
+                        item: _myItems[i],
+                        role: _role,
+                        showActions: false,
                       ),
+                    ),
+                  ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -247,13 +247,19 @@ class _RequirementsScreenState extends State<RequirementsScreen>
       ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.fromLTRB(
-            20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          20,
+          20,
+          20,
+          MediaQuery.of(ctx).viewInsets.bottom + 20,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('New Facility Request',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const Text(
+              'New Facility Request',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 20),
             TextField(
               controller: titleCtrl,
@@ -268,7 +274,9 @@ class _RequirementsScreenState extends State<RequirementsScreen>
             const SizedBox(height: 12),
             TextField(
               controller: refreshCtrl,
-              decoration: const InputDecoration(labelText: 'Refreshment Details'),
+              decoration: const InputDecoration(
+                labelText: 'Refreshment Details',
+              ),
               maxLines: 2,
             ),
             const SizedBox(height: 20),
@@ -278,17 +286,25 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                 onPressed: () async {
                   Navigator.pop(ctx);
                   try {
-                    await _api.post('/facility/requests', data: {
-                      'event_title': titleCtrl.text,
-                      'setup_details': setupCtrl.text,
-                      'refreshment_details': refreshCtrl.text,
-                    });
+                    await _api.post(
+                      '/facility/requests',
+                      data: {
+                        'event_title': titleCtrl.text,
+                        'setup_details': setupCtrl.text,
+                        'refreshment_details': refreshCtrl.text,
+                      },
+                    );
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Facility request submitted!')),
+                      const SnackBar(
+                        content: Text('Facility request submitted!'),
+                      ),
                     );
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+                      SnackBar(
+                        content: Text(e.toString()),
+                        backgroundColor: AppColors.error,
+                      ),
                     );
                   }
                 },
@@ -317,13 +333,19 @@ class _RequirementsScreenState extends State<RequirementsScreen>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
           padding: EdgeInsets.fromLTRB(
-              20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+            20,
+            20,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('New IT Request',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const Text(
+                'New IT Request',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 20),
               TextField(
                 controller: titleCtrl,
@@ -355,7 +377,9 @@ class _RequirementsScreenState extends State<RequirementsScreen>
               ),
               TextField(
                 controller: notesCtrl,
-                decoration: const InputDecoration(labelText: 'Additional Notes'),
+                decoration: const InputDecoration(
+                  labelText: 'Additional Notes',
+                ),
                 maxLines: 2,
               ),
               const SizedBox(height: 20),
@@ -365,19 +389,25 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                   onPressed: () async {
                     Navigator.pop(ctx);
                     try {
-                      await _api.post('/it/requests', data: {
-                        'event_title': titleCtrl.text,
-                        'mode': mode,
-                        'pa_system': pa,
-                        'projection': projection,
-                        'notes': notesCtrl.text,
-                      });
+                      await _api.post(
+                        '/it/requests',
+                        data: {
+                          'event_title': titleCtrl.text,
+                          'mode': mode,
+                          'pa_system': pa,
+                          'projection': projection,
+                          'notes': notesCtrl.text,
+                        },
+                      );
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('IT request submitted!')),
                       );
                     } catch (e) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+                        SnackBar(
+                          content: Text(e.toString()),
+                          backgroundColor: AppColors.error,
+                        ),
                       );
                     }
                   },
@@ -406,21 +436,29 @@ class _RequirementsScreenState extends State<RequirementsScreen>
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setS) => Padding(
           padding: EdgeInsets.fromLTRB(
-              20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+            20,
+            20,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('New Marketing Request',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              const Text(
+                'New Marketing Request',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 20),
               TextField(
                 controller: titleCtrl,
                 decoration: const InputDecoration(labelText: 'Event Title'),
               ),
               const SizedBox(height: 12),
-              const Text('Items Required:',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              const Text(
+                'Items Required:',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -432,8 +470,10 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                     selected: sel,
                     onSelected: (v) {
                       setS(() {
-                        if (v) selected.add(item);
-                        else selected.remove(item);
+                        if (v)
+                          selected.add(item);
+                        else
+                          selected.remove(item);
                       });
                     },
                   );
@@ -449,23 +489,33 @@ class _RequirementsScreenState extends State<RequirementsScreen>
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: selected.isEmpty ? null : () async {
-                    Navigator.pop(ctx);
-                    try {
-                      await _api.post('/marketing/requests', data: {
-                        'event_title': titleCtrl.text,
-                        'items': selected,
-                        'notes': notesCtrl.text,
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Marketing request submitted!')),
-                      );
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
-                      );
-                    }
-                  },
+                  onPressed: selected.isEmpty
+                      ? null
+                      : () async {
+                          Navigator.pop(ctx);
+                          try {
+                            await _api.post(
+                              '/marketing/requests',
+                              data: {
+                                'event_title': titleCtrl.text,
+                                'items': selected,
+                                'notes': notesCtrl.text,
+                              },
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Marketing request submitted!'),
+                              ),
+                            );
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(e.toString()),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                          }
+                        },
                   child: const Text('Submit Request'),
                 ),
               ),
@@ -506,14 +556,16 @@ class _RequestCard extends StatelessWidget {
       requestedBy = r.requestedBy;
       details = [
         if (r.setupDetails != null) 'Setup: ${r.setupDetails}',
-        if (r.refreshmentDetails != null) 'Refreshments: ${r.refreshmentDetails}',
+        if (r.refreshmentDetails != null)
+          'Refreshments: ${r.refreshmentDetails}',
       ].join('\n');
     } else if (item is ITRequest) {
       final r = item as ITRequest;
       title = r.eventTitle;
       status = r.status;
       requestedBy = r.requestedBy;
-      details = 'Mode: ${r.mode.toUpperCase()}${r.paSystem ? ' · PA System' : ''}${r.projection ? ' · Projection' : ''}';
+      details =
+          'Mode: ${r.mode.toUpperCase()}${r.paSystem ? ' · PA System' : ''}${r.projection ? ' · Projection' : ''}';
     } else if (item is MarketingRequest) {
       final r = item as MarketingRequest;
       title = r.eventTitle;
@@ -537,7 +589,11 @@ class _RequestCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
               StatusBadge(status),
@@ -549,7 +605,10 @@ class _RequestCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               details,
-              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
@@ -572,7 +631,9 @@ class _RequestCard extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: onAccept,
-                    style: FilledButton.styleFrom(backgroundColor: AppColors.success),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                    ),
                     child: const Text('Accept'),
                   ),
                 ),

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 
 class SideNavBar extends StatelessWidget {
@@ -12,6 +13,9 @@ class SideNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+    final user = authProvider.user;
+
     return Container(
       width: 256,
       color: const Color(0xFF1B254B),
@@ -31,7 +35,11 @@ class SideNavBar extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Center(
-                      child: Icon(LucideIcons.shieldCheck, color: Colors.white, size: 24),
+                      child: Icon(
+                        LucideIcons.shieldCheck,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -68,25 +76,61 @@ class SideNavBar extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _buildNavItem(context, icon: LucideIcons.layoutDashboard, title: 'Dashboard', route: '/dashboard'),
-                    _buildNavItem(context, icon: LucideIcons.calendar, title: 'My Events', route: '/events'),
-                    _buildNavItem(context, icon: LucideIcons.barChart3, title: 'Event Reports', route: '/reports'),
-                    _buildNavItem(context, icon: LucideIcons.calendarCheck, title: 'Calendar View', route: '/calendar'),
-                    _buildNavItem(context, icon: LucideIcons.bookOpen, title: 'Publications', route: '/publications'),
-                    _buildNavItem(context, icon: LucideIcons.database, title: 'IQAC Data Collection', route: '/iqac'),
-                    _buildNavItem(context, icon: LucideIcons.shield, title: 'Admin Console', route: '/admin'),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'PREFERENCES',
-                      style: TextStyle(
-                        color: Color(0xFF718096),
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                      ),
+                    _buildNavItem(
+                      context,
+                      icon: LucideIcons.layoutDashboard,
+                      title: 'Dashboard',
+                      route: '/dashboard',
                     ),
-                    const SizedBox(height: 12),
-                    _buildNavItem(context, icon: LucideIcons.users, title: 'User Management', route: '/users'),
+                    _buildNavItem(
+                      context,
+                      icon: LucideIcons.calendar,
+                      title: 'My Events',
+                      route: '/events',
+                    ),
+                    _buildNavItem(
+                      context,
+                      icon: LucideIcons.calendarCheck,
+                      title: 'Calendar View',
+                      route: '/calendar',
+                    ),
+                    _buildNavItem(
+                      context,
+                      icon: LucideIcons.bookOpen,
+                      title: 'Publications',
+                      route: '/publications',
+                    ),
+                    _buildNavItem(
+                      context,
+                      icon: LucideIcons.database,
+                      title: 'IQAC Data Collection',
+                      route: '/iqac',
+                    ),
+                    if (user?.role == UserRole.admin) ...[
+                      const SizedBox(height: 24),
+                      const Text(
+                        'ADMINISTRATION',
+                        style: TextStyle(
+                          color: Color(0xFF718096),
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildNavItem(
+                        context,
+                        icon: LucideIcons.fileText,
+                        title: 'Event Reports',
+                        route: '/reports',
+                      ),
+                      _buildNavItem(
+                        context,
+                        icon: LucideIcons.userCog,
+                        title: 'Admin Console',
+                        route: '/admin',
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -121,13 +165,25 @@ class SideNavBar extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.blue.withOpacity(0.2) : Colors.transparent,
+            color: isSelected
+                ? Colors.blue.withOpacity(0.2)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
-            border: isSelected ? Border(left: BorderSide(color: Colors.blue.shade400, width: 4)) : null,
+            border: isSelected
+                ? Border(
+                    left: BorderSide(color: Colors.blue.shade400, width: 4),
+                  )
+                : null,
           ),
           child: Row(
             children: [
-              Icon(icon, size: 20, color: isSelected ? Colors.blue.shade300 : const Color(0xFFA0AEC0)),
+              Icon(
+                icon,
+                size: 20,
+                color: isSelected
+                    ? Colors.blue.shade300
+                    : const Color(0xFFA0AEC0),
+              ),
               const SizedBox(width: 16),
               Text(
                 title,

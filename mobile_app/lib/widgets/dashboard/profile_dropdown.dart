@@ -28,9 +28,7 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
             children: [
               GestureDetector(
                 onTap: _tooltipController.hide,
-                child: Container(
-                  color: Colors.transparent,
-                ),
+                child: Container(color: Colors.transparent),
               ),
               Positioned(
                 top: kToolbarHeight + 8,
@@ -50,7 +48,9 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                       children: [
                         CircleAvatar(
                           radius: 30,
-                          backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                          backgroundColor: Theme.of(
+                            context,
+                          ).primaryColor.withOpacity(0.1),
                           child: Icon(
                             LucideIcons.user,
                             size: 30,
@@ -67,38 +67,79 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                         ),
                         const SizedBox(height: 4),
                         Chip(
-                          avatar: Icon(LucideIcons.shieldCheck, size: 14),
-                          label: Text(
-                            widget.user.role.name.toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          label: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                LucideIcons.shieldCheck,
+                                size: 14,
+                                color: Colors.green,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                widget.user.role.name.toUpperCase(),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                           backgroundColor: Colors.green.withOpacity(0.1),
                           labelStyle: const TextStyle(color: Colors.green),
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
-                            side: BorderSide(color: Colors.green.withOpacity(0.2)),
+                            side: BorderSide(
+                              color: Colors.green.withOpacity(0.2),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 16),
                         const Divider(height: 1),
                         const SizedBox(height: 16),
-                        _buildInfoRow(LucideIcons.mail, "Email Address", widget.user.email),
-                        const SizedBox(height: 12),
-                        _buildInfoRow(LucideIcons.building2, "Department", widget.user.department ?? 'Not specified'),
+                        _buildInfoRow(
+                          LucideIcons.mail,
+                          "Email Address",
+                          widget.user.email,
+                        ),
                         const SizedBox(height: 16),
                         const Divider(height: 1),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 8),
                         SizedBox(
                           width: double.infinity,
                           child: TextButton.icon(
-                            icon: Icon(LucideIcons.logOut, size: 16),
+                            icon: const Icon(LucideIcons.settings, size: 16),
+                            label: const Text('Settings'),
+                            onPressed: () {
+                              _tooltipController.hide();
+                              context.go('/settings');
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.grey[800],
+                              backgroundColor: Colors.grey.withOpacity(0.1),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Divider(height: 1),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton.icon(
+                            icon: const Icon(LucideIcons.logOut, size: 16),
                             label: const Text('Log Out'),
                             onPressed: () {
-                              Provider.of<AuthProvider>(context, listen: false).signOut();
+                              Provider.of<AuthProvider>(
+                                context,
+                                listen: false,
+                              ).signOut();
                               context.go('/login');
                             },
                             style: TextButton.styleFrom(
@@ -127,7 +168,11 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                 color: const Color(0xFF4F46E5),
                 borderRadius: BorderRadius.circular(12.0),
               ),
-              child: const Icon(LucideIcons.user, color: Colors.white, size: 20),
+              child: const Icon(
+                LucideIcons.user,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 4),
             Icon(Icons.arrow_drop_down, color: Colors.grey[700]),
@@ -155,10 +200,7 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
             ),
             Text(
               value,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ],
         ),

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../constants/app_colors.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
@@ -28,6 +29,7 @@ class _CalendarScreenState extends State<CalendarScreen>
   bool _isConnectingGoogle = false;
   bool _awaitingGoogleConsent = false;
   _CalendarSource _source = _CalendarSource.institution;
+  CalendarFormat _calendarFormat = CalendarFormat.month;
 
   void _log(String message) {
     if (kDebugMode) {
@@ -289,218 +291,304 @@ class _CalendarScreenState extends State<CalendarScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Calendar'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () async {
-              await _loadGoogleStatus();
-              await _loadEvents();
-            },
-            tooltip: 'Refresh',
-          ),
-          IconButton(
-            icon: const Icon(Icons.today),
-            onPressed: () {
-              setState(() {
-                _focusedDay = DateTime.now();
-                _selectedDay = DateTime.now();
-              });
-            },
-          ),
-        ],
-      ),
+      backgroundColor: const Color(0xFFF4F7FE),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: _isConnectingGoogle
-                              ? null
-                              : _connectGoogleCalendar,
-                          icon: _isConnectingGoogle
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Icon(Icons.link),
-                          label: Text(
-                            _isGoogleConnected
-                                ? 'Google Connected'
-                                : 'Connect Google Calendar',
-                          ),
-                        ),
+          : SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'SCHEDULING',
+                      style: TextStyle(
+                        color: Color(0xFF718096),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.2,
                       ),
-                      const SizedBox(width: 8),
-                      PopupMenuButton<_CalendarSource>(
-                        initialValue: _source,
-                        tooltip: 'Calendar source',
-                        onSelected: (value) async {
-                          setState(() => _source = value);
-                          await _loadEvents();
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Calendar View',
+                      style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1B254B),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            _focusedDay = DateTime.now();
+                            _selectedDay = _focusedDay;
+                          });
                         },
-                        itemBuilder: (context) => const [
-                          PopupMenuItem(
-                            value: _CalendarSource.institution,
-                            child: Text('Institution events'),
-                          ),
-                          PopupMenuItem(
-                            value: _CalendarSource.personal,
-                            child: Text('Personal Google events'),
-                          ),
-                          PopupMenuItem(
-                            value: _CalendarSource.both,
-                            child: Text('Both'),
-                          ),
-                        ],
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.surface,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: AppColors.border),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.calendar_today,
+                              size: 16,
+                              color: Color(0xFF4A5568),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              DateFormat.yMMMMd().format(DateTime.now()),
+                              style: const TextStyle(
+                                color: Color(0xFF2D3748),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                switch (_source) {
-                                  _CalendarSource.institution => 'Institution',
-                                  _CalendarSource.personal => 'Personal',
-                                  _CalendarSource.both => 'Both',
+                              const Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Calendar',
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF1B254B),
+                                    ),
+                                  ),
+                                  Text(
+                                    'All approved events',
+                                    style: TextStyle(color: Color(0xFF718096)),
+                                  ),
+                                ],
+                              ),
+                              FilledButton.icon(
+                                icon: const FaIcon(
+                                  FontAwesomeIcons.google,
+                                  size: 18,
+                                ),
+                                label: const Text('Connect'),
+                                onPressed: _connectGoogleCalendar,
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF4299E1),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          Row(
+                            children: [
+                              OutlinedButton.icon(
+                                icon: const Icon(
+                                  Icons.refresh,
+                                  color: Color(0xFF2D3748),
+                                ),
+                                label: const Text(
+                                  'Refresh',
+                                  style: TextStyle(color: Color(0xFF2D3748)),
+                                ),
+                                onPressed: _loadEvents,
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(
+                                    color: Color(0xFFE2E8F0),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              PopupMenuButton<_CalendarSource>(
+                                initialValue: _source,
+                                tooltip: 'Calendar source',
+                                onSelected: (value) async {
+                                  setState(() => _source = value);
+                                  await _loadEvents();
                                 },
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.arrow_drop_down),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  color: AppColors.surface,
-                  child: TableCalendar<Event>(
-                    firstDay: DateTime(2020),
-                    lastDay: DateTime(2030),
-                    focusedDay: _focusedDay,
-                    selectedDayPredicate: (d) => isSameDay(_selectedDay, d),
-                    eventLoader: _getEventsForDay,
-                    calendarStyle: CalendarStyle(
-                      selectedDecoration: const BoxDecoration(
-                        color: AppColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      todayDecoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      todayTextStyle: const TextStyle(color: AppColors.primary),
-                      markerDecoration: const BoxDecoration(
-                        color: AppColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      markersMaxCount: 3,
-                      outsideDaysVisible: false,
-                    ),
-                    headerStyle: HeaderStyle(
-                      formatButtonVisible: false,
-                      titleCentered: true,
-                      titleTextStyle: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
-                      leftChevronIcon: const Icon(
-                        Icons.chevron_left,
-                        color: AppColors.textSecondary,
-                      ),
-                      rightChevronIcon: const Icon(
-                        Icons.chevron_right,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    daysOfWeekStyle: const DaysOfWeekStyle(
-                      weekdayStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
-                      ),
-                      weekendStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.error,
-                      ),
-                    ),
-                    onDaySelected: (selected, focused) {
-                      setState(() {
-                        _selectedDay = selected;
-                        _focusedDay = focused;
-                      });
-                    },
-                    onPageChanged: (focused) {
-                      _focusedDay = focused;
-                      _loadEvents();
-                    },
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: _selectedEvents.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.event_available,
-                                size: 48,
-                                color: AppColors.textMuted,
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                _selectedDay != null
-                                    ? 'No events on ${DateFormat('MMM d').format(_selectedDay!)}'
-                                    : 'Select a day to view events',
-                                style: const TextStyle(
-                                  color: AppColors.textSecondary,
+                                itemBuilder: (context) => const [
+                                  PopupMenuItem(
+                                    value: _CalendarSource.institution,
+                                    child: Text('Institution events'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: _CalendarSource.personal,
+                                    child: Text('Personal Google events'),
+                                  ),
+                                  PopupMenuItem(
+                                    value: _CalendarSource.both,
+                                    child: Text('Both'),
+                                  ),
+                                ],
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: const Color(0xFFE2E8F0),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        switch (_source) {
+                                          _CalendarSource.institution =>
+                                            'Institution',
+                                          _CalendarSource.personal =>
+                                            'Personal',
+                                          _CalendarSource.both => 'Both',
+                                        },
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF2D3748),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.arrow_drop_down,
+                                        color: Color(0xFF718096),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                          itemCount: _selectedEvents.length,
-                          itemBuilder: (ctx, i) {
-                            final e = _selectedEvents[i];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: _CalendarEventCard(event: e),
-                            );
-                          },
-                        ),
+                          const SizedBox(height: 20),
+                          _buildCalendar(),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    if (_selectedEvents.isNotEmpty) _buildEventList(),
+                  ],
                 ),
-              ],
+              ),
             ),
+    );
+  }
+
+  Widget _buildCalendar() {
+    return TableCalendar<Event>(
+      firstDay: DateTime.utc(2020, 1, 1),
+      lastDay: DateTime.utc(2030, 12, 31),
+      focusedDay: _focusedDay,
+      selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+      calendarFormat: _calendarFormat,
+      eventLoader: _getEventsForDay,
+      onDaySelected: (selectedDay, focusedDay) {
+        setState(() {
+          _selectedDay = selectedDay;
+          _focusedDay = focusedDay;
+        });
+      },
+      onPageChanged: (focusedDay) {
+        _focusedDay = focusedDay;
+        _loadEvents();
+      },
+      onFormatChanged: (format) {
+        if (_calendarFormat != format) {
+          setState(() {
+            _calendarFormat = format;
+          });
+        }
+      },
+      calendarStyle: CalendarStyle(
+        selectedDecoration: const BoxDecoration(
+          color: Color(0xFF4299E1),
+          shape: BoxShape.circle,
+        ),
+        todayDecoration: BoxDecoration(
+          color: const Color(0xFF4299E1).withOpacity(0.3),
+          shape: BoxShape.circle,
+        ),
+        markerDecoration: const BoxDecoration(
+          color: Color(0xFF4299E1),
+          shape: BoxShape.circle,
+        ),
+        outsideDaysVisible: false,
+        weekendTextStyle: const TextStyle(color: Color(0xFFE53E3E)),
+      ),
+      headerStyle: HeaderStyle(
+        titleCentered: true,
+        titleTextStyle: const TextStyle(
+          fontSize: 18.0,
+          fontWeight: FontWeight.bold,
+          color: Color(0xFF1A202C),
+        ),
+        formatButtonDecoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFCBD5E0)),
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        formatButtonTextStyle: const TextStyle(color: Color(0xFF2D3748)),
+        formatButtonShowsNext: false,
+      ),
+      daysOfWeekStyle: const DaysOfWeekStyle(
+        weekdayStyle: TextStyle(color: Color(0xFF4A5568)),
+        weekendStyle: TextStyle(color: Color(0xFFC53030)),
+      ),
+    );
+  }
+
+  Widget _buildEventList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Events on ${DateFormat.yMMMMd().format(_selectedDay!)}',
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1B254B),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _selectedEvents.length,
+          itemBuilder: (ctx, i) {
+            final e = _selectedEvents[i];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _CalendarEventCard(event: e),
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -553,8 +641,7 @@ class _CalendarEventCard extends StatelessWidget {
           const SizedBox(height: 8),
           InfoRow(
             icon: Icons.schedule,
-            text:
-                '${tf.format(event.startTime)} – ${tf.format(event.endTime)}',
+            text: '${tf.format(event.startTime)} – ${tf.format(event.endTime)}',
           ),
           const SizedBox(height: 4),
           InfoRow(icon: Icons.location_on_outlined, text: event.venueName),

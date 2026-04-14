@@ -91,6 +91,7 @@ dependencies:
   uuid: ^4.4.0
   logger: ^2.3.0
   lucide_icons: ^0.257.0
+  font_awesome_flutter: ^11.0.0
 
 
 dev_dependencies:

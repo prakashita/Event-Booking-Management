@@ -48,11 +48,7 @@ class User {
   };
 }
 
-enum UserRole {
-  admin,
-  iqac,
-  faculty,
-}
+enum UserRole { admin, iqac, faculty }
 
 // ─── Event ────────────────────────────────────────────────────────────────────
 
@@ -89,10 +85,14 @@ class Event {
     description: json['description'],
     venueName: json['venue_name'] ?? json['location'] ?? '',
     startTime:
-        DateTime.tryParse(json['start_datetime'] ?? json['start_time'] ?? json['start'] ?? '')?.toLocal() ??
+        DateTime.tryParse(
+          json['start_datetime'] ?? json['start_time'] ?? json['start'] ?? '',
+        )?.toLocal() ??
         DateTime.now(),
     endTime:
-        DateTime.tryParse(json['end_datetime'] ?? json['end_time'] ?? json['end'] ?? '')?.toLocal() ??
+        DateTime.tryParse(
+          json['end_datetime'] ?? json['end_time'] ?? json['end'] ?? '',
+        )?.toLocal() ??
         DateTime.now(),
     status: json['status'] ?? 'approved',
     createdBy: json['created_by'] ?? '',
@@ -140,23 +140,26 @@ class ApprovalRequest {
         description: json['description'],
         venueName: json['venue_name'] ?? '',
         startDatetime:
-            DateTime.tryParse(json['start_datetime'] ?? '')?.toLocal() ?? DateTime.now(),
+            DateTime.tryParse(json['start_datetime'] ?? '')?.toLocal() ??
+            DateTime.now(),
         endDatetime:
-            DateTime.tryParse(json['end_datetime'] ?? '')?.toLocal() ?? DateTime.now(),
+            DateTime.tryParse(json['end_datetime'] ?? '')?.toLocal() ??
+            DateTime.now(),
         status: json['status'] ?? 'pending',
         requestedBy: json['requested_by'] ?? '',
         requestedTo: json['requested_to'] ?? '',
         overrideConflict: json['override_conflict'] ?? false,
         notes: json['notes'],
         createdAt:
-            DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
+            DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
+            DateTime.now(),
       );
 }
 
 // ─── Venue ────────────────────────────────────────────────────────────────────
 
 class Venue {
-// ... existing code ...
+  // ... existing code ...
   final String id;
   final String name;
 
@@ -169,7 +172,7 @@ class Venue {
 // ─── Facility Request ─────────────────────────────────────────────────────────
 
 class FacilityRequest {
-// ... existing code ...
+  // ... existing code ...
   final String id;
   final String? eventId;
   final String eventTitle;
@@ -200,14 +203,15 @@ class FacilityRequest {
         status: json['status'] ?? 'pending',
         requestedBy: json['requested_by'] ?? '',
         createdAt:
-            DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
+            DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
+            DateTime.now(),
       );
 }
 
 // ─── IT Request ───────────────────────────────────────────────────────────────
 
 class ITRequest {
-// ... existing code ...
+  // ... existing code ...
   final String id;
   final String? eventId;
   final String eventTitle;
@@ -242,14 +246,16 @@ class ITRequest {
     notes: json['notes'],
     status: json['status'] ?? 'pending',
     requestedBy: json['requested_by'] ?? '',
-    createdAt: DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
+    createdAt:
+        DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
+        DateTime.now(),
   );
 }
 
 // ─── Marketing Request ────────────────────────────────────────────────────────
 
 class MarketingRequest {
-// ... existing code ...
+  // ... existing code ...
   final String id;
   final String? eventId;
   final String eventTitle;
@@ -285,12 +291,13 @@ class MarketingRequest {
             .map((d) => MarketingDeliverable.fromJson(d))
             .toList(),
         createdAt:
-            DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
+            DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
+            DateTime.now(),
       );
 }
 
 class MarketingDeliverable {
-// ... existing code ...
+  // ... existing code ...
   final String type;
   final String? driveFileId;
   final String? link;
@@ -315,7 +322,7 @@ class MarketingDeliverable {
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 class ChatConversation {
-// ... existing code ...
+  // ... existing code ...
   final String id;
   final String kind;
   final List<String> participants;
@@ -352,7 +359,7 @@ class ChatConversation {
       );
 
   static String? _extractLastMessage(dynamic lastMessageField) {
-// ... existing code ...
+    // ... existing code ...
     if (lastMessageField is String) return lastMessageField;
     if (lastMessageField is Map<String, dynamic>) {
       final text = lastMessageField['text'];
@@ -362,7 +369,7 @@ class ChatConversation {
   }
 
   static DateTime? _extractLastMessageAt(Map<String, dynamic> json) {
-// ... existing code ...
+    // ... existing code ...
     final direct = json['last_message_at'];
     if (direct is String) return DateTime.tryParse(direct)?.toLocal();
 
@@ -378,7 +385,7 @@ class ChatConversation {
   }
 
   static List<String> _extractParticipantNames(Map<String, dynamic> json) {
-// ... existing code ...
+    // ... existing code ...
     final directNames = json['participant_names'];
     if (directNames is List) {
       return directNames.map((e) => e.toString()).toList();
@@ -403,7 +410,7 @@ class ChatConversation {
 }
 
 class ChatMessage {
-// ... existing code ...
+  // ... existing code ...
   final String id;
   final String conversationId;
   final String senderId;
@@ -428,7 +435,9 @@ class ChatMessage {
     senderId: json['sender_id'] ?? '',
     senderName: json['sender_name'] ?? '',
     content: json['content'] ?? '',
-    createdAt: DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
+    createdAt:
+        DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
+        DateTime.now(),
     readBy: List<String>.from(json['read_by'] ?? []),
   );
 }
@@ -436,7 +445,7 @@ class ChatMessage {
 // ─── Publication ──────────────────────────────────────────────────────────────
 
 class Publication {
-// ... existing code ...
+  // ... existing code ...
   final String id;
   final String type;
   final String title;
@@ -468,14 +477,16 @@ class Publication {
     url: json['url'],
     journal: json['journal'],
     createdBy: json['created_by'] ?? '',
-    createdAt: DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
+    createdAt:
+        DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
+        DateTime.now(),
   );
 }
 
 // ─── IQAC ─────────────────────────────────────────────────────────────────────
 
 class IQACFile {
-// ... existing code ...
+  // ... existing code ...
   final String id;
   final String criterion;
   final String subfolder;
@@ -503,7 +514,9 @@ class IQACFile {
     item: json['item'] ?? '',
     filename: json['filename'] ?? '',
     uploadedBy: json['uploaded_by'] ?? '',
-    createdAt: DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ?? DateTime.now(),
+    createdAt:
+        DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
+        DateTime.now(),
     size: json['size'],
   );
 }
@@ -511,7 +524,7 @@ class IQACFile {
 // ─── Dashboard Stats ──────────────────────────────────────────────────────────
 
 class DashboardStats {
-// ... existing code ...
+  // ... existing code ...
   final int totalEvents;
   final int upcomingEvents;
   final int ongoingEvents;

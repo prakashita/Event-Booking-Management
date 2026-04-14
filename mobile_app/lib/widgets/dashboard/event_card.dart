@@ -7,11 +7,7 @@ class EventCard extends StatelessWidget {
   final Event event;
   final VoidCallback onTap;
 
-  const EventCard({
-    super.key,
-    required this.event,
-    required this.onTap,
-  });
+  const EventCard({super.key, required this.event, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +45,10 @@ class EventCard extends StatelessWidget {
                   child: Icon(LucideIcons.calendar, color: _getStatusColor()),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: _getStatusColor().withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -77,7 +76,11 @@ class EventCard extends StatelessWidget {
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(LucideIcons.calendar, size: 14, color: Color(0xFF64748B)),
+                const Icon(
+                  LucideIcons.calendar,
+                  size: 14,
+                  color: Color(0xFF64748B),
+                ),
                 const SizedBox(width: 6),
                 Text(
                   DateFormat('d MMM yyyy').format(event.startTime),

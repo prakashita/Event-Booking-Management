@@ -14,9 +14,11 @@ import '../screens/chat/chat_screen.dart';
 import '../screens/publications/publications_screen.dart';
 import '../screens/iqac/iqac_screen.dart';
 import '../screens/admin/admin_screen.dart';
+import '../screens/reports/event_reports_screen.dart';
 import '../screens/home_screen.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_constants.dart';
+import '../screens/settings/settings_screen.dart';
 
 class AppRouter {
   static GoRouter createRouter(AuthProvider authProvider) {
@@ -34,10 +36,7 @@ class AppRouter {
         return null;
       },
       routes: [
-        GoRoute(
-          path: '/login',
-          builder: (_, __) => const LoginScreen(),
-        ),
+        GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
         ShellRoute(
           builder: (context, state, child) {
             return HomeScreen(child: child);
@@ -47,10 +46,7 @@ class AppRouter {
               path: '/dashboard',
               builder: (_, __) => const DashboardScreen(),
             ),
-            GoRoute(
-              path: '/events',
-              builder: (_, __) => const EventsScreen(),
-            ),
+            GoRoute(path: '/events', builder: (_, __) => const EventsScreen()),
             GoRoute(
               path: '/events/create',
               builder: (_, __) => const CreateEventScreen(),
@@ -72,10 +68,7 @@ class AppRouter {
               path: '/calendar',
               builder: (_, __) => const CalendarScreen(),
             ),
-            GoRoute(
-              path: '/chat',
-              builder: (_, __) => const ChatListScreen(),
-            ),
+            GoRoute(path: '/chat', builder: (_, __) => const ChatListScreen()),
             GoRoute(
               path: '/chat/:id',
               builder: (_, state) =>
@@ -85,13 +78,15 @@ class AppRouter {
               path: '/publications',
               builder: (_, __) => const PublicationsScreen(),
             ),
+            GoRoute(path: '/iqac', builder: (_, __) => const IQACScreen()),
+            GoRoute(path: '/admin', builder: (_, __) => const AdminScreen()),
             GoRoute(
-              path: '/iqac',
-              builder: (_, __) => const IQACScreen(),
+              path: '/reports',
+              builder: (_, __) => const EventReportsScreen(),
             ),
             GoRoute(
-              path: '/admin',
-              builder: (_, __) => const AdminScreen(),
+              path: '/settings',
+              builder: (_, __) => const SettingsScreen(),
             ),
           ],
         ),
