@@ -227,7 +227,8 @@ export default function App() {
     eventFacilitator: "",
     hasReport: false,
     existingAttendanceFileName: "",
-    existingAttendanceUrl: ""
+    existingAttendanceUrl: "",
+    existingAttendanceFileId: ""
   });
   const REQUIREMENT_OPTIONS = [
     { key: "poster_required", type: "poster", label: "Poster" },
@@ -2445,7 +2446,8 @@ export default function App() {
       eventFacilitator: eventItem.facilitator || "",
       hasReport: Boolean(eventItem.report_file_id),
       existingAttendanceFileName: eventItem.attendance_file_name || "",
-      existingAttendanceUrl: eventItem.attendance_web_view_link || ""
+      existingAttendanceUrl: eventItem.attendance_web_view_link || "",
+      existingAttendanceFileId: eventItem.attendance_file_id || ""
     });
     if (canAccessIqac) {
       (async () => {
@@ -2824,7 +2826,8 @@ export default function App() {
       eventFacilitator: "",
       hasReport: false,
       existingAttendanceFileName: "",
-      existingAttendanceUrl: ""
+      existingAttendanceUrl: "",
+      existingAttendanceFileId: ""
     });
   };
 
@@ -3137,8 +3140,14 @@ export default function App() {
   };
 
   const handleViewAttendanceFile = (eventItem) => {
-    if (eventItem?.attendance_web_view_link) {
-      window.open(eventItem.attendance_web_view_link, "_blank", "noopener,noreferrer");
+    const link = eventItem?.attendance_web_view_link;
+    const fileId = eventItem?.attendance_file_id;
+    if (link) {
+      window.open(link, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (fileId) {
+      window.open(`https://drive.google.com/file/d/${encodeURIComponent(String(fileId))}/view`, "_blank", "noopener,noreferrer");
       return;
     }
     setStatus({ type: "error", message: "Attendance file link unavailable." });
@@ -5332,6 +5341,8 @@ export default function App() {
 
       if (isMyEvents || isReportsView) {
         const isReportsTab = myEventsTab === "closed";
+        /** Compact table (no date/time columns): dedicated Event Reports page, or My Events → Closed tab. */
+        const showReportsCompactLayout = isReportsView || isReportsTab;
         const getNormalizedStatus = (event) => getNormalizedEventStatus(event);
         /** Backend lifecycle status (upcoming, ongoing, completed, closed) for tab filtering. Approval items have no lifecycle. */
         const getLifecycleStatus = (event) => {
@@ -5423,19 +5434,19 @@ export default function App() {
                 </div>
               )}
               <div className="events-table">
-                <div className={`events-table-row header ${isReportsTab ? "reports" : ""}`}>
+                <div className={`events-table-row header ${showReportsCompactLayout ? "reports" : ""}`}>
                   <span>Events</span>
-                  {isReportsTab ? null : <span>Date</span>}
-                  {isReportsTab ? null : <span>Time</span>}
+                  {showReportsCompactLayout ? null : <span>Date</span>}
+                  {showReportsCompactLayout ? null : <span>Time</span>}
                   <span>Status</span>
                   <span>Action</span>
                 </div>
                 {eventsState.status === "loading" ? (
                   Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className={`events-table-row my-events-skeleton-row ${isReportsTab ? "reports" : ""}`}>
+                    <div key={i} className={`events-table-row my-events-skeleton-row ${showReportsCompactLayout ? "reports" : ""}`}>
                       <span className="skeleton-line" style={{ height: "16px", width: "65%", display: "block" }} />
-                      {isReportsTab ? null : <span className="skeleton-line" style={{ height: "16px", width: "55%", display: "block" }} />}
-                      {isReportsTab ? null : <span className="skeleton-line" style={{ height: "16px", width: "45%", display: "block" }} />}
+                      {showReportsCompactLayout ? null : <span className="skeleton-line" style={{ height: "16px", width: "55%", display: "block" }} />}
+                      {showReportsCompactLayout ? null : <span className="skeleton-line" style={{ height: "16px", width: "45%", display: "block" }} />}
                       <span className="skeleton-line" style={{ height: "26px", width: "72px", borderRadius: "999px", display: "block" }} />
                       <span className="skeleton-line" style={{ height: "30px", width: "80px", borderRadius: "10px", display: "block" }} />
                     </div>
@@ -5448,9 +5459,21 @@ export default function App() {
                   <div className="my-events-empty-state">
                     <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#c4c9d4" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                     <p className="my-events-empty-title">
-                      {isReportsTab ? "No closed events yet." : myEventsTab === "completed" ? "No completed events yet." : myEventsTab === "upcoming" ? "No upcoming events." : myEventsTab === "ongoing" ? "No ongoing events." : myEventsTab === "pending" ? "No pending events." : "No events found."}
+                      {showReportsCompactLayout
+                        ? isReportsView
+                          ? "No closed events with reports yet."
+                          : "No closed events yet."
+                        : myEventsTab === "completed"
+                          ? "No completed events yet."
+                          : myEventsTab === "upcoming"
+                            ? "No upcoming events."
+                            : myEventsTab === "ongoing"
+                              ? "No ongoing events."
+                              : myEventsTab === "pending"
+                                ? "No pending events."
+                                : "No events found."}
                     </p>
-                    {myEventsTab === "all" && !isReportsTab ? (
+                    {myEventsTab === "all" && !showReportsCompactLayout ? (
                       <span className="my-events-empty-sub">Create your first event to get started.</span>
                     ) : null}
                   </div>
@@ -5533,7 +5556,9 @@ export default function App() {
                         !isApprovalItem &&
                         statusValue === "completed" &&
                         Boolean(event.report_file_id);
-                      if (isReportsTab) {
+                      if (showReportsCompactLayout) {
+                        const hasAttendanceFile =
+                          Boolean(event.attendance_web_view_link) || Boolean(event.attendance_file_id);
                         return (
                           <div key={event.id} className="events-table-row reports my-events-row">
                             <span className="my-events-row-name">{event.name}</span>
@@ -5547,13 +5572,13 @@ export default function App() {
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                 View Report
                               </button>
-                              {event.attendance_web_view_link ? (
+                              {hasAttendanceFile ? (
                                 <button
                                   type="button"
                                   className="ev-action-btn ev-action-details"
                                   onClick={() => handleViewAttendanceFile(event)}
                                 >
-                                  View attendance file
+                                  View attendance
                                 </button>
                               ) : null}
                             </div>
@@ -5633,13 +5658,13 @@ export default function App() {
                                 View Report
                               </button>
                             ) : null}
-                            {event.attendance_web_view_link ? (
+                            {event.attendance_web_view_link || event.attendance_file_id ? (
                               <button
                                 type="button"
                                 className="ev-action-btn ev-action-details"
                                 onClick={() => handleViewAttendanceFile(event)}
                               >
-                                View attendance file
+                                View attendance
                               </button>
                             ) : null}
                           </div>
@@ -6806,8 +6831,17 @@ export default function App() {
                       {reportModal.existingAttendanceFileName && !reportAttendanceFile && !reportAttendanceNotApplicable ? (
                         <p className="form-hint" style={{ marginTop: "6px" }}>
                           Current attendance file on record:{" "}
-                          {reportModal.existingAttendanceUrl ? (
-                            <button type="button" className="link-button" onClick={() => handleViewAttendanceFile({ attendance_web_view_link: reportModal.existingAttendanceUrl })}>
+                          {reportModal.existingAttendanceUrl || reportModal.existingAttendanceFileId ? (
+                            <button
+                              type="button"
+                              className="link-button"
+                              onClick={() =>
+                                handleViewAttendanceFile({
+                                  attendance_web_view_link: reportModal.existingAttendanceUrl,
+                                  attendance_file_id: reportModal.existingAttendanceFileId
+                                })
+                              }
+                            >
                               {reportModal.existingAttendanceFileName}
                             </button>
                           ) : (
