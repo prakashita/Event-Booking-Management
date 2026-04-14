@@ -50,6 +50,9 @@ def serialize_event(event: Event) -> EventResponse:
         report_file_name=event.report_file_name,
         report_web_view_link=event.report_web_view_link,
         report_uploaded_at=event.report_uploaded_at,
+        attendance_file_id=getattr(event, "attendance_file_id", None),
+        attendance_file_name=getattr(event, "attendance_file_name", None),
+        attendance_web_view_link=getattr(event, "attendance_web_view_link", None),
         created_at=event.created_at,
     )
 

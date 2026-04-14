@@ -114,6 +114,9 @@ class EventResponse(BaseModel):
     report_file_name: Optional[str] = None
     report_web_view_link: Optional[str] = None
     report_uploaded_at: Optional[datetime] = None
+    attendance_file_id: Optional[str] = None
+    attendance_file_name: Optional[str] = None
+    attendance_web_view_link: Optional[str] = None
     created_at: datetime
 
 
