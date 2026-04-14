@@ -84,9 +84,9 @@ class _AdminScreenState extends State<AdminScreen>
     try {
       await _api.delete('/users/${user.id}');
       setState(() => _users.removeWhere((u) => u.id == user.id));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('User deleted.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('User deleted.')));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
@@ -106,9 +106,9 @@ class _AdminScreenState extends State<AdminScreen>
     try {
       await _api.delete('/venues/${venue.id}');
       setState(() => _venues.removeWhere((v) => v.id == venue.id));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Venue removed.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Venue removed.')));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
@@ -124,7 +124,10 @@ class _AdminScreenState extends State<AdminScreen>
         title: const Text('Admin Console'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: 'Users'), Tab(text: 'Venues')],
+          tabs: const [
+            Tab(text: 'Users'),
+            Tab(text: 'Venues'),
+          ],
         ),
       ),
       body: TabBarView(
@@ -202,7 +205,9 @@ class _AdminScreenState extends State<AdminScreen>
                                 ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  side: const BorderSide(color: AppColors.border),
+                                  side: const BorderSide(
+                                    color: AppColors.border,
+                                  ),
                                 ),
                                 tileColor: AppColors.surface,
                               ),
@@ -236,8 +241,12 @@ class _AdminScreenState extends State<AdminScreen>
           content: DropdownButtonFormField<UserRole>(
             value: role,
             items: UserRole.values
-                .map((r) => DropdownMenuItem(
-                    value: r, child: Text(r.name.toUpperCase())))
+                .map(
+                  (r) => DropdownMenuItem(
+                    value: r,
+                    child: Text(r.name.toUpperCase()),
+                  ),
+                )
                 .toList(),
             onChanged: (v) => setS(() => role = v!),
           ),
@@ -250,14 +259,20 @@ class _AdminScreenState extends State<AdminScreen>
               onPressed: () async {
                 Navigator.pop(ctx);
                 try {
-                  await _api.patch('/users/${user.id}/role', data: {'role': role.name});
+                  await _api.patch(
+                    '/users/${user.id}/role',
+                    data: {'role': role.name},
+                  );
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Role updated!')),
                   );
                   _loadUsers();
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+                    SnackBar(
+                      content: Text(e.toString()),
+                      backgroundColor: AppColors.error,
+                    ),
                   );
                 }
               },
@@ -290,9 +305,22 @@ class _AdminScreenState extends State<AdminScreen>
               DropdownButtonFormField<String>(
                 value: role,
                 decoration: const InputDecoration(labelText: 'Role'),
-                items: ['registrar', 'facility_manager', 'marketing', 'it', 'iqac', 'transport']
-                    .map((r) => DropdownMenuItem(value: r, child: Text(r.toUpperCase())))
-                    .toList(),
+                items:
+                    [
+                          'registrar',
+                          'facility_manager',
+                          'marketing',
+                          'it',
+                          'iqac',
+                          'transport',
+                        ]
+                        .map(
+                          (r) => DropdownMenuItem(
+                            value: r,
+                            child: Text(r.toUpperCase()),
+                          ),
+                        )
+                        .toList(),
                 onChanged: (v) => setS(() => role = v!),
               ),
             ],
@@ -306,16 +334,19 @@ class _AdminScreenState extends State<AdminScreen>
               onPressed: () async {
                 Navigator.pop(ctx);
                 try {
-                  await _api.post('/auth/pending-role', data: {
-                    'email': emailCtrl.text.trim(),
-                    'role': role,
-                  });
+                  await _api.post(
+                    '/auth/pending-role',
+                    data: {'email': emailCtrl.text.trim(), 'role': role},
+                  );
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('User role registered!')),
                   );
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+                    SnackBar(
+                      content: Text(e.toString()),
+                      backgroundColor: AppColors.error,
+                    ),
                   );
                 }
               },
@@ -347,15 +378,21 @@ class _AdminScreenState extends State<AdminScreen>
             onPressed: () async {
               Navigator.pop(ctx);
               try {
-                await _api.post('/venues', data: {'name': nameCtrl.text.trim()});
+                await _api.post(
+                  '/venues',
+                  data: {'name': nameCtrl.text.trim()},
+                );
                 _venuesLoaded = false;
                 _loadVenues();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Venue added!')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('Venue added!')));
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+                  SnackBar(
+                    content: Text(e.toString()),
+                    backgroundColor: AppColors.error,
+                  ),
                 );
               }
             },

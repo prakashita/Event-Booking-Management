@@ -37,10 +37,16 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 // Custom Header
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 8.0,
+                  ),
                   child: SafeArea(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8.0,
+                        vertical: 8.0,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(24.0),
@@ -69,14 +75,21 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: TextField(
                                 decoration: InputDecoration(
                                   hintText: 'Search...',
-                                  prefixIcon: Icon(LucideIcons.search, size: 18),
+                                  prefixIcon: Icon(
+                                    LucideIcons.search,
+                                    size: 18,
+                                  ),
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.all(Radius.circular(16.0)),
+                                    borderRadius: BorderRadius.all(
+                                      Radius.circular(16.0),
+                                    ),
                                     borderSide: BorderSide.none,
                                   ),
                                   filled: true,
                                   fillColor: Color(0xFFF4F7FE),
-                                  contentPadding: EdgeInsets.symmetric(vertical: 0),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    vertical: 0,
+                                  ),
                                 ),
                               ),
                             ),
@@ -87,7 +100,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           else
                             const CircleAvatar(
                               backgroundColor: Color(0xFF2563EB),
-                              child: Icon(LucideIcons.user, color: Colors.white),
+                              child: Icon(
+                                LucideIcons.user,
+                                color: Colors.white,
+                              ),
                             ),
                         ],
                       ),
@@ -95,9 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 // Main Content
-                Expanded(
-                  child: widget.child,
-                ),
+                Expanded(child: widget.child),
               ],
             ),
           ),
@@ -108,9 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
           context.go('/chat');
         },
         backgroundColor: const Color(0xFF2563EB),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: const Icon(LucideIcons.messageSquare, color: Colors.white),
       ),
     );
