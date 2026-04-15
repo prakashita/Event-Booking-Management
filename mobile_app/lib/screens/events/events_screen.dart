@@ -128,6 +128,9 @@ class _EventsScreenState extends State<EventsScreen>
               endTime: end,
               status: (a['status'] ?? 'pending').toString(),
               createdBy: (a['requester_id'] ?? '').toString(),
+              createdAt: DateTime.tryParse(
+                (a['created_at'] ?? '').toString(),
+              )?.toLocal(),
               reportFileId: null,
               audienceCount: null,
               notes: null,
@@ -136,7 +139,13 @@ class _EventsScreenState extends State<EventsScreen>
           .toList();
 
       final allEvents = [...approvals, ...events]
-        ..sort((a, b) => b.startTime.compareTo(a.startTime));
+        ..sort((a, b) {
+          final aCreated = a.createdAt ?? a.startTime;
+          final bCreated = b.createdAt ?? b.startTime;
+          final byCreated = bCreated.compareTo(aCreated);
+          if (byCreated != 0) return byCreated;
+          return b.startTime.compareTo(a.startTime);
+        });
       setState(() {
         _eventsByTab[key] = _filterEventsForTab(allEvents, idx);
         _loading[key] = false;
@@ -300,7 +309,7 @@ class _EventsScreenState extends State<EventsScreen>
         padding: const EdgeInsets.symmetric(horizontal: 20),
         scrollDirection: Axis.horizontal,
         itemCount: _tabs.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final isActive = _tabController.index == index;
           return GestureDetector(
@@ -449,108 +458,109 @@ class _EventCard extends StatelessWidget {
     final statusBgColor = _getStatusBgColor(event.status);
     final statusBorderColor = _getStatusBorderColor(event.status);
 
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFFF8FAFC), width: 1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  event.title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1E293B),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: statusBgColor,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: statusBorderColor),
-                ),
-                child: Text(
-                  event.status.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                    color: statusColor,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ],
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Color(0xFFF8FAFC), width: 1),
           ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'DATE',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFCBD5E1),
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    df.format(event.startTime),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    event.title,
                     style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF475569),
-                    ),
-                  ),
-                ],
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'TIME',
-                    style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFFCBD5E1),
-                      letterSpacing: 1.0,
+                      color: Color(0xFF1E293B),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    tf.format(event.startTime),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF475569),
+                ),
+                const SizedBox(width: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusBgColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: statusBorderColor),
+                  ),
+                  child: Text(
+                    event.status.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      color: statusColor,
+                      letterSpacing: 0.5,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(width: 40),
-            ],
-          ),
-          const SizedBox(height: 16),
-          InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'DATE',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFCBD5E1),
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      df.format(event.startTime),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'TIME',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFCBD5E1),
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      tf.format(event.startTime),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 40),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
@@ -574,8 +584,8 @@ class _EventCard extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

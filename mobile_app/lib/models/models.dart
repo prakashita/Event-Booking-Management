@@ -30,8 +30,20 @@ class User {
     switch (role?.toLowerCase()) {
       case 'admin':
         return UserRole.admin;
+      case 'registrar':
+        return UserRole.registrar;
+      case 'vice_chancellor':
+        return UserRole.vice_chancellor;
+      case 'facility_manager':
+        return UserRole.facility_manager;
+      case 'marketing':
+        return UserRole.marketing;
+      case 'it':
+        return UserRole.it;
       case 'iqac':
         return UserRole.iqac;
+      case 'transport':
+        return UserRole.transport;
       case 'faculty':
       default:
         return UserRole.faculty;
@@ -48,7 +60,87 @@ class User {
   };
 }
 
-enum UserRole { admin, iqac, faculty }
+enum UserRole {
+  admin,
+  registrar,
+  vice_chancellor,
+  faculty,
+  facility_manager,
+  marketing,
+  it,
+  iqac,
+  transport,
+}
+
+DateTime _parseDateTime(
+  Map<String, dynamic> json, {
+  required String dateKey,
+  required String timeKey,
+  required String datetimeKey,
+}) {
+  final dtRaw = (json[datetimeKey] ?? '').toString().trim();
+  final parsedDt = DateTime.tryParse(dtRaw);
+  if (parsedDt != null) {
+    return parsedDt.toLocal();
+  }
+
+  final dateRaw = (json[dateKey] ?? '').toString().trim();
+  final timeRaw = (json[timeKey] ?? '').toString().trim();
+  if (dateRaw.isNotEmpty && timeRaw.isNotEmpty) {
+    final combined = DateTime.tryParse('${dateRaw}T$timeRaw');
+    if (combined != null) {
+      return combined.toLocal();
+    }
+  }
+
+  return DateTime.now();
+}
+
+List<String> _deriveMarketingItems(Map<String, dynamic> json) {
+  final direct = json['items'];
+  if (direct is List) {
+    return direct.map((e) => e.toString()).toList();
+  }
+
+  final out = <String>[];
+  final req = json['marketing_requirements'];
+  if (req is Map<String, dynamic>) {
+    final pre = req['pre_event'];
+    if (pre is Map<String, dynamic>) {
+      if (pre['poster'] == true) out.add('Poster');
+      if (pre['social_media'] == true) out.add('Social Media');
+    }
+    final during = req['during_event'];
+    if (during is Map<String, dynamic>) {
+      if (during['photo'] == true) out.add('Photography');
+      if (during['video'] == true) out.add('Video');
+    }
+    final post = req['post_event'];
+    if (post is Map<String, dynamic>) {
+      if (post['social_media'] == true) out.add('Post Event Social Media');
+      if (post['photo_upload'] == true) out.add('Photo Upload');
+      if (post['video'] == true) out.add('Post Event Video');
+    }
+  }
+
+  if (json['poster_required'] == true && !out.contains('Poster')) {
+    out.add('Poster');
+  }
+  if (json['video_required'] == true && !out.contains('Video')) {
+    out.add('Video');
+  }
+  if (json['linkedin_post'] == true && !out.contains('LinkedIn Post')) {
+    out.add('LinkedIn Post');
+  }
+  if (json['photography'] == true && !out.contains('Photography')) {
+    out.add('Photography');
+  }
+  if (json['recording'] == true && !out.contains('Recording')) {
+    out.add('Recording');
+  }
+
+  return out;
+}
 
 // ─── Event ────────────────────────────────────────────────────────────────────
 
@@ -61,6 +153,7 @@ class Event {
   final DateTime endTime;
   final String status;
   final String createdBy;
+  final DateTime? createdAt;
   final String? reportFileId;
   final int? audienceCount;
   final String? notes;
@@ -74,6 +167,7 @@ class Event {
     required this.endTime,
     required this.status,
     required this.createdBy,
+    this.createdAt,
     this.reportFileId,
     this.audienceCount,
     this.notes,
@@ -81,21 +175,27 @@ class Event {
 
   factory Event.fromJson(Map<String, dynamic> json) => Event(
     id: json['id'] ?? json['_id'] ?? '',
-    title: json['title'] ?? json['summary'] ?? 'Untitled event',
+    title:
+        (json['name'] ?? json['title'] ?? json['summary'] ?? 'Untitled event')
+            .toString(),
     description: json['description'],
     venueName: json['venue_name'] ?? json['location'] ?? '',
-    startTime:
-        DateTime.tryParse(
-          json['start_datetime'] ?? json['start_time'] ?? json['start'] ?? '',
-        )?.toLocal() ??
-        DateTime.now(),
-    endTime:
-        DateTime.tryParse(
-          json['end_datetime'] ?? json['end_time'] ?? json['end'] ?? '',
-        )?.toLocal() ??
-        DateTime.now(),
+    startTime: _parseDateTime(
+      json,
+      dateKey: 'start_date',
+      timeKey: 'start_time',
+      datetimeKey: 'start_datetime',
+    ),
+    endTime: _parseDateTime(
+      json,
+      dateKey: 'end_date',
+      timeKey: 'end_time',
+      datetimeKey: 'end_datetime',
+    ),
     status: json['status'] ?? 'approved',
     createdBy: json['created_by'] ?? '',
+    createdAt: DateTime.tryParse((json['created_at'] ?? '').toString())
+        ?.toLocal(),
     reportFileId: json['report_file_id'],
     audienceCount: json['audience_count'],
     notes: json['notes'] ?? json['htmlLink'],
@@ -136,20 +236,28 @@ class ApprovalRequest {
   factory ApprovalRequest.fromJson(Map<String, dynamic> json) =>
       ApprovalRequest(
         id: json['id'] ?? json['_id'] ?? '',
-        eventTitle: json['event_title'] ?? '',
+        eventTitle: (json['event_name'] ?? json['event_title'] ?? '')
+            .toString(),
         description: json['description'],
         venueName: json['venue_name'] ?? '',
-        startDatetime:
-            DateTime.tryParse(json['start_datetime'] ?? '')?.toLocal() ??
-            DateTime.now(),
-        endDatetime:
-            DateTime.tryParse(json['end_datetime'] ?? '')?.toLocal() ??
-            DateTime.now(),
+        startDatetime: _parseDateTime(
+          json,
+          dateKey: 'start_date',
+          timeKey: 'start_time',
+          datetimeKey: 'start_datetime',
+        ),
+        endDatetime: _parseDateTime(
+          json,
+          dateKey: 'end_date',
+          timeKey: 'end_time',
+          datetimeKey: 'end_datetime',
+        ),
         status: json['status'] ?? 'pending',
-        requestedBy: json['requested_by'] ?? '',
+        requestedBy: (json['requester_email'] ?? json['requested_by'] ?? '')
+            .toString(),
         requestedTo: json['requested_to'] ?? '',
         overrideConflict: json['override_conflict'] ?? false,
-        notes: json['notes'],
+        notes: json['other_notes'] ?? json['notes'],
         createdAt:
             DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
             DateTime.now(),
@@ -197,11 +305,25 @@ class FacilityRequest {
       FacilityRequest(
         id: json['id'] ?? json['_id'] ?? '',
         eventId: json['event_id'],
-        eventTitle: json['event_title'] ?? '',
-        setupDetails: json['setup_details'],
-        refreshmentDetails: json['refreshment_details'],
+        eventTitle: (json['event_name'] ?? json['event_title'] ?? '')
+            .toString(),
+        setupDetails:
+            json['setup_details'] ??
+            (json['venue_required'] is bool
+                ? ((json['venue_required'] as bool)
+                      ? 'Venue required'
+                      : 'Venue not required')
+                : null),
+        refreshmentDetails:
+            json['refreshment_details'] ??
+            (json['refreshments'] is bool
+                ? ((json['refreshments'] as bool)
+                      ? 'Refreshments required'
+                      : 'No refreshments')
+                : null),
         status: json['status'] ?? 'pending',
-        requestedBy: json['requested_by'] ?? '',
+        requestedBy: (json['requester_email'] ?? json['requested_by'] ?? '')
+            .toString(),
         createdAt:
             DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
             DateTime.now(),
@@ -239,13 +361,14 @@ class ITRequest {
   factory ITRequest.fromJson(Map<String, dynamic> json) => ITRequest(
     id: json['id'] ?? json['_id'] ?? '',
     eventId: json['event_id'],
-    eventTitle: json['event_title'] ?? '',
-    mode: json['mode'] ?? 'offline',
+    eventTitle: (json['event_name'] ?? json['event_title'] ?? '').toString(),
+    mode: json['event_mode'] ?? json['mode'] ?? 'offline',
     paSystem: json['pa_system'] ?? false,
     projection: json['projection'] ?? false,
-    notes: json['notes'],
+    notes: json['other_notes'] ?? json['notes'],
     status: json['status'] ?? 'pending',
-    requestedBy: json['requested_by'] ?? '',
+    requestedBy: (json['requester_email'] ?? json['requested_by'] ?? '')
+        .toString(),
     createdAt:
         DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
         DateTime.now(),
@@ -282,11 +405,13 @@ class MarketingRequest {
       MarketingRequest(
         id: json['id'] ?? json['_id'] ?? '',
         eventId: json['event_id'],
-        eventTitle: json['event_title'] ?? '',
-        items: List<String>.from(json['items'] ?? []),
-        notes: json['notes'],
+        eventTitle: (json['event_name'] ?? json['event_title'] ?? '')
+            .toString(),
+        items: _deriveMarketingItems(json),
+        notes: json['other_notes'] ?? json['notes'],
         status: json['status'] ?? 'pending',
-        requestedBy: json['requested_by'] ?? '',
+        requestedBy: (json['requester_email'] ?? json['requested_by'] ?? '')
+            .toString(),
         deliverables: (json['deliverables'] as List? ?? [])
             .map((d) => MarketingDeliverable.fromJson(d))
             .toList(),
@@ -312,9 +437,9 @@ class MarketingDeliverable {
 
   factory MarketingDeliverable.fromJson(Map<String, dynamic> json) =>
       MarketingDeliverable(
-        type: json['type'] ?? '',
-        driveFileId: json['drive_file_id'],
-        link: json['link'],
+        type: (json['deliverable_type'] ?? json['type'] ?? '').toString(),
+        driveFileId: json['file_id'] ?? json['drive_file_id'],
+        link: json['web_view_link'] ?? json['link'],
         isNa: json['is_na'] ?? false,
       );
 }

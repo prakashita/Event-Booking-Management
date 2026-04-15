@@ -51,12 +51,22 @@ class AppColors {
     switch (role) {
       case UserRole.admin:
         return const Color(0xFF6A1B9A);
+      case UserRole.registrar:
+        return const Color(0xFF8E24AA);
+      case UserRole.vice_chancellor:
+        return const Color(0xFF5E35B1);
       case UserRole.iqac:
         return const Color(0xFF283593);
+      case UserRole.facility_manager:
+        return const Color(0xFF00897B);
+      case UserRole.marketing:
+        return const Color(0xFFEF6C00);
+      case UserRole.it:
+        return const Color(0xFF1565C0);
+      case UserRole.transport:
+        return const Color(0xFF2E7D32);
       case UserRole.faculty:
         return primary;
-      default:
-        return textSecondary;
     }
   }
 
