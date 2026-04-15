@@ -2,8 +2,9 @@ import os
 import re
 import base64
 import logging
+from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Tuple
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
@@ -238,6 +239,45 @@ def get_expected_budget_breakdown_filename(event_name: str, start_date: str) -> 
     return f"{sanitized}_{date_part}{BUDGET_BREAKDOWN_FILENAME_SUFFIX}"
 
 
+ATTENDANCE_ALLOWED_EXT = {".pdf", ".doc", ".docx", ".xls", ".xlsx"}
+ATTENDANCE_EXT_TO_MIME = {
+    ".pdf": "application/pdf",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+ATTENDANCE_ALLOWED_MIMES = set(ATTENDANCE_EXT_TO_MIME.values())
+
+
+async def _read_validated_attendance_attachment(file: UploadFile) -> Tuple[bytes, str, str]:
+    """Return (bytes, safe_filename, mime_type) or raise HTTPException."""
+    raw_name = (file.filename or "").strip()
+    if not raw_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attendance attachment has no filename")
+    safe_name = Path(raw_name.replace("\\", "/")).name
+    if not safe_name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid attendance attachment filename")
+    ext = Path(safe_name).suffix.lower()
+    if ext not in ATTENDANCE_ALLOWED_EXT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Attendance attachment must be PDF, Word (.doc, .docx), or Excel (.xls, .xlsx)",
+        )
+    declared = (file.content_type or "").split(";")[0].strip().lower()
+    if declared and declared not in ATTENDANCE_ALLOWED_MIMES and declared != "application/octet-stream":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Attendance attachment must be PDF, Word (.doc, .docx), or Excel (.xls, .xlsx)",
+        )
+    contents = await file.read()
+    max_size = 10 * 1024 * 1024
+    if len(contents) > max_size:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attendance attachment too large (max 10MB)")
+    mime = ATTENDANCE_EXT_TO_MIME[ext]
+    return contents, safe_name, mime
+
+
 async def sync_event_to_google_calendar(event: Event, user: User) -> None:
     if not user.google_refresh_token:
         raise HTTPException(
@@ -465,6 +505,9 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
                     report_file_name=None,
                     report_web_view_link=None,
                     report_uploaded_at=None,
+                    attendance_file_id=None,
+                    attendance_file_name=None,
+                    attendance_web_view_link=None,
                     created_at=approval.created_at,
                 ),
                 approval_request=serialize_approval(approval),
@@ -689,6 +732,8 @@ async def upload_event_report(
     request: Request,
     event_id: str,
     file: UploadFile = File(...),
+    attendance_file: Optional[UploadFile] = File(None),
+    attendance_not_applicable: Optional[str] = Form(None),
     iqac_criterion: Optional[int] = Form(None),
     iqac_sub_folder: Optional[str] = Form(None),
     iqac_item: Optional[str] = Form(None),
@@ -725,6 +770,32 @@ async def upload_event_report(
     if len(contents) > max_size:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 10MB)")
 
+    attendance_bytes: Optional[bytes] = None
+    attendance_name: Optional[str] = None
+    attendance_mime: Optional[str] = None
+    if attendance_file is not None and (attendance_file.filename or "").strip():
+        attendance_bytes, attendance_name, attendance_mime = await _read_validated_attendance_attachment(
+            attendance_file
+        )
+
+    def _form_flag_truthy(value: Optional[str]) -> bool:
+        return (value or "").strip().lower() in ("1", "true", "yes", "on")
+
+    attendance_na = _form_flag_truthy(attendance_not_applicable)
+    if attendance_na and attendance_bytes is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Remove the attendance file when 'Not applicable' is selected, or untick Not applicable.",
+        )
+    if not attendance_na:
+        has_new_attendance = attendance_bytes is not None
+        has_existing_attendance = bool(getattr(event, "attendance_file_id", None))
+        if not has_new_attendance and not has_existing_attendance:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Upload an attendance file (PDF, Word, or Excel), or tick Not applicable.",
+            )
+
     sub_s = (iqac_sub_folder or "").strip()
     item_s = (iqac_item or "").strip()
     iqac_requested = iqac_criterion is not None or bool(sub_s) or bool(item_s)
@@ -753,6 +824,7 @@ async def upload_event_report(
 
     access_token = None
     drive_file = None
+    drive_attendance = None
     try:
         access_token = await ensure_google_access_token(user)
         drive_file = upload_report_file(
@@ -763,6 +835,15 @@ async def upload_event_report(
             folder_id=folder_id,
             replace_file_id=event.report_file_id,
         )
+        if not attendance_na and attendance_bytes is not None and attendance_name and attendance_mime:
+            drive_attendance = upload_report_file(
+                access_token=access_token,
+                file_name=attendance_name,
+                file_bytes=attendance_bytes,
+                mime_type=attendance_mime,
+                folder_id=folder_id,
+                replace_file_id=getattr(event, "attendance_file_id", None),
+            )
     except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -793,6 +874,8 @@ async def upload_event_report(
         except Exception as exc:
             if drive_file and drive_file.get("id") and access_token:
                 delete_drive_file(access_token, drive_file.get("id"))
+            if drive_attendance and drive_attendance.get("id") and access_token:
+                delete_drive_file(access_token, drive_attendance.get("id"))
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Report was not saved: could not add a copy to IQAC Data Collection ({exc}).",
@@ -802,6 +885,17 @@ async def upload_event_report(
     event.report_file_name = drive_file.get("name")
     event.report_web_view_link = drive_file.get("webViewLink")
     event.report_uploaded_at = datetime.utcnow()
+    if attendance_na:
+        old_att_id = getattr(event, "attendance_file_id", None)
+        if old_att_id and access_token:
+            delete_drive_file(access_token, old_att_id)
+        event.attendance_file_id = None
+        event.attendance_file_name = None
+        event.attendance_web_view_link = None
+    elif drive_attendance:
+        event.attendance_file_id = drive_attendance.get("id")
+        event.attendance_file_name = drive_attendance.get("name")
+        event.attendance_web_view_link = drive_attendance.get("webViewLink")
     await event.save()
 
     return serialize_event(event)

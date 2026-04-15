@@ -178,6 +178,7 @@ export default function App() {
   });
   const [marketingAttachmentFiles, setMarketingAttachmentFiles] = useState([]);
   const marketingAttachmentsInputRef = useRef(null);
+  const reportAttendanceInputRef = useRef(null);
   const MAX_MARKETING_REQUESTER_FILES = 10;
   const MAX_MARKETING_REQUESTER_FILE_MB = 25;
   const [itModal, setItModal] = useState({ open: false, status: "idle", error: "" });
@@ -224,7 +225,10 @@ export default function App() {
     startDate: "",
     eventVenue: "",
     eventFacilitator: "",
-    hasReport: false
+    hasReport: false,
+    existingAttendanceFileName: "",
+    existingAttendanceUrl: "",
+    existingAttendanceFileId: ""
   });
   const REQUIREMENT_OPTIONS = [
     { key: "poster_required", type: "poster", label: "Poster" },
@@ -336,13 +340,14 @@ export default function App() {
 
   const [reportForm, setReportForm] = useState({
     executiveSummary: "",
-    attendance: "",
     programAgenda: "",
     outcomesLearnings: "",
     followUp: "",
     appendix: ""
   });
   const [reportAppendixPhotos, setReportAppendixPhotos] = useState([]);
+  const [reportAttendanceFile, setReportAttendanceFile] = useState(null);
+  const [reportAttendanceNotApplicable, setReportAttendanceNotApplicable] = useState(false);
   const [reportIqacCriteria, setReportIqacCriteria] = useState({ status: "idle", items: [], error: "" });
   const [reportIqacSelection, setReportIqacSelection] = useState({
     criterionId: "",
@@ -2413,9 +2418,13 @@ export default function App() {
   };
 
   const handleReportOpen = (eventItem) => {
+    setReportAttendanceFile(null);
+    if (reportAttendanceInputRef.current) {
+      reportAttendanceInputRef.current.value = "";
+    }
+    setReportAttendanceNotApplicable(false);
     setReportForm({
       executiveSummary: "",
-      attendance: "",
       programAgenda: "",
       outcomesLearnings: "",
       followUp: "",
@@ -2435,7 +2444,10 @@ export default function App() {
       startDate: eventItem.start_date || "",
       eventVenue: eventItem.venue_name || "",
       eventFacilitator: eventItem.facilitator || "",
-      hasReport: Boolean(eventItem.report_file_id)
+      hasReport: Boolean(eventItem.report_file_id),
+      existingAttendanceFileName: eventItem.attendance_file_name || "",
+      existingAttendanceUrl: eventItem.attendance_web_view_link || "",
+      existingAttendanceFileId: eventItem.attendance_file_id || ""
     });
     if (canAccessIqac) {
       (async () => {
@@ -2788,9 +2800,9 @@ export default function App() {
   };
 
   const handleReportClose = () => {
+    setReportAttendanceNotApplicable(false);
     setReportForm({
       executiveSummary: "",
-      attendance: "",
       programAgenda: "",
       outcomesLearnings: "",
       followUp: "",
@@ -2799,7 +2811,24 @@ export default function App() {
     setReportAppendixPhotos([]);
     setReportIqacSelection({ criterionId: "", subFolderId: "", itemId: "", description: "" });
     setReportIqacCriteria({ status: "idle", items: [], error: "" });
-    setReportModal({ open: false, status: "idle", error: "", eventId: "", eventName: "", startDate: "", eventVenue: "", eventFacilitator: "", hasReport: false });
+    setReportAttendanceFile(null);
+    if (reportAttendanceInputRef.current) {
+      reportAttendanceInputRef.current.value = "";
+    }
+    setReportModal({
+      open: false,
+      status: "idle",
+      error: "",
+      eventId: "",
+      eventName: "",
+      startDate: "",
+      eventVenue: "",
+      eventFacilitator: "",
+      hasReport: false,
+      existingAttendanceFileName: "",
+      existingAttendanceUrl: "",
+      existingAttendanceFileId: ""
+    });
   };
 
   const handleAppendixPhotosChange = (e) => {
@@ -2815,6 +2844,35 @@ export default function App() {
 
   const handleReportFormChange = (field) => (e) => {
     setReportForm((prev) => ({ ...prev, [field]: e.target.value }));
+  };
+
+  const handleReportAttendanceFileChange = (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    const lower = f.name.toLowerCase();
+    const allowed = [".pdf", ".doc", ".docx", ".xls", ".xlsx"];
+    if (!allowed.some((ext) => lower.endsWith(ext))) {
+      setReportModal((prev) => {
+        if (!prev.open) return prev;
+        return {
+          ...prev,
+          status: "error",
+          error: "Attendance file must be PDF, Word (.doc, .docx), or Excel (.xls, .xlsx)."
+        };
+      });
+      return;
+    }
+    setReportAttendanceNotApplicable(false);
+    setReportAttendanceFile(f);
+    setReportModal((prev) => (prev.open ? { ...prev, status: "idle", error: "" } : prev));
+  };
+
+  const clearReportAttendanceFile = () => {
+    setReportAttendanceFile(null);
+    if (reportAttendanceInputRef.current) {
+      reportAttendanceInputRef.current.value = "";
+    }
   };
 
   const handleReportIqacCriterionChange = (e) => {
@@ -3081,6 +3139,20 @@ export default function App() {
     setStatus({ type: "error", message: "Report link unavailable." });
   };
 
+  const handleViewAttendanceFile = (eventItem) => {
+    const link = eventItem?.attendance_web_view_link;
+    const fileId = eventItem?.attendance_file_id;
+    if (link) {
+      window.open(link, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (fileId) {
+      window.open(`https://drive.google.com/file/d/${encodeURIComponent(String(fileId))}/view`, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setStatus({ type: "error", message: "Attendance file link unavailable." });
+  };
+
   const handleInviteFieldChange = (field) => (event) => {
     setInviteForm((prev) => ({
       ...prev,
@@ -3094,7 +3166,6 @@ export default function App() {
     }
     const required = [
       { key: "executiveSummary", label: "Executive summary" },
-      { key: "attendance", label: "Attendance" },
       { key: "programAgenda", label: "Program / agenda" },
       { key: "outcomesLearnings", label: "Outcomes and learnings" }
     ];
@@ -3106,6 +3177,19 @@ export default function App() {
         error: `Please fill in: ${missing.label}`
       }));
       return;
+    }
+
+    if (!reportAttendanceNotApplicable) {
+      const hasAttendanceFile =
+        Boolean(reportAttendanceFile) || Boolean((reportModal.existingAttendanceFileName || "").trim());
+      if (!hasAttendanceFile) {
+        setReportModal((prev) => ({
+          ...prev,
+          status: "error",
+          error: "Upload an attendance file (PDF, Word, or Excel), or tick Not applicable."
+        }));
+        return;
+      }
     }
 
     const sel = reportIqacSelection;
@@ -3138,6 +3222,14 @@ export default function App() {
         });
         appendixImages.push({ dataUrl, width, height });
       }
+      let attendanceForPdf = "";
+      if (reportAttendanceNotApplicable) {
+        attendanceForPdf = "Not applicable.";
+      } else if (reportAttendanceFile) {
+        attendanceForPdf = `Supporting attendance document uploaded with this submission: ${reportAttendanceFile.name}`;
+      } else if ((reportModal.existingAttendanceFileName || "").trim()) {
+        attendanceForPdf = `Supporting attendance document on file: ${reportModal.existingAttendanceFileName.trim()}`;
+      }
       const blob = buildReportPdf(
         {
           eventName: reportModal.eventName,
@@ -3146,12 +3238,17 @@ export default function App() {
           eventFacilitator: reportModal.eventFacilitator,
           appendixImages
         },
-        reportForm
+        { ...reportForm, attendance: attendanceForPdf }
       );
       const expectedName = getExpectedReportFilename(reportModal.eventName, reportModal.startDate);
       const file = new File([blob], expectedName, { type: "application/pdf" });
       const formData = new FormData();
       formData.append("file", file);
+      if (reportAttendanceNotApplicable) {
+        formData.append("attendance_not_applicable", "1");
+      } else if (reportAttendanceFile) {
+        formData.append("attendance_file", reportAttendanceFile, reportAttendanceFile.name);
+      }
       if (iqacComplete) {
         formData.append("iqac_criterion", String(sel.criterionId));
         formData.append("iqac_sub_folder", sel.subFolderId);
@@ -5244,6 +5341,8 @@ export default function App() {
 
       if (isMyEvents || isReportsView) {
         const isReportsTab = myEventsTab === "closed";
+        /** Compact table (no date/time columns): dedicated Event Reports page, or My Events → Closed tab. */
+        const showReportsCompactLayout = isReportsView || isReportsTab;
         const getNormalizedStatus = (event) => getNormalizedEventStatus(event);
         /** Backend lifecycle status (upcoming, ongoing, completed, closed) for tab filtering. Approval items have no lifecycle. */
         const getLifecycleStatus = (event) => {
@@ -5335,19 +5434,19 @@ export default function App() {
                 </div>
               )}
               <div className="events-table">
-                <div className={`events-table-row header ${isReportsTab ? "reports" : ""}`}>
+                <div className={`events-table-row header ${showReportsCompactLayout ? "reports" : ""}`}>
                   <span>Events</span>
-                  {isReportsTab ? null : <span>Date</span>}
-                  {isReportsTab ? null : <span>Time</span>}
+                  {showReportsCompactLayout ? null : <span>Date</span>}
+                  {showReportsCompactLayout ? null : <span>Time</span>}
                   <span>Status</span>
                   <span>Action</span>
                 </div>
                 {eventsState.status === "loading" ? (
                   Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className={`events-table-row my-events-skeleton-row ${isReportsTab ? "reports" : ""}`}>
+                    <div key={i} className={`events-table-row my-events-skeleton-row ${showReportsCompactLayout ? "reports" : ""}`}>
                       <span className="skeleton-line" style={{ height: "16px", width: "65%", display: "block" }} />
-                      {isReportsTab ? null : <span className="skeleton-line" style={{ height: "16px", width: "55%", display: "block" }} />}
-                      {isReportsTab ? null : <span className="skeleton-line" style={{ height: "16px", width: "45%", display: "block" }} />}
+                      {showReportsCompactLayout ? null : <span className="skeleton-line" style={{ height: "16px", width: "55%", display: "block" }} />}
+                      {showReportsCompactLayout ? null : <span className="skeleton-line" style={{ height: "16px", width: "45%", display: "block" }} />}
                       <span className="skeleton-line" style={{ height: "26px", width: "72px", borderRadius: "999px", display: "block" }} />
                       <span className="skeleton-line" style={{ height: "30px", width: "80px", borderRadius: "10px", display: "block" }} />
                     </div>
@@ -5360,9 +5459,21 @@ export default function App() {
                   <div className="my-events-empty-state">
                     <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#c4c9d4" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
                     <p className="my-events-empty-title">
-                      {isReportsTab ? "No closed events yet." : myEventsTab === "completed" ? "No completed events yet." : myEventsTab === "upcoming" ? "No upcoming events." : myEventsTab === "ongoing" ? "No ongoing events." : myEventsTab === "pending" ? "No pending events." : "No events found."}
+                      {showReportsCompactLayout
+                        ? isReportsView
+                          ? "No closed events with reports yet."
+                          : "No closed events yet."
+                        : myEventsTab === "completed"
+                          ? "No completed events yet."
+                          : myEventsTab === "upcoming"
+                            ? "No upcoming events."
+                            : myEventsTab === "ongoing"
+                              ? "No ongoing events."
+                              : myEventsTab === "pending"
+                                ? "No pending events."
+                                : "No events found."}
                     </p>
-                    {myEventsTab === "all" && !isReportsTab ? (
+                    {myEventsTab === "all" && !showReportsCompactLayout ? (
                       <span className="my-events-empty-sub">Create your first event to get started.</span>
                     ) : null}
                   </div>
@@ -5445,7 +5556,9 @@ export default function App() {
                         !isApprovalItem &&
                         statusValue === "completed" &&
                         Boolean(event.report_file_id);
-                      if (isReportsTab) {
+                      if (showReportsCompactLayout) {
+                        const hasAttendanceFile =
+                          Boolean(event.attendance_web_view_link) || Boolean(event.attendance_file_id);
                         return (
                           <div key={event.id} className="events-table-row reports my-events-row">
                             <span className="my-events-row-name">{event.name}</span>
@@ -5459,6 +5572,15 @@ export default function App() {
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                 View Report
                               </button>
+                              {hasAttendanceFile ? (
+                                <button
+                                  type="button"
+                                  className="ev-action-btn ev-action-details"
+                                  onClick={() => handleViewAttendanceFile(event)}
+                                >
+                                  View attendance
+                                </button>
+                              ) : null}
                             </div>
                           </div>
                         );
@@ -5534,6 +5656,15 @@ export default function App() {
                               >
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                                 View Report
+                              </button>
+                            ) : null}
+                            {event.attendance_web_view_link || event.attendance_file_id ? (
+                              <button
+                                type="button"
+                                className="ev-action-btn ev-action-details"
+                                onClick={() => handleViewAttendanceFile(event)}
+                              >
+                                View attendance
                               </button>
                             ) : null}
                           </div>
@@ -6659,16 +6790,67 @@ export default function App() {
                         rows={3}
                       />
                     </label>
-                    <label className="form-field">
-                      <span>Attendance <em>(required)</em></span>
-                      <p className="form-hint">Total attendees and breakdown if relevant</p>
-                      <textarea
-                        value={reportForm.attendance}
-                        onChange={handleReportFormChange("attendance")}
-                        placeholder="e.g. 45 participants (30 staff, 15 external)"
-                        rows={2}
+                    <div className="form-field">
+                      <span>Attendance</span>
+                      <label className="report-attendance-na-row">
+                        <input
+                          type="checkbox"
+                          checked={reportAttendanceNotApplicable}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setReportAttendanceNotApplicable(checked);
+                            if (checked) {
+                              clearReportAttendanceFile();
+                            }
+                            setReportModal((prev) => (prev.open ? { ...prev, status: "idle", error: "" } : prev));
+                          }}
+                        />
+                        <span>Not applicable</span>
+                      </label>
+                      <p className="form-hint">
+                        {reportAttendanceNotApplicable
+                          ? "No attendance document will be stored for this event. Any previous attendance file will be removed when you submit."
+                          : "Upload a PDF, Word, or Excel file (max 10 MB), unless you tick Not applicable above."}
+                      </p>
+                      <input
+                        ref={reportAttendanceInputRef}
+                        type="file"
+                        disabled={reportAttendanceNotApplicable}
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        onChange={handleReportAttendanceFileChange}
+                        className="report-appendix-file-input"
                       />
-                    </label>
+                      {reportAttendanceFile ? (
+                        <div className="report-attendance-file-row">
+                          <span className="report-appendix-photo-name">{reportAttendanceFile.name}</span>
+                          <button type="button" className="report-appendix-photo-remove" onClick={clearReportAttendanceFile}>
+                            Remove file
+                          </button>
+                        </div>
+                      ) : null}
+                      {reportModal.existingAttendanceFileName && !reportAttendanceFile && !reportAttendanceNotApplicable ? (
+                        <p className="form-hint" style={{ marginTop: "6px" }}>
+                          Current attendance file on record:{" "}
+                          {reportModal.existingAttendanceUrl || reportModal.existingAttendanceFileId ? (
+                            <button
+                              type="button"
+                              className="link-button"
+                              onClick={() =>
+                                handleViewAttendanceFile({
+                                  attendance_web_view_link: reportModal.existingAttendanceUrl,
+                                  attendance_file_id: reportModal.existingAttendanceFileId
+                                })
+                              }
+                            >
+                              {reportModal.existingAttendanceFileName}
+                            </button>
+                          ) : (
+                            <span>{reportModal.existingAttendanceFileName}</span>
+                          )}
+                          . Upload a new file here to replace it, or tick Not applicable to remove it on submit.
+                        </p>
+                      ) : null}
+                    </div>
                     <label className="form-field">
                       <span>Program / agenda <em>(required)</em></span>
                       <p className="form-hint">Sessions or activities with times</p>
