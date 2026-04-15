@@ -4,13 +4,20 @@ class AppConstants {
   static const String wsPath = '/api/v1/chat/ws';
 
   // Google OAuth (provided via --dart-define)
-  static const String googleClientId = String.fromEnvironment('GOOGLE_CLIENT_ID', defaultValue: '');
-  static const String googleServerClientId = String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID', defaultValue: '');
+  static const String googleClientId = String.fromEnvironment(
+    'GOOGLE_CLIENT_ID',
+    defaultValue: '',
+  );
+  static const String googleServerClientId = String.fromEnvironment(
+    'GOOGLE_SERVER_CLIENT_ID',
+    defaultValue: '',
+  );
 
   // Roles
   static const List<String> allRoles = [
     'admin',
     'registrar',
+    'vice_chancellor',
     'faculty',
     'facility_manager',
     'marketing',
@@ -19,9 +26,19 @@ class AppConstants {
     'transport',
   ];
 
-  static const List<String> iqacAllowedRoles = ['iqac', 'admin', 'registrar'];
-  static const List<String> adminRoles = ['admin', 'registrar'];
-  static const List<String> approvalRoles = ['registrar'];
+  static const List<String> iqacAllowedRoles = [
+    'iqac',
+    'faculty',
+    'admin',
+    'registrar',
+    'vice_chancellor',
+  ];
+  static const List<String> adminRoles = [
+    'admin',
+    'registrar',
+    'vice_chancellor',
+  ];
+  static const List<String> approvalRoles = ['registrar', 'vice_chancellor'];
   static const List<String> facilityRoles = ['facility_manager'];
   static const List<String> marketingRoles = ['marketing'];
   static const List<String> itRoles = ['it'];

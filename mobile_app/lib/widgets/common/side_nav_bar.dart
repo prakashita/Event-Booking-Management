@@ -3,8 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../constants/app_constants.dart';
 
 class SideNavBar extends StatelessWidget {
   final String currentRoute;
@@ -106,7 +106,8 @@ class SideNavBar extends StatelessWidget {
                       title: 'IQAC Data Collection',
                       route: '/iqac',
                     ),
-                    if (user?.role == UserRole.admin) ...[
+                    if (user != null &&
+                        AppConstants.adminRoles.contains(user.role.name)) ...[
                       const SizedBox(height: 24),
                       const Text(
                         'ADMINISTRATION',

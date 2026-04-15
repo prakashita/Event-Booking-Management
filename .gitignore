@@ -48,3 +48,4 @@ Server/event-booking-system-dev-*.json
 **/.env.example
 Client/.env.example
 
+\n# Python cache\n__pycache__/\n*.pyc

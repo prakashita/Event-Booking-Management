@@ -26,17 +26,35 @@ class ApiService {
     _dio.options.baseUrl = '$_baseUrl${AppConstants.apiBase}';
   }
 
+  void setAuthToken(String? token) {
+    final normalized = token?.trim();
+    _cachedToken = (normalized == null || normalized.isEmpty)
+        ? null
+        : normalized;
+  }
+
+  void clearAuthToken() {
+    _cachedToken = null;
+  }
+
   String? getToken() => _cachedToken;
 
   void _setupInterceptors() {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          String? token = _cachedToken;
-          token ??= await _storage.read(key: AppConstants.tokenKey);
+          // Keep in-memory token aligned with persisted token to avoid
+          // cross-account leakage after sign out / sign in.
+          final storedToken = await _storage.read(key: AppConstants.tokenKey);
+          if (storedToken != _cachedToken) {
+            _cachedToken = storedToken;
+          }
+
+          final token = _cachedToken;
           if (token != null) {
-            _cachedToken = token;
             options.headers['Authorization'] = 'Bearer $token';
+          } else {
+            options.headers.remove('Authorization');
           }
           options.headers['Content-Type'] = 'application/json';
           handler.next(options);

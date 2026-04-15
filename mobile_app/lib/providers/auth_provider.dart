@@ -34,11 +34,14 @@ class AuthProvider extends ChangeNotifier {
       if (storedUser != null && storedToken != null) {
         _user = storedUser;
         _token = storedToken;
+        _api.setAuthToken(storedToken);
         _status = AuthStatus.authenticated;
       } else {
+        _api.clearAuthToken();
         _status = AuthStatus.unauthenticated;
       }
     } catch (_) {
+      _api.clearAuthToken();
       _status = AuthStatus.unauthenticated;
     }
     notifyListeners();
@@ -51,6 +54,7 @@ class AuthProvider extends ChangeNotifier {
       final result = await _authService.signInWithGoogle();
       _user = result.user;
       _token = result.token;
+      _api.setAuthToken(result.token);
       _status = AuthStatus.authenticated;
       notifyListeners();
       return true;
@@ -63,6 +67,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> signOut() async {
     await _authService.signOut();
+    _api.clearAuthToken();
     _user = null;
     _token = null;
     _status = AuthStatus.unauthenticated;
@@ -70,6 +75,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   void handleUnauthorized() {
+    _api.clearAuthToken();
     _user = null;
     _token = null;
     _status = AuthStatus.unauthenticated;

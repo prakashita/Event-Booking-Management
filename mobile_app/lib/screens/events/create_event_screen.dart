@@ -5,9 +5,11 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../constants/app_colors.dart';
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
 import 'package:mobile_app/screens/events/event_approval_screen.dart';
+import 'package:provider/provider.dart';
 
 class CreateEventScreen extends StatefulWidget {
   const CreateEventScreen({super.key});
@@ -37,13 +39,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   String? _selectedAudience;
   PlatformFile? _budgetPdf;
-  bool _submitting = false;
+  final bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
-    // Default facilitator could be from user context, hardcoded for now
-    _facilitatorCtrl.text = "Partha Sarathi Manna";
+    final userName =
+        Provider.of<AuthProvider>(context, listen: false).user?.name ?? '';
+    _facilitatorCtrl.text = userName;
     _loadVenues();
   }
 
@@ -161,7 +164,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       'start_time': tf.format(tStart),
       'end_date': df.format(_endDate!),
       'end_time': tf.format(tEnd),
-      'override_conflict': true,
+      'override_conflict': false,
     };
 
     Navigator.of(context).push(
@@ -347,8 +350,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                           const Duration(days: 365),
                                         ),
                                       );
-                                      if (d != null)
+                                      if (d != null) {
                                         setState(() => _startDate = d);
+                                      }
                                     },
                                     child: IgnorePointer(
                                       child: TextFormField(
@@ -380,8 +384,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                         context: context,
                                         initialTime: TimeOfDay.now(),
                                       );
-                                      if (t != null)
+                                      if (t != null) {
                                         setState(() => _startTime = t);
+                                      }
                                     },
                                     child: IgnorePointer(
                                       child: TextFormField(
@@ -424,8 +429,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                           const Duration(days: 365),
                                         ),
                                       );
-                                      if (d != null)
+                                      if (d != null) {
                                         setState(() => _endDate = d);
+                                      }
                                     },
                                     child: IgnorePointer(
                                       child: TextFormField(
@@ -458,8 +464,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                         initialTime:
                                             _startTime ?? TimeOfDay.now(),
                                       );
-                                      if (t != null)
+                                      if (t != null) {
                                         setState(() => _endTime = t);
+                                      }
                                     },
                                     child: IgnorePointer(
                                       child: TextFormField(
@@ -532,7 +539,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         _loadingVenues
                             ? const Center(child: CircularProgressIndicator())
                             : DropdownButtonFormField<String>(
-                                value: _selectedVenueName,
+                                initialValue: _selectedVenueName,
                                 decoration: _inputDecoration('Select a Venue'),
                                 icon: const Icon(
                                   LucideIcons.chevronDown,
@@ -572,7 +579,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         const SizedBox(height: 20),
                         _buildLabel('Intended Audience'),
                         DropdownButtonFormField<String>(
-                          value: _selectedAudience,
+                          initialValue: _selectedAudience,
                           decoration: _inputDecoration('Select Audience'),
                           icon: const Icon(
                             LucideIcons.chevronDown,

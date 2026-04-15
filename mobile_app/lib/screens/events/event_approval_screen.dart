@@ -28,6 +28,16 @@ class EventApprovalScreen extends StatefulWidget {
 class _EventApprovalScreenState extends State<EventApprovalScreen> {
   final _api = ApiService();
   static const double _budgetThreshold = 30000;
+  static const Color _pageBg = Color(0xFFF4F7FE);
+  static const Color _cardBg = Colors.white;
+  static const Color _slate50 = Color(0xFFF8FAFC);
+  static const Color _slate100 = Color(0xFFF1F5F9);
+  static const Color _slate200 = Color(0xFFE2E8F0);
+  static const Color _slate500 = Color(0xFF64748B);
+  static const Color _slate600 = Color(0xFF475569);
+  static const Color _slate700 = Color(0xFF334155);
+  static const Color _slate800 = Color(0xFF1E293B);
+  static const Color _indigo600 = Color(0xFF521EEA);
   bool _submitting = false;
   bool _confirmed = false;
   bool _loadingApprovalEmails = true;
@@ -220,144 +230,377 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
     final endTime = widget.eventData['end_time'];
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: Text(
-          isHighBudget ? 'Vice Chancellor Approval' : 'Registrar Approval',
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(LucideIcons.x),
-            onPressed: () => context.pop(),
-          ),
-        ],
-      ),
+      backgroundColor: _pageBg,
       body: LoadingOverlay(
         isLoading: _submitting,
         message: 'Submitting for approval...',
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildEmailRow('FROM', userEmail),
-              const SizedBox(height: 16),
-              _buildEmailRow(
-                'TO',
-                toEmail.isEmpty
-                    ? (isHighBudget
-                          ? 'Vice Chancellor email'
-                          : 'Registrar email')
-                    : toEmail,
-              ),
-              const SizedBox(height: 16),
-              _buildEmailRow(
-                'CC',
-                ccEmail.isEmpty
-                    ? (isHighBudget
-                          ? 'Registrar (not configured)'
-                          : 'Vice Chancellor (optional)')
-                    : ccEmail,
-              ),
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 24),
-              _buildEventDetail('Event:', widget.eventData['name']),
-              const SizedBox(height: 12),
-              _buildEventDetail(
-                'Date:',
-                '${DateFormat('yyyy-MM-dd').format(startDate)} to ${DateFormat('yyyy-MM-dd').format(endDate)}',
-              ),
-              const SizedBox(height: 12),
-              _buildEventDetail('Time:', '$startTime to $endTime'),
-              const SizedBox(height: 24),
-              Text(
-                isHighBudget
-                    ? 'Budget is above Rs ${_budgetThreshold.toStringAsFixed(0)}. The Vice Chancellor will approve or reject this event in the portal. The Registrar is copied on the email for information only. After approval, you can send requirements to Facility, IT, Marketing, and Transport.'
-                    : 'Budget is Rs ${_budgetThreshold.toStringAsFixed(0)} or below. The Registrar will approve or reject this event in the portal. The Vice Chancellor is copied on the email when configured. After approval, you can send requirements to Facility, IT, Marketing, and Transport.',
-                style: const TextStyle(fontSize: 14, color: Colors.black54),
-              ),
-              if (!canSend) ...[
-                const SizedBox(height: 12),
-                const Text(
-                  'Approval routing is not fully configured. Please ask admin to assign Registrar/Vice Chancellor users.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFFB91C1C),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 24),
-              Container(
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 860),
+              child: Padding(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Checkbox(
-                      value: _confirmed,
-                      onChanged: (val) =>
-                          setState(() => _confirmed = val ?? false),
-                    ),
-                    const Expanded(
-                      child: Text(
-                        'I have discussed this event with the programming chair and received confirmation to proceed.',
-                        style: TextStyle(fontSize: 14),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: _cardBg,
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x1A0F172A),
+                        blurRadius: 30,
+                        offset: Offset(0, 14),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 22, 16, 18),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                isHighBudget
+                                    ? 'Vice Chancellor Approval'
+                                    : 'Registrar Approval',
+                                style: const TextStyle(
+                                  color: _slate800,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.1,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              style: IconButton.styleFrom(
+                                backgroundColor: _slate50,
+                              ),
+                              icon: const Icon(
+                                LucideIcons.x,
+                                color: _slate500,
+                                size: 19,
+                              ),
+                              onPressed: () => context.pop(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Divider(height: 1, color: _slate100),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildReadonlyField(
+                                'FROM',
+                                userEmail,
+                                fullWidth: true,
+                              ),
+                              const SizedBox(height: 14),
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final useColumns =
+                                      constraints.maxWidth >= 520;
+                                  final toLabel = toEmail.isEmpty
+                                      ? (isHighBudget
+                                            ? 'Vice Chancellor email'
+                                            : 'Registrar email')
+                                      : toEmail;
+                                  final ccLabel = ccEmail.isEmpty
+                                      ? (isHighBudget
+                                            ? 'Registrar (not configured)'
+                                            : 'Vice Chancellor (optional)')
+                                      : ccEmail;
+                                  if (!useColumns) {
+                                    return Column(
+                                      children: [
+                                        _buildReadonlyField('TO', toLabel),
+                                        const SizedBox(height: 12),
+                                        _buildReadonlyField('CC', ccLabel),
+                                      ],
+                                    );
+                                  }
+                                  return Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildReadonlyField(
+                                          'TO',
+                                          toLabel,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: _buildReadonlyField(
+                                          'CC',
+                                          ccLabel,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 22),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                  horizontal: 2,
+                                ),
+                                decoration: const BoxDecoration(
+                                  border: Border(
+                                    top: BorderSide(color: _slate100),
+                                    bottom: BorderSide(color: _slate100),
+                                  ),
+                                ),
+                                child: Column(
+                                  children: [
+                                    _buildEventDetailRow(
+                                      'Event',
+                                      widget.eventData['name']?.toString() ??
+                                          '',
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _buildEventDetailRow(
+                                      'Date',
+                                      '${DateFormat('yyyy-MM-dd').format(startDate)} to ${DateFormat('yyyy-MM-dd').format(endDate)}',
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _buildEventDetailRow(
+                                      'Time',
+                                      '$startTime to $endTime',
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              Text(
+                                isHighBudget
+                                    ? 'Budget is above Rs ${_budgetThreshold.toStringAsFixed(0)}. The Vice Chancellor will approve or reject this event in the portal. The Registrar is copied on the email for information only. After approval, you can send requirements to Facility, IT, Marketing, and Transport.'
+                                    : 'Budget is Rs ${_budgetThreshold.toStringAsFixed(0)} or below. The Registrar will approve or reject this event in the portal. The Vice Chancellor is copied on the email when configured. After approval, you can send requirements to Facility, IT, Marketing, and Transport.',
+                                style: const TextStyle(
+                                  color: _slate600,
+                                  fontSize: 14,
+                                  height: 1.45,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              if (!canSend) ...[
+                                const SizedBox(height: 10),
+                                const Text(
+                                  'Approval routing is not fully configured. Please ask admin to assign Registrar/Vice Chancellor users.',
+                                  style: TextStyle(
+                                    color: Color(0xFFB91C1C),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 18),
+                              InkWell(
+                                onTap: () =>
+                                    setState(() => _confirmed = !_confirmed),
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: _confirmed
+                                        ? const Color(0xFFEDE9FE)
+                                        : _slate50,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: _confirmed
+                                          ? const Color(0xFFC4B5FD)
+                                          : _slate200,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: 22,
+                                        height: 22,
+                                        margin: const EdgeInsets.only(top: 1),
+                                        decoration: BoxDecoration(
+                                          color: _confirmed
+                                              ? _indigo600
+                                              : Colors.white,
+                                          borderRadius: BorderRadius.circular(
+                                            7,
+                                          ),
+                                          border: Border.all(
+                                            color: _confirmed
+                                                ? _indigo600
+                                                : const Color(0xFFCBD5E1),
+                                            width: 1.8,
+                                          ),
+                                        ),
+                                        child: _confirmed
+                                            ? const Icon(
+                                                LucideIcons.check,
+                                                size: 14,
+                                                color: Colors.white,
+                                              )
+                                            : null,
+                                      ),
+                                      const SizedBox(width: 11),
+                                      const Expanded(
+                                        child: Text(
+                                          'I have discussed this event with the programming chair and received confirmation to proceed.',
+                                          style: TextStyle(
+                                            color: _slate700,
+                                            fontSize: 14,
+                                            height: 1.45,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const Divider(height: 1, color: _slate100),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 26,
+                                  vertical: 14,
+                                ),
+                                side: const BorderSide(color: _slate200),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                foregroundColor: _slate600,
+                              ),
+                              onPressed: () => context.pop(),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 32,
+                                  vertical: 14,
+                                ),
+                                backgroundColor: _indigo600,
+                                disabledBackgroundColor: const Color(
+                                  0xFFB8B0D4,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 8,
+                                shadowColor: const Color(0x44521EEA),
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: (canSend && _confirmed)
+                                  ? _submit
+                                  : null,
+                              child: const Text(
+                                'Send',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => context.pop(),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: canSend ? _submit : null,
-                    child: const Text('Send'),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildEmailRow(String label, String email) {
+  Widget _buildReadonlyField(
+    String label,
+    String value, {
+    bool fullWidth = false,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: Colors.grey,
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            color: _slate500,
+            letterSpacing: 1.15,
           ),
         ),
-        const SizedBox(height: 4),
-        Text(email, style: const TextStyle(fontSize: 16)),
+        const SizedBox(height: 6),
+        Container(
+          width: fullWidth ? double.infinity : null,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: _slate50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _slate200),
+          ),
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              color: _slate600,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildEventDetail(String label, String value) {
+  Widget _buildEventDetailRow(String label, String value) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+        SizedBox(
+          width: 56,
+          child: Text(
+            '$label:',
+            style: const TextStyle(
+              color: _slate800,
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+            ),
+          ),
+        ),
         const SizedBox(width: 8),
-        Expanded(child: Text(value)),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: _slate600,
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+            ),
+          ),
+        ),
       ],
     );
   }
