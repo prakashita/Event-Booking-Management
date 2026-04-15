@@ -1,4 +1,6 @@
-from datetime import date, time, datetime
+from __future__ import annotations
+
+from datetime import date as DateType, time, datetime
 from typing import Generic, List, Literal, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -13,6 +15,140 @@ class PaginatedResponse(BaseModel, Generic[T]):
     limit: int
     offset: int
     next_offset: Optional[int] = None  # None if no more items
+
+
+InstitutionCalendarEntryType = Literal["holiday", "academic"]
+InstitutionCalendarSemesterType = Literal["Even Semester", "Odd Semester", "Summer Term"]
+
+
+class InstitutionCalendarEntryCreate(BaseModel):
+    entry_type: InstitutionCalendarEntryType
+    academic_year: str = Field(..., min_length=1, max_length=40)
+    calendar_year: Optional[int] = Field(default=None, ge=1900, le=3000)
+    date: Optional[DateType] = None
+    holiday_name: Optional[str] = Field(default=None, max_length=200)
+    title: Optional[str] = Field(default=None, max_length=200)
+    semester_type: Optional[InstitutionCalendarSemesterType] = None
+    semester: Optional[str] = Field(default=None, max_length=60)
+    category: Optional[str] = Field(default=None, max_length=80)
+    start_date: Optional[DateType] = None
+    end_date: Optional[DateType] = None
+    all_day: bool = True
+    description: Optional[str] = Field(default=None, max_length=2000)
+    color: Optional[str] = Field(default=None, max_length=20)
+    visible_to_all: bool = True
+    google_sync_enabled: bool = False
+    is_active: bool = True
+
+    @field_validator("academic_year", "semester", "holiday_name", "title", "category", "description", "color", mode="before")
+    @classmethod
+    def strip_text(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+    @model_validator(mode="after")
+    def validate_payload(self):
+        if self.entry_type == "holiday":
+            if not self.date:
+                raise ValueError("Holiday date is required")
+            if not self.holiday_name:
+                raise ValueError("Holiday name is required")
+            self.title = self.holiday_name
+            self.category = "Holiday"
+            self.start_date = self.date
+            self.end_date = self.date
+            self.all_day = True
+            if not self.calendar_year:
+                self.calendar_year = self.date.year
+            return self
+
+        if not self.title:
+            raise ValueError("Academic event title is required")
+        if not self.category:
+            raise ValueError("Academic event category is required")
+        if not self.semester_type:
+            raise ValueError("Semester type is required")
+        if not self.start_date:
+            raise ValueError("Start date is required")
+        if self.end_date and self.end_date < self.start_date:
+            raise ValueError("End date cannot be before start date")
+        if self.end_date is None:
+            self.end_date = self.start_date
+        if not self.calendar_year:
+            self.calendar_year = self.start_date.year
+        return self
+
+
+class InstitutionCalendarEntryUpdate(BaseModel):
+    academic_year: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    calendar_year: Optional[int] = Field(default=None, ge=1900, le=3000)
+    date: Optional[DateType] = None
+    holiday_name: Optional[str] = Field(default=None, max_length=200)
+    title: Optional[str] = Field(default=None, max_length=200)
+    semester_type: Optional[InstitutionCalendarSemesterType] = None
+    semester: Optional[str] = Field(default=None, max_length=60)
+    category: Optional[str] = Field(default=None, max_length=80)
+    start_date: Optional[DateType] = None
+    end_date: Optional[DateType] = None
+    all_day: Optional[bool] = None
+    description: Optional[str] = Field(default=None, max_length=2000)
+    color: Optional[str] = Field(default=None, max_length=20)
+    visible_to_all: Optional[bool] = None
+    google_sync_enabled: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("academic_year", "semester", "holiday_name", "title", "category", "description", "color", mode="before")
+    @classmethod
+    def strip_optional_text(cls, value):
+        if isinstance(value, str):
+            value = value.strip()
+            return value or None
+        return value
+
+
+class InstitutionCalendarSyncResponse(BaseModel):
+    success: bool
+    detail: str
+    google_event_id: Optional[str] = None
+    google_event_link: Optional[str] = None
+    sync_error: Optional[str] = None
+
+
+class InstitutionCalendarEntryResponse(BaseModel):
+    id: str
+    title: str
+    holiday_name: Optional[str] = None
+    category: str
+    entry_type: InstitutionCalendarEntryType
+    academic_year: str
+    calendar_year: Optional[int] = None
+    semester_type: Optional[str] = None
+    semester: Optional[str] = None
+    date: Optional[str] = None
+    start_date: str
+    end_date: str
+    all_day: bool
+    day_label: Optional[str] = None
+    description: Optional[str] = None
+    color: Optional[str] = None
+    visible_to_all: bool
+    google_sync_enabled: bool
+    google_event_id: Optional[str] = None
+    google_event_link: Optional[str] = None
+    google_sync_error: Optional[str] = None
+    sync_status: str
+    is_active: bool
+    created_by: str
+    updated_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class InstitutionCalendarMutationResponse(BaseModel):
+    entry: InstitutionCalendarEntryResponse
+    sync: Optional[InstitutionCalendarSyncResponse] = None
 
 
 class UserAdminResponse(BaseModel):

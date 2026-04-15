@@ -38,6 +38,7 @@ import RequirementsWizardModal from "./components/RequirementsWizardModal";
 import { MessengerProvider, FloatingMessenger } from "./components/messenger";
 import SettingsModal from "./components/SettingsModal";
 import NotificationBell from "./components/NotificationBell";
+import InstitutionCalendarAdmin from "./components/InstitutionCalendarAdmin";
 import api from "./services/api";
 
 /** Normalize path so "/event reports" or "/event%20reports" map to canonical routes. */
@@ -63,6 +64,17 @@ function transportRequestTypeLabel(type) {
   if (type === "students_off_campus") return "Students (off-campus)";
   if (type === "both") return "Guest cab & students";
   return type ? String(type) : "—";
+}
+
+function formatCalendarDateRange(start, end, allDay = false) {
+  if (!start) return "—";
+  const options = allDay
+    ? { timeZone: "Asia/Kolkata", dateStyle: "full" }
+    : { timeZone: "Asia/Kolkata", dateStyle: "full", timeStyle: "short" };
+  const startLabel = start.toLocaleString("en-IN", options);
+  if (!end) return startLabel;
+  const endLabel = end.toLocaleString("en-IN", options);
+  return `${startLabel} – ${endLabel}`;
 }
 
 export default function App() {
@@ -434,7 +446,9 @@ export default function App() {
   const isMarketingRole = normalizedUserRole === "marketing";
   const isItRole = normalizedUserRole === "it";
   const isTransportRole = normalizedUserRole === "transport";
-  const canAccessAdminConsole = isAdmin || isRegistrarDashboard;
+  const canAccessAdminConsole = isAdmin;
+  const canAccessCalendarUpdates = isAdmin || isRegistrar;
+  const canAccessUserApprovals = isAdmin || isRegistrar;
   const canAccessApprovals = isRegistrarDashboard;
   const canAccessRequirements =
     isFacilityManagerRole || isMarketingRole || isItRole || isTransportRole;
@@ -570,7 +584,7 @@ export default function App() {
   }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
 
   const loadAdminPendingUsers = useCallback(async () => {
-    if (!canAccessAdminConsole) return;
+    if (!canAccessUserApprovals) return;
     setAdminPendingUsersState({ status: "loading", items: [], error: "" });
     try {
       const res = await apiFetch(`${apiBaseUrl}/users/pending-approvals`);
@@ -581,10 +595,10 @@ export default function App() {
     } catch (err) {
       setAdminPendingUsersState({ status: "error", items: [], error: err?.message || "Unable to load pending users." });
     }
-  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
+  }, [apiBaseUrl, apiFetch, canAccessUserApprovals]);
 
   const loadAdminRejectedUsers = useCallback(async () => {
-    if (!canAccessAdminConsole) return;
+    if (!canAccessUserApprovals) return;
     setAdminRejectedUsersState({ status: "loading", items: [], error: "" });
     try {
       const res = await apiFetch(`${apiBaseUrl}/users/rejected-users`);
@@ -595,7 +609,7 @@ export default function App() {
     } catch (err) {
       setAdminRejectedUsersState({ status: "error", items: [], error: err?.message || "Unable to load rejected users." });
     }
-  }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
+  }, [apiBaseUrl, apiFetch, canAccessUserApprovals]);
 
   const handleUserApproval = useCallback(async (userId, action, role, rejectionReason) => {
     setApprovalActionStatus({ id: userId, status: "loading", error: "" });
@@ -1256,9 +1270,21 @@ export default function App() {
         title: event.summary || "Untitled event",
         start: event.start,
         end: event.end,
+        allDay: Boolean(event.allDay),
+        backgroundColor: event.color || undefined,
+        borderColor: event.color || undefined,
         url: event.htmlLink || undefined,
         extendedProps: {
-          location: event.location
+          location: event.location,
+          sourceType: event.sourceType || "event_booking",
+          entryType: event.entryType || "event",
+          category: event.category || "",
+          academicYear: event.academicYear || "",
+          semesterType: event.semesterType || "",
+          semester: event.semester || "",
+          description: event.description || "",
+          dayLabel: event.dayLabel || "",
+          dateRangeLabel: event.dateRangeLabel || ""
         }
       }));
       setCalendarState({
@@ -1856,11 +1882,14 @@ export default function App() {
       (activeView === "approvals" && !canAccessApprovals) ||
       (activeView === "requirements" && !canAccessRequirements) ||
       (activeView === "event-reports" && !isAdmin && !isRegistrarDashboard) ||
-      (activeView === "iqac-data" && !canAccessIqac)
+      (activeView === "iqac-data" && !canAccessIqac) ||
+      (activeView === "calendar-updates" && !canAccessCalendarUpdates) ||
+      (activeView === "user-approvals" && !canAccessUserApprovals) ||
+      (activeView === "admin" && !canAccessAdminConsole)
     ) {
       navigate(ROUTES.DASHBOARD);
     }
-  }, [activeView, canAccessApprovals, canAccessRequirements, canAccessIqac, isAdmin, isRegistrarDashboard, navigate]);
+  }, [activeView, canAccessApprovals, canAccessRequirements, canAccessIqac, canAccessCalendarUpdates, canAccessUserApprovals, canAccessAdminConsole, isAdmin, isRegistrarDashboard, navigate]);
 
   useEffect(() => {
     const showApprovalsOrRequirements =
@@ -1916,6 +1945,14 @@ export default function App() {
     loadAdminRejectedUsers,
     user
   ]);
+
+  useEffect(() => {
+    if (!user || !canAccessUserApprovals || activeView !== "user-approvals") {
+      return;
+    }
+    loadAdminPendingUsers();
+    loadAdminRejectedUsers();
+  }, [activeView, canAccessUserApprovals, loadAdminPendingUsers, loadAdminRejectedUsers, user]);
 
   const handleLogout = () => {
     localStorage.removeItem("auth_token");
@@ -4463,8 +4500,16 @@ export default function App() {
     const isPublications = activeView === "publications";
     const isAdminView = activeView === "admin";
     const isIqacData = activeView === "iqac-data";
+    const isCalendarUpdatesView = activeView === "calendar-updates";
+    const isUserApprovalsView = activeView === "user-approvals";
     const visibleMenuItems = menuItems.filter((item) => {
       if (item.id === "admin" && !canAccessAdminConsole) {
+        return false;
+      }
+      if (item.id === "calendar-updates" && !canAccessCalendarUpdates) {
+        return false;
+      }
+      if (item.id === "user-approvals" && !canAccessUserApprovals) {
         return false;
       }
       if (item.id === "event-reports" && !isAdmin && !isRegistrarDashboard) {
@@ -4576,6 +4621,237 @@ export default function App() {
     };
 
     const renderPrimaryContent = () => {
+      if (isCalendarUpdatesView) {
+        if (!canAccessCalendarUpdates) {
+          return <div className="admin-empty"><p>Access denied.</p></div>;
+        }
+        return (
+          <div className="primary-column">
+            <InstitutionCalendarAdmin
+              apiBaseUrl={apiBaseUrl}
+              apiFetch={apiFetch}
+              onCalendarMutated={() => fetchCalendarEvents()}
+              standalonePage={true}
+            />
+          </div>
+        );
+      }
+
+      if (isUserApprovalsView) {
+        if (!canAccessUserApprovals) {
+          return <div className="admin-empty"><p>Access denied.</p></div>;
+        }
+        return (
+          <div className="primary-column user-approvals-page">
+            <div className="user-approvals-header">
+              <div>
+                <h2>User Approvals</h2>
+                <p className="admin-note">Review and approve pending registration requests.</p>
+              </div>
+              <div className="user-approvals-header-actions">
+                <div className="institution-summary-chips">
+                  <span className="institution-chip pending">
+                    {adminPendingUsersState.items.length} Pending
+                  </span>
+                  <span className="institution-chip" style={{ background: "rgba(220, 38, 38, 0.1)", color: "#b91c1c", borderColor: "rgba(220, 38, 38, 0.2)" }}>
+                    {adminRejectedUsersState.items.length} Rejected
+                  </span>
+                </div>
+                <button type="button" className="secondary-action" onClick={() => { loadAdminPendingUsers(); loadAdminRejectedUsers(); }}>
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            <div className="user-approvals-section">
+              <div className="approvals-section-title">
+                <h4>Pending Approval</h4>
+                <span className="approvals-count-badge pending-count">{adminPendingUsersState.items.length}</span>
+              </div>
+              {adminPendingUsersState.status === "loading" ? <p className="table-message">Loading pending users...</p> : null}
+              {adminPendingUsersState.status === "error" ? <p className="table-message" style={{ color: "#b91c1c" }}>{adminPendingUsersState.error}</p> : null}
+              <div className="admin-table">
+                <div className="admin-row header">
+                  <span>User</span>
+                  <span>Role Requested</span>
+                  <span>Requested</span>
+                  <span>Actions</span>
+                </div>
+                {adminPendingUsersState.items.map((item) => {
+                  const initial = (item.name || item.email || "?").trim().charAt(0).toUpperCase();
+                  const isActing = approvalActionStatus.id === item.id && approvalActionStatus.status === "loading";
+                  return (
+                    <div className="admin-row" key={item.id}>
+                      <div className="admin-cell">
+                        <div className="admin-user">
+                          <span className="admin-avatar" aria-hidden="true">{initial}</span>
+                          <div>
+                            <p className="admin-name">{item.name || "Unnamed"}</p>
+                            <p className="admin-email">{item.email}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="admin-cell">
+                        <span className="institution-type-badge academic">{(item.requested_role || item.role || "faculty").replace(/_/g, " ")}</span>
+                      </div>
+                      <div className="admin-cell">
+                        <span className="admin-email">{new Date(item.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <div className="admin-cell" style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          className="details-button approve"
+                          disabled={isActing}
+                          onClick={() => setApproveRoleModal({ open: true, userId: item.id, role: item.requested_role || item.role || "faculty" })}
+                        >
+                          {isActing ? "…" : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          className="details-button reject"
+                          disabled={isActing}
+                          onClick={() => setRejectReasonModal({ open: true, userId: item.id, reason: "" })}
+                        >
+                          {isActing ? "…" : "Reject"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {adminPendingUsersState.items.length === 0 && adminPendingUsersState.status === "ready" ? (
+                  <p className="table-message">No users pending approval.</p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="user-approvals-section" style={{ marginTop: "28px" }}>
+              <div className="approvals-section-title">
+                <h4>Rejected Users</h4>
+                <span className="approvals-count-badge rejected-count">{adminRejectedUsersState.items.length}</span>
+              </div>
+              {adminRejectedUsersState.status === "loading" ? <p className="table-message">Loading rejected users...</p> : null}
+              <div className="admin-table">
+                <div className="admin-row header">
+                  <span>User</span>
+                  <span>Reason</span>
+                  <span>Rejected</span>
+                  <span>Actions</span>
+                </div>
+                {adminRejectedUsersState.items.map((item) => {
+                  const initial = (item.name || item.email || "?").trim().charAt(0).toUpperCase();
+                  const isActing = approvalActionStatus.id === item.id && approvalActionStatus.status === "loading";
+                  return (
+                    <div className="admin-row" key={item.id}>
+                      <div className="admin-cell">
+                        <div className="admin-user">
+                          <span className="admin-avatar" aria-hidden="true">{initial}</span>
+                          <div>
+                            <p className="admin-name">{item.name || "Unnamed"}</p>
+                            <p className="admin-email">{item.email}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="admin-cell">
+                        <span className="admin-email" style={{ fontStyle: item.rejection_reason ? "normal" : "italic", opacity: item.rejection_reason ? 1 : 0.6 }}>
+                          {item.rejection_reason || "No reason given"}
+                        </span>
+                      </div>
+                      <div className="admin-cell">
+                        <span className="admin-email">{item.updated_at ? new Date(item.updated_at).toLocaleDateString() : "—"}</span>
+                      </div>
+                      <div className="admin-cell">
+                        <button
+                          type="button"
+                          className="details-button approve"
+                          disabled={isActing}
+                          onClick={() => setApproveRoleModal({ open: true, userId: item.id, role: item.requested_role || item.role || "faculty" })}
+                        >
+                          {isActing ? "…" : "Re-approve"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {adminRejectedUsersState.items.length === 0 && adminRejectedUsersState.status === "ready" ? (
+                  <p className="table-message">No rejected users.</p>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Approve role confirmation modal */}
+            {approveRoleModal.open ? (
+              <Modal onClose={() => setApproveRoleModal({ open: false, userId: null, role: "faculty" })}>
+                <div className="modal-body" style={{ padding: "24px", maxWidth: "400px" }}>
+                  <h3>Approve User</h3>
+                  <p style={{ margin: "12px 0" }}>Select the role to assign:</p>
+                  <select
+                    value={approveRoleModal.role}
+                    onChange={(e) => setApproveRoleModal((prev) => ({ ...prev, role: e.target.value }))}
+                    style={{ width: "100%", padding: "8px", marginBottom: "16px" }}
+                  >
+                    <option value="faculty">Faculty</option>
+                    <option value="registrar">Registrar</option>
+                    <option value="vice_chancellor">Vice Chancellor</option>
+                    <option value="facility_manager">Facility Manager</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="it">IT</option>
+                    <option value="transport">Transport</option>
+                    <option value="iqac">IQAC</option>
+                  </select>
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                    <button type="button" className="secondary-action" onClick={() => setApproveRoleModal({ open: false, userId: null, role: "faculty" })}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-action"
+                      onClick={() => {
+                        handleUserApproval(approveRoleModal.userId, "approve", approveRoleModal.role);
+                        setApproveRoleModal({ open: false, userId: null, role: "faculty" });
+                      }}
+                    >
+                      Confirm Approve
+                    </button>
+                  </div>
+                </div>
+              </Modal>
+            ) : null}
+
+            {/* Reject reason modal */}
+            {rejectReasonModal.open ? (
+              <Modal onClose={() => setRejectReasonModal({ open: false, userId: null, reason: "" })}>
+                <div className="modal-body" style={{ padding: "24px", maxWidth: "400px" }}>
+                  <h3>Reject User</h3>
+                  <p style={{ margin: "12px 0" }}>Optionally provide a reason:</p>
+                  <textarea
+                    value={rejectReasonModal.reason}
+                    onChange={(e) => setRejectReasonModal((prev) => ({ ...prev, reason: e.target.value }))}
+                    placeholder="Reason for rejection (optional)"
+                    rows={3}
+                    style={{ width: "100%", padding: "8px", marginBottom: "16px", resize: "vertical" }}
+                  />
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                    <button type="button" className="secondary-action" onClick={() => setRejectReasonModal({ open: false, userId: null, reason: "" })}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="details-button reject"
+                      onClick={() => {
+                        handleUserApproval(rejectReasonModal.userId, "reject", null, rejectReasonModal.reason);
+                        setRejectReasonModal({ open: false, userId: null, reason: "" });
+                      }}
+                    >
+                      Confirm Reject
+                    </button>
+                  </div>
+                </div>
+              </Modal>
+            ) : null}
+          </div>
+        );
+      }
+
       if (isAdminView) {
         if (!canAccessAdminConsole) {
           return (
@@ -4665,16 +4941,6 @@ export default function App() {
                 onClick={() => setAdminTab("publications")}
               >
                 Publications
-              </button>
-              <button
-                type="button"
-                className={`tab-button ${adminTab === "user-approvals" ? "active" : ""}`}
-                onClick={() => setAdminTab("user-approvals")}
-              >
-                User Approvals
-                {(adminOverview.data?.pending_user_approvals ?? 0) > 0 ? (
-                  <span className="tab-badge">{adminOverview.data.pending_user_approvals}</span>
-                ) : null}
               </button>
             </div>
 
@@ -5062,182 +5328,6 @@ export default function App() {
               </div>
             ) : null}
 
-            {adminTab === "user-approvals" ? (
-              <div className="admin-panel">
-                <div className="admin-panel-header">
-                  <h3>User Approvals</h3>
-                  <button type="button" className="secondary-action" onClick={() => { loadAdminPendingUsers(); loadAdminRejectedUsers(); }}>
-                    Refresh
-                  </button>
-                </div>
-
-                <h4 style={{ margin: "16px 0 8px" }}>Pending Approval ({adminPendingUsersState.items.length})</h4>
-                {adminPendingUsersState.status === "loading" ? <p className="table-message">Loading pending users...</p> : null}
-                {adminPendingUsersState.status === "error" ? <p className="table-message">{adminPendingUsersState.error}</p> : null}
-                <div className="admin-table">
-                  <div className="admin-row header">
-                    <span>User</span>
-                    <span>Requested</span>
-                    <span>Actions</span>
-                  </div>
-                  {adminPendingUsersState.items.map((item) => {
-                    const initial = (item.name || item.email || "?").trim().charAt(0).toUpperCase();
-                    const isActing = approvalActionStatus.id === item.id && approvalActionStatus.status === "loading";
-                    return (
-                      <div className="admin-row" key={item.id}>
-                        <div className="admin-cell">
-                          <div className="admin-user">
-                            <span className="admin-avatar" aria-hidden="true">{initial}</span>
-                            <div>
-                              <p className="admin-name">{item.name || "Unnamed"}</p>
-                              <p className="admin-email">{item.email}</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="admin-cell">
-                          <span className="admin-email">{new Date(item.created_at).toLocaleDateString()}</span>
-                        </div>
-                        <div className="admin-cell" style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                          <button
-                            type="button"
-                            className="details-button approve"
-                            disabled={isActing}
-                            onClick={() => setApproveRoleModal({ open: true, userId: item.id, role: item.requested_role || item.role || "faculty" })}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            className="details-button reject"
-                            disabled={isActing}
-                            onClick={() => setRejectReasonModal({ open: true, userId: item.id, reason: "" })}
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {adminPendingUsersState.items.length === 0 && adminPendingUsersState.status === "ready" ? (
-                    <p className="table-message">No users pending approval.</p>
-                  ) : null}
-                </div>
-
-                <h4 style={{ margin: "24px 0 8px" }}>Rejected Users ({adminRejectedUsersState.items.length})</h4>
-                {adminRejectedUsersState.status === "loading" ? <p className="table-message">Loading rejected users...</p> : null}
-                <div className="admin-table">
-                  <div className="admin-row header">
-                    <span>User</span>
-                    <span>Reason</span>
-                    <span>Actions</span>
-                  </div>
-                  {adminRejectedUsersState.items.map((item) => {
-                    const initial = (item.name || item.email || "?").trim().charAt(0).toUpperCase();
-                    const isActing = approvalActionStatus.id === item.id && approvalActionStatus.status === "loading";
-                    return (
-                      <div className="admin-row" key={item.id}>
-                        <div className="admin-cell">
-                          <div className="admin-user">
-                            <span className="admin-avatar" aria-hidden="true">{initial}</span>
-                            <div>
-                              <p className="admin-name">{item.name || "Unnamed"}</p>
-                              <p className="admin-email">{item.email}</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="admin-cell">
-                          <span className="admin-email">{item.rejection_reason || "No reason given"}</span>
-                        </div>
-                        <div className="admin-cell">
-                          <button
-                            type="button"
-                            className="details-button approve"
-                            disabled={isActing}
-                            onClick={() => setApproveRoleModal({ open: true, userId: item.id, role: item.requested_role || item.role || "faculty" })}
-                          >
-                            Approve
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {adminRejectedUsersState.items.length === 0 && adminRejectedUsersState.status === "ready" ? (
-                    <p className="table-message">No rejected users.</p>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-
-            {/* Approve role confirmation modal */}
-            {approveRoleModal.open ? (
-              <Modal onClose={() => setApproveRoleModal({ open: false, userId: null, role: "faculty" })}>
-                <div className="modal-body" style={{ padding: "24px", maxWidth: "400px" }}>
-                  <h3>Approve User</h3>
-                  <p style={{ margin: "12px 0" }}>Select the role to assign:</p>
-                  <select
-                    value={approveRoleModal.role}
-                    onChange={(e) => setApproveRoleModal((prev) => ({ ...prev, role: e.target.value }))}
-                    style={{ width: "100%", padding: "8px", marginBottom: "16px" }}
-                  >
-                    <option value="faculty">Faculty</option>
-                    <option value="registrar">Registrar</option>
-                    <option value="vice_chancellor">Vice Chancellor</option>
-                    <option value="facility_manager">Facility Manager</option>
-                    <option value="marketing">Marketing</option>
-                    <option value="it">IT</option>
-                    <option value="transport">Transport</option>
-                    <option value="iqac">IQAC</option>
-                  </select>
-                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                    <button type="button" className="secondary-action" onClick={() => setApproveRoleModal({ open: false, userId: null, role: "faculty" })}>
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="primary-action"
-                      onClick={() => {
-                        handleUserApproval(approveRoleModal.userId, "approve", approveRoleModal.role);
-                        setApproveRoleModal({ open: false, userId: null, role: "faculty" });
-                      }}
-                    >
-                      Confirm Approve
-                    </button>
-                  </div>
-                </div>
-              </Modal>
-            ) : null}
-
-            {/* Reject reason modal */}
-            {rejectReasonModal.open ? (
-              <Modal onClose={() => setRejectReasonModal({ open: false, userId: null, reason: "" })}>
-                <div className="modal-body" style={{ padding: "24px", maxWidth: "400px" }}>
-                  <h3>Reject User</h3>
-                  <p style={{ margin: "12px 0" }}>Optionally provide a reason:</p>
-                  <textarea
-                    value={rejectReasonModal.reason}
-                    onChange={(e) => setRejectReasonModal((prev) => ({ ...prev, reason: e.target.value }))}
-                    placeholder="Reason for rejection (optional)"
-                    rows={3}
-                    style={{ width: "100%", padding: "8px", marginBottom: "16px", resize: "vertical" }}
-                  />
-                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                    <button type="button" className="secondary-action" onClick={() => setRejectReasonModal({ open: false, userId: null, reason: "" })}>
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="details-button reject"
-                      onClick={() => {
-                        handleUserApproval(rejectReasonModal.userId, "reject", null, rejectReasonModal.reason);
-                        setRejectReasonModal({ open: false, userId: null, reason: "" });
-                      }}
-                    >
-                      Confirm Reject
-                    </button>
-                  </div>
-                </div>
-              </Modal>
-            ) : null}
           </div>
         );
       }
@@ -7452,7 +7542,7 @@ export default function App() {
               <div className="calendar-toolbar">
                 <div>
                   <h3>Calendar</h3>
-                  <p className="calendar-subtitle">All approved events</p>
+                  <p className="calendar-subtitle">Approved events plus visible institution holidays and academic updates</p>
                 </div>
                 <div className="calendar-actions">
                   <button type="button" className="secondary-action" onClick={() => fetchCalendarEvents()}>
@@ -7501,23 +7591,52 @@ export default function App() {
                         title: evt.title,
                         start: evt.start,
                         end: evt.end,
+                        allDay: evt.allDay,
                         location: evt.extendedProps?.location || "",
-                        url: evt.url || ""
+                        url: evt.url || "",
+                        category: evt.extendedProps?.category || "",
+                        entryType: evt.extendedProps?.entryType || "event",
+                        sourceType: evt.extendedProps?.sourceType || "event_booking",
+                        academicYear: evt.extendedProps?.academicYear || "",
+                        semesterType: evt.extendedProps?.semesterType || "",
+                        semester: evt.extendedProps?.semester || "",
+                        description: evt.extendedProps?.description || "",
+                        dayLabel: evt.extendedProps?.dayLabel || "",
+                        dateRangeLabel: evt.extendedProps?.dateRangeLabel || ""
                       }
                     });
                   }}
                   eventDidMount={(info) => {
                     const evt = info.event;
                     const loc = evt.extendedProps?.location;
-                    const startStr = evt.start
-                      ? evt.start.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })
+                    const category = evt.extendedProps?.category;
+                    const academicYear = evt.extendedProps?.academicYear;
+                    const semesterType = evt.extendedProps?.semesterType;
+                    const semester = evt.extendedProps?.semester;
+                    const description = evt.extendedProps?.description;
+                    const dayLabel = evt.extendedProps?.dayLabel;
+                    const sourceType = evt.extendedProps?.sourceType;
+                    const entryType = evt.extendedProps?.entryType;
+                    const dateLabel = evt.extendedProps?.dateRangeLabel
+                      || formatCalendarDateRange(evt.start, evt.end, evt.allDay);
+                    const sourceTag = sourceType === "institution_calendar"
+                      ? entryType === "holiday"
+                        ? `<span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:0.7rem;font-weight:700;background:rgba(245,158,11,0.15);color:#92400e;margin-bottom:4px">Holiday</span><br/>`
+                        : `<span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:0.7rem;font-weight:700;background:rgba(37,99,235,0.12);color:#1e40af;margin-bottom:4px">Academic</span><br/>`
                       : "";
-                    const endStr = evt.end
-                      ? evt.end.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", timeStyle: "short" })
-                      : "";
-                    const tooltipHtml = `<strong>${evt.title}</strong>${startStr ? `<br/>${startStr}${endStr ? " – " + endStr : ""}` : ""}${loc ? `<br/>📍 ${loc}` : ""}`;
+                    const tooltipBits = [
+                      sourceTag,
+                      `<strong>${evt.title}</strong>`,
+                      category ? `<br/>${category}` : "",
+                      academicYear ? `<br/>AY: ${academicYear}` : "",
+                      semesterType ? `<br/>${semesterType}${semester ? ` | ${semester}` : ""}` : semester ? `<br/>${semester}` : "",
+                      dayLabel ? `<br/>📅 ${dayLabel}` : "",
+                      dateLabel ? `<br/>${dateLabel}` : "",
+                      loc ? `<br/>📍 ${loc}` : "",
+                      description ? `<br/><em>${description}</em>` : ""
+                    ];
                     tippy(info.el, {
-                      content: tooltipHtml,
+                      content: tooltipBits.join(""),
                       allowHTML: true,
                       placement: "top",
                       theme: "calendar-tooltip",
@@ -7526,15 +7645,7 @@ export default function App() {
                       arrow: true
                     });
 
-                    const title = (evt.title || "").toLowerCase();
-                    let color = "var(--accent-blue)";
-                    if (title.includes("workshop")) color = "#6366f1";
-                    else if (title.includes("seminar")) color = "#0891b2";
-                    else if (title.includes("meeting")) color = "#059669";
-                    else if (title.includes("cultural") || title.includes("fest")) color = "#d946ef";
-                    else if (title.includes("exam") || title.includes("test")) color = "#dc2626";
-                    else if (title.includes("holiday") || title.includes("break")) color = "#f59e0b";
-                    else if (title.includes("sports") || title.includes("athletic")) color = "#10b981";
+                    const color = evt.backgroundColor || evt.borderColor || "var(--accent-blue)";
                     info.el.style.backgroundColor = color;
                     info.el.style.borderColor = color;
                   }}
@@ -7565,34 +7676,64 @@ export default function App() {
                     <span className="cal-detail-label">Title</span>
                     <span className="cal-detail-value">{calendarDetailModal.event.title}</span>
                   </div>
-                  {calendarDetailModal.event.start ? (
+                  <div className="cal-detail-row">
+                    <span className="cal-detail-label">Type</span>
+                    <span className="cal-detail-value">
+                      {calendarDetailModal.event.sourceType === "institution_calendar"
+                        ? calendarDetailModal.event.entryType === "holiday"
+                          ? "Institution Holiday"
+                          : "Institution Academic"
+                        : "Event Booking"}
+                    </span>
+                  </div>
+                  {calendarDetailModal.event.category ? (
                     <div className="cal-detail-row">
-                      <span className="cal-detail-label">Start</span>
+                      <span className="cal-detail-label">Category</span>
+                      <span className="cal-detail-value">{calendarDetailModal.event.category}</span>
+                    </div>
+                  ) : null}
+                  {calendarDetailModal.event.academicYear ? (
+                    <div className="cal-detail-row">
+                      <span className="cal-detail-label">Academic Year</span>
+                      <span className="cal-detail-value">{calendarDetailModal.event.academicYear}</span>
+                    </div>
+                  ) : null}
+                  {calendarDetailModal.event.semesterType || calendarDetailModal.event.semester ? (
+                    <div className="cal-detail-row">
+                      <span className="cal-detail-label">Semester</span>
                       <span className="cal-detail-value">
-                        {calendarDetailModal.event.start.toLocaleString("en-IN", {
-                          timeZone: "Asia/Kolkata",
-                          dateStyle: "full",
-                          timeStyle: "short"
-                        })}
+                        {[calendarDetailModal.event.semesterType, calendarDetailModal.event.semester].filter(Boolean).join(" | ")}
                       </span>
                     </div>
                   ) : null}
-                  {calendarDetailModal.event.end ? (
+                  {calendarDetailModal.event.start ? (
                     <div className="cal-detail-row">
-                      <span className="cal-detail-label">End</span>
+                      <span className="cal-detail-label">Schedule</span>
                       <span className="cal-detail-value">
-                        {calendarDetailModal.event.end.toLocaleString("en-IN", {
-                          timeZone: "Asia/Kolkata",
-                          dateStyle: "full",
-                          timeStyle: "short"
-                        })}
+                        {formatCalendarDateRange(
+                          calendarDetailModal.event.start,
+                          calendarDetailModal.event.end,
+                          calendarDetailModal.event.allDay
+                        )}
                       </span>
+                    </div>
+                  ) : null}
+                  {calendarDetailModal.event.dayLabel ? (
+                    <div className="cal-detail-row">
+                      <span className="cal-detail-label">Day</span>
+                      <span className="cal-detail-value">{calendarDetailModal.event.dayLabel}</span>
                     </div>
                   ) : null}
                   {calendarDetailModal.event.location ? (
                     <div className="cal-detail-row">
                       <span className="cal-detail-label">Venue</span>
                       <span className="cal-detail-value">{calendarDetailModal.event.location}</span>
+                    </div>
+                  ) : null}
+                  {calendarDetailModal.event.description ? (
+                    <div className="cal-detail-row">
+                      <span className="cal-detail-label">Notes</span>
+                      <span className="cal-detail-value">{calendarDetailModal.event.description}</span>
                     </div>
                   ) : null}
                 </div>
@@ -8489,4 +8630,3 @@ export default function App() {
 
   return <LoginPage googleButtonRef={googleButtonRef} status={status} />;
 }
-
