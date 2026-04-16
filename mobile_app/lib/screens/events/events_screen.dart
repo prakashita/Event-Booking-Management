@@ -166,8 +166,9 @@ class _EventsScreenState extends State<EventsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FE),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,6 +194,17 @@ class _EventsScreenState extends State<EventsScreen>
   }
 
   Widget _buildTopSection() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final headingColor = theme.colorScheme.onSurface;
+    final refreshFg = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF475569);
+    final refreshBg = theme.colorScheme.surface;
+    final refreshBorder = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0);
+
     final currentTabEvents =
         _eventsByTab[_tabs[_tabController.index]]?.length ?? 0;
 
@@ -203,12 +215,12 @@ class _EventsScreenState extends State<EventsScreen>
         children: [
           Row(
             children: [
-              const Text(
+              Text(
                 'My Events',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
-                  color: Color(0xFF1E293B),
+                  color: headingColor,
                   letterSpacing: -0.5,
                 ),
               ),
@@ -268,20 +280,20 @@ class _EventsScreenState extends State<EventsScreen>
               OutlinedButton.icon(
                 onPressed: _handleRefresh,
                 icon: _isRefreshing
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Color(0xFF475569),
+                          color: refreshFg,
                         ),
                       )
                     : const Icon(Icons.refresh, size: 16),
                 label: const Text('Refresh'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF475569),
-                  backgroundColor: Colors.white,
-                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                  foregroundColor: refreshFg,
+                  backgroundColor: refreshBg,
+                  side: BorderSide(color: refreshBorder),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 20,
                     vertical: 12,
@@ -303,6 +315,16 @@ class _EventsScreenState extends State<EventsScreen>
   }
 
   Widget _buildFilterPills() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final inactiveBg = theme.colorScheme.surface;
+    final inactiveBorder = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0);
+    final inactiveText = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF94A3B8);
+
     return SizedBox(
       height: 44,
       child: ListView.separated(
@@ -320,10 +342,10 @@ class _EventsScreenState extends State<EventsScreen>
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
-                color: isActive ? const Color(0xFF2563EB) : Colors.white,
+                color: isActive ? const Color(0xFF2563EB) : inactiveBg,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: isActive ? const Color(0xFF2563EB) : Colors.white,
+                  color: isActive ? const Color(0xFF2563EB) : inactiveBorder,
                 ),
                 boxShadow: isActive
                     ? const [
@@ -341,7 +363,7 @@ class _EventsScreenState extends State<EventsScreen>
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
-                    color: isActive ? Colors.white : const Color(0xFF94A3B8),
+                    color: isActive ? Colors.white : inactiveText,
                   ),
                 ),
               ),
@@ -353,19 +375,21 @@ class _EventsScreenState extends State<EventsScreen>
   }
 
   Widget _buildEventsContainer() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Expanded(
       child: Container(
         width: double.infinity,
         margin: const EdgeInsets.only(top: 20),
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(40),
             topRight: Radius.circular(40),
           ),
           boxShadow: [
             BoxShadow(
-              color: Color(0x05000000),
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.03),
               blurRadius: 10,
               offset: Offset(0, -4),
             ),
@@ -451,6 +475,25 @@ class _EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final titleColor = theme.colorScheme.onSurface;
+    final labelColor = isDark
+        ? const Color(0xFF64748B)
+        : const Color(0xFFCBD5E1);
+    final valueColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF475569);
+    final rowBorder = isDark
+        ? const Color(0xFF1E293B)
+        : const Color(0xFFF8FAFC);
+    final detailsBg = isDark
+        ? const Color(0xFF1E3A5F)
+        : const Color(0xFFEFF6FF);
+    final detailsFg = isDark
+        ? const Color(0xFF93C5FD)
+        : const Color(0xFF2563EB);
+
     final df = DateFormat('MMM d, yyyy');
     final tf = DateFormat('h:mm a');
 
@@ -462,10 +505,8 @@ class _EventCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(24),
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: Color(0xFFF8FAFC), width: 1),
-          ),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: rowBorder, width: 1)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -476,10 +517,10 @@ class _EventCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     event.title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF1E293B),
+                      color: titleColor,
                     ),
                   ),
                 ),
@@ -513,22 +554,22 @@ class _EventCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'DATE',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFFCBD5E1),
+                        color: labelColor,
                         letterSpacing: 1.0,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       df.format(event.startTime),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF475569),
+                        color: valueColor,
                       ),
                     ),
                   ],
@@ -536,22 +577,22 @@ class _EventCard extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'TIME',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFFCBD5E1),
+                        color: labelColor,
                         letterSpacing: 1.0,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       tf.format(event.startTime),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF475569),
+                        color: valueColor,
                       ),
                     ),
                   ],
@@ -564,20 +605,20 @@ class _EventCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF), // blue-50
+                color: detailsBg,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.visibility, size: 16, color: Color(0xFF2563EB)),
-                  SizedBox(width: 8),
+                children: [
+                  Icon(Icons.visibility, size: 16, color: detailsFg),
+                  const SizedBox(width: 8),
                   Text(
                     'VIEW DETAILS',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFF2563EB),
+                      color: detailsFg,
                       letterSpacing: 1.0,
                     ),
                   ),
