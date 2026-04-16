@@ -24,10 +24,18 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = authProvider.user;
     final currentRoute = GoRouterState.of(context).matchedLocation;
     final isDesktop = MediaQuery.of(context).size.width >= 768;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final pageBg = theme.scaffoldBackgroundColor;
+    final headerBg = theme.colorScheme.surface;
+    final searchBg = isDark
+        ? theme.colorScheme.surfaceContainerHighest
+        : const Color(0xFFF4F7FE);
+    final shadowColor = Colors.black.withOpacity(isDark ? 0.35 : 0.05);
 
     return Scaffold(
       key: _scaffoldKey,
-      backgroundColor: const Color(0xFFF4F7FE),
+      backgroundColor: pageBg,
       drawer: SideNavBar(currentRoute: currentRoute),
       body: Row(
         children: [
@@ -48,11 +56,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         vertical: 8.0,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: headerBg,
                         borderRadius: BorderRadius.circular(24.0),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: shadowColor,
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -69,13 +77,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           if (!isDesktop) const SizedBox(width: 8),
                           // Search Bar
-                          const Expanded(
+                          Expanded(
                             child: SizedBox(
                               height: 40,
                               child: TextField(
                                 decoration: InputDecoration(
                                   hintText: 'Search...',
-                                  prefixIcon: Icon(
+                                  prefixIcon: const Icon(
                                     LucideIcons.search,
                                     size: 18,
                                   ),
@@ -86,7 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     borderSide: BorderSide.none,
                                   ),
                                   filled: true,
-                                  fillColor: Color(0xFFF4F7FE),
+                                  fillColor: searchBg,
                                   contentPadding: EdgeInsets.symmetric(
                                     vertical: 0,
                                   ),

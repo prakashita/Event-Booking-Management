@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'constants/app_theme.dart';
 import 'providers/auth_provider.dart';
+import 'providers/theme_provider.dart';
 import 'router/app_router.dart';
 
 // Configure API base URL here
@@ -33,8 +34,13 @@ void main() {
   );
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AuthProvider()..init(kApiBaseUrl),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => AuthProvider()..init(kApiBaseUrl),
+        ),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      ],
       child: const EventBookingApp(),
     ),
   );
@@ -46,11 +52,14 @@ class EventBookingApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
+    final themeProvider = context.watch<ThemeProvider>();
     final router = AppRouter.createRouter(authProvider);
 
     return MaterialApp.router(
       title: 'Event Booking Management',
       theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: themeProvider.themeMode,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
