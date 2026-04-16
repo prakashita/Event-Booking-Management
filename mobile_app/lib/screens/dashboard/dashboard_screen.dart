@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
@@ -76,8 +75,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FE),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: RefreshIndicator(
         onRefresh: _loadData,
         color: const Color(0xFF2563EB),
@@ -101,6 +101,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildHeader() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final muted = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+    final heading = theme.colorScheme.onSurface;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -108,14 +113,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'OVERVIEW',
                     style: TextStyle(
-                      color: Color(0xFF64748B),
+                      color: muted,
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
                       letterSpacing: 0.5,
@@ -127,7 +132,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w900,
-                      color: Color(0xFF1E293B),
+                      color: heading,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -137,11 +142,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(16), // rounded-2xl
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFE2E8F0),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.02),
+                    color: Colors.black.withOpacity(isDark ? 0.25 : 0.02),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -158,10 +168,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(width: 8),
                   Text(
                     DateFormat('MMMM d, yyyy').format(_currentTime),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
-                      color: Color(0xFF64748B),
+                      color: muted,
                     ),
                   ),
                 ],
@@ -175,15 +185,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// This creates the large white rounded card from the React code
   Widget _buildEventsContainer() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(40), // rounded-[2.5rem]
-        border: Border.all(color: Colors.white.withOpacity(0.5)),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF334155)
+              : Colors.white.withOpacity(0.5),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withOpacity(isDark ? 0.22 : 0.02),
             blurRadius: 10,
             spreadRadius: 0,
             offset: const Offset(0, 4),
@@ -198,7 +215,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -207,7 +224,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
-                        color: Color(0xFF1E293B),
+                        color: theme.colorScheme.onSurface,
                         letterSpacing: -0.5,
                       ),
                     ),
@@ -217,7 +234,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF94A3B8),
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF94A3B8),
                       ),
                     ),
                   ],
@@ -241,11 +260,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildContentArea() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     if (_isLoading) {
       return Container(
         height: 200,
         alignment: Alignment.center,
-        child: const Column(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             SizedBox(
@@ -253,7 +275,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               height: 40,
               child: CircularProgressIndicator(
                 strokeWidth: 4,
-                backgroundColor: Color(0xFFEFF6FF), // blue-50
+                backgroundColor: isDark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFEFF6FF),
                 valueColor: AlwaysStoppedAnimation<Color>(
                   Color(0xFF3B82F6),
                 ), // blue-500
@@ -265,7 +289,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF94A3B8), // slate-400
+                color: isDark
+                    ? const Color(0xFF94A3B8)
+                    : const Color(0xFF94A3B8),
               ),
             ),
           ],
@@ -284,12 +310,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return Container(
         height: 150,
         alignment: Alignment.center,
-        child: const Text(
+        child: Text(
           'No upcoming events.',
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w500,
-            color: Color(0xFF94A3B8),
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF94A3B8),
           ),
         ),
       );
@@ -312,11 +338,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildNavButton(IconData icon) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final navBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC);
+    final navFg = isDark ? const Color(0xFF94A3B8) : const Color(0xFF94A3B8);
+
     return Container(
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC), // slate-50
+        color: navBg,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Material(
@@ -324,11 +355,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: () {}, // Add navigation logic here
-          child: Icon(
-            icon,
-            size: 20,
-            color: const Color(0xFF94A3B8), // slate-400
-          ),
+          child: Icon(icon, size: 20, color: navFg),
         ),
       ),
     );
