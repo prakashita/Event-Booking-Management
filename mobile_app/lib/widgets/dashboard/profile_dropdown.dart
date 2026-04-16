@@ -19,6 +19,33 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cardColor = theme.colorScheme.surface;
+    final cardBorder = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0);
+    final mutedText = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
+    final settingsBg = isDark
+        ? const Color(0xFF1E293B)
+        : Colors.grey.withOpacity(0.1);
+    final settingsFg = isDark ? const Color(0xFFCBD5E1) : Colors.grey[800]!;
+    final dividerColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE5E7EB);
+    final triggerBg = isDark
+        ? const Color(0xFF1E3A5F)
+        : const Color(0xFF4F46E5);
+    final triggerIconColor = isDark ? const Color(0xFFDBEAFE) : Colors.white;
+    final avatarBg = isDark
+        ? const Color(0xFF1E3A5F)
+        : theme.colorScheme.primary.withOpacity(0.1);
+    final avatarIcon = isDark
+        ? const Color(0xFFDBEAFE)
+        : theme.colorScheme.primary;
+
     return GestureDetector(
       onTap: _tooltipController.toggle,
       child: OverlayPortal(
@@ -34,35 +61,43 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                 top: kToolbarHeight + 8,
                 right: 16,
                 child: Material(
-                  elevation: 8,
+                  elevation: isDark ? 0 : 8,
+                  color: Colors.transparent,
                   borderRadius: BorderRadius.circular(16),
                   child: Container(
                     width: 280,
                     padding: const EdgeInsets.all(16.0),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: cardColor,
                       borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: cardBorder),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDark ? 0.35 : 0.08),
+                          blurRadius: 24,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         CircleAvatar(
                           radius: 30,
-                          backgroundColor: Theme.of(
-                            context,
-                          ).primaryColor.withOpacity(0.1),
+                          backgroundColor: avatarBg,
                           child: Icon(
                             LucideIcons.user,
                             size: 30,
-                            color: Theme.of(context).primaryColor,
+                            color: avatarIcon,
                           ),
                         ),
                         const SizedBox(height: 12),
                         Text(
                           widget.user.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -85,7 +120,9 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                               ),
                             ],
                           ),
-                          backgroundColor: Colors.green.withOpacity(0.1),
+                          backgroundColor: isDark
+                              ? const Color(0xFF0F2E1A)
+                              : Colors.green.withOpacity(0.1),
                           labelStyle: const TextStyle(color: Colors.green),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
@@ -99,15 +136,16 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        const Divider(height: 1),
+                        Divider(height: 1, color: dividerColor),
                         const SizedBox(height: 16),
                         _buildInfoRow(
+                          context,
                           LucideIcons.mail,
                           "Email Address",
                           widget.user.email,
                         ),
                         const SizedBox(height: 16),
-                        const Divider(height: 1),
+                        Divider(height: 1, color: dividerColor),
                         const SizedBox(height: 8),
                         SizedBox(
                           width: double.infinity,
@@ -119,8 +157,8 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                               context.go('/settings');
                             },
                             style: TextButton.styleFrom(
-                              foregroundColor: Colors.grey[800],
-                              backgroundColor: Colors.grey.withOpacity(0.1),
+                              foregroundColor: settingsFg,
+                              backgroundColor: settingsBg,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
@@ -128,7 +166,7 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Divider(height: 1),
+                        Divider(height: 1, color: dividerColor),
                         const SizedBox(height: 8),
                         SizedBox(
                           width: double.infinity,
@@ -144,7 +182,9 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                             },
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.red,
-                              backgroundColor: Colors.red.withOpacity(0.1),
+                              backgroundColor: isDark
+                                  ? const Color(0xFF3F1D1D)
+                                  : Colors.red.withOpacity(0.1),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
@@ -165,27 +205,34 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF4F46E5),
+                color: triggerBg,
                 borderRadius: BorderRadius.circular(12.0),
               ),
-              child: const Icon(
-                LucideIcons.user,
-                color: Colors.white,
-                size: 20,
-              ),
+              child: Icon(LucideIcons.user, color: triggerIconColor, size: 20),
             ),
             const SizedBox(width: 4),
-            Icon(Icons.arrow_drop_down, color: Colors.grey[700]),
+            Icon(Icons.arrow_drop_down, color: mutedText),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value) {
+  Widget _buildInfoRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final mutedText = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
+
     return Row(
       children: [
-        Icon(icon, size: 16, color: Colors.grey[600]),
+        Icon(icon, size: 16, color: mutedText),
         const SizedBox(width: 12),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -193,14 +240,18 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
             Text(
               label,
               style: TextStyle(
-                color: Colors.grey[600],
+                color: mutedText,
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
               ),
             ),
             Text(
               value,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurface,
+              ),
             ),
           ],
         ),

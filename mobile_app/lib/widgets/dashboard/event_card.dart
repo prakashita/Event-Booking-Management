@@ -11,17 +11,28 @@ class EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1F2937) : Colors.white;
+    final titleColor = theme.colorScheme.onSurface;
+    final metaColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(24),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardBg,
           borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.05),
+              color: Colors.black.withOpacity(isDark ? 0.25 : 0.05),
               spreadRadius: 1,
               blurRadius: 10,
               offset: const Offset(0, 4),
@@ -67,27 +78,23 @@ class EventCard extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               event.title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
-                color: Color(0xFF1E293B),
+                color: titleColor,
               ),
             ),
             const SizedBox(height: 8),
             Row(
               children: [
-                const Icon(
-                  LucideIcons.calendar,
-                  size: 14,
-                  color: Color(0xFF64748B),
-                ),
+                Icon(LucideIcons.calendar, size: 14, color: metaColor),
                 const SizedBox(width: 6),
                 Text(
                   DateFormat('d MMM yyyy').format(event.startTime),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: Color(0xFF64748B),
+                    color: metaColor,
                   ),
                 ),
               ],
