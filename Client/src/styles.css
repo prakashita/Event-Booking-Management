@@ -519,7 +519,8 @@ body {
   top: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  transition: padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: padding 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
@@ -809,6 +810,7 @@ body {
   height: 100vh;
   overflow-x: hidden;
   overflow-y: auto;
+  transition: padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .dashboard-header {
@@ -2200,6 +2202,42 @@ button.marketing-attachment-remove {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Calendar filter segmented control */
+.calendar-filter-control {
+  display: inline-flex;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.cal-filter-btn {
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.cal-filter-btn:hover {
+  background: rgba(37, 99, 235, 0.06);
+  color: var(--ink);
+}
+
+.cal-filter-btn.active {
+  background: var(--accent-blue);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
 }
 
 .calendar-message {
@@ -3700,6 +3738,625 @@ button.marketing-attachment-remove {
   gap: 8px;
   padding: 8px 0;
   border-bottom: 1px solid var(--border-soft);
+}
+
+.institution-calendar-panel {
+  gap: 20px;
+}
+
+/* ── Calendar Updates standalone page ─────────────────────────── */
+.cal-updates-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 32px 40px;
+  max-width: 1200px;
+  width: 100%;
+}
+
+.cal-updates-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.cal-updates-page-header h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+/* Calendar Updates header actions */
+.cal-updates-header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cal-add-entry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  white-space: nowrap;
+}
+
+.cal-add-entry-btn:active {
+  transform: translateY(1px);
+}
+
+.cal-add-entry-btn svg {
+  flex-shrink: 0;
+}
+
+.cal-add-entry-btn.cal-add-holiday {
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+}
+
+.cal-add-entry-btn.cal-add-holiday:hover {
+  background: rgba(245, 158, 11, 0.22);
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.15);
+}
+
+.cal-add-entry-btn.cal-add-academic {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1e40af;
+}
+
+.cal-add-entry-btn.cal-add-academic:hover {
+  background: rgba(37, 99, 235, 0.2);
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.15);
+}
+
+/* ── User Approvals standalone page ───────────────────────────── */
+.user-approvals-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 32px 40px;
+  max-width: 1200px;
+  width: 100%;
+}
+
+.user-approvals-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.user-approvals-header h2 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.user-approvals-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.user-approvals-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+
+
+.institution-calendar-card {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--border-soft);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.institution-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.institution-card-header h4 {
+  margin-bottom: 4px;
+}
+
+.institution-card-header p {
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+/* Summary chips */
+.institution-summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.institution-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  color: var(--ink);
+}
+
+.institution-chip.holiday {
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+.institution-chip.academic {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1e40af;
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+.institution-chip.synced {
+  background: rgba(22, 163, 74, 0.1);
+  color: #166534;
+  border-color: rgba(22, 163, 74, 0.2);
+}
+
+.institution-chip.pending {
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+/* Tab bar */
+.institution-tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border-soft);
+  margin-bottom: 4px;
+}
+
+.institution-tab {
+  padding: 10px 20px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -2px;
+}
+
+.institution-tab:hover {
+  color: var(--ink);
+}
+
+.institution-tab.active {
+  color: var(--primary, #2563eb);
+  border-bottom-color: var(--primary, #2563eb);
+}
+
+/* Form actions (submit + reset at bottom right) */
+.institution-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-soft);
+  margin-top: 6px;
+}
+
+/* Type badges */
+.institution-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.institution-type-badge.holiday {
+  background: rgba(245, 158, 11, 0.14);
+  color: #92400e;
+}
+
+.institution-type-badge.academic {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1e40af;
+}
+
+.institution-type-badge.active {
+  background: rgba(22, 163, 74, 0.12);
+  color: #166534;
+}
+
+.institution-type-badge.inactive {
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+}
+
+/* Field-level error */
+.institution-field-error {
+  color: #dc2626;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.institution-calendar-form-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.institution-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.institution-filter-grid .institution-field {
+  grid-column: span 1;
+}
+
+.institution-field {
+  display: grid;
+  gap: 6px;
+  grid-column: span 4;
+}
+
+.institution-field--wide {
+  grid-column: span 8;
+}
+
+.institution-field span,
+.institution-toggle span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+}
+
+.institution-field input,
+.institution-field select,
+.institution-field textarea {
+  width: 100%;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  font-family: inherit;
+  background: var(--card);
+  color: var(--ink);
+}
+
+.institution-field input[type="color"] {
+  padding: 4px;
+  min-height: 44px;
+}
+
+.institution-field textarea {
+  resize: vertical;
+}
+
+.institution-field--readonly {
+  align-content: start;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-soft);
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.institution-field--readonly strong {
+  font-size: 0.98rem;
+  color: var(--ink);
+}
+
+.institution-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  grid-column: span 4;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.institution-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.institution-filter-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  grid-column: span 1;
+}
+
+.institution-filter-clear-btn {
+  width: 100%;
+}
+
+.institution-calendar-table {
+  display: grid;
+  gap: 10px;
+}
+
+.institution-calendar-row {
+  display: grid;
+  grid-template-columns: 1.8fr 0.7fr 0.8fr 0.8fr 0.7fr 0.75fr 0.75fr 0.6fr 0.9fr 0.6fr;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 0.88rem;
+  min-height: 52px;
+}
+
+.institution-calendar-row--header {
+  color: var(--ink-soft);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.76rem;
+}
+
+.institution-row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.institution-edit-danger-actions {
+  display: flex;
+  gap: 8px;
+  margin-right: auto;
+}
+
+.institution-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.institution-status-pill.synced {
+  background: rgba(22, 163, 74, 0.12);
+  color: #166534;
+}
+
+.institution-status-pill.pending {
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.institution-status-pill.sync_failed {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
+.institution-status-pill.disabled {
+  background: rgba(71, 85, 105, 0.12);
+  color: #475569;
+}
+
+.institution-notice {
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 0.9rem;
+}
+
+.institution-notice.success {
+  background: rgba(22, 163, 74, 0.1);
+  color: #166534;
+}
+
+.institution-notice.error {
+  background: rgba(220, 38, 38, 0.1);
+  color: #b91c1c;
+}
+
+.institution-calendar-modal {
+  max-width: 880px;
+}
+
+.institution-calendar-modal-body {
+  padding: 16px 0;
+}
+
+/* Dashboard quick-access cards */
+.dashboard-quick-access {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.quick-access-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  text-align: left;
+  font-family: inherit;
+}
+
+.quick-access-card:hover {
+  border-color: var(--primary, #2563eb);
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.1);
+}
+
+.quick-access-card .qa-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--primary, #2563eb);
+  flex-shrink: 0;
+}
+
+.quick-access-card .qa-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.quick-access-card .qa-desc {
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+/* User approvals improvements */
+.approvals-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 10px;
+}
+
+.approvals-section-title h4 {
+  margin: 0;
+}
+
+.approvals-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.approvals-count-badge.pending-count {
+  background: rgba(245, 158, 11, 0.14);
+  color: #92400e;
+}
+
+.approvals-count-badge.rejected-count {
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+}
+
+@media (max-width: 1100px) {
+  .institution-filter-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .institution-filter-grid .institution-field {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 1200px) {
+  .institution-calendar-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .institution-calendar-row--header {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .institution-calendar-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .institution-filter-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .institution-field,
+  .institution-field--wide,
+  .institution-toggle,
+  .institution-filter-actions {
+    grid-column: auto;
+  }
+
+  .institution-calendar-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-quick-access {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .institution-summary-chips {
+    gap: 6px;
+  }
+
+  .cal-updates-header-actions {
+    width: 100%;
+  }
+
+  .cal-add-entry-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .calendar-filter-control {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .calendar-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .calendar-actions {
+    justify-content: center;
+  }
 }
 
 .admin-request-item:last-child {

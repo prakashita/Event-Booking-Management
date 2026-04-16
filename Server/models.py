@@ -87,6 +87,45 @@ class Event(Document):
         name = "events"
 
 
+class InstitutionCalendarEntry(Document):
+    title: str
+    category: str
+    entry_type: str = Field(default="academic")  # holiday | academic
+    academic_year: str
+    calendar_year: Optional[int] = None
+    semester_type: Optional[str] = None
+    semester: Optional[str] = None
+    start_date: str
+    end_date: str
+    all_day: bool = True
+    day_label: Optional[str] = None
+    description: Optional[str] = None
+    color: Optional[str] = None
+    visible_to_all: bool = True
+    google_sync_enabled: bool = False
+    google_event_id: Optional[str] = None
+    google_event_link: Optional[str] = None
+    google_sync_error: Optional[str] = None
+    is_active: bool = True
+    created_by: str
+    updated_by: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "institution_calendar_entries"
+        indexes = [
+            "entry_type",
+            "academic_year",
+            "semester",
+            "category",
+            "start_date",
+            "end_date",
+            "is_active",
+            "visible_to_all",
+        ]
+
+
 class ApprovalRequest(Document):
     requester_id: str
     requester_email: str
