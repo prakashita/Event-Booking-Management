@@ -6,6 +6,7 @@ class User {
   final String name;
   final String? picture;
   final UserRole role;
+  final String? rawRole;
   final String? department;
 
   const User({
@@ -14,6 +15,7 @@ class User {
     required this.name,
     this.picture,
     required this.role,
+    this.rawRole,
     this.department,
   });
 
@@ -22,9 +24,18 @@ class User {
     email: json['email'] ?? '',
     name: json['name'] ?? json['email'] ?? '',
     picture: json['picture'],
-    role: _parseRole(json['role']),
+    role: _parseRole((json['role'] ?? '').toString()),
+    rawRole: (json['role'] ?? '').toString(),
     department: json['department'],
   );
+
+  String get roleKey {
+    final fromServer = (rawRole ?? '').trim().toLowerCase();
+    if (fromServer.isNotEmpty) return fromServer;
+    return role.name;
+  }
+
+  String get roleLabel => roleKey.replaceAll('_', ' ').toUpperCase();
 
   static UserRole _parseRole(String? role) {
     switch (role?.toLowerCase()) {
@@ -55,7 +66,8 @@ class User {
     'email': email,
     'name': name,
     'picture': picture,
-    'role': role.name,
+    'role': roleKey,
+    'raw_role': rawRole,
     'department': department,
   };
 }
@@ -194,8 +206,9 @@ class Event {
     ),
     status: json['status'] ?? 'approved',
     createdBy: json['created_by'] ?? '',
-    createdAt: DateTime.tryParse((json['created_at'] ?? '').toString())
-        ?.toLocal(),
+    createdAt: DateTime.tryParse(
+      (json['created_at'] ?? '').toString(),
+    )?.toLocal(),
     reportFileId: json['report_file_id'],
     audienceCount: json['audience_count'],
     notes: json['notes'] ?? json['htmlLink'],
