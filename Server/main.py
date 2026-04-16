@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from database import init_db, close_db
 from event_status import update_event_statuses
-from routers import admin, approvals, auth, calendar, chat, events, facility, invites, iqac, it, marketing, publications, transport, users, venues
+from routers import admin, approvals, auth, calendar, chat, events, facility, institution_calendar, invites, iqac, it, marketing, publications, transport, users, venues
 from routers.calendar import oauth_callback as google_calendar_oauth_callback
 from dotenv import load_dotenv
 from settings import load_settings
@@ -156,6 +156,20 @@ async def handle_http_exception(request: Request, exc: HTTPException):
 
 @app.exception_handler(RequestValidationError)
 async def handle_validation_exception(request: Request, exc: RequestValidationError):
+    body = None
+    try:
+        body = await request.body()
+        if isinstance(body, (bytes, bytearray)):
+            body = body.decode(errors="replace")
+    except Exception:
+        body = "<unavailable>"
+    logger.error(
+        "Request validation failed rid=%s path=%s body=%s errors=%s",
+        _request_id(request),
+        request.url.path,
+        body,
+        exc.errors(),
+    )
     return JSONResponse(
         status_code=422,
         content=error_payload(
@@ -185,6 +199,7 @@ app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(calendar.router, prefix=API_PREFIX)
+app.include_router(institution_calendar.router, prefix=API_PREFIX)
 app.include_router(venues.router, prefix=API_PREFIX)
 app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(approvals.router, prefix=API_PREFIX)

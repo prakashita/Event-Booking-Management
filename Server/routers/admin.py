@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from models import ApprovalRequest, Event, FacilityManagerRequest, Invite, ItRequest, MarketingRequest, Publication, TransportRequest, User, Venue
+from models import ApprovalRequest, Event, FacilityManagerRequest, InstitutionCalendarEntry, Invite, ItRequest, MarketingRequest, Publication, TransportRequest, User, Venue
 from routers.deps import require_admin
 from schemas import (
     ApprovalRequestResponse,
@@ -333,6 +333,7 @@ async def admin_overview(admin: User = Depends(require_admin)):
         "transport": await TransportRequest.find_all().count(),
         "invites": await Invite.find_all().count(),
         "publications": await Publication.find_all().count(),
+        "institution_calendar": await InstitutionCalendarEntry.find_all().count(),
         "pending_user_approvals": await User.find(User.approval_status == "pending").count(),
     }
 

@@ -17,6 +17,7 @@ from auth import (
 )
 from event_status import combine_datetime
 from models import Event, User
+from routers.institution_calendar import institution_entry_to_calendar_item, list_visible_institution_calendar_entries
 from routers.deps import get_current_user
 
 router = APIRouter(prefix="/calendar", tags=["Calendar"])
@@ -218,6 +219,16 @@ def _event_to_calendar_item(event: Event) -> dict | None:
         "end": end_dt.isoformat(),
         "location": event.venue_name,
         "htmlLink": event.google_event_link,
+        "color": "#2563eb",
+        "sourceType": "event_booking",
+        "entryType": "event",
+        "category": "Event Booking",
+        "academicYear": None,
+        "semesterType": None,
+        "semester": None,
+        "description": event.description,
+        "dayLabel": None,
+        "dateRangeLabel": f"{event.start_date} {event.start_time} to {event.end_date} {event.end_time}",
     }
 
 
@@ -247,6 +258,21 @@ async def get_app_calendar_events(
                 ev_start = combine_datetime(event.start_date, event.start_time)
                 ev_end = combine_datetime(event.end_date, event.end_time)
             except (ValueError, TypeError):
+                continue
+            if range_start is not None and ev_end < range_start:
+                continue
+            if range_end is not None and ev_start > range_end:
+                continue
+        events_payload.append(item)
+
+    institution_entries = await list_visible_institution_calendar_entries()
+    for entry in institution_entries:
+        item = institution_entry_to_calendar_item(entry)
+        if range_start is not None or range_end is not None:
+            try:
+                ev_start = datetime.fromisoformat(f"{entry.start_date}T00:00:00+05:30")
+                ev_end = datetime.fromisoformat(f"{entry.end_date}T23:59:59+05:30")
+            except Exception:
                 continue
             if range_start is not None and ev_end < range_start:
                 continue
