@@ -23,7 +23,7 @@ class AuthProvider extends ChangeNotifier {
 
   bool hasRole(List<String> roles) {
     if (_user == null) return false;
-    return roles.contains(_user!.role);
+    return roles.contains(_user!.roleKey);
   }
 
   Future<void> init(String apiBaseUrl) async {

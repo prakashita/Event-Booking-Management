@@ -15,6 +15,24 @@ class SideNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
+    final roleKey = user?.roleKey ?? 'faculty';
+    final roleLabel = user?.roleLabel ?? 'FACULTY';
+
+    final isAdmin = roleKey == 'admin';
+    final isRegistrar = roleKey == 'registrar';
+    final isViceChancellor = roleKey == 'vice_chancellor';
+    final isRegistrarDashboard = isRegistrar || isViceChancellor;
+    final isFacilityManager = roleKey == 'facility_manager';
+    final isMarketing = roleKey == 'marketing';
+    final isIt = roleKey == 'it';
+    final isTransport = roleKey == 'transport';
+
+    final canAccessApprovals = isRegistrarDashboard;
+    final canAccessRequirements =
+        isFacilityManager || isMarketing || isIt || isTransport;
+    final canAccessEventReports = isAdmin || isRegistrarDashboard;
+    final canAccessAdminConsole = isAdmin;
+    final canAccessIqac = AppConstants.iqacAllowedRoles.contains(roleKey);
 
     return Container(
       width: 256,
@@ -43,8 +61,8 @@ class SideNavBar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Text(
-                    'ADMIN',
+                  Text(
+                    roleLabel,
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -88,26 +106,47 @@ class SideNavBar extends StatelessWidget {
                       title: 'My Events',
                       route: '/events',
                     ),
+                    if (canAccessEventReports)
+                      _buildNavItem(
+                        context,
+                        icon: LucideIcons.barChart3,
+                        title: 'Event Reports',
+                        route: '/reports',
+                      ),
                     _buildNavItem(
                       context,
                       icon: LucideIcons.calendarCheck,
                       title: 'Calendar View',
                       route: '/calendar',
                     ),
+                    if (canAccessApprovals)
+                      _buildNavItem(
+                        context,
+                        icon: LucideIcons.shieldCheck,
+                        title: 'Approvals',
+                        route: '/approvals',
+                      ),
+                    if (canAccessRequirements)
+                      _buildNavItem(
+                        context,
+                        icon: LucideIcons.clipboardCheck,
+                        title: 'Requirements',
+                        route: '/requirements',
+                      ),
                     _buildNavItem(
                       context,
                       icon: LucideIcons.bookOpen,
                       title: 'Publications',
                       route: '/publications',
                     ),
-                    _buildNavItem(
-                      context,
-                      icon: LucideIcons.database,
-                      title: 'IQAC Data Collection',
-                      route: '/iqac',
-                    ),
-                    if (user != null &&
-                        AppConstants.adminRoles.contains(user.role.name)) ...[
+                    if (canAccessIqac)
+                      _buildNavItem(
+                        context,
+                        icon: LucideIcons.database,
+                        title: 'IQAC Data Collection',
+                        route: '/iqac',
+                      ),
+                    if (canAccessAdminConsole) ...[
                       const SizedBox(height: 24),
                       const Text(
                         'ADMINISTRATION',
@@ -119,12 +158,6 @@ class SideNavBar extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      _buildNavItem(
-                        context,
-                        icon: LucideIcons.fileText,
-                        title: 'Event Reports',
-                        route: '/reports',
-                      ),
                       _buildNavItem(
                         context,
                         icon: LucideIcons.userCog,

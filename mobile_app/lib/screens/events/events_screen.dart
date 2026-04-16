@@ -421,14 +421,7 @@ class _EventsScreenState extends State<EventsScreen>
                 );
               }
               if (events.isEmpty) {
-                return EmptyState(
-                  icon: Icons.event_busy,
-                  title: 'No ${key == 'All' ? '' : key.toLowerCase()} events',
-                  message:
-                      'Events you create or participate in will appear here.',
-                  actionLabel: 'Create Event',
-                  onAction: () => context.go('/events/create'),
-                );
+                return const _MyEventsEmptyState();
               }
 
               return RefreshIndicator(
@@ -462,6 +455,57 @@ class _LoadingList extends StatelessWidget {
       itemBuilder: (_, i) => Padding(
         padding: const EdgeInsets.only(bottom: 16),
         child: ShimmerBox(width: double.infinity, height: 160, radius: 16),
+      ),
+    );
+  }
+}
+
+class _MyEventsEmptyState extends StatelessWidget {
+  const _MyEventsEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final iconColor = isDark
+        ? const Color(0xFF64748B)
+        : const Color(0xFFB6BCCB);
+    final titleColor = isDark
+        ? const Color(0xFFC7D2FE)
+        : const Color(0xFF707EA4);
+    final subtitleColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF9AA5C2);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.calendar_today_outlined, size: 52, color: iconColor),
+            const SizedBox(height: 14),
+            Text(
+              'No events found.',
+              style: TextStyle(
+                fontSize: 31 / 2,
+                fontWeight: FontWeight.w700,
+                color: titleColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Create your first event to get started.',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: subtitleColor,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }
