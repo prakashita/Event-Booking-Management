@@ -178,6 +178,7 @@ function buildEditDraft(entry) {
     return {
       id: entry.id,
       entry_type: "holiday",
+      sync_status: entry.sync_status || "disabled",
       academic_year: entry.academic_year || currentAY,
       calendar_year: entry.calendar_year || new Date().getFullYear(),
       date: entry.date || entry.start_date || "",
@@ -192,6 +193,7 @@ function buildEditDraft(entry) {
   return {
     id: entry.id,
     entry_type: "academic",
+    sync_status: entry.sync_status || "disabled",
     academic_year: entry.academic_year || currentAY,
     semester_type: entry.semester_type || "Odd Semester",
     semester: entry.semester || "Semester I",
@@ -241,7 +243,6 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
   const [localSyncFilter, setLocalSyncFilter] = useState("");
   const [localActiveFilter, setLocalActiveFilter] = useState("");
   const [localSearch, setLocalSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("holiday");
   const [holidayForm, setHolidayForm] = useState(HOLIDAY_DEFAULTS);
   const [academicForm, setAcademicForm] = useState(ACADEMIC_DEFAULTS);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -251,17 +252,6 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
   const [busyAction, setBusyAction] = useState({ id: "", action: "" });
 
   /* -- Derived data ------------------------------------------------- */
-  const summaryStats = useMemo(() => {
-    const items = entriesState.items;
-    return {
-      total: items.length,
-      holidays: items.filter((e) => e.entry_type === "holiday").length,
-      academic: items.filter((e) => e.entry_type === "academic").length,
-      synced: items.filter((e) => e.sync_status === "synced").length,
-      pending: items.filter((e) => e.sync_status === "pending" || e.sync_status === "sync_failed").length,
-    };
-  }, [entriesState.items]);
-
   const filteredEntries = useMemo(() => {
     let items = entriesState.items;
     if (localSyncFilter) items = items.filter((e) => e.sync_status === localSyncFilter);
@@ -336,7 +326,8 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
 
   /* -- API: delete -------------------------------------------------- */
   const handleDelete = useCallback(async (entry) => {
-    if (!window.confirm('Delete "' + entry.title + '" from the institution calendar?')) return;
+    const displayName = entry.title || entry.holiday_name || "this entry";
+    if (!window.confirm('Delete "' + displayName + '" from the institution calendar?')) return;
     setBusyAction({ id: entry.id, action: "delete" });
     setNotice({ type: "idle", message: "" });
     try {
@@ -381,7 +372,7 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
 
   /* -- Form handlers ------------------------------------------------ */
   const handleHolidaySubmit = useCallback((e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     const errors = validateHolidayForm(holidayForm);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -389,12 +380,12 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
       method: "POST",
       url: apiBaseUrl + "/institution-calendar",
       successPrefix: "Holiday",
-      reset: () => setHolidayForm(HOLIDAY_DEFAULTS),
+      reset: () => { setHolidayForm(HOLIDAY_DEFAULTS); setAddHolidayModalOpen(false); },
     });
   }, [holidayForm, apiBaseUrl, submitEntry]);
 
   const handleAcademicSubmit = useCallback((e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     const errors = validateAcademicForm(academicForm);
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -402,7 +393,7 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
       method: "POST",
       url: apiBaseUrl + "/institution-calendar",
       successPrefix: "Academic entry",
-      reset: () => setAcademicForm(ACADEMIC_DEFAULTS),
+      reset: () => { setAcademicForm(ACADEMIC_DEFAULTS); setAddAcademicModalOpen(false); },
     });
   }, [academicForm, apiBaseUrl, submitEntry]);
 
@@ -430,7 +421,7 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
     });
   }, []);
 
-  useEffect(() => { loadEntries(filters); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadEntries(filters); }, [filters, loadEntries]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isSubmitting = busyAction.action === "POST";
 
@@ -438,6 +429,9 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
     if (!errs?.[name]) return null;
     return <span className="institution-field-error">{errs[name]}</span>;
   };
+
+  const [addHolidayModalOpen, setAddHolidayModalOpen] = useState(false);
+  const [addAcademicModalOpen, setAddAcademicModalOpen] = useState(false);
 
   /* ================================================================
      RENDER
@@ -451,7 +445,17 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
             <h2>Calendar Updates</h2>
             <p className="admin-note">Manage institution holidays and academic calendar entries visible on the shared calendar.</p>
           </div>
-          <button type="button" className="secondary-action" onClick={() => loadEntries()}>Refresh</button>
+          <div className="cal-updates-header-actions">
+            <button type="button" className="cal-add-entry-btn cal-add-holiday" onClick={() => { setAddHolidayModalOpen(true); setFieldErrors({}); }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Holiday
+            </button>
+            <button type="button" className="cal-add-entry-btn cal-add-academic" onClick={() => { setAddAcademicModalOpen(true); setFieldErrors({}); }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Academic Entry
+            </button>
+            <button type="button" className="secondary-action" onClick={() => loadEntries(filters)}>Refresh</button>
+          </div>
         </div>
       ) : (
         <div className="admin-panel-header">
@@ -459,150 +463,26 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
             <h3>Calendar Updates</h3>
             <p className="admin-note">Manage institution holidays and academic calendar entries visible on the shared calendar.</p>
           </div>
-          <button type="button" className="secondary-action" onClick={() => loadEntries()}>Refresh</button>
+          <div className="cal-updates-header-actions">
+            <button type="button" className="cal-add-entry-btn cal-add-holiday" onClick={() => { setAddHolidayModalOpen(true); setFieldErrors({}); }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Holiday
+            </button>
+            <button type="button" className="cal-add-entry-btn cal-add-academic" onClick={() => { setAddAcademicModalOpen(true); setFieldErrors({}); }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Academic Entry
+            </button>
+            <button type="button" className="secondary-action" onClick={() => loadEntries(filters)}>Refresh</button>
+          </div>
         </div>
       )}
-
-      {/* -- Summary chips ------------------------------------------- */}
-      <div className="institution-summary-chips">
-        <span className="institution-chip">{summaryStats.total} Total</span>
-        <span className="institution-chip holiday">{summaryStats.holidays} Holidays</span>
-        <span className="institution-chip academic">{summaryStats.academic} Academic</span>
-        <span className="institution-chip synced">{summaryStats.synced} Synced</span>
-        {summaryStats.pending > 0 && <span className="institution-chip pending">{summaryStats.pending} Pending / Failed</span>}
-      </div>
 
       {/* -- Notice -------------------------------------------------- */}
       {notice.message ? (
         <p className={"institution-notice " + (notice.type === "error" ? "error" : "success")} style={{ whiteSpace: "pre-line" }}>{notice.message}</p>
       ) : null}
 
-      {/* -- Entry creation tabs ------------------------------------- */}
-      <div className="institution-calendar-card">
-        <div className="institution-tab-bar">
-          <button type="button" className={"institution-tab " + (activeTab === "holiday" ? "active" : "")} onClick={() => { setActiveTab("holiday"); setFieldErrors({}); }}>Add Holiday</button>
-          <button type="button" className={"institution-tab " + (activeTab === "academic" ? "active" : "")} onClick={() => { setActiveTab("academic"); setFieldErrors({}); }}>Add Academic Entry</button>
-        </div>
-
-        {/* -- Holiday form ------------------------------------------ */}
-        {activeTab === "holiday" && (
-          <form onSubmit={handleHolidaySubmit}>
-            <div className="institution-calendar-form-grid">
-              <label className="institution-field">
-                <span>Academic Year *</span>
-                <select value={holidayForm.academic_year} onChange={(e) => setHolidayForm((prev) => ({ ...prev, academic_year: e.target.value }))} required>
-                  <option value="">Select academic year</option>
-                  {ACADEMIC_YEAR_OPTIONS.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
-                </select>
-                <FieldError name="academic_year" errors={fieldErrors} />
-              </label>
-              <label className="institution-field">
-                <span>Calendar Year</span>
-                <input type="number" value={holidayForm.calendar_year} onChange={(e) => setHolidayForm((prev) => ({ ...prev, calendar_year: Number(e.target.value) || new Date().getFullYear() }))} min="1900" max="3000" />
-              </label>
-              <label className="institution-field">
-                <span>Date *</span>
-                <input type="date" value={holidayForm.date} onChange={(e) => updateHolidayDate(e.target.value)} required />
-                <FieldError name="date" errors={fieldErrors} />
-              </label>
-              <div className="institution-field institution-field--readonly">
-                <span>Day</span>
-                <strong>{toDayLabel(holidayForm.date)}</strong>
-              </div>
-              <label className="institution-field institution-field--wide">
-                <span>Holiday Name *</span>
-                <input type="text" value={holidayForm.holiday_name} onChange={(e) => setHolidayForm((prev) => ({ ...prev, holiday_name: e.target.value }))} placeholder="e.g. Republic Day" required />
-                <FieldError name="holiday_name" errors={fieldErrors} />
-              </label>
-              <label className="institution-field institution-field--wide">
-                <span>Description / Notes</span>
-                <textarea rows={3} value={holidayForm.description} onChange={(e) => setHolidayForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Mirror holiday circular notes here." />
-              </label>
-              <label className="institution-field">
-                <span>Display Color</span>
-                <input type="color" value={holidayForm.color} onChange={(e) => setHolidayForm((prev) => ({ ...prev, color: e.target.value }))} />
-              </label>
-              <label className="institution-toggle"><input type="checkbox" checked={holidayForm.visible_to_all} onChange={(e) => setHolidayForm((prev) => ({ ...prev, visible_to_all: e.target.checked }))} /><span>Visible to All</span></label>
-              <label className="institution-toggle"><input type="checkbox" checked={holidayForm.google_sync_enabled} onChange={(e) => setHolidayForm((prev) => ({ ...prev, google_sync_enabled: e.target.checked }))} /><span>Google Sync</span></label>
-              <label className="institution-toggle"><input type="checkbox" checked={holidayForm.is_active} onChange={(e) => setHolidayForm((prev) => ({ ...prev, is_active: e.target.checked }))} /><span>Active</span></label>
-            </div>
-            <div className="institution-form-actions">
-              <button type="button" className="secondary-action" onClick={() => { setHolidayForm(HOLIDAY_DEFAULTS); setFieldErrors({}); }}>Reset</button>
-              <button type="submit" className="primary-action" disabled={isSubmitting}>{isSubmitting ? "Adding..." : "Add Holiday"}</button>
-            </div>
-          </form>
-        )}
-
-        {/* -- Academic form ----------------------------------------- */}
-        {activeTab === "academic" && (
-          <form onSubmit={handleAcademicSubmit}>
-            <div className="institution-calendar-form-grid">
-              <label className="institution-field">
-                <span>Academic Year *</span>
-                <select value={academicForm.academic_year} onChange={(e) => setAcademicForm((prev) => ({ ...prev, academic_year: e.target.value }))} required>
-                  <option value="">Select academic year</option>
-                  {ACADEMIC_YEAR_OPTIONS.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
-                </select>
-                <FieldError name="academic_year" errors={fieldErrors} />
-              </label>
-              <label className="institution-field">
-                <span>Semester Type *</span>
-                <select value={academicForm.semester_type} onChange={(e) => setAcademicForm((prev) => ({ ...prev, semester_type: e.target.value }))} required>
-                  {SEMESTER_TYPE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-                <FieldError name="semester_type" errors={fieldErrors} />
-              </label>
-              <label className="institution-field">
-                <span>Semester</span>
-                <select value={academicForm.semester} onChange={(e) => setAcademicForm((prev) => ({ ...prev, semester: e.target.value }))}>
-                  <option value="">None</option>
-                  {SEMESTER_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-              </label>
-              <label className="institution-field institution-field--wide">
-                <span>Academic Event Title *</span>
-                <input type="text" value={academicForm.title} onChange={(e) => setAcademicForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="e.g. First Day of Instruction" required />
-                <FieldError name="title" errors={fieldErrors} />
-              </label>
-              <label className="institution-field">
-                <span>Event Category *</span>
-                <select value={academicForm.category} onChange={(e) => setAcademicForm((prev) => ({ ...prev, category: e.target.value }))} required>
-                  {ACADEMIC_CATEGORY_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-                <FieldError name="category" errors={fieldErrors} />
-              </label>
-              <label className="institution-field">
-                <span>Start Date *</span>
-                <input type="date" value={academicForm.start_date} onChange={(e) => setAcademicForm((prev) => ({ ...prev, start_date: e.target.value }))} required />
-                <FieldError name="start_date" errors={fieldErrors} />
-              </label>
-              <label className="institution-field">
-                <span>End Date</span>
-                <input type="date" value={academicForm.end_date} onChange={(e) => setAcademicForm((prev) => ({ ...prev, end_date: e.target.value }))} min={academicForm.start_date || undefined} />
-                <FieldError name="end_date" errors={fieldErrors} />
-              </label>
-              <label className="institution-toggle"><input type="checkbox" checked={academicForm.all_day} onChange={(e) => setAcademicForm((prev) => ({ ...prev, all_day: e.target.checked }))} /><span>All Day</span></label>
-              <label className="institution-field institution-field--wide">
-                <span>Description / Notes</span>
-                <textarea rows={3} value={academicForm.description} onChange={(e) => setAcademicForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Commencement, examinations, results, meetings, and notes." />
-              </label>
-              <label className="institution-field">
-                <span>Display Color</span>
-                <input type="color" value={academicForm.color} onChange={(e) => setAcademicForm((prev) => ({ ...prev, color: e.target.value }))} />
-              </label>
-              <label className="institution-toggle"><input type="checkbox" checked={academicForm.visible_to_all} onChange={(e) => setAcademicForm((prev) => ({ ...prev, visible_to_all: e.target.checked }))} /><span>Visible to All</span></label>
-              <label className="institution-toggle"><input type="checkbox" checked={academicForm.google_sync_enabled} onChange={(e) => setAcademicForm((prev) => ({ ...prev, google_sync_enabled: e.target.checked }))} /><span>Google Sync</span></label>
-              <label className="institution-toggle"><input type="checkbox" checked={academicForm.is_active} onChange={(e) => setAcademicForm((prev) => ({ ...prev, is_active: e.target.checked }))} /><span>Active</span></label>
-            </div>
-            <div className="institution-form-actions">
-              <button type="button" className="secondary-action" onClick={() => { setAcademicForm(ACADEMIC_DEFAULTS); setFieldErrors({}); }}>Reset</button>
-              <button type="submit" className="primary-action" disabled={isSubmitting}>{isSubmitting ? "Adding..." : "Add Academic Entry"}</button>
-            </div>
-          </form>
-        )}
-      </div>
-
-      {/* -- Manage current entries ----------------------------------- */}
+      {/* -- Manage current entries (primary section) ---------------- */}
       <div className="institution-calendar-card">
         <div className="institution-card-header">
           <div>
@@ -612,16 +492,16 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
         </div>
         <div className="institution-filter-grid">
           <label className="institution-field">
+            <span>Entry Type</span>
+            <select value={filters.entry_type} onChange={(e) => setFilters((prev) => ({ ...prev, entry_type: e.target.value }))}>
+              {ENTRY_TYPE_OPTIONS.map((opt) => <option key={opt.label} value={opt.value}>{opt.label}</option>)}
+            </select>
+          </label>
+          <label className="institution-field">
             <span>Academic Year</span>
             <select value={filters.academic_year} onChange={(e) => setFilters((prev) => ({ ...prev, academic_year: e.target.value }))}>
               <option value="">All Years</option>
               {ACADEMIC_YEAR_OPTIONS.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
-            </select>
-          </label>
-          <label className="institution-field">
-            <span>Entry Type</span>
-            <select value={filters.entry_type} onChange={(e) => setFilters((prev) => ({ ...prev, entry_type: e.target.value }))}>
-              {ENTRY_TYPE_OPTIONS.map((opt) => <option key={opt.label} value={opt.value}>{opt.label}</option>)}
             </select>
           </label>
           <label className="institution-field">
@@ -651,20 +531,18 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
               {ACTIVE_OPTIONS.map((opt) => <option key={opt.label} value={opt.value}>{opt.label}</option>)}
             </select>
           </label>
-          <label className="institution-field institution-field--wide">
+          <label className="institution-field">
             <span>Search</span>
             <input type="text" value={localSearch} onChange={(e) => setLocalSearch(e.target.value)} placeholder="Search title, category, description..." />
           </label>
           <div className="institution-filter-actions">
-            <button type="button" className="primary-action" onClick={() => loadEntries(filters)}>Apply Filters</button>
-            <button type="button" className="secondary-action" onClick={() => {
+            <button type="button" className="secondary-action institution-filter-clear-btn" onClick={() => {
               const reset = { academic_year: "", semester: "", entry_type: "", category: "" };
               setFilters(reset);
               setLocalSyncFilter("");
               setLocalActiveFilter("");
               setLocalSearch("");
-              loadEntries(reset);
-            }}>Clear</button>
+            }}>Clear Filters</button>
           </div>
         </div>
 
@@ -697,7 +575,7 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
               </span>
               <span>{entry.category}</span>
               <span>{entry.academic_year}</span>
-              <span>{entry.semester || entry.semester_type || "\u2014"}</span>
+              <span>{entry.entry_type === "holiday" ? "NA" : (entry.semester || entry.semester_type || "\u2014")}</span>
               <span>{entry.start_date}</span>
               <span>{entry.end_date}</span>
               <span>
@@ -711,8 +589,6 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
               </div>
               <div className="institution-row-actions">
                 <button type="button" className="details-button" onClick={() => { setEditingEntry(buildEditDraft(entry)); setEditFieldErrors({}); }}>Edit</button>
-                <button type="button" className="details-button" disabled={busyAction.id === entry.id} onClick={() => handleSyncToggle(entry, entry.sync_status !== "synced")}>{entry.sync_status === "synced" ? "Unsync" : "Sync"}</button>
-                <button type="button" className="details-button reject" disabled={busyAction.id === entry.id && busyAction.action === "delete"} onClick={() => handleDelete(entry)}>Delete</button>
               </div>
             </div>
           ))}
@@ -722,6 +598,139 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
         </div>
       </div>
 
+      {/* -- Add Holiday modal --------------------------------------- */}
+      {addHolidayModalOpen ? (
+        <Modal
+          title="Add Holiday"
+          onClose={() => setAddHolidayModalOpen(false)}
+          className="institution-calendar-modal"
+          actions={<>
+            <button type="button" className="secondary-action" onClick={() => { setHolidayForm(HOLIDAY_DEFAULTS); setFieldErrors({}); }}>Reset</button>
+            <button type="button" className="primary-action" disabled={isSubmitting} onClick={handleHolidaySubmit}>{isSubmitting ? "Adding..." : "Add Holiday"}</button>
+          </>}
+        >
+          <div className="modal-body institution-calendar-modal-body">
+            <form onSubmit={handleHolidaySubmit} id="holiday-form">
+              <div className="institution-calendar-form-grid">
+                <label className="institution-field">
+                  <span>Academic Year *</span>
+                  <select value={holidayForm.academic_year} onChange={(e) => setHolidayForm((prev) => ({ ...prev, academic_year: e.target.value }))} required>
+                    <option value="">Select academic year</option>
+                    {ACADEMIC_YEAR_OPTIONS.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
+                  </select>
+                  <FieldError name="academic_year" errors={fieldErrors} />
+                </label>
+                <label className="institution-field">
+                  <span>Calendar Year</span>
+                  <input type="number" value={holidayForm.calendar_year} onChange={(e) => setHolidayForm((prev) => ({ ...prev, calendar_year: Number(e.target.value) || new Date().getFullYear() }))} min="1900" max="3000" />
+                </label>
+                <label className="institution-field">
+                  <span>Date *</span>
+                  <input type="date" value={holidayForm.date} onChange={(e) => updateHolidayDate(e.target.value)} required />
+                  <FieldError name="date" errors={fieldErrors} />
+                </label>
+                <div className="institution-field institution-field--readonly">
+                  <span>Day</span>
+                  <strong>{toDayLabel(holidayForm.date)}</strong>
+                </div>
+                <label className="institution-field institution-field--wide">
+                  <span>Holiday Name *</span>
+                  <input type="text" value={holidayForm.holiday_name} onChange={(e) => setHolidayForm((prev) => ({ ...prev, holiday_name: e.target.value }))} placeholder="e.g. Republic Day" required />
+                  <FieldError name="holiday_name" errors={fieldErrors} />
+                </label>
+                <label className="institution-field institution-field--wide">
+                  <span>Description / Notes</span>
+                  <textarea rows={3} value={holidayForm.description} onChange={(e) => setHolidayForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Mirror holiday circular notes here." />
+                </label>
+                <label className="institution-field">
+                  <span>Display Color</span>
+                  <input type="color" value={holidayForm.color} onChange={(e) => setHolidayForm((prev) => ({ ...prev, color: e.target.value }))} />
+                </label>
+                <label className="institution-toggle"><input type="checkbox" checked={holidayForm.visible_to_all} onChange={(e) => setHolidayForm((prev) => ({ ...prev, visible_to_all: e.target.checked }))} /><span>Visible to All</span></label>
+                <label className="institution-toggle"><input type="checkbox" checked={holidayForm.google_sync_enabled} onChange={(e) => setHolidayForm((prev) => ({ ...prev, google_sync_enabled: e.target.checked }))} /><span>Google Sync</span></label>
+                <label className="institution-toggle"><input type="checkbox" checked={holidayForm.is_active} onChange={(e) => setHolidayForm((prev) => ({ ...prev, is_active: e.target.checked }))} /><span>Active</span></label>
+              </div>
+            </form>
+          </div>
+        </Modal>
+      ) : null}
+
+      {/* -- Add Academic modal -------------------------------------- */}
+      {addAcademicModalOpen ? (
+        <Modal
+          title="Add Academic Entry"
+          onClose={() => setAddAcademicModalOpen(false)}
+          className="institution-calendar-modal"
+          actions={<>
+            <button type="button" className="secondary-action" onClick={() => { setAcademicForm(ACADEMIC_DEFAULTS); setFieldErrors({}); }}>Reset</button>
+            <button type="button" className="primary-action" disabled={isSubmitting} onClick={handleAcademicSubmit}>{isSubmitting ? "Adding..." : "Add Academic Entry"}</button>
+          </>}
+        >
+          <div className="modal-body institution-calendar-modal-body">
+            <form onSubmit={handleAcademicSubmit} id="academic-form">
+              <div className="institution-calendar-form-grid">
+                <label className="institution-field">
+                  <span>Academic Year *</span>
+                  <select value={academicForm.academic_year} onChange={(e) => setAcademicForm((prev) => ({ ...prev, academic_year: e.target.value }))} required>
+                    <option value="">Select academic year</option>
+                    {ACADEMIC_YEAR_OPTIONS.map((yr) => <option key={yr} value={yr}>{yr}</option>)}
+                  </select>
+                  <FieldError name="academic_year" errors={fieldErrors} />
+                </label>
+                <label className="institution-field">
+                  <span>Semester Type *</span>
+                  <select value={academicForm.semester_type} onChange={(e) => setAcademicForm((prev) => ({ ...prev, semester_type: e.target.value }))} required>
+                    {SEMESTER_TYPE_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                  <FieldError name="semester_type" errors={fieldErrors} />
+                </label>
+                <label className="institution-field">
+                  <span>Semester</span>
+                  <select value={academicForm.semester} onChange={(e) => setAcademicForm((prev) => ({ ...prev, semester: e.target.value }))}>
+                    <option value="">None</option>
+                    {SEMESTER_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </label>
+                <label className="institution-field institution-field--wide">
+                  <span>Academic Event Title *</span>
+                  <input type="text" value={academicForm.title} onChange={(e) => setAcademicForm((prev) => ({ ...prev, title: e.target.value }))} placeholder="e.g. First Day of Instruction" required />
+                  <FieldError name="title" errors={fieldErrors} />
+                </label>
+                <label className="institution-field">
+                  <span>Event Category *</span>
+                  <select value={academicForm.category} onChange={(e) => setAcademicForm((prev) => ({ ...prev, category: e.target.value }))} required>
+                    {ACADEMIC_CATEGORY_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                  <FieldError name="category" errors={fieldErrors} />
+                </label>
+                <label className="institution-field">
+                  <span>Start Date *</span>
+                  <input type="date" value={academicForm.start_date} onChange={(e) => setAcademicForm((prev) => ({ ...prev, start_date: e.target.value }))} required />
+                  <FieldError name="start_date" errors={fieldErrors} />
+                </label>
+                <label className="institution-field">
+                  <span>End Date</span>
+                  <input type="date" value={academicForm.end_date} onChange={(e) => setAcademicForm((prev) => ({ ...prev, end_date: e.target.value }))} min={academicForm.start_date || undefined} />
+                  <FieldError name="end_date" errors={fieldErrors} />
+                </label>
+                <label className="institution-toggle"><input type="checkbox" checked={academicForm.all_day} onChange={(e) => setAcademicForm((prev) => ({ ...prev, all_day: e.target.checked }))} /><span>All Day</span></label>
+                <label className="institution-field institution-field--wide">
+                  <span>Description / Notes</span>
+                  <textarea rows={3} value={academicForm.description} onChange={(e) => setAcademicForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Commencement, examinations, results, meetings, and notes." />
+                </label>
+                <label className="institution-field">
+                  <span>Display Color</span>
+                  <input type="color" value={academicForm.color} onChange={(e) => setAcademicForm((prev) => ({ ...prev, color: e.target.value }))} />
+                </label>
+                <label className="institution-toggle"><input type="checkbox" checked={academicForm.visible_to_all} onChange={(e) => setAcademicForm((prev) => ({ ...prev, visible_to_all: e.target.checked }))} /><span>Visible to All</span></label>
+                <label className="institution-toggle"><input type="checkbox" checked={academicForm.google_sync_enabled} onChange={(e) => setAcademicForm((prev) => ({ ...prev, google_sync_enabled: e.target.checked }))} /><span>Google Sync</span></label>
+                <label className="institution-toggle"><input type="checkbox" checked={academicForm.is_active} onChange={(e) => setAcademicForm((prev) => ({ ...prev, is_active: e.target.checked }))} /><span>Active</span></label>
+              </div>
+            </form>
+          </div>
+        </Modal>
+      ) : null}
+
       {/* -- Edit modal ---------------------------------------------- */}
       {editingEntry ? (
         <Modal
@@ -729,6 +738,12 @@ export default function InstitutionCalendarAdmin({ apiBaseUrl, apiFetch, onCalen
           onClose={() => setEditingEntry(null)}
           className="institution-calendar-modal"
           actions={<>
+            <div className="institution-edit-danger-actions">
+              {editingEntry.sync_status === "synced" ? (
+                <button type="button" className="secondary-action" disabled={busyAction.id === editingEntry.id} onClick={() => { setEditingEntry(null); handleSyncToggle(editingEntry, false); }}>Unsync</button>
+              ) : null}
+              <button type="button" className="details-button reject" disabled={busyAction.id === editingEntry.id && busyAction.action === "delete"} onClick={() => { setEditingEntry(null); handleDelete(editingEntry); }}>Delete</button>
+            </div>
             <button type="button" className="secondary-action" onClick={() => setEditingEntry(null)}>Cancel</button>
             <button type="button" className="primary-action" onClick={handleEditSubmit}>Save Changes</button>
           </>}

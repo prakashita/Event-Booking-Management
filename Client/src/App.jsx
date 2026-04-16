@@ -368,6 +368,7 @@ export default function App() {
     error: ""
   });
   const [calendarDetailModal, setCalendarDetailModal] = useState({ open: false, event: null });
+  const [calendarFilter, setCalendarFilter] = useState("all");
   const [publicationsState, setPublicationsState] = useState({
     status: "idle",
     items: [],
@@ -448,7 +449,7 @@ export default function App() {
   const isTransportRole = normalizedUserRole === "transport";
   const canAccessAdminConsole = isAdmin;
   const canAccessCalendarUpdates = isAdmin || isRegistrar;
-  const canAccessUserApprovals = isAdmin || isRegistrar;
+  const canAccessUserApprovals = isAdmin;
   const canAccessApprovals = isRegistrarDashboard;
   const canAccessRequirements =
     isFacilityManagerRole || isMarketingRole || isItRole || isTransportRole;
@@ -1300,6 +1301,18 @@ export default function App() {
       });
     }
   }, [apiBaseUrl]);
+
+  const filteredCalendarEvents = useMemo(() => {
+    if (calendarFilter === "all") return calendarState.events;
+    return calendarState.events.filter((evt) => {
+      const source = evt.extendedProps?.sourceType;
+      const entryType = evt.extendedProps?.entryType;
+      if (calendarFilter === "events") return source !== "institution_calendar";
+      if (calendarFilter === "holidays") return source === "institution_calendar" && entryType === "holiday";
+      if (calendarFilter === "academic") return source === "institution_calendar" && entryType === "academic";
+      return true;
+    });
+  }, [calendarState.events, calendarFilter]);
 
   const loadEvents = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
@@ -4790,7 +4803,6 @@ export default function App() {
                     style={{ width: "100%", padding: "8px", marginBottom: "16px" }}
                   >
                     <option value="faculty">Faculty</option>
-                    <option value="registrar">Registrar</option>
                     <option value="vice_chancellor">Vice Chancellor</option>
                     <option value="facility_manager">Facility Manager</option>
                     <option value="marketing">Marketing</option>
@@ -7545,6 +7557,12 @@ export default function App() {
                   <p className="calendar-subtitle">Approved events plus visible institution holidays and academic updates</p>
                 </div>
                 <div className="calendar-actions">
+                  <div className="calendar-filter-control">
+                    <button type="button" className={`cal-filter-btn${calendarFilter === "all" ? " active" : ""}`} onClick={() => setCalendarFilter("all")}>All</button>
+                    <button type="button" className={`cal-filter-btn${calendarFilter === "events" ? " active" : ""}`} onClick={() => setCalendarFilter("events")}>Events</button>
+                    <button type="button" className={`cal-filter-btn${calendarFilter === "holidays" ? " active" : ""}`} onClick={() => setCalendarFilter("holidays")}>Holidays</button>
+                    <button type="button" className={`cal-filter-btn${calendarFilter === "academic" ? " active" : ""}`} onClick={() => setCalendarFilter("academic")}>Academic</button>
+                  </div>
                   <button type="button" className="secondary-action" onClick={() => fetchCalendarEvents()}>
                     Refresh
                   </button>
@@ -7580,7 +7598,7 @@ export default function App() {
                   height="auto"
                   editable
                   eventResizableFromStart
-                  events={calendarState.events}
+                  events={filteredCalendarEvents}
                   datesSet={(info) => fetchCalendarEvents({ start: info.start, end: info.end })}
                   eventClick={(info) => {
                     info.jsEvent.preventDefault();
