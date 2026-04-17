@@ -31,6 +31,7 @@ class SideNavBar extends StatelessWidget {
     final canAccessRequirements =
         isFacilityManager || isMarketing || isIt || isTransport;
     final canAccessEventReports = isAdmin || isRegistrarDashboard;
+    final canAccessCalendarUpdates = isAdmin || isRegistrarDashboard;
     final canAccessAdminConsole = isAdmin;
     final canAccessIqac = AppConstants.iqacAllowedRoles.contains(roleKey);
 
@@ -119,6 +120,13 @@ class SideNavBar extends StatelessWidget {
                       title: 'Calendar View',
                       route: '/calendar',
                     ),
+                    if (canAccessCalendarUpdates)
+                      _buildNavItem(
+                        context,
+                        icon: LucideIcons.calendarDays,
+                        title: 'Calendar Updates',
+                        route: '/calendar-updates',
+                      ),
                     if (canAccessApprovals)
                       _buildNavItem(
                         context,
@@ -188,7 +196,8 @@ class SideNavBar extends StatelessWidget {
     required String title,
     required String route,
   }) {
-    final bool isSelected = currentRoute.startsWith(route);
+    final bool isSelected =
+        currentRoute == route || currentRoute.startsWith('$route/');
     return Material(
       color: Colors.transparent,
       child: InkWell(

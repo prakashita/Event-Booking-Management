@@ -8,6 +8,7 @@ import '../screens/events/event_details_screen.dart';
 import '../screens/approvals/approvals_screen.dart';
 import '../screens/requirements/requirements_screen.dart';
 import '../screens/calendar/calendar_screen.dart';
+import '../screens/calendar/calendar_updates_screen.dart';
 import '../screens/chat/chat_list_screen.dart';
 import '../screens/chat/chat_screen.dart';
 import '../screens/publications/publications_screen.dart';
@@ -64,6 +65,10 @@ class AppRouter {
             GoRoute(
               path: '/calendar',
               builder: (_, _) => const CalendarScreen(),
+            ),
+            GoRoute(
+              path: '/calendar-updates',
+              builder: (_, _) => const CalendarUpdatesScreen(),
             ),
             GoRoute(path: '/chat', builder: (_, _) => const ChatListScreen()),
             GoRoute(
