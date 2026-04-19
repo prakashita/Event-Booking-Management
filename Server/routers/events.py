@@ -75,7 +75,7 @@ async def user_may_view_event_details(user: User, event: Event) -> bool:
     if event.created_by == str(user.id):
         return True
     role = (user.role or "").strip().lower()
-    if role in ("admin", "registrar", "vice_chancellor"):
+    if role in ("admin", "registrar", "vice_chancellor", "deputy_registrar", "finance_team"):
         return True
     if is_admin_email(user.email or ""):
         return True
@@ -393,6 +393,8 @@ async def notify_registrar_for_approval(
 
     access_token = None
     for sender_user in [
+        await get_user_by_role("deputy_registrar"),
+        await get_user_by_role("finance_team"),
         await get_user_by_role("vice_chancellor"),
         await get_user_by_role("registrar"),
         requester,
@@ -408,7 +410,7 @@ async def notify_registrar_for_approval(
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Unable to send approval notification: connect Google on a vice chancellor, registrar, or your account.",
+            detail="Unable to send approval notification: connect Google on deputy registrar, finance, vice chancellor, registrar, or your account.",
         )
 
     response = requests.post(
@@ -470,7 +472,13 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
             approval.requested_to
             and approval.requested_to.strip().lower() == (user.email or "").strip().lower()
         )
-        is_privileged = role in ("registrar", "vice_chancellor", "admin") or is_admin_email(user.email or "")
+        is_privileged = role in (
+            "registrar",
+            "vice_chancellor",
+            "deputy_registrar",
+            "finance_team",
+            "admin",
+        ) or is_admin_email(user.email or "")
         if not (is_requester or is_assigned_approver or is_privileged):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed to view this event")
 
@@ -669,22 +677,25 @@ async def create_event(request: Request, payload: EventCreate, user: User = Depe
             detail="Registrar email is not configured",
         )
 
-    vc_email = (await get_primary_email_by_role("vice_chancellor") or "").strip()
-    budget_amount = float(payload.budget) if payload.budget is not None else 0.0
+    deputy_email = (await get_primary_email_by_role("deputy_registrar") or "").strip()
+    if not deputy_email:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Deputy Registrar email is not configured",
+        )
 
-    if budget_amount > BUDGET_VC_PRIMARY_THRESHOLD:
-        if not vc_email:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Vice Chancellor email is not configured (required for events over Rs 30,000).",
-            )
-        primary_approver_email = vc_email
-        cc_list = [registrar_email]
-        pending_status = "pending_vice_chancellor_approval"
-    else:
-        primary_approver_email = registrar_email
-        cc_list = [vc_email] if vc_email else []
-        pending_status = "pending_registrar_approval"
+    finance_email = (await get_primary_email_by_role("finance_team") or "").strip()
+    if not finance_email:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Finance Team email is not configured",
+        )
+
+    vc_email = (await get_primary_email_by_role("vice_chancellor") or "").strip()
+    # First stage: Deputy Registrar only. VC/registrar routing applies at the final stage after finance.
+    primary_approver_email = deputy_email
+    cc_list = [e for e in [registrar_email, vc_email, finance_email] if e]
+    pending_status = "pending_deputy_registrar_approval"
 
     # Primary addressee approves in-app; CC list is notification-only on this email.
     approval = ApprovalRequest(
@@ -707,6 +718,7 @@ async def create_event(request: Request, payload: EventCreate, user: User = Depe
         other_notes=None,
         override_conflict=payload.override_conflict,
         approval_cc=cc_list,
+        pipeline_stage="deputy",
     )
     await approval.insert()
 

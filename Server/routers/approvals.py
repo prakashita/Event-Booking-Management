@@ -28,7 +28,9 @@ from rate_limit import limiter
 from routers.admin import serialize_approval
 from routers.deps import get_current_user
 from routers.events import (
+    BUDGET_VC_PRIMARY_THRESHOLD,
     get_expected_budget_breakdown_filename,
+    notify_registrar_for_approval,
     serialize_workflow_log_entry,
     sync_event_to_google_calendar,
 )
@@ -42,6 +44,69 @@ from workflow_action_service import record_approval_discussion_reply, record_wor
 
 router = APIRouter(prefix="/approvals", tags=["Approvals"])
 logger = logging.getLogger("event-booking.approvals")
+
+
+def effective_pipeline_stage(approval: ApprovalRequest) -> str:
+    """Logical stage for routing. Legacy rows omit pipeline_stage → registrar-only final gate."""
+    ps = (getattr(approval, "pipeline_stage", None) or "").strip().lower()
+    if ps:
+        return ps
+    if (getattr(approval, "status", None) or "") == "approved" and getattr(approval, "event_id", None):
+        return "complete"
+    return "registrar"
+
+
+async def user_may_act_on_approval_request(user: User, approval: ApprovalRequest) -> bool:
+    """True if the user may approve/reject/clarify (assigned approver or role-matched delegate)."""
+    approver_email = (user.email or "").strip().lower()
+    requested_to = (approval.requested_to or "").strip().lower()
+    role = (user.role or "").strip().lower()
+    ps = effective_pipeline_stage(approval)
+
+    if ps in ("after_deputy", "after_finance"):
+        return False
+    if not requested_to:
+        return False
+    if approver_email == requested_to:
+        return True
+
+    reg_primary = (await get_primary_email_by_role("registrar") or "").strip().lower()
+    dep_primary = (await get_primary_email_by_role("deputy_registrar") or "").strip().lower()
+    fin_primary = (await get_primary_email_by_role("finance_team") or "").strip().lower()
+
+    if role == "deputy_registrar" and dep_primary and requested_to == dep_primary:
+        return True
+    if role == "finance_team" and fin_primary and requested_to == fin_primary:
+        return True
+    # Legacy: delegate could act on the final registrar queue
+    if role == "deputy_registrar" and reg_primary and requested_to == reg_primary and ps == "registrar":
+        return True
+    if role == "finance_team" and reg_primary and requested_to == reg_primary and ps == "registrar":
+        return True
+    return False
+
+
+async def notify_requester_text(
+    sender: User,
+    requester_email: str,
+    subject: str,
+    body: str,
+) -> None:
+    try:
+        access_token = await ensure_google_access_token(sender)
+    except HTTPException:
+        logger.warning("Cannot email requester: sender Google token not available")
+        return
+    raw_message = _build_raw_email(requester_email, subject, body)
+    encoded_message = base64.urlsafe_b64encode(raw_message.encode("utf-8")).decode("utf-8")
+    response = requests.post(
+        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json={"raw": encoded_message},
+        timeout=15,
+    )
+    if response.status_code not in {200, 202}:
+        logger.warning("Failed to notify requester: %s", response.text)
 
 
 def _build_raw_email(to_email: str, subject: str, body: str) -> str:
@@ -153,6 +218,10 @@ async def list_inbox(
     role = (user.role or "").strip().lower()
     if role == "vice_chancellor":
         email = (await get_primary_email_by_role("vice_chancellor") or "").strip()
+    elif role == "deputy_registrar":
+        email = (await get_primary_email_by_role("deputy_registrar") or "").strip()
+    elif role == "finance_team":
+        email = (await get_primary_email_by_role("finance_team") or "").strip()
     else:
         email = (user.email or "").strip()
     if not email:
@@ -175,6 +244,76 @@ async def list_inbox(
         offset=offset,
         next_offset=next_offset,
     )
+
+
+@router.post("/{request_id}/forward-to-finance", response_model=ApprovalRequestResponse)
+async def forward_to_finance(request_id: str, user: User = Depends(get_current_user)):
+    approval = await ApprovalRequest.get(request_id)
+    if not approval:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    if str(approval.requester_id) != str(user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+    if effective_pipeline_stage(approval) != "after_deputy":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This request is not waiting to be sent to the finance department.",
+        )
+    finance_email = (await get_primary_email_by_role("finance_team") or "").strip()
+    if not finance_email:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Finance Team email is not configured",
+        )
+    approval.pipeline_stage = "finance"
+    approval.requested_to = finance_email
+    await approval.save()
+    try:
+        await notify_registrar_for_approval(user, finance_email, approval, cc_emails=[])
+    except Exception as exc:
+        logger.warning("forward_to_finance: notification failed: %s", exc)
+    return serialize_approval(approval)
+
+
+@router.post("/{request_id}/forward-to-registrar", response_model=ApprovalRequestResponse)
+async def forward_to_registrar(request_id: str, user: User = Depends(get_current_user)):
+    approval = await ApprovalRequest.get(request_id)
+    if not approval:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
+    if str(approval.requester_id) != str(user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+    if effective_pipeline_stage(approval) != "after_finance":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This request is not waiting to be sent to the Registrar.",
+        )
+    budget_amount = float(getattr(approval, "budget", None) or 0) or 0.0
+    registrar_email = (await get_primary_email_by_role("registrar") or "").strip()
+    vc_email = (await get_primary_email_by_role("vice_chancellor") or "").strip()
+    if budget_amount > BUDGET_VC_PRIMARY_THRESHOLD:
+        if not vc_email:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Vice Chancellor email is not configured (required for events over Rs 30,000).",
+            )
+        primary = vc_email
+        cc_list = [registrar_email] if registrar_email else []
+    else:
+        if not registrar_email:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Registrar email is not configured",
+            )
+        primary = registrar_email
+        cc_list = [vc_email] if vc_email else []
+    approval.pipeline_stage = "registrar"
+    approval.requested_to = primary
+    approval.approval_cc = cc_list
+    await approval.save()
+    try:
+        await notify_registrar_for_approval(user, primary, approval, cc_emails=cc_list)
+    except Exception as exc:
+        logger.warning("forward_to_registrar: notification failed: %s", exc)
+    return serialize_approval(approval)
 
 
 @router.post("/{request_id}/budget-breakdown", response_model=ApprovalRequestResponse)
@@ -270,6 +409,7 @@ async def get_approval_threads(
     uid = str(user.id)
     is_admin = role == "admin" or is_admin_email(user.email or "")
     is_vc = role == "vice_chancellor"
+    is_reg_queue_oversight = role in ("deputy_registrar", "finance_team")
 
     conversations = await list_approval_threads(str(approval.id))
 
@@ -288,6 +428,8 @@ async def get_approval_threads(
             pass  # direct participant
         elif is_vc and (conv.department or "").strip().lower() == "registrar":
             pass  # vice chancellor: same oversight as registrar dashboard for registrar threads
+        elif is_reg_queue_oversight and (conv.department or "").strip().lower() == "registrar":
+            pass  # deputy registrar / finance: oversight on registrar threads without being primary approver
         else:
             continue  # PRIVACY: skip threads user is not part of
 
@@ -383,7 +525,13 @@ async def ensure_department_thread(
     uid = str(user.id)
     role = (user.role or "").strip().lower()
     is_requester = str(approval.requester_id) == uid
-    is_admin_or_reg = role in ("registrar", "vice_chancellor", "admin") or is_admin_email(user.email or "")
+    is_admin_or_reg = role in (
+        "registrar",
+        "vice_chancellor",
+        "deputy_registrar",
+        "finance_team",
+        "admin",
+    ) or is_admin_email(user.email or "")
 
     # Determine who the two parties are
     faculty_user_id = str(approval.requester_id)
@@ -533,7 +681,13 @@ async def reopen_approval_thread(
     Restricted to registrar and admin roles.
     """
     role = (user.role or "").strip().lower()
-    if role not in ("registrar", "vice_chancellor", "admin") and not is_admin_email(user.email or ""):
+    if role not in (
+        "registrar",
+        "vice_chancellor",
+        "deputy_registrar",
+        "finance_team",
+        "admin",
+    ) and not is_admin_email(user.email or ""):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only registrar or admin can reopen threads")
 
     try:
@@ -729,7 +883,13 @@ async def post_approval_discussion_reply(
     approver_email = (approval.requested_to or "").strip().lower()
     user_email = (user.email or "").strip().lower()
     is_assigned_approver = bool(approver_email and approver_email == user_email)
-    is_privileged = role in ("registrar", "vice_chancellor", "admin") or is_admin_email(user.email or "")
+    is_privileged = role in (
+        "registrar",
+        "vice_chancellor",
+        "deputy_registrar",
+        "finance_team",
+        "admin",
+    ) or is_admin_email(user.email or "")
 
     if not (is_requester or is_assigned_approver or is_privileged):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
@@ -795,10 +955,8 @@ async def decide_request(
             detail="Event has already started; approval or rejection is no longer allowed.",
         )
 
-    approver_email = (user.email or "").strip().lower()
-    requested_to = (approval.requested_to or "").strip().lower()
     role_normalized = (user.role or "").strip().lower()
-    if not (requested_to and approver_email == requested_to):
+    if not await user_may_act_on_approval_request(user, approval):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
 
     if approval.status in ("approved", "rejected"):
@@ -813,7 +971,11 @@ async def decide_request(
             detail="This approval request is no longer actionable.",
         )
 
-    audit_role = role_normalized if role_normalized in ("registrar", "vice_chancellor") else "registrar"
+    audit_role = (
+        role_normalized
+        if role_normalized in ("registrar", "vice_chancellor", "deputy_registrar", "finance_team")
+        else "registrar"
+    )
     ar_log_kwargs = dict(
         approval_request_id=str(approval.id),
         related_kind="approval_request",
@@ -876,6 +1038,75 @@ async def decide_request(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A budget breakdown PDF must be uploaded before this request can be approved.",
             )
+        ps_gate = effective_pipeline_stage(approval)
+
+        if ps_gate == "deputy":
+            approval.pipeline_stage = "after_deputy"
+            approval.requested_to = None
+            approval.discussion_status = None
+            await approval.save()
+            await record_workflow_action(
+                event_id=approval.event_id,
+                action_type=action_type_for_status(normalized_status),
+                **ar_log_kwargs,
+            )
+            requester = await User.get(approval.requester_id)
+            if requester and requester.email:
+                try:
+                    await notify_requester_text(
+                        user,
+                        requester.email,
+                        f"Deputy Registrar approved: {approval.event_name}",
+                        (
+                            f"The Deputy Registrar approved your event \"{approval.event_name}\".\n\n"
+                            "Sign in to the Event Booking portal, open My Events, and use "
+                            "\"Send to finance department for approval\" to continue the workflow."
+                        ),
+                    )
+                except Exception as exc:
+                    logger.warning("Requester notification (deputy approved) failed: %s", exc)
+            response_body = serialize_approval(approval)
+            if idem_key:
+                await store_response(idem_key, 200, response_body.model_dump(mode="json"))
+            return response_body
+
+        if ps_gate == "finance":
+            approval.pipeline_stage = "after_finance"
+            approval.requested_to = None
+            approval.discussion_status = None
+            await approval.save()
+            await record_workflow_action(
+                event_id=approval.event_id,
+                action_type=action_type_for_status(normalized_status),
+                **ar_log_kwargs,
+            )
+            requester = await User.get(approval.requester_id)
+            if requester and requester.email:
+                try:
+                    await notify_requester_text(
+                        user,
+                        requester.email,
+                        f"Finance approved: {approval.event_name}",
+                        (
+                            f"Finance has approved your event \"{approval.event_name}\".\n\n"
+                            "Sign in to the Event Booking portal, open My Events, and use "
+                            "\"Send to Registrar for approval\" to route the request to the Registrar "
+                            "(or Vice Chancellor for high-budget events)."
+                        ),
+                    )
+                except Exception as exc:
+                    logger.warning("Requester notification (finance approved) failed: %s", exc)
+            response_body = serialize_approval(approval)
+            if idem_key:
+                await store_response(idem_key, 200, response_body.model_dump(mode="json"))
+            return response_body
+
+        if ps_gate != "registrar":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This approval is not at the final review stage.",
+            )
+
         if not approval.event_id:
             start_dt = combine_datetime(approval.start_date, approval.start_time)
             end_dt = combine_datetime(approval.end_date, approval.end_time)
@@ -990,6 +1221,7 @@ async def decide_request(
             except Exception as exc:
                 logger.warning("Event group chat creation failed: %s", exc)
 
+        approval.pipeline_stage = "complete"
         approval.status = "approved"
         approval.discussion_status = None
         approval.decided_by = user.email
@@ -1003,8 +1235,12 @@ async def decide_request(
 
     response_body = serialize_approval(approval)
 
-    # Resolve all approval threads when the decision is final
-    if normalized_status in ("approved", "rejected"):
+    should_resolve_threads = normalized_status == "rejected" or (
+        normalized_status == "approved"
+        and approval.status == "approved"
+        and getattr(approval, "event_id", None)
+    )
+    if should_resolve_threads:
         try:
             await resolve_approval_thread_status(str(approval.id), normalized_status)
         except Exception as exc:

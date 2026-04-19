@@ -148,7 +148,7 @@ async def record_approval_discussion_reply(
         role = "requester"
     else:
         ur = (user.role or "").strip().lower()
-        role = ur if ur in ("registrar", "vice_chancellor") else "registrar"
+        role = ur if ur in ("registrar", "vice_chancellor", "deputy_registrar", "finance_team") else "registrar"
     return await record_workflow_action(
         event_id=approval.event_id,
         approval_request_id=str(approval.id),

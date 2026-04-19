@@ -286,6 +286,7 @@ class ApprovalRequestResponse(BaseModel):
     decided_by: Optional[str] = None
     created_at: datetime
     approval_cc: List[str] = Field(default_factory=list)
+    pipeline_stage: Optional[str] = None
 
 
 class ApprovalDecision(BaseModel):

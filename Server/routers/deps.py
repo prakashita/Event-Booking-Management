@@ -80,9 +80,25 @@ async def require_admin(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> User:
     user = await get_current_user(credentials)
-    allowed_roles = {"admin", "registrar", "vice_chancellor"}
+    allowed_roles = {"admin", "registrar", "vice_chancellor", "deputy_registrar"}
     if (user.role or '').strip().lower() not in allowed_roles:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Admin access required')
+    return user
+
+
+# Broader than require_admin: includes finance_team for Event Reports API only (no user/venue admin).
+REGISTRAR_DASHBOARD_ROLES = frozenset(
+    {"admin", "registrar", "vice_chancellor", "deputy_registrar", "finance_team"}
+)
+
+
+async def require_registrar_dashboard(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> User:
+    user = await get_current_user(credentials)
+    r = (user.role or "").strip().lower()
+    if r not in REGISTRAR_DASHBOARD_ROLES and not is_admin_email(user.email or ""):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
     return user
 
 
@@ -90,7 +106,7 @@ async def require_admin_or_registrar(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> User:
     user = await get_current_user(credentials)
-    allowed_roles = {"admin", "registrar"}
+    allowed_roles = {"admin", "registrar", "vice_chancellor", "deputy_registrar", "finance_team"}
     if (user.role or "").strip().lower() not in allowed_roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -101,9 +117,13 @@ async def require_admin_or_registrar(
 
 # Roles that may access IQAC Data Collection (criteria, upload/list/download/delete).
 # Frontend must mirror this for sidebar visibility and route guard (see ROLES_WITH_IQAC_ACCESS in Client).
-IQAC_ALLOWED_ROLES = frozenset({"iqac", "faculty", "admin", "registrar", "vice_chancellor"})
+IQAC_ALLOWED_ROLES = frozenset(
+    {"iqac", "faculty", "admin", "registrar", "vice_chancellor", "deputy_registrar", "finance_team"}
+)
 # Faculty may upload and view but not delete; must match Client ROLES_WITH_IQAC_DELETE_ACCESS.
-IQAC_DELETE_ALLOWED_ROLES = frozenset({"iqac", "admin", "registrar", "vice_chancellor"})
+IQAC_DELETE_ALLOWED_ROLES = frozenset(
+    {"iqac", "admin", "registrar", "vice_chancellor", "deputy_registrar", "finance_team"}
+)
 
 
 async def require_iqac(
@@ -125,7 +145,13 @@ def _user_role(user: User) -> str:
 
 def _is_privileged(user: User) -> bool:
     """Admin or registrar-level access (includes vice chancellor registrar-style dashboard)."""
-    return _user_role(user) in ("admin", "registrar", "vice_chancellor") or is_admin_email(user.email or "")
+    return _user_role(user) in (
+        "admin",
+        "registrar",
+        "vice_chancellor",
+        "deputy_registrar",
+        "finance_team",
+    ) or is_admin_email(user.email or "")
 
 
 def can_view_conversation(user: User, conversation: ChatConversation) -> bool:

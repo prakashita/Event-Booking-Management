@@ -54,6 +54,8 @@ async def get_user_by_role(role: str):
 CALENDAR_INVITE_STAFF_ROLES = (
     "registrar",
     "vice_chancellor",
+    "deputy_registrar",
+    "finance_team",
     "facility_manager",
     "marketing",
     "it",
