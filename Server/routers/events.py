@@ -604,8 +604,15 @@ async def check_conflicts(payload: EventCreate, user: User = Depends(get_current
     existing_events = await Event.find_all().to_list()
     conflicts = []
     for existing in existing_events:
-        existing_start = combine_datetime(existing.start_date, existing.start_time)
-        existing_end = combine_datetime(existing.end_date, existing.end_time)
+        try:
+            existing_start = combine_datetime(existing.start_date, existing.start_time)
+            existing_end = combine_datetime(existing.end_date, existing.end_time)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Skipping event with invalid date/time while checking conflicts",
+                extra={"event_id": str(existing.id)},
+            )
+            continue
         if (
             existing.venue_name == payload.venue_name
             and start_dt < existing_end
@@ -637,8 +644,15 @@ async def create_event(request: Request, payload: EventCreate, user: User = Depe
         existing_events = await Event.find_all().to_list()
         conflicts = []
         for existing in existing_events:
-            existing_start = combine_datetime(existing.start_date, existing.start_time)
-            existing_end = combine_datetime(existing.end_date, existing.end_time)
+            try:
+                existing_start = combine_datetime(existing.start_date, existing.start_time)
+                existing_end = combine_datetime(existing.end_date, existing.end_time)
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Skipping event with invalid date/time while creating event",
+                    extra={"event_id": str(existing.id)},
+                )
+                continue
             if (
                 existing.venue_name == payload.venue_name
                 and start_dt < existing_end
