@@ -326,7 +326,6 @@ class AppTheme {
     const darkPrimary = Color(0xFF60A5FA);
     const darkSurface = Color(0xFF111827);
     const darkSurfaceRaised = Color(0xFF1F2937);
-    const darkBackground = Color(0xFF0B1220);
     const darkOutline = Color(0xFF334155);
 
     final base = ThemeData(

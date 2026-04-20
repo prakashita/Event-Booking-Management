@@ -55,6 +55,10 @@ class AppColors {
         return const Color(0xFF8E24AA);
       case UserRole.vice_chancellor:
         return const Color(0xFF5E35B1);
+      case UserRole.deputy_registrar:
+        return const Color(0xFF7C3AED);
+      case UserRole.finance_team:
+        return const Color(0xFF0E7490);
       case UserRole.iqac:
         return const Color(0xFF283593);
       case UserRole.facility_manager:

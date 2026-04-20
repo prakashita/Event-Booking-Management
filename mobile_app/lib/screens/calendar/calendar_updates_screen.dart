@@ -165,7 +165,11 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
   bool get _canManage {
     final role = (context.read<AuthProvider>().user?.roleKey ?? '')
         .toLowerCase();
-    return role == 'admin' || role == 'registrar';
+    return role == 'admin' ||
+        role == 'registrar' ||
+        role == 'vice_chancellor' ||
+        role == 'deputy_registrar' ||
+        role == 'finance_team';
   }
 
   @override
@@ -1739,10 +1743,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
               // Filters label pill
               Container(
                 margin: const EdgeInsets.only(right: 6),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 6,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 decoration: BoxDecoration(
                   color: isDark
                       ? const Color(0xFF334155)
@@ -2016,7 +2017,9 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.normal,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
                     ),
                   ),
                   Text(
@@ -2079,10 +2082,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
             child: ElevatedButton.icon(
               onPressed: () => _openHolidaySheet(),
               icon: const Icon(Icons.add, size: 16),
-              label: const Text(
-                'Add Holiday',
-                overflow: TextOverflow.ellipsis,
-              ),
+              label: const Text('Add Holiday', overflow: TextOverflow.ellipsis),
               style:
                   ElevatedButton.styleFrom(
                     elevation: 0,
@@ -2394,7 +2394,11 @@ class _EntryCard extends StatelessWidget {
                         flex: 5,
                         child: _buildPropColumn(
                           'SEM/CAT',
-                          entry.category.isNotEmpty ? entry.category : (entry.entryType == 'holiday' ? 'Holiday' : 'N/A'),
+                          entry.category.isNotEmpty
+                              ? entry.category
+                              : (entry.entryType == 'holiday'
+                                    ? 'Holiday'
+                                    : 'N/A'),
                           labelColor: mutedLabel,
                           valueColor: titleColor,
                         ),

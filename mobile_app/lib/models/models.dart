@@ -51,6 +51,10 @@ class User {
         return UserRole.registrar;
       case 'vice_chancellor':
         return UserRole.vice_chancellor;
+      case 'deputy_registrar':
+        return UserRole.deputy_registrar;
+      case 'finance_team':
+        return UserRole.finance_team;
       case 'facility_manager':
         return UserRole.facility_manager;
       case 'marketing':
@@ -84,6 +88,8 @@ enum UserRole {
   admin,
   registrar,
   vice_chancellor,
+  deputy_registrar,
+  finance_team,
   faculty,
   facility_manager,
   marketing,
@@ -178,6 +184,8 @@ class Event {
   final String? reportFileId;
   final int? audienceCount;
   final String? notes;
+  final String? pipelineStage;
+  final String? approvalRequestId;
 
   const Event({
     required this.id,
@@ -193,6 +201,8 @@ class Event {
     this.reportFileId,
     this.audienceCount,
     this.notes,
+    this.pipelineStage,
+    this.approvalRequestId,
   });
 
   factory Event.fromJson(Map<String, dynamic> json) => Event(
@@ -229,6 +239,9 @@ class Event {
     reportFileId: json['report_file_id'],
     audienceCount: json['audience_count'],
     notes: json['notes'] ?? json['htmlLink'],
+    pipelineStage: json['pipeline_stage']?.toString(),
+    approvalRequestId:
+        (json['approval_request_id'] ?? json['id'] ?? json['_id'])?.toString(),
   );
 }
 
@@ -247,6 +260,7 @@ class ApprovalRequest {
   final bool overrideConflict;
   final String? notes;
   final DateTime createdAt;
+  final String? pipelineStage;
 
   const ApprovalRequest({
     required this.id,
@@ -261,6 +275,7 @@ class ApprovalRequest {
     this.overrideConflict = false,
     this.notes,
     required this.createdAt,
+    this.pipelineStage,
   });
 
   factory ApprovalRequest.fromJson(Map<String, dynamic> json) =>
@@ -288,6 +303,7 @@ class ApprovalRequest {
         requestedTo: json['requested_to'] ?? '',
         overrideConflict: json['override_conflict'] ?? false,
         notes: json['other_notes'] ?? json['notes'],
+        pipelineStage: json['pipeline_stage']?.toString(),
         createdAt:
             DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
             DateTime.now(),

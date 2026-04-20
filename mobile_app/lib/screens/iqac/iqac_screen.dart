@@ -88,7 +88,9 @@ class _IQACScreenState extends State<IQACScreen> {
     return role == 'iqac' ||
         role == 'admin' ||
         role == 'registrar' ||
-        role == 'vice_chancellor';
+        role == 'vice_chancellor' ||
+        role == 'deputy_registrar' ||
+        role == 'finance_team';
   }
 
   Future<void> _openCriterionPanel(

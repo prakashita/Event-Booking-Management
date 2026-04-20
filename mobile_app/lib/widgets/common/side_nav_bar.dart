@@ -21,7 +21,10 @@ class SideNavBar extends StatelessWidget {
     final isAdmin = roleKey == 'admin';
     final isRegistrar = roleKey == 'registrar';
     final isViceChancellor = roleKey == 'vice_chancellor';
-    final isRegistrarDashboard = isRegistrar || isViceChancellor;
+    final isDeputyRegistrar = roleKey == 'deputy_registrar';
+    final isFinanceTeam = roleKey == 'finance_team';
+    final isRegistrarDashboard =
+        isRegistrar || isViceChancellor || isDeputyRegistrar || isFinanceTeam;
     final isFacilityManager = roleKey == 'facility_manager';
     final isMarketing = roleKey == 'marketing';
     final isIt = roleKey == 'it';

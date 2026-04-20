@@ -18,6 +18,8 @@ class AppConstants {
     'admin',
     'registrar',
     'vice_chancellor',
+    'deputy_registrar',
+    'finance_team',
     'faculty',
     'facility_manager',
     'marketing',
@@ -32,13 +34,22 @@ class AppConstants {
     'admin',
     'registrar',
     'vice_chancellor',
+    'deputy_registrar',
+    'finance_team',
   ];
   static const List<String> adminRoles = [
     'admin',
     'registrar',
     'vice_chancellor',
+    'deputy_registrar',
+    'finance_team',
   ];
-  static const List<String> approvalRoles = ['registrar', 'vice_chancellor'];
+  static const List<String> approvalRoles = [
+    'registrar',
+    'vice_chancellor',
+    'deputy_registrar',
+    'finance_team',
+  ];
   static const List<String> facilityRoles = ['facility_manager'];
   static const List<String> marketingRoles = ['marketing'];
   static const List<String> itRoles = ['it'];

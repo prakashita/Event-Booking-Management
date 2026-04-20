@@ -66,6 +66,8 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
   bool _confirmed = false;
   bool _loadingApprovalEmails = true;
 
+  String _deputyRegistrarEmail = "";
+  String _financeTeamEmail = "";
   String _registrarEmail = "";
   String _viceChancellorEmail = "";
 
@@ -82,6 +84,12 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
       );
       if (!mounted) return;
       setState(() {
+        _deputyRegistrarEmail = (data['deputy_registrar_email'] ?? '')
+            .toString()
+            .trim();
+        _financeTeamEmail = (data['finance_team_email'] ?? '')
+            .toString()
+            .trim();
         _registrarEmail = (data['registrar_email'] ?? '').toString().trim();
         _viceChancellorEmail = (data['vice_chancellor_email'] ?? '')
             .toString()
@@ -97,9 +105,6 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
   }
 
   Future<void> _submit() async {
-    final budget = widget.eventData['budget'] as num? ?? 0;
-    final isHighBudget = budget > _budgetThreshold;
-
     if (_loadingApprovalEmails) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -110,23 +115,13 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
       return;
     }
 
-    if (_registrarEmail.isEmpty) {
+    if (_deputyRegistrarEmail.isEmpty ||
+        _financeTeamEmail.isEmpty ||
+        _registrarEmail.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Registrar email is not configured. Please ask admin to assign a registrar user.',
-          ),
-          backgroundColor: AppColors.error,
-        ),
-      );
-      return;
-    }
-
-    if (isHighBudget && _viceChancellorEmail.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Vice Chancellor email is not configured for events above Rs 30,000.',
+            'Approval routing is not fully configured. Please ask admin to assign Deputy Registrar, Finance Team, and Registrar users.',
           ),
           backgroundColor: AppColors.error,
         ),
@@ -149,12 +144,11 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
     setState(() => _submitting = true);
 
     try {
-      final toEmail = isHighBudget ? _viceChancellorEmail : _registrarEmail;
       final payload = {
         ...widget.eventData,
-        'approval_to': toEmail,
         'discussedWithProgrammingChair': true,
-        'submit_for_approval': true,
+        'requirements': const <String>[],
+        'other_notes': '',
       };
 
       final data = await _api.post<Map<String, dynamic>>(
@@ -200,7 +194,10 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(uploadWarning ?? 'Event submitted successfully!'),
+            content: Text(
+              uploadWarning ??
+                  'Event submitted to Deputy Registrar for stage 1 approval.',
+            ),
           ),
         );
         context.go('/events');
@@ -235,14 +232,21 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userEmail = authProvider.user?.email ?? 'partha.worklife@gmail.com';
 
-    final budget = widget.eventData['budget'] as num? ?? 0;
-    final isHighBudget = budget > _budgetThreshold;
-    final toEmail = isHighBudget ? _viceChancellorEmail : _registrarEmail;
-    final ccEmail = isHighBudget ? _registrarEmail : _viceChancellorEmail;
+    final toEmail = _deputyRegistrarEmail;
+    final ccEmails = [
+      _financeTeamEmail,
+      _registrarEmail,
+      _viceChancellorEmail,
+    ].map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
+    final ccLabel = ccEmails.isEmpty
+        ? 'Finance Team / Registrar / Vice Chancellor (as configured)'
+        : ccEmails.join(', ');
     final canSend =
         !_loadingApprovalEmails &&
+        _deputyRegistrarEmail.isNotEmpty &&
+        _financeTeamEmail.isNotEmpty &&
         _registrarEmail.isNotEmpty &&
-        (!isHighBudget || _viceChancellorEmail.isNotEmpty);
+        _confirmed;
 
     final startDate = DateFormat(
       'yyyy-MM-dd',
@@ -285,9 +289,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                isHighBudget
-                                    ? 'Vice Chancellor Approval'
-                                    : 'Registrar Approval',
+                                'Deputy Registrar Approval (Stage 1)',
                                 style: TextStyle(
                                   color: _slate800,
                                   fontSize: 18,
@@ -328,15 +330,8 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                   final useColumns =
                                       constraints.maxWidth >= 520;
                                   final toLabel = toEmail.isEmpty
-                                      ? (isHighBudget
-                                            ? 'Vice Chancellor email'
-                                            : 'Registrar email')
+                                      ? 'Deputy Registrar email'
                                       : toEmail;
-                                  final ccLabel = ccEmail.isEmpty
-                                      ? (isHighBudget
-                                            ? 'Registrar (not configured)'
-                                            : 'Vice Chancellor (optional)')
-                                      : ccEmail;
                                   if (!useColumns) {
                                     return Column(
                                       children: [
@@ -399,9 +394,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                               ),
                               const SizedBox(height: 18),
                               Text(
-                                isHighBudget
-                                    ? 'Budget is above Rs ${_budgetThreshold.toStringAsFixed(0)}. The Vice Chancellor will approve or reject this event in the portal. The Registrar is copied on the email for information only. After approval, you can send requirements to Facility, IT, Marketing, and Transport.'
-                                    : 'Budget is Rs ${_budgetThreshold.toStringAsFixed(0)} or below. The Registrar will approve or reject this event in the portal. The Vice Chancellor is copied on the email when configured. After approval, you can send requirements to Facility, IT, Marketing, and Transport.',
+                                'Stage 1 routes to Deputy Registrar. After Deputy approval, open My Events and use "Send to finance department for approval". After Finance approval, use "Send to Registrar for approval". Final approver is Registrar for budgets up to Rs ${_budgetThreshold.toStringAsFixed(0)} and Vice Chancellor for higher budgets (with Registrar in CC). Requirements can be sent only after final approval.',
                                 style: TextStyle(
                                   color: _slate600,
                                   fontSize: 14,
@@ -412,7 +405,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                               if (!canSend) ...[
                                 const SizedBox(height: 10),
                                 const Text(
-                                  'Approval routing is not fully configured. Please ask admin to assign Registrar/Vice Chancellor users.',
+                                  'Approval routing is not fully configured. Please ask admin to assign Deputy Registrar, Finance Team, and Registrar users.',
                                   style: TextStyle(
                                     color: Color(0xFFB91C1C),
                                     fontSize: 13,

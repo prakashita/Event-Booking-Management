@@ -109,6 +109,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     Map<String, dynamic> approval,
     Map<String, dynamic> event,
   ) {
+    final pipelineStage = _s(
+      approval['pipeline_stage'],
+      fallback: '',
+    ).toLowerCase();
+    if (pipelineStage == 'deputy') return 'Deputy Registrar review';
+    if (pipelineStage == 'after_deputy') {
+      return 'Requester action: send to Finance';
+    }
+    if (pipelineStage == 'finance') return 'Finance Team review';
+    if (pipelineStage == 'after_finance') {
+      return 'Requester action: send to Registrar';
+    }
+
     final requestedTo = _s(
       approval['requested_to'],
       fallback: '',
