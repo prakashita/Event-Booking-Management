@@ -635,36 +635,45 @@ async def get_event_details(event_id: str, user: User = Depends(get_current_user
 
 @router.post("/conflicts")
 async def check_conflicts(payload: EventCreate, user: User = Depends(get_current_user)):
-    start_dt = datetime.combine(payload.start_date, payload.start_time)
-    end_dt = datetime.combine(payload.end_date, payload.end_time)
-    if end_dt < start_dt:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="End datetime must be after start datetime",
-        )
-
-    logger.info("Checking conflicts venue=%s", payload.venue_name)
-    existing_events = await _fetch_event_conflict_docs(payload.venue_name)
-    logger.info("Conflict candidate count venue=%s count=%s", payload.venue_name, len(existing_events))
-    conflicts = []
-    for existing in existing_events:
-        try:
-            existing_start = combine_datetime(existing.get("start_date"), existing.get("start_time"))
-            existing_end = combine_datetime(existing.get("end_date"), existing.get("end_time"))
-        except (TypeError, ValueError):
-            logger.warning(
-                "Skipping event with invalid date/time while checking conflicts",
-                extra={"event_id": str(existing.get("_id", ""))},
+    try:
+        start_dt = datetime.combine(payload.start_date, payload.start_time)
+        end_dt = datetime.combine(payload.end_date, payload.end_time)
+        if end_dt < start_dt:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="End datetime must be after start datetime",
             )
-            continue
-        if (
-            str(existing.get("venue_name", "") or "") == payload.venue_name
-            and start_dt < existing_end
-            and end_dt > existing_start
-        ):
-            conflicts.append(_serialize_conflict_doc(existing))
 
-    return {"conflicts": conflicts}
+        logger.info("Checking conflicts venue=%s", payload.venue_name)
+        existing_events = await _fetch_event_conflict_docs(payload.venue_name)
+        logger.info("Conflict candidate count venue=%s count=%s", payload.venue_name, len(existing_events))
+        conflicts = []
+        for existing in existing_events:
+            try:
+                existing_start = combine_datetime(existing.get("start_date"), existing.get("start_time"))
+                existing_end = combine_datetime(existing.get("end_date"), existing.get("end_time"))
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Skipping event with invalid date/time while checking conflicts",
+                    extra={"event_id": str(existing.get("_id", ""))},
+                )
+                continue
+            if (
+                str(existing.get("venue_name", "") or "") == payload.venue_name
+                and start_dt < existing_end
+                and end_dt > existing_start
+            ):
+                conflicts.append(_serialize_conflict_doc(existing))
+
+        return {"conflicts": conflicts}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Conflict check failed venue=%s error=%s", payload.venue_name, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Conflict check failed: {type(exc).__name__}: {exc}",
+        )
 
 
 @router.post("", response_model=EventCreateResponse, status_code=status.HTTP_201_CREATED)

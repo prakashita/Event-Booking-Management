@@ -4315,7 +4315,18 @@ export default function App() {
       });
 
       if (!res.ok) {
-        const message = res.status === 400 ? "Check your date/time inputs." : "Unable to check conflicts.";
+        let message = res.status === 400 ? "Check your date/time inputs." : "Unable to check conflicts.";
+        try {
+          const errData = await res.json();
+          const detail = errData?.detail;
+          if (typeof detail === "string" && detail.trim()) {
+            message = detail;
+          } else if (Array.isArray(detail) && detail.length) {
+            message = detail.map((d) => d?.msg || JSON.stringify(d)).join("; ");
+          }
+        } catch (_) {
+          // Keep fallback message when response isn't JSON.
+        }
         throw new Error(message);
       }
 
