@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:go_router/go_router.dart';
 import 'package:mobile_app/providers/theme_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -13,11 +12,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   void _close(BuildContext context) {
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go('/dashboard');
-    }
+    Navigator.of(context).maybePop();
   }
 
   @override
@@ -25,21 +20,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final themeProvider = context.watch<ThemeProvider>();
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final modalSurface = isDark ? const Color(0xFF111827) : Colors.white;
-    final modalLayer = isDark ? const Color(0xFF0B1220) : Colors.white;
-    final panel = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
-    final border = isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9);
-    final heading = isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B);
+    final modalSurface = theme.colorScheme.surface;
+    final modalLayer = theme.colorScheme.surface;
+    final panel = isDark
+        ? theme.colorScheme.surfaceContainerHighest
+        : theme.colorScheme.surfaceContainerLowest;
+    final border = isDark
+        ? theme.colorScheme.outline
+        : theme.colorScheme.outlineVariant;
+    final heading = theme.colorScheme.onSurface;
     final subheading = isDark
-        ? const Color(0xFF94A3B8)
-        : const Color(0xFF94A3B8);
-    final iconTile = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
-    final closeIcon = isDark
-        ? const Color(0xFFCBD5E1)
-        : const Color(0xFF94A3B8);
+        ? theme.colorScheme.onSurface.withOpacity(0.7)
+        : theme.colorScheme.onSurface.withOpacity(0.6);
+    final iconTile = isDark
+        ? theme.colorScheme.surfaceContainerHighest
+        : theme.colorScheme.surfaceContainer;
+    final closeIcon = theme.colorScheme.onSurface.withOpacity(0.7);
     final closeHover = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFF1F5F9);
+        ? theme.colorScheme.surfaceContainerHighest
+        : theme.colorScheme.surfaceContainer;
 
     return Scaffold(
       backgroundColor: Colors
@@ -53,9 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: GestureDetector(
               onTap: () => _close(context),
               child: Container(
-                color: const Color(
-                  0xFF0F172A,
-                ).withOpacity(0.4), // bg-slate-900/40
+                color: Colors.black.withOpacity(isDark ? 0.55 : 0.28),
               ),
             ),
           ),
@@ -152,7 +149,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       // Settings Body
                       Container(
                         padding: const EdgeInsets.all(32),
-                        color: panel.withOpacity(0.9),
+                        decoration: BoxDecoration(
+                          color: panel.withOpacity(0.9),
+                          borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(40),
+                          ),
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -246,51 +248,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ],
                         ),
                       ),
-
-                      // Action Footer
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 32,
-                          vertical: 20,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border(top: BorderSide(color: border)),
-                          color: modalLayer,
-                          borderRadius: BorderRadius.vertical(
-                            bottom: Radius.circular(40),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isDark
-                                    ? const Color(0xFF1D4ED8)
-                                    : const Color(0xFF0F172A),
-                                foregroundColor: Colors.white,
-                                elevation: 8,
-                                shadowColor: Colors.black.withOpacity(0.2),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 32,
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              onPressed: () => _close(context),
-                              child: const Text(
-                                'Done',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -316,26 +273,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     final bool isActive = currentThemeMode == id;
     final themeProvider = context.read<ThemeProvider>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final inactiveBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final inactiveBg = theme.colorScheme.surface;
     final inactiveBorder = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0);
-    final inactiveTitle = isDark
-        ? const Color(0xFFE2E8F0)
-        : const Color(0xFF334155);
-    final inactiveSubtitle = isDark
-        ? const Color(0xFF94A3B8)
-        : const Color(0xFF64748B);
+        ? theme.colorScheme.outline
+        : theme.colorScheme.outlineVariant;
+    final inactiveTitle = theme.colorScheme.onSurface;
+    final inactiveSubtitle = theme.colorScheme.onSurface.withOpacity(0.62);
     final inactiveIconBg = isDark
-        ? const Color(0xFF0F172A)
-        : const Color(0xFFF1F5F9);
-    final inactiveIcon = isDark
-        ? const Color(0xFF94A3B8)
-        : const Color(0xFF64748B);
+        ? theme.colorScheme.surfaceContainerHighest
+        : theme.colorScheme.surfaceContainer;
+    final inactiveIcon = theme.colorScheme.onSurface.withOpacity(0.65);
 
     return GestureDetector(
-      onTap: () => themeProvider.setThemeModeByValue(id),
+      onTap: () async {
+        await themeProvider.setThemeModeByValue(id);
+        if (!mounted) return;
+        _close(context);
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: double.infinity,

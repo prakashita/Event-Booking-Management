@@ -176,19 +176,22 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   Widget _buildSectionHeader(IconData icon, String title) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final muted = isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8);
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: const Color(0xFF94A3B8)), // slate-400
+          Icon(icon, size: 14, color: muted),
           const SizedBox(width: 8),
           Text(
             title.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w900,
               letterSpacing: 1.5,
-              color: Color(0xFF94A3B8),
+              color: muted,
             ),
           ),
         ],
@@ -197,41 +200,56 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   Widget _buildLabel(String text) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final labelColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF475569);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         text.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.5,
-          color: Color(0xFF475569), // slate-600
+          color: labelColor,
         ),
       ),
     );
   }
 
   InputDecoration _inputDecoration(String hint, {IconData? prefixIcon}) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final hintColor = isDark
+        ? const Color(0xFF64748B)
+        : const Color(0xFF94A3B8);
+    final fillColor = theme.colorScheme.surface;
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0);
+
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(
-        color: Color(0xFF94A3B8),
+      hintStyle: TextStyle(
+        color: hintColor,
         fontSize: 14,
         fontWeight: FontWeight.normal,
-      ), // slate-400
+      ),
       filled: true,
-      fillColor: Colors.white,
+      fillColor: fillColor,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       prefixIcon: prefixIcon != null
-          ? Icon(prefixIcon, size: 18, color: const Color(0xFF94A3B8))
+          ? Icon(prefixIcon, size: 18, color: hintColor)
           : null,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)), // slate-200
+        borderSide: BorderSide(color: borderColor),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        borderSide: BorderSide(color: borderColor),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -250,11 +268,21 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   @override
   Widget build(BuildContext context) {
     final df = DateFormat('MMM d, yyyy');
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final pageBg = theme.scaffoldBackgroundColor;
+    final surface = theme.colorScheme.surface;
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFF1F5F9);
+    final heading = theme.colorScheme.onSurface;
+    final muted = isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: pageBg,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: surface,
+        surfaceTintColor: surface,
         elevation: 0,
         scrolledUnderElevation: 0,
         leadingWidth: 0,
@@ -267,12 +295,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               size: 24,
             ), // blue-600
             const SizedBox(width: 12),
-            const Text(
+            Text(
               'Create Event',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B), // slate-800
+                color: heading,
                 letterSpacing: -0.5,
               ),
             ),
@@ -299,16 +327,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 color: Color(0xFF94A3B8),
               ),
             ),
-            hoverColor: const Color(0xFFF1F5F9), // slate-100
+            hoverColor: isDark
+                ? const Color(0xFF1E293B)
+                : const Color(0xFFF1F5F9),
           ),
           const SizedBox(width: 12),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(
-            height: 1,
-            color: const Color(0xFFF1F5F9),
-          ), // slate-100
+          child: Container(height: 1, color: borderColor),
         ),
       ),
       body: SafeArea(
@@ -370,7 +397,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                         style: const TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w600,
-                                          color: Color(0xFF475569),
+                                          color: Color(0xFF64748B),
                                         ),
                                       ),
                                     ),
@@ -506,25 +533,23 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           ),
                           validator: (v) =>
                               (v?.trim().isEmpty ?? true) ? 'Required' : null,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E293B),
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: 16),
                         _buildLabel('Facilitator'),
                         TextFormField(
                           controller: _facilitatorCtrl,
-                          decoration: _inputDecoration(
-                            'Facilitator Name',
-                          ).copyWith(fillColor: const Color(0xFFF8FAFC)),
+                          decoration: _inputDecoration('Facilitator Name'),
                           validator: (v) =>
                               (v?.trim().isEmpty ?? true) ? 'Required' : null,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E293B),
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
 
@@ -694,10 +719,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             'Add a short overview of the event...',
                           ),
                           maxLines: 4,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            color: Color(0xFF1E293B),
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
                         const Padding(
@@ -786,15 +811,17 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             ),
                             decoration: BoxDecoration(
                               color: _budgetPdf == null
-                                  ? Colors.white
-                                  : const Color(0xFFEFF6FF), // blue-50
+                                  ? surface
+                                  : (isDark
+                                        ? theme
+                                              .colorScheme
+                                              .surfaceContainerHighest
+                                        : const Color(0xFFEFF6FF)),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: _budgetPdf == null
-                                    ? const Color(0xFFE2E8F0)
-                                    : const Color(
-                                        0xFF93C5FD,
-                                      ), // slate-200 / blue-300
+                                    ? borderColor
+                                    : const Color(0xFF93C5FD),
                                 width: 2,
                                 style: BorderStyle.solid,
                               ),
@@ -845,11 +872,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   horizontal: 24,
                   vertical: 20,
                 ),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    top: BorderSide(color: Color(0xFFF1F5F9)),
-                  ), // slate-100
+                decoration: const BoxDecoration().copyWith(
+                  color: surface,
+                  border: Border(top: BorderSide(color: borderColor)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -869,17 +894,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
-                          side: const BorderSide(
-                            color: Color(0xFFE2E8F0),
-                          ), // slate-200
+                          side: BorderSide(color: borderColor),
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Cancel',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF475569), // slate-600
+                          color: muted,
                         ),
                       ),
                     ),

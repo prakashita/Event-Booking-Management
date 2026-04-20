@@ -7,6 +7,8 @@ class User {
   final String? picture;
   final UserRole role;
   final String? rawRole;
+  final String approvalStatus;
+  final String? rejectionReason;
   final String? department;
 
   const User({
@@ -16,6 +18,8 @@ class User {
     this.picture,
     required this.role,
     this.rawRole,
+    this.approvalStatus = 'approved',
+    this.rejectionReason,
     this.department,
   });
 
@@ -26,6 +30,8 @@ class User {
     picture: json['picture'],
     role: _parseRole((json['role'] ?? '').toString()),
     rawRole: (json['role'] ?? '').toString(),
+    approvalStatus: (json['approval_status'] ?? 'approved').toString(),
+    rejectionReason: json['rejection_reason']?.toString(),
     department: json['department'],
   );
 
@@ -68,6 +74,8 @@ class User {
     'picture': picture,
     'role': roleKey,
     'raw_role': rawRole,
+    'approval_status': approvalStatus,
+    'rejection_reason': rejectionReason,
     'department': department,
   };
 }
@@ -160,6 +168,7 @@ class Event {
   final String id;
   final String title;
   final String? description;
+  final String? imageUrl;
   final String venueName;
   final DateTime startTime;
   final DateTime endTime;
@@ -174,6 +183,7 @@ class Event {
     required this.id,
     required this.title,
     this.description,
+    this.imageUrl,
     required this.venueName,
     required this.startTime,
     required this.endTime,
@@ -191,6 +201,13 @@ class Event {
         (json['name'] ?? json['title'] ?? json['summary'] ?? 'Untitled event')
             .toString(),
     description: json['description'],
+    imageUrl:
+        (json['image_url'] ??
+                json['event_image'] ??
+                json['poster_url'] ??
+                json['thumbnail_url'] ??
+                json['banner_url'])
+            ?.toString(),
     venueName: json['venue_name'] ?? json['location'] ?? '',
     startTime: _parseDateTime(
       json,

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/app_constants.dart';
 
@@ -38,6 +39,7 @@ class ApiService {
   }
 
   String? getToken() => _cachedToken;
+  String? get baseUrl => _baseUrl;
 
   void _setupInterceptors() {
     _dio.interceptors.add(
@@ -99,6 +101,19 @@ class ApiService {
   Future<T> delete<T>(String path, {T Function(dynamic)? parser}) async {
     final resp = await _dio.delete(path);
     return parser != null ? parser(resp.data) : resp.data as T;
+  }
+
+  Future<Uint8List> getBytes(
+    String path, {
+    Map<String, dynamic>? params,
+  }) async {
+    final resp = await _dio.get<List<int>>(
+      path,
+      queryParameters: params,
+      options: Options(responseType: ResponseType.bytes),
+    );
+    final data = resp.data ?? const <int>[];
+    return Uint8List.fromList(data);
   }
 
   Future<T> postMultipart<T>(

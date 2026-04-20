@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
 import '../../../providers/auth_provider.dart';
+import '../../screens/settings/settings_screen.dart';
 
 class ProfileDropdown extends StatefulWidget {
   final User user;
@@ -152,9 +153,41 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                           child: TextButton.icon(
                             icon: const Icon(LucideIcons.settings, size: 16),
                             label: const Text('Settings'),
-                            onPressed: () {
+                            onPressed: () async {
                               _tooltipController.hide();
-                              context.go('/settings');
+                              await showGeneralDialog<void>(
+                                context: context,
+                                barrierDismissible: true,
+                                barrierLabel: 'Settings',
+                                barrierColor: Colors.transparent,
+                                transitionDuration: const Duration(
+                                  milliseconds: 180,
+                                ),
+                                pageBuilder: (_, __, ___) =>
+                                    const SettingsScreen(),
+                                transitionBuilder:
+                                    (
+                                      context,
+                                      animation,
+                                      secondaryAnimation,
+                                      child,
+                                    ) {
+                                      final curve = CurvedAnimation(
+                                        parent: animation,
+                                        curve: Curves.easeOutCubic,
+                                      );
+                                      return FadeTransition(
+                                        opacity: curve,
+                                        child: ScaleTransition(
+                                          scale: Tween<double>(
+                                            begin: 0.98,
+                                            end: 1.0,
+                                          ).animate(curve),
+                                          child: child,
+                                        ),
+                                      );
+                                    },
+                              );
                             },
                             style: TextButton.styleFrom(
                               foregroundColor: settingsFg,

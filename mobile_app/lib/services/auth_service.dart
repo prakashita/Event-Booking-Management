@@ -1,6 +1,7 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart';
+import 'package:dio/dio.dart';
 import 'dart:convert';
 import '../constants/app_constants.dart';
 import '../models/models.dart';
@@ -17,11 +18,13 @@ class AuthService {
     clientId: kIsWeb && AppConstants.googleClientId.isNotEmpty
         ? AppConstants.googleClientId
         : null,
-    serverClientId: kIsWeb 
-        ? null 
+    serverClientId: kIsWeb
+        ? null
         : (AppConstants.googleServerClientId.isNotEmpty
-            ? AppConstants.googleServerClientId
-            : (AppConstants.googleClientId.isNotEmpty ? AppConstants.googleClientId : null)),
+              ? AppConstants.googleServerClientId
+              : (AppConstants.googleClientId.isNotEmpty
+                    ? AppConstants.googleClientId
+                    : null)),
   );
 
   AuthService._internal();
@@ -38,6 +41,13 @@ class AuthService {
 
   Future<String?> loadStoredToken() async {
     return _storage.read(key: AppConstants.tokenKey);
+  }
+
+  Future<void> saveStoredUser(User user) async {
+    await _storage.write(
+      key: AppConstants.userKey,
+      value: jsonEncode(user.toJson()),
+    );
   }
 
   Future<({User user, String token})> signInWithGoogle() async {
@@ -61,24 +71,69 @@ class AuthService {
 
       await Future.wait([
         _storage.write(key: AppConstants.tokenKey, value: token),
-        _storage.write(key: AppConstants.userKey, value: jsonEncode(user.toJson())),
+        _storage.write(
+          key: AppConstants.userKey,
+          value: jsonEncode(user.toJson()),
+        ),
       ]);
 
       return (user: user, token: token);
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout ||
+          e.type == DioExceptionType.connectionError) {
+        throw Exception(
+          'Cannot reach server. Set API_BASE_URL to your backend host (e.g. http://10.0.2.2:8000 for Android emulator).',
+        );
+      }
+
+      final status = e.response?.statusCode;
+      final data = e.response?.data;
+      final detail = data is Map<String, dynamic>
+          ? (data['detail']?.toString())
+          : null;
+
+      if (status == 403 && detail != null && detail.isNotEmpty) {
+        throw Exception(detail);
+      }
+      if (status == 401) {
+        throw Exception(
+          'Google token validation failed. Please try signing in again.',
+        );
+      }
+      if (status == 500) {
+        throw Exception(
+          'Server auth configuration is incomplete. Contact admin.',
+        );
+      }
+
+      throw Exception(detail ?? 'Login failed (${status ?? 'network error'}).');
     } on Exception catch (e) {
       final text = e.toString();
       if (text.contains('ApiException: 10')) {
-        throw Exception('Google Sign-In blocked by Android OAuth config (ApiException 10). Verify package name and SHA-1 in Google Cloud.');
+        throw Exception(
+          'Google Sign-In blocked by Android OAuth config (ApiException 10). Verify package name and SHA-1 in Google Cloud.',
+        );
       }
       rethrow;
     }
   }
 
   Future<void> signOut() async {
-    await Future.wait([
-      _googleSignIn.signOut().catchError((_) => null),
-      _storage.delete(key: AppConstants.tokenKey),
-      _storage.delete(key: AppConstants.userKey),
-    ]);
+    try {
+      await _googleSignIn.disconnect();
+    } catch (_) {}
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
+    
+    try {
+      await _storage.delete(key: AppConstants.tokenKey);
+    } catch (_) {}
+    
+    try {
+      await _storage.delete(key: AppConstants.userKey);
+    } catch (_) {}
   }
 }

@@ -168,6 +168,12 @@ class SideNavBar extends StatelessWidget {
                       const SizedBox(height: 12),
                       _buildNavItem(
                         context,
+                        icon: LucideIcons.users,
+                        title: 'User Approvals',
+                        route: '/user-approvals',
+                      ),
+                      _buildNavItem(
+                        context,
                         icon: LucideIcons.userCog,
                         title: 'Admin Console',
                         route: '/admin',

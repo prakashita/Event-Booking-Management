@@ -8,7 +8,7 @@ import '../../services/api_service.dart';
 class EventDetailsScreen extends StatefulWidget {
   final String eventId;
 
-  const EventDetailsScreen({Key? key, required this.eventId}) : super(key: key);
+  const EventDetailsScreen({super.key, required this.eventId});
 
   @override
   State<EventDetailsScreen> createState() => _EventDetailsScreenState();
@@ -20,6 +20,18 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   String? _error;
   Map<String, dynamic>? _detailsData;
   final Set<String> _expandedDepartments = <String>{};
+
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  Color get _pageBg => Theme.of(context).scaffoldBackgroundColor;
+  Color get _surface => Theme.of(context).colorScheme.surface;
+  Color get _onSurface => Theme.of(context).colorScheme.onSurface;
+  Color get _muted =>
+      _isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+  Color get _border =>
+      _isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+  Color get _panel => _isDark
+      ? Theme.of(context).colorScheme.surfaceContainerHighest
+      : const Color(0xFFF8FAFC);
 
   @override
   void initState() {
@@ -114,9 +126,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     if (uri == null) return;
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open link')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Could not open link')));
     }
   }
 
@@ -169,26 +181,26 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: _pageBg,
       body: SafeArea(
         child: Column(
           children: [
             // Header
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+              decoration: BoxDecoration(
+                color: _surface,
+                border: Border(bottom: BorderSide(color: _border)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'Approval request',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF1E293B),
+                      color: _onSurface,
                       letterSpacing: -0.5,
                     ),
                   ),
@@ -198,14 +210,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
+                        color: _panel,
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Icon(
-                        LucideIcons.x,
-                        size: 20,
-                        color: Color(0xFF94A3B8),
-                      ),
+                      child: Icon(LucideIcons.x, size: 20, color: _muted),
                     ),
                   ),
                 ],
@@ -266,9 +274,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             // Footer
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+              decoration: BoxDecoration(
+                color: _surface,
+                border: Border(top: BorderSide(color: _border)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -283,12 +291,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      side: BorderSide(color: _border),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Close',
                       style: TextStyle(
-                        color: Color(0xFF475569),
+                        color: _muted,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -316,12 +324,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         top: topPadding > 0 ? topPadding : 24,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: const [
+        border: Border.all(color: _border),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x05000000),
+            color: Colors.black.withOpacity(_isDark ? 0.24 : 0.03),
             offset: Offset(0, 2),
             blurRadius: 4,
           ),
@@ -336,10 +344,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               const SizedBox(width: 12),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
+                  color: _onSurface,
                 ),
               ),
             ],
@@ -358,7 +366,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 18, color: const Color(0xFF94A3B8)),
+            Icon(icon, size: 18, color: _muted),
             const SizedBox(width: 16),
           ],
           Expanded(
@@ -367,10 +375,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               children: [
                 Text(
                   label.toUpperCase(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w900,
-                    color: Color(0xFF94A3B8),
+                    color: _muted,
                     letterSpacing: 1.5,
                   ),
                 ),
@@ -725,8 +733,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    color: _surface,
+                    border: Border.all(color: _border),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
@@ -740,19 +748,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       Expanded(
                         child: Text(
                           '$label · $messageCount message${messageCount == 1 ? '' : 's'}',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E293B),
+                            color: _onSurface,
                           ),
                         ),
                       ),
                       Text(
                         status.replaceAll('_', ' '),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF64748B),
+                          color: _muted,
                         ),
                       ),
                     ],
@@ -868,13 +876,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  color: _surface,
+                  border: Border.all(color: _border),
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: const [
+                  boxShadow: [
                     BoxShadow(
-                      color: Color(0x05000000),
-                      offset: Offset(0, 1),
+                      color: Colors.black.withOpacity(_isDark ? 0.22 : 0.04),
+                      offset: const Offset(0, 1),
                       blurRadius: 2,
                     ),
                   ],
@@ -895,9 +903,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                             const SizedBox(width: 12),
                             Text(
                               item.title,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF1E293B),
+                                color: _onSurface,
                               ),
                             ),
                           ],
@@ -910,18 +918,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFC),
+                                color: _panel,
                                 borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: const Color(0xFFE2E8F0),
-                                ),
+                                border: Border.all(color: _border),
                               ),
                               child: Text(
                                 item.status.replaceAll('_', ' '),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w800,
-                                  color: Color(0xFF475569),
+                                  color: _muted,
                                 ),
                               ),
                             ),
@@ -943,10 +949,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         item.count == 0
                             ? 'No requests created yet.'
                             : '${item.count} request${item.count == 1 ? '' : 's'} linked to this event.',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF64748B),
-                        ),
+                        style: TextStyle(fontSize: 12, color: _muted),
                       ),
                     ],
                   ],
@@ -973,10 +976,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             'Other Notes',
             Text(
               _s(event['other_notes'], fallback: _s(approval['other_notes'])),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF1E293B),
+                color: _onSurface,
               ),
             ),
           ),
@@ -985,10 +988,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             'Description',
             Text(
               _s(event['description'], fallback: 'No description'),
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF1E293B),
+                color: _onSurface,
                 height: 1.5,
               ),
             ),
