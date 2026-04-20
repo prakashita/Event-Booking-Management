@@ -16,7 +16,7 @@ class AppTheme {
         surface: AppColors.surface,
         error: AppColors.error,
       ),
-      scaffoldBackgroundColor: AppColors.background,
+      scaffoldBackgroundColor: Colors.transparent,
       textTheme: GoogleFonts.interTextTheme().copyWith(
         displayLarge: GoogleFonts.inter(
           fontSize: 32,
@@ -178,6 +178,27 @@ class AppTheme {
           color: AppColors.textSecondary,
           fontSize: 14,
         ),
+        helperStyle: GoogleFonts.inter(
+          color: AppColors.textMuted,
+          fontSize: 12,
+        ),
+        errorStyle: GoogleFonts.inter(color: AppColors.error, fontSize: 12),
+      ),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStateProperty.all(AppColors.surface),
+          side: WidgetStateProperty.all(
+            const BorderSide(color: AppColors.border),
+          ),
+          shape: WidgetStateProperty.all(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        textStyle: GoogleFonts.inter(
+          fontSize: 14,
+          color: AppColors.textPrimary,
+          fontWeight: FontWeight.w500,
+        ),
       ),
       dividerTheme: const DividerThemeData(
         color: AppColors.divider,
@@ -237,6 +258,48 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 4,
       ),
+      checkboxTheme: CheckboxThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        side: const BorderSide(color: AppColors.border),
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.primary;
+          return AppColors.surface;
+        }),
+        checkColor: WidgetStateProperty.all(AppColors.onPrimary),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.primary;
+          return AppColors.textMuted;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return AppColors.primary.withOpacity(0.35);
+          }
+          return AppColors.border;
+        }),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return AppColors.primary;
+          return AppColors.textMuted;
+        }),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: AppColors.border),
+        ),
+      ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -287,7 +350,7 @@ class AppTheme {
     ).apply(bodyColor: Colors.white, displayColor: Colors.white);
 
     return base.copyWith(
-      scaffoldBackgroundColor: darkBackground,
+      scaffoldBackgroundColor: Colors.transparent,
       textTheme: textTheme,
       appBarTheme: base.appBarTheme.copyWith(
         backgroundColor: darkSurface,
@@ -378,6 +441,28 @@ class AppTheme {
           color: const Color(0xFFCBD5E1),
           fontSize: 14,
         ),
+        helperStyle: GoogleFonts.inter(
+          color: const Color(0xFF94A3B8),
+          fontSize: 12,
+        ),
+        errorStyle: GoogleFonts.inter(
+          color: const Color(0xFFFCA5A5),
+          fontSize: 12,
+        ),
+      ),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        menuStyle: MenuStyle(
+          backgroundColor: WidgetStateProperty.all(darkSurfaceRaised),
+          side: WidgetStateProperty.all(const BorderSide(color: darkOutline)),
+          shape: WidgetStateProperty.all(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        textStyle: GoogleFonts.inter(
+          fontSize: 14,
+          color: const Color(0xFFE2E8F0),
+          fontWeight: FontWeight.w500,
+        ),
       ),
       navigationBarTheme: base.navigationBarTheme.copyWith(
         backgroundColor: darkSurface,
@@ -392,6 +477,37 @@ class AppTheme {
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: darkPrimary,
         foregroundColor: Color(0xFF0B1220),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        side: const BorderSide(color: darkOutline),
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return darkPrimary;
+          return darkSurfaceRaised;
+        }),
+        checkColor: WidgetStateProperty.all(const Color(0xFF0B1220)),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return darkPrimary;
+          return const Color(0xFF94A3B8);
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return darkPrimary.withOpacity(0.35);
+          }
+          return darkOutline;
+        }),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return darkPrimary;
+          return const Color(0xFF94A3B8);
+        }),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: darkSurface,
+        surfaceTintColor: Colors.transparent,
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,

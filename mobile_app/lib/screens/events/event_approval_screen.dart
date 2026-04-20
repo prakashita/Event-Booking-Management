@@ -28,16 +28,40 @@ class EventApprovalScreen extends StatefulWidget {
 class _EventApprovalScreenState extends State<EventApprovalScreen> {
   final _api = ApiService();
   static const double _budgetThreshold = 30000;
-  static const Color _pageBg = Color(0xFFF4F7FE);
-  static const Color _cardBg = Colors.white;
-  static const Color _slate50 = Color(0xFFF8FAFC);
-  static const Color _slate100 = Color(0xFFF1F5F9);
-  static const Color _slate200 = Color(0xFFE2E8F0);
-  static const Color _slate500 = Color(0xFF64748B);
-  static const Color _slate600 = Color(0xFF475569);
-  static const Color _slate700 = Color(0xFF334155);
-  static const Color _slate800 = Color(0xFF1E293B);
-  static const Color _indigo600 = Color(0xFF521EEA);
+
+  Color get _pageBg => Theme.of(context).scaffoldBackgroundColor;
+
+  Color get _cardBg => Theme.of(context).colorScheme.surface;
+
+  Color get _slate50 => Theme.of(context).brightness == Brightness.dark
+      ? Theme.of(context).colorScheme.surfaceContainerHighest
+      : const Color(0xFFF8FAFC);
+
+  Color get _slate100 => Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFF334155)
+      : const Color(0xFFF1F5F9);
+
+  Color get _slate200 => Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFF334155)
+      : const Color(0xFFE2E8F0);
+
+  Color get _slate500 => Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFF94A3B8)
+      : const Color(0xFF64748B);
+
+  Color get _slate600 => Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFFCBD5E1)
+      : const Color(0xFF475569);
+
+  Color get _slate700 => Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFFE2E8F0)
+      : const Color(0xFF334155);
+
+  Color get _slate800 => Theme.of(context).colorScheme.onSurface;
+
+  Color get _indigo600 => Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFF6366F1)
+      : const Color(0xFF521EEA);
   bool _submitting = false;
   bool _confirmed = false;
   bool _loadingApprovalEmails = true;
@@ -264,7 +288,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                 isHighBudget
                                     ? 'Vice Chancellor Approval'
                                     : 'Registrar Approval',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: _slate800,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900,
@@ -276,7 +300,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                               style: IconButton.styleFrom(
                                 backgroundColor: _slate50,
                               ),
-                              icon: const Icon(
+                              icon: Icon(
                                 LucideIcons.x,
                                 color: _slate500,
                                 size: 19,
@@ -286,7 +310,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                           ],
                         ),
                       ),
-                      const Divider(height: 1, color: _slate100),
+                      Divider(height: 1, color: _slate100),
                       Flexible(
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.fromLTRB(24, 24, 24, 10),
@@ -347,7 +371,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                   vertical: 14,
                                   horizontal: 2,
                                 ),
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   border: Border(
                                     top: BorderSide(color: _slate100),
                                     bottom: BorderSide(color: _slate100),
@@ -378,7 +402,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                 isHighBudget
                                     ? 'Budget is above Rs ${_budgetThreshold.toStringAsFixed(0)}. The Vice Chancellor will approve or reject this event in the portal. The Registrar is copied on the email for information only. After approval, you can send requirements to Facility, IT, Marketing, and Transport.'
                                     : 'Budget is Rs ${_budgetThreshold.toStringAsFixed(0)} or below. The Registrar will approve or reject this event in the portal. The Vice Chancellor is copied on the email when configured. After approval, you can send requirements to Facility, IT, Marketing, and Transport.',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: _slate600,
                                   fontSize: 14,
                                   height: 1.45,
@@ -446,7 +470,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                             : null,
                                       ),
                                       const SizedBox(width: 11),
-                                      const Expanded(
+                                      Expanded(
                                         child: Text(
                                           'I have discussed this event with the programming chair and received confirmation to proceed.',
                                           style: TextStyle(
@@ -466,7 +490,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                           ),
                         ),
                       ),
-                      const Divider(height: 1, color: _slate100),
+                      Divider(height: 1, color: _slate100),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
                         child: Row(
@@ -478,7 +502,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                   horizontal: 26,
                                   vertical: 14,
                                 ),
-                                side: const BorderSide(color: _slate200),
+                                side: BorderSide(color: _slate200),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -546,7 +570,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
       children: [
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w900,
             color: _slate500,
@@ -564,7 +588,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
           ),
           child: Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               color: _slate600,
               fontWeight: FontWeight.w600,
@@ -583,7 +607,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
           width: 56,
           child: Text(
             '$label:',
-            style: const TextStyle(
+            style: TextStyle(
               color: _slate800,
               fontWeight: FontWeight.w800,
               fontSize: 14,
@@ -594,7 +618,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               color: _slate600,
               fontWeight: FontWeight.w500,
               fontSize: 14,

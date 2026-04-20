@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 import '../providers/auth_provider.dart';
 import '../screens/auth/login_screen.dart';
+import '../screens/auth/approval_gate_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/events/events_screen.dart';
 import '../screens/events/create_event_screen.dart';
@@ -14,9 +15,9 @@ import '../screens/chat/chat_screen.dart';
 import '../screens/publications/publications_screen.dart';
 import '../screens/iqac/iqac_screen.dart';
 import '../screens/admin/admin_screen.dart';
+import '../screens/admin/user_approvals_screen.dart';
 import '../screens/reports/event_reports_screen.dart';
 import '../screens/home_screen.dart';
-import '../screens/settings/settings_screen.dart';
 
 class AppRouter {
   static GoRouter createRouter(AuthProvider authProvider) {
@@ -26,15 +27,29 @@ class AppRouter {
       redirect: (context, state) {
         final isAuth = authProvider.isAuthenticated;
         final isLoading = authProvider.isLoading;
+        final approvalPending = authProvider.isApprovalPending;
+        final approvalRejected = authProvider.isApprovalRejected;
         final goingToLogin = state.matchedLocation == '/login';
+        final goingToApprovalGate = state.matchedLocation == '/approval-gate';
 
         if (isLoading) return null;
         if (!isAuth && !goingToLogin) return '/login';
-        if (isAuth && goingToLogin) return '/dashboard';
+
+        if (isAuth && (approvalPending || approvalRejected)) {
+          if (!goingToApprovalGate) return '/approval-gate';
+          return null;
+        }
+
+        if (isAuth && (goingToLogin || goingToApprovalGate))
+          return '/dashboard';
         return null;
       },
       routes: [
         GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
+        GoRoute(
+          path: '/approval-gate',
+          builder: (_, _) => const ApprovalGateScreen(),
+        ),
         ShellRoute(
           builder: (context, state, child) {
             return HomeScreen(child: child);
@@ -83,12 +98,12 @@ class AppRouter {
             GoRoute(path: '/iqac', builder: (_, _) => const IQACScreen()),
             GoRoute(path: '/admin', builder: (_, _) => const AdminScreen()),
             GoRoute(
-              path: '/reports',
-              builder: (_, _) => const EventReportsScreen(),
+              path: '/user-approvals',
+              builder: (_, _) => const UserApprovalsScreen(),
             ),
             GoRoute(
-              path: '/settings',
-              builder: (_, _) => const SettingsScreen(),
+              path: '/reports',
+              builder: (_, _) => const EventReportsScreen(),
             ),
           ],
         ),

@@ -20,6 +20,13 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
   bool get isLoading => _status == AuthStatus.loading;
+  String get approvalStatus {
+    return (_user?.approvalStatus ?? 'approved').trim().toLowerCase();
+  }
+
+  bool get isApprovalPending => approvalStatus == 'pending';
+  bool get isApprovalRejected => approvalStatus == 'rejected';
+  bool get isApprovalApproved => approvalStatus == 'approved';
 
   bool hasRole(List<String> roles) {
     if (_user == null) return false;
@@ -31,6 +38,14 @@ class AuthProvider extends ChangeNotifier {
     try {
       final storedUser = await _authService.loadStoredUser();
       final storedToken = await _authService.loadStoredToken();
+
+      // If sign-in completed while init was awaiting storage, do not override it.
+      if (_status == AuthStatus.authenticated &&
+          _user != null &&
+          _token != null) {
+        return;
+      }
+
       if (storedUser != null && storedToken != null) {
         _user = storedUser;
         _token = storedToken;
@@ -70,8 +85,49 @@ class AuthProvider extends ChangeNotifier {
     _api.clearAuthToken();
     _user = null;
     _token = null;
+    _error = null;
     _status = AuthStatus.unauthenticated;
     notifyListeners();
+  }
+
+  Future<void> refreshApprovalStatus({bool silent = false}) async {
+    if (_status != AuthStatus.authenticated ||
+        _token == null ||
+        _user == null) {
+      return;
+    }
+
+    if (!silent && _error != null) {
+      _error = null;
+      notifyListeners();
+    }
+
+    try {
+      final me = await _api.get<Map<String, dynamic>>('/auth/me');
+      final merged = {..._user!.toJson(), ...me};
+      final updatedUser = User.fromJson(merged);
+      final hasChanged =
+          updatedUser.approvalStatus != _user!.approvalStatus ||
+          updatedUser.rejectionReason != _user!.rejectionReason ||
+          updatedUser.roleKey != _user!.roleKey;
+
+      _user = updatedUser;
+      await _authService.saveStoredUser(_user!);
+      if (hasChanged || (!silent && _error != null)) {
+        notifyListeners();
+      }
+    } catch (e) {
+      final message = e.toString().replaceAll('Exception: ', '');
+      if (message.contains('401')) {
+        await signOut();
+        return;
+      }
+      final errorChanged = _error != message;
+      _error = message;
+      if (!silent || errorChanged) {
+        notifyListeners();
+      }
+    }
   }
 
   void handleUnauthorized() {
