@@ -604,21 +604,8 @@ async def check_conflicts(payload: EventCreate, user: User = Depends(get_current
     existing_events = await Event.find_all().to_list()
     conflicts = []
     for existing in existing_events:
-        try:
-            existing_start = combine_datetime(existing.start_date, existing.start_time)
-            existing_end = combine_datetime(existing.end_date, existing.end_time)
-        except Exception as exc:
-            # Legacy or malformed rows should not break new event creation.
-            logger.warning(
-                "check_conflicts: skipping malformed event id=%s start_date=%r start_time=%r end_date=%r end_time=%r err=%s",
-                getattr(existing, "id", None),
-                getattr(existing, "start_date", None),
-                getattr(existing, "start_time", None),
-                getattr(existing, "end_date", None),
-                getattr(existing, "end_time", None),
-                exc,
-            )
-            continue
+        existing_start = combine_datetime(existing.start_date, existing.start_time)
+        existing_end = combine_datetime(existing.end_date, existing.end_time)
         if (
             existing.venue_name == payload.venue_name
             and start_dt < existing_end
@@ -650,20 +637,8 @@ async def create_event(request: Request, payload: EventCreate, user: User = Depe
         existing_events = await Event.find_all().to_list()
         conflicts = []
         for existing in existing_events:
-            try:
-                existing_start = combine_datetime(existing.start_date, existing.start_time)
-                existing_end = combine_datetime(existing.end_date, existing.end_time)
-            except Exception as exc:
-                logger.warning(
-                    "create_event: skipping malformed event id=%s start_date=%r start_time=%r end_date=%r end_time=%r err=%s",
-                    getattr(existing, "id", None),
-                    getattr(existing, "start_date", None),
-                    getattr(existing, "start_time", None),
-                    getattr(existing, "end_date", None),
-                    getattr(existing, "end_time", None),
-                    exc,
-                )
-                continue
+            existing_start = combine_datetime(existing.start_date, existing.start_time)
+            existing_end = combine_datetime(existing.end_date, existing.end_time)
             if (
                 existing.venue_name == payload.venue_name
                 and start_dt < existing_end

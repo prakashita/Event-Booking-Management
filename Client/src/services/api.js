@@ -34,8 +34,7 @@ async function request(method, path, body = undefined, options = {}) {
     ...options,
     method,
     headers,
-    // We use Bearer auth; avoid cross-site cookie/credentials issues.
-    credentials: "omit",
+    credentials: "include",
     body: bodyPayload,
   });
   if (res.status === 401) {
