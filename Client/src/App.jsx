@@ -410,6 +410,8 @@ export default function App() {
     open: false,
     missing: []
   });
+  const [deputyRegistrarEmail, setDeputyRegistrarEmail] = useState("");
+  const [financeTeamEmail, setFinanceTeamEmail] = useState("");
   const [registrarEmail, setRegistrarEmail] = useState("");
   const [viceChancellorEmail, setViceChancellorEmail] = useState("");
   const [facilityManagerEmail, setFacilityManagerEmail] = useState("");
@@ -446,14 +448,22 @@ export default function App() {
   const isAdmin = normalizedUserRole === "admin";
   const isRegistrar = normalizedUserRole === "registrar";
   const isViceChancellor = normalizedUserRole === "vice_chancellor";
-  const isRegistrarDashboard = isRegistrar || isViceChancellor;
+  const isDeputyRegistrar = normalizedUserRole === "deputy_registrar";
+  const isFinanceTeam = normalizedUserRole === "finance_team";
+  const isRegistrarDashboard =
+    isRegistrar || isViceChancellor || isDeputyRegistrar || isFinanceTeam;
   const isApproverRole = normalizedUserRole === "approver" || isRegistrarDashboard;
   const isFacilityManagerRole = normalizedUserRole === "facility_manager";
   const isMarketingRole = normalizedUserRole === "marketing";
   const isItRole = normalizedUserRole === "it";
   const isTransportRole = normalizedUserRole === "transport";
   const canAccessAdminConsole = isAdmin;
-  const canAccessCalendarUpdates = isAdmin || isRegistrar;
+  const canAccessCalendarUpdates =
+    isAdmin ||
+    isRegistrar ||
+    isViceChancellor ||
+    isDeputyRegistrar ||
+    isFinanceTeam;
   const canAccessUserApprovals = isAdmin;
   const canAccessApprovals = isRegistrarDashboard;
   const canAccessRequirements =
@@ -470,8 +480,11 @@ export default function App() {
     return Number.isNaN(n) ? 0 : n;
   })();
   const eventApprovalRoutesToVc = eventFormBudgetAmount > APPROVAL_BUDGET_VC_THRESHOLD;
-  const eventApprovalToEmail = eventApprovalRoutesToVc ? viceChancellorEmail : registrarEmail;
-  const eventApprovalCcEmail = eventApprovalRoutesToVc ? registrarEmail : viceChancellorEmail;
+  const eventApprovalCcList = [financeTeamEmail, registrarEmail, viceChancellorEmail]
+    .map((email) => (email || "").trim())
+    .filter((email, index, arr) => email && arr.indexOf(email) === index);
+  const eventApprovalCcDisplay =
+    eventApprovalCcList.join(", ") || "Finance Team / Registrar / Vice Chancellor (as configured)";
 
   const googleClientId =
     import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -1330,7 +1343,11 @@ export default function App() {
     try {
       const role = (user?.role || "").toLowerCase();
       const isAdminOrRegistrar =
-        role === "admin" || role === "registrar" || role === "vice_chancellor";
+        role === "admin" ||
+        role === "registrar" ||
+        role === "vice_chancellor" ||
+        role === "deputy_registrar" ||
+        role === "finance_team";
       if (activeView === "event-reports" && user && isAdminOrRegistrar) {
         const reportsRes = await apiFetch(`${apiBaseUrl}/admin/event-reports`);
         if (!reportsRes.ok) {
@@ -1446,6 +1463,8 @@ export default function App() {
           end_date: item.end_date,
           end_time: item.end_time,
           status: item.status,
+          pipeline_stage: item.pipeline_stage ?? null,
+          requester_id: item.requester_id,
           approval_request_id: item.id
         }));
 
@@ -1633,10 +1652,14 @@ export default function App() {
       const res = await apiFetch(`${apiBaseUrl}/auth/event-approval-emails`);
       if (res.ok) {
         const data = await res.json();
+        setDeputyRegistrarEmail(data?.deputy_registrar_email || "");
+        setFinanceTeamEmail(data?.finance_team_email || "");
         setRegistrarEmail(data?.registrar_email || "");
         setViceChancellorEmail(data?.vice_chancellor_email || "");
       }
     } catch {
+      setDeputyRegistrarEmail("");
+      setFinanceTeamEmail("");
       setRegistrarEmail("");
       setViceChancellorEmail("");
     }
@@ -2560,6 +2583,38 @@ export default function App() {
     }
   };
 
+  const handleForwardToFinance = async (eventItem) => {
+    const rawId = eventItem?.approval_request_id || String(eventItem?.id || "").replace(/^approval-/, "");
+    if (!rawId) return;
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/approvals/${rawId}/forward-to-finance`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.detail || "Unable to forward to finance.");
+      }
+      setStatus({ type: "success", message: "Sent to Finance for approval." });
+      loadEvents();
+    } catch (err) {
+      setStatus({ type: "error", message: err?.message || "Unable to forward to finance." });
+    }
+  };
+
+  const handleForwardToRegistrar = async (eventItem) => {
+    const rawId = eventItem?.approval_request_id || String(eventItem?.id || "").replace(/^approval-/, "");
+    if (!rawId) return;
+    try {
+      const res = await apiFetch(`${apiBaseUrl}/approvals/${rawId}/forward-to-registrar`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.detail || "Unable to forward to Registrar.");
+      }
+      setStatus({ type: "success", message: "Sent to Registrar for final approval." });
+      loadEvents();
+    } catch (err) {
+      setStatus({ type: "error", message: err?.message || "Unable to forward to Registrar." });
+    }
+  };
+
   const handleEventDetailsClose = () => {
     setEventDetailsModal({
       open: false,
@@ -3339,6 +3394,21 @@ export default function App() {
       .join(" ");
   };
   const getEventStatusInfo = (event) => {
+    if (String(event.id || "").startsWith("approval-")) {
+      const st = (event.status || "").toLowerCase();
+      const ps = (event.pipeline_stage || "").toLowerCase();
+      let pipelineLabel = "Pending";
+      if (st === "rejected") pipelineLabel = "Rejected";
+      else if (st === "clarification_requested") pipelineLabel = "Clarification requested";
+      else if (ps === "deputy") pipelineLabel = "Awaiting Deputy Registrar";
+      else if (ps === "after_deputy") pipelineLabel = "Deputy approved — send to finance";
+      else if (ps === "finance") pipelineLabel = "Awaiting Finance";
+      else if (ps === "after_finance") pipelineLabel = "Finance approved — send to Registrar";
+      else if (ps === "registrar") pipelineLabel = "Awaiting Registrar / VC";
+      else if (!ps && st === "pending") pipelineLabel = "Awaiting approval";
+      const statusClass = st === "rejected" ? "rejected" : st === "clarification_requested" ? "clarification-requested" : "pending";
+      return { statusLabel: pipelineLabel, statusClass };
+    }
     const statusValue = event.status || "";
     const explicitStatus = statusValue ? formatStatusLabel(statusValue) : null;
     const hasApprovalData =
@@ -3375,6 +3445,13 @@ export default function App() {
   const getNormalizedEventStatus = (event) => {
     const { statusLabel } = getEventStatusInfo(event);
     return (statusLabel || "").toLowerCase();
+  };
+
+  /** Approval-queue rows still in progress (any pipeline stage before final event creation). */
+  const isPendingApprovalRow = (event) => {
+    if (!String(event.id || "").startsWith("approval-")) return false;
+    const st = (event.status || "").toLowerCase();
+    return st !== "approved" && st !== "rejected";
   };
 
   /** True if event start date/time is in the past (event has started); no actions allowed once started. */
@@ -3555,17 +3632,6 @@ export default function App() {
 
     const budgetVal = eventForm.budget && !isNaN(parseFloat(eventForm.budget)) && parseFloat(eventForm.budget) >= 0
       ? parseFloat(eventForm.budget) : null;
-    const routesToVc =
-      budgetVal != null && budgetVal > APPROVAL_BUDGET_VC_THRESHOLD;
-    if (routesToVc && !(viceChancellorEmail || "").trim()) {
-      setApprovalModal({
-        open: true,
-        status: "error",
-        error:
-          "Vice Chancellor email is not configured. An admin must assign a Vice Chancellor user before high-budget events can be submitted."
-      });
-      return;
-    }
 
     setApprovalModal((prev) => ({ ...prev, status: "loading", error: "" }));
 
@@ -4247,7 +4313,18 @@ export default function App() {
       });
 
       if (!res.ok) {
-        const message = res.status === 400 ? "Check your date/time inputs." : "Unable to check conflicts.";
+        let message = res.status === 400 ? "Check your date/time inputs." : "Unable to check conflicts.";
+        try {
+          const errData = await res.json();
+          const detail = errData?.detail;
+          if (typeof detail === "string" && detail.trim()) {
+            message = detail;
+          } else if (Array.isArray(detail) && detail.length) {
+            message = detail.map((d) => d?.msg || JSON.stringify(d)).join("; ");
+          }
+        } catch (_) {
+          // Keep fallback message when response isn't JSON.
+        }
         throw new Error(message);
       }
 
@@ -4900,7 +4977,10 @@ export default function App() {
                     style={{ width: "100%", padding: "8px", marginBottom: "16px" }}
                   >
                     <option value="faculty">Faculty</option>
+                    <option value="registrar">Registrar</option>
                     <option value="vice_chancellor">Vice Chancellor</option>
+                    <option value="deputy_registrar">Deputy Registrar</option>
+                    <option value="finance_team">Finance Team</option>
                     <option value="facility_manager">Facility Manager</option>
                     <option value="marketing">Marketing</option>
                     <option value="it">IT</option>
@@ -5098,6 +5178,8 @@ export default function App() {
                             <option value="faculty">Faculty</option>
                             <option value="registrar">Registrar</option>
                             <option value="vice_chancellor">Vice Chancellor</option>
+                            <option value="deputy_registrar">Deputy Registrar</option>
+                            <option value="finance_team">Finance Team</option>
                             <option value="facility_manager">Facility Manager</option>
                             <option value="marketing">Marketing</option>
                             <option value="it">IT</option>
@@ -5458,7 +5540,7 @@ export default function App() {
             : myEventsTab === "all"
               ? true
               : myEventsTab === "pending"
-                ? getNormalizedStatus(event) === "pending"
+                ? isPendingApprovalRow(event) || getNormalizedStatus(event) === "pending"
                 : myEventsTab === "upcoming"
                   ? lifecycle === "upcoming"
                   : myEventsTab === "ongoing"
@@ -5608,13 +5690,7 @@ export default function App() {
                         }
                       }
 
-                      const statusLabel =
-                        event.approval_status === "approved"
-                          ? "Approved"
-                          : explicitStatus || derivedStatus;
-                      const statusClass = (statusValue || statusLabel)
-                        .toLowerCase()
-                        .replace(/\s+/g, "-");
+                      const { statusLabel, statusClass } = getEventStatusInfo(event);
                       const inviteSent = event.invite_status === "sent";
                       const isUpcomingEvent = (statusValue || "").toLowerCase() === "upcoming";
                       const eventHasStarted = isEventStarted(event);
@@ -5633,6 +5709,11 @@ export default function App() {
                             event.it_status === "approved")) &&
                         !inviteSent;
                       const isApprovalItem = String(event.id || "").startsWith("approval-");
+                      const isRequesterOnApproval =
+                        isApprovalItem && String(user?.id || "") === String(event.requester_id || "");
+                      const ps = (event.pipeline_stage || "").toLowerCase();
+                      const showForwardFinance = isRequesterOnApproval && ps === "after_deputy";
+                      const showForwardRegistrar = isRequesterOnApproval && ps === "after_finance";
                       const canSendSupportForms =
                         !eventHasStarted &&
                         !isApprovalItem &&
@@ -5710,6 +5791,24 @@ export default function App() {
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                               Details
                             </button>
+                            {showForwardFinance ? (
+                              <button
+                                type="button"
+                                className="ev-action-btn ev-action-requirements"
+                                onClick={() => handleForwardToFinance(event)}
+                              >
+                                Send to finance department for approval
+                              </button>
+                            ) : null}
+                            {showForwardRegistrar ? (
+                              <button
+                                type="button"
+                                className="ev-action-btn ev-action-requirements"
+                                onClick={() => handleForwardToRegistrar(event)}
+                              >
+                                Send to Registrar for approval
+                              </button>
+                            ) : null}
                             {inviteSent ? (
                               <button type="button" className="ev-action-btn ev-action-sent" disabled>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -6081,7 +6180,7 @@ export default function App() {
                 <div className="approval-card">
                   <div className="approval-header">
                     <h3>
-                      {eventApprovalRoutesToVc ? "VICE CHANCELLOR APPROVAL" : "REGISTRAR APPROVAL"}
+                      DEPUTY REGISTRAR APPROVAL (STAGE 1)
                     </h3>
                     <button type="button" className="modal-close" onClick={handleApprovalModalClose}>
                       &times;
@@ -6098,10 +6197,7 @@ export default function App() {
                         <input
                           type="text"
                           readOnly
-                          value={
-                            eventApprovalToEmail ||
-                            (eventApprovalRoutesToVc ? "Vice Chancellor email" : "Registrar email")
-                          }
+                          value={(deputyRegistrarEmail || "").trim() || "Deputy Registrar email"}
                         />
                       </label>
                       <label className="approval-field">
@@ -6109,10 +6205,7 @@ export default function App() {
                         <input
                           type="text"
                           readOnly
-                          value={
-                            (eventApprovalCcEmail || "").trim() ||
-                            (eventApprovalRoutesToVc ? "Registrar (not configured)" : "Vice Chancellor (optional)")
-                          }
+                          value={eventApprovalCcDisplay}
                         />
                       </label>
                     </div>
@@ -6142,21 +6235,22 @@ export default function App() {
                     </div>
 
                     <p className="approval-note">
+                      Stage 1 routes to <strong>Deputy Registrar</strong>. After Deputy approval, a{" "}
+                      <strong>Send to finance department for approval</strong> button appears in My Events. After
+                      Finance approval, a <strong>Send to Registrar for approval</strong> button appears. Final
+                      approver is{" "}
                       {eventApprovalRoutesToVc ? (
                         <>
-                          Budget is above Rs {APPROVAL_BUDGET_VC_THRESHOLD.toLocaleString("en-IN")}. The{" "}
-                          <strong>Vice Chancellor</strong> will approve or reject this event in the portal. The{" "}
-                          <strong>Registrar</strong> is copied on the email for information only. After approval, you can
-                          send requirements to Facility, IT, Marketing, and Transport.
+                          <strong>Vice Chancellor</strong> for budgets above Rs{" "}
+                          {APPROVAL_BUDGET_VC_THRESHOLD.toLocaleString("en-IN")} (Registrar is CC).
                         </>
                       ) : (
                         <>
-                          Budget is Rs {APPROVAL_BUDGET_VC_THRESHOLD.toLocaleString("en-IN")} or below. The{" "}
-                          <strong>Registrar</strong> will approve or reject this event in the portal. The{" "}
-                          <strong>Vice Chancellor</strong> is copied on the email when configured. After approval, you can
-                          send requirements to Facility, IT, Marketing, and Transport.
+                          <strong>Registrar</strong> for budgets up to Rs{" "}
+                          {APPROVAL_BUDGET_VC_THRESHOLD.toLocaleString("en-IN")} (Vice Chancellor may be CC).
                         </>
-                      )}
+                      )}{" "}
+                      <strong>Send your requirements</strong> appears only after final approval.
                     </p>
 
                     <label className="approval-progchair-confirm">
@@ -8330,6 +8424,8 @@ export default function App() {
                   >
                     <option value="registrar">Registrar</option>
                     <option value="vice_chancellor">Vice Chancellor</option>
+                    <option value="deputy_registrar">Deputy Registrar</option>
+                    <option value="finance_team">Finance Team</option>
                     <option value="facility_manager">Facility Manager</option>
                     <option value="marketing">Marketing</option>
                     <option value="it">IT</option>

@@ -140,10 +140,17 @@ async def get_registrar_email(user: User = Depends(get_current_user)):
 
 @router.get("/event-approval-emails")
 async def get_event_approval_emails(user: User = Depends(get_current_user)):
-    """Registrar and vice chancellor primary emails for event approval routing UI."""
+    """Primary emails used by the staged event-approval workflow UI."""
+    deputy = await get_primary_email_by_role("deputy_registrar")
+    finance = await get_primary_email_by_role("finance_team")
     registrar = await get_primary_email_by_role("registrar")
     vc = await get_primary_email_by_role("vice_chancellor")
-    return {"registrar_email": registrar or "", "vice_chancellor_email": vc or ""}
+    return {
+        "deputy_registrar_email": deputy or "",
+        "finance_team_email": finance or "",
+        "registrar_email": registrar or "",
+        "vice_chancellor_email": vc or "",
+    }
 
 
 @router.get("/facility-manager-email")

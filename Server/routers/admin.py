@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from models import ApprovalRequest, Event, FacilityManagerRequest, InstitutionCalendarEntry, Invite, ItRequest, MarketingRequest, Publication, TransportRequest, User, Venue
-from routers.deps import require_admin
+from routers.deps import require_admin, require_registrar_dashboard
 from schemas import (
     ApprovalRequestResponse,
     EventResponse,
@@ -86,6 +86,7 @@ def serialize_approval(item: ApprovalRequest) -> ApprovalRequestResponse:
         decided_by=item.decided_by,
         created_at=item.created_at,
         approval_cc=list(getattr(item, "approval_cc", None) or []),
+        pipeline_stage=getattr(item, "pipeline_stage", None),
     )
 
 
@@ -359,7 +360,7 @@ async def list_all_events(
 
 @router.get("/event-reports", response_model=PaginatedResponse[EventResponse])
 async def list_event_reports(
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_registrar_dashboard),
     limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ):

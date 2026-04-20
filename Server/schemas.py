@@ -214,9 +214,9 @@ class EventCreate(BaseModel):
                 return None
         return v
 
-    start_date: date
+    start_date: DateType
     start_time: time
-    end_date: date
+    end_date: DateType
     end_time: time
     override_conflict: bool = False
     submit_for_approval: bool = False
@@ -286,6 +286,7 @@ class ApprovalRequestResponse(BaseModel):
     decided_by: Optional[str] = None
     created_at: datetime
     approval_cc: List[str] = Field(default_factory=list)
+    pipeline_stage: Optional[str] = None
 
 
 class ApprovalDecision(BaseModel):

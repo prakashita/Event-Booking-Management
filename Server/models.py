@@ -157,6 +157,8 @@ class ApprovalRequest(Document):
     override_conflict: bool = Field(default=False)
     # Emails copied on the initial approval notification (not approvers on the request).
     approval_cc: List[str] = Field(default_factory=list)
+    # Multi-stage routing: deputy → finance → registrar/VC (final). Legacy rows omit this (treated as registrar-only).
+    pipeline_stage: Optional[str] = Field(default=None)
 
     class Settings:
         name = "approval_requests"
