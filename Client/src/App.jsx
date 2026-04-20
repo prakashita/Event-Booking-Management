@@ -3556,16 +3556,19 @@ export default function App() {
       try {
         await uploadBudgetBreakdown(data?.approval_request?.id, budgetBreakdownFile);
       } catch (uploadErr) {
-        setEventFormStatus({
-          status: "error",
-          error:
-            uploadErr?.message ||
-            "Budget breakdown upload failed. Your request was created—open your pending request and try uploading again, or contact support."
+        setEventFormStatus({ status: "idle", error: "" });
+        setIsEventModalOpen(false);
+        setConflictState({ open: false, items: [] });
+        setStatus({
+          type: "error",
+          message:
+            `Approval request was created and sent, but budget breakdown upload failed: ${
+              uploadErr?.message || "Google connection/upload issue."
+            } Connect Google and upload the budget PDF from your pending request.`
         });
         loadEvents();
         return;
       }
-
       setEventForm({
         start_date: "",
         end_date: "",
@@ -3633,6 +3636,7 @@ export default function App() {
     const budgetVal = eventForm.budget && !isNaN(parseFloat(eventForm.budget)) && parseFloat(eventForm.budget) >= 0
       ? parseFloat(eventForm.budget) : null;
 
+    const routesToVc = budgetVal != null && budgetVal > APPROVAL_BUDGET_VC_THRESHOLD;
     setApprovalModal((prev) => ({ ...prev, status: "loading", error: "" }));
 
     try {
@@ -3683,17 +3687,21 @@ export default function App() {
       try {
         await uploadBudgetBreakdown(data?.approval_request?.id, budgetBreakdownFile);
       } catch (uploadErr) {
-        setApprovalModal({
-          open: true,
-          status: "error",
-          error:
-            uploadErr?.message ||
-            "Budget breakdown upload failed. Your request was created—try sending the PDF again from your pending list or contact support."
+        setApprovalModal({ open: false, status: "idle", error: "" });
+        setOverrideConflict(false);
+        resetEventFormState();
+        setIsEventModalOpen(false);
+        setConflictState({ open: false, items: [] });
+        setStatus({
+          type: "error",
+          message:
+            `Approval request was created and sent, but budget breakdown upload failed: ${
+              uploadErr?.message || "Google connection/upload issue."
+            } Connect Google and upload the budget PDF from your pending request before approvers can approve it.`
         });
         loadEvents();
         return;
       }
-
       setApprovalModal({ open: false, status: "idle", error: "" });
       setOverrideConflict(false);
       resetEventFormState();
