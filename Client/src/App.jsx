@@ -410,6 +410,8 @@ export default function App() {
     open: false,
     missing: []
   });
+  const [deputyRegistrarEmail, setDeputyRegistrarEmail] = useState("");
+  const [financeTeamEmail, setFinanceTeamEmail] = useState("");
   const [registrarEmail, setRegistrarEmail] = useState("");
   const [viceChancellorEmail, setViceChancellorEmail] = useState("");
   const [facilityManagerEmail, setFacilityManagerEmail] = useState("");
@@ -478,8 +480,11 @@ export default function App() {
     return Number.isNaN(n) ? 0 : n;
   })();
   const eventApprovalRoutesToVc = eventFormBudgetAmount > APPROVAL_BUDGET_VC_THRESHOLD;
-  const eventApprovalToEmail = eventApprovalRoutesToVc ? viceChancellorEmail : registrarEmail;
-  const eventApprovalCcEmail = eventApprovalRoutesToVc ? registrarEmail : viceChancellorEmail;
+  const eventApprovalCcList = [financeTeamEmail, registrarEmail, viceChancellorEmail]
+    .map((email) => (email || "").trim())
+    .filter((email, index, arr) => email && arr.indexOf(email) === index);
+  const eventApprovalCcDisplay =
+    eventApprovalCcList.join(", ") || "Finance Team / Registrar / Vice Chancellor (as configured)";
 
   const googleClientId =
     import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -1647,10 +1652,14 @@ export default function App() {
       const res = await apiFetch(`${apiBaseUrl}/auth/event-approval-emails`);
       if (res.ok) {
         const data = await res.json();
+        setDeputyRegistrarEmail(data?.deputy_registrar_email || "");
+        setFinanceTeamEmail(data?.finance_team_email || "");
         setRegistrarEmail(data?.registrar_email || "");
         setViceChancellorEmail(data?.vice_chancellor_email || "");
       }
     } catch {
+      setDeputyRegistrarEmail("");
+      setFinanceTeamEmail("");
       setRegistrarEmail("");
       setViceChancellorEmail("");
     }
@@ -3623,17 +3632,6 @@ export default function App() {
 
     const budgetVal = eventForm.budget && !isNaN(parseFloat(eventForm.budget)) && parseFloat(eventForm.budget) >= 0
       ? parseFloat(eventForm.budget) : null;
-    const routesToVc =
-      budgetVal != null && budgetVal > APPROVAL_BUDGET_VC_THRESHOLD;
-    if (routesToVc && !(viceChancellorEmail || "").trim()) {
-      setApprovalModal({
-        open: true,
-        status: "error",
-        error:
-          "Vice Chancellor email is not configured. An admin must assign a Vice Chancellor user before high-budget events can be submitted."
-      });
-      return;
-    }
 
     setApprovalModal((prev) => ({ ...prev, status: "loading", error: "" }));
 
@@ -6182,7 +6180,7 @@ export default function App() {
                 <div className="approval-card">
                   <div className="approval-header">
                     <h3>
-                      {eventApprovalRoutesToVc ? "VICE CHANCELLOR APPROVAL" : "REGISTRAR APPROVAL"}
+                      DEPUTY REGISTRAR APPROVAL (STAGE 1)
                     </h3>
                     <button type="button" className="modal-close" onClick={handleApprovalModalClose}>
                       &times;
@@ -6199,10 +6197,7 @@ export default function App() {
                         <input
                           type="text"
                           readOnly
-                          value={
-                            eventApprovalToEmail ||
-                            (eventApprovalRoutesToVc ? "Vice Chancellor email" : "Registrar email")
-                          }
+                          value={(deputyRegistrarEmail || "").trim() || "Deputy Registrar email"}
                         />
                       </label>
                       <label className="approval-field">
@@ -6210,10 +6205,7 @@ export default function App() {
                         <input
                           type="text"
                           readOnly
-                          value={
-                            (eventApprovalCcEmail || "").trim() ||
-                            (eventApprovalRoutesToVc ? "Registrar (not configured)" : "Vice Chancellor (optional)")
-                          }
+                          value={eventApprovalCcDisplay}
                         />
                       </label>
                     </div>
@@ -6243,21 +6235,22 @@ export default function App() {
                     </div>
 
                     <p className="approval-note">
+                      Stage 1 routes to <strong>Deputy Registrar</strong>. After Deputy approval, a{" "}
+                      <strong>Send to finance department for approval</strong> button appears in My Events. After
+                      Finance approval, a <strong>Send to Registrar for approval</strong> button appears. Final
+                      approver is{" "}
                       {eventApprovalRoutesToVc ? (
                         <>
-                          Budget is above Rs {APPROVAL_BUDGET_VC_THRESHOLD.toLocaleString("en-IN")}. The{" "}
-                          <strong>Vice Chancellor</strong> will approve or reject this event in the portal. The{" "}
-                          <strong>Registrar</strong> is copied on the email for information only. After approval, you can
-                          send requirements to Facility, IT, Marketing, and Transport.
+                          <strong>Vice Chancellor</strong> for budgets above Rs{" "}
+                          {APPROVAL_BUDGET_VC_THRESHOLD.toLocaleString("en-IN")} (Registrar is CC).
                         </>
                       ) : (
                         <>
-                          Budget is Rs {APPROVAL_BUDGET_VC_THRESHOLD.toLocaleString("en-IN")} or below. The{" "}
-                          <strong>Registrar</strong> will approve or reject this event in the portal. The{" "}
-                          <strong>Vice Chancellor</strong> is copied on the email when configured. After approval, you can
-                          send requirements to Facility, IT, Marketing, and Transport.
+                          <strong>Registrar</strong> for budgets up to Rs{" "}
+                          {APPROVAL_BUDGET_VC_THRESHOLD.toLocaleString("en-IN")} (Vice Chancellor may be CC).
                         </>
-                      )}
+                      )}{" "}
+                      <strong>Send your requirements</strong> appears only after final approval.
                     </p>
 
                     <label className="approval-progchair-confirm">
