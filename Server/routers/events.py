@@ -362,7 +362,15 @@ def _serialize_conflict_doc(doc: dict) -> dict:
 async def _fetch_event_conflict_docs(venue_name: str) -> list[dict]:
     # Read raw Mongo documents so malformed legacy rows do not fail Beanie model parsing.
     # Restrict to one venue to avoid scanning the full events collection on each request.
-    collection = Event.get_motor_collection()
+    try:
+        collection = Event.get_motor_collection()
+    except Exception:
+        # Fallback for runtime/env differences where Beanie collection accessor fails.
+        from database import DB_NAME, client
+
+        if client is None:
+            raise RuntimeError("Database client is not initialized")
+        collection = client[DB_NAME]["events"]
     cursor = collection.find(
         {"venue_name": venue_name},
         {
@@ -375,7 +383,10 @@ async def _fetch_event_conflict_docs(venue_name: str) -> list[dict]:
             "end_time": 1,
         },
     )
-    return await cursor.to_list(length=None)
+    docs: list[dict] = []
+    async for doc in cursor:
+        docs.append(doc)
+    return docs
 
 
 def _build_raw_email(

@@ -124,7 +124,19 @@ async def request_context_middleware(request: Request, call_next):
 
     try:
         response = await call_next(request)
-    except Exception:
+    except Exception as exc:
+        if isinstance(exc, BaseExceptionGroup):
+            for idx, sub_exc in enumerate(exc.exceptions, start=1):
+                logger.error(
+                    "Unhandled request sub-exception rid=%s method=%s path=%s index=%s type=%s message=%s",
+                    request_id,
+                    request.method,
+                    request.url.path,
+                    idx,
+                    type(sub_exc).__name__,
+                    sub_exc,
+                    exc_info=(type(sub_exc), sub_exc, sub_exc.__traceback__),
+                )
         logger.exception(
             "Unhandled request error rid=%s method=%s path=%s",
             request_id,
