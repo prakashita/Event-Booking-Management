@@ -37,9 +37,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   List<Venue> _venues = [];
   bool _loadingVenues = false;
 
-  String? _selectedAudience;
+  final List<String> _selectedAudiences = [];
   PlatformFile? _budgetPdf;
   final bool _submitting = false;
+
+  static const List<String> _audienceOptions = [
+    'Students',
+    'Faculty',
+    'PhD Scholars',
+    'Staffs',
+    'Everyone at VU',
+    'Others',
+  ];
 
   @override
   void initState() {
@@ -85,6 +94,86 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
   }
 
+  Future<void> _selectAudienceOptions() async {
+    final selected = Set<String>.from(_selectedAudiences);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Select Intended Audience',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _selectedAudiences
+                                ..clear()
+                                ..addAll(selected);
+                              if (!_selectedAudiences.contains('Others')) {
+                                _audienceOtherCtrl.clear();
+                              }
+                            });
+                            Navigator.of(context).pop();
+                          },
+                          child: const Text('Done'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _audienceOptions.length,
+                        itemBuilder: (context, index) {
+                          final value = _audienceOptions[index];
+                          final checked = selected.contains(value);
+                          return CheckboxListTile(
+                            value: checked,
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            title: Text(value),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            onChanged: (v) {
+                              setSheetState(() {
+                                if (v == true) {
+                                  selected.add(value);
+                                } else {
+                                  selected.remove(value);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -111,7 +200,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       return;
     }
 
-    if (_selectedAudience == null) {
+    if (_selectedAudiences.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select an intended audience.'),
@@ -121,7 +210,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       return;
     }
 
-    if (_selectedAudience == 'Others' &&
+    if (_selectedAudiences.contains('Others') &&
         _audienceOtherCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -155,8 +244,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       'facilitator': _facilitatorCtrl.text.trim(),
       'description': _descCtrl.text.trim(),
       'venue_name': _selectedVenueName!,
-      'intendedAudience': <String>[_selectedAudience!],
-      'intendedAudienceOther': _selectedAudience == 'Others'
+      'intendedAudience': List<String>.from(_selectedAudiences),
+      'intendedAudienceOther': _selectedAudiences.contains('Others')
           ? _audienceOtherCtrl.text.trim()
           : null,
       'budget': budgetVal > 0 ? budgetVal : null,
@@ -603,86 +692,35 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         ),
                         const SizedBox(height: 20),
                         _buildLabel('Intended Audience'),
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedAudience,
-                          decoration: _inputDecoration('Select Audience'),
-                          icon: const Icon(
-                            LucideIcons.chevronDown,
-                            size: 18,
-                            color: Color(0xFF94A3B8),
+                        InkWell(
+                          onTap: _selectAudienceOptions,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InputDecorator(
+                            decoration:
+                                _inputDecoration(
+                                  'Select Audience (Multi)',
+                                ).copyWith(
+                                  suffixIcon: const Icon(
+                                    LucideIcons.chevronDown,
+                                    size: 18,
+                                    color: Color(0xFF94A3B8),
+                                  ),
+                                ),
+                            child: Text(
+                              _selectedAudiences.isEmpty
+                                  ? 'Select audience (multi)'
+                                  : _selectedAudiences.join(', '),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: _selectedAudiences.isEmpty
+                                    ? const Color(0xFF94A3B8)
+                                    : theme.colorScheme.onSurface,
+                              ),
+                            ),
                           ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'Students',
-                              child: Text(
-                                'Students',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Faculty',
-                              child: Text(
-                                'Faculty',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'PhD Scholars',
-                              child: Text(
-                                'PhD Scholars',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Staffs',
-                              child: Text(
-                                'Staffs',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Everyone at VU',
-                              child: Text(
-                                'Everyone at VU',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Others',
-                              child: Text(
-                                'Others',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                          ],
-                          onChanged: (v) =>
-                              setState(() => _selectedAudience = v),
                         ),
-                        if (_selectedAudience == 'Others') ...[
+                        if (_selectedAudiences.contains('Others')) ...[
                           const SizedBox(height: 12),
                           TextFormField(
                             controller: _audienceOtherCtrl,
@@ -696,7 +734,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             ),
                             maxLength: 500,
                             validator: (v) {
-                              if (_selectedAudience == 'Others' &&
+                              if (_selectedAudiences.contains('Others') &&
                                   (v?.trim().isEmpty ?? true)) {
                                 return 'Required';
                               }

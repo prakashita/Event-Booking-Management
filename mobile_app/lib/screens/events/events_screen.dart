@@ -134,6 +134,8 @@ class _EventsScreenState extends State<EventsScreen>
               reportFileId: null,
               audienceCount: null,
               notes: null,
+              pipelineStage: a['pipeline_stage']?.toString(),
+              approvalRequestId: (a['id'] ?? '').toString(),
             );
           })
           .toList();
@@ -158,6 +160,51 @@ class _EventsScreenState extends State<EventsScreen>
     }
   }
 
+  String _approvalForwardLabel(Event event) {
+    final stage = (event.pipelineStage ?? '').toLowerCase().trim();
+    if (stage == 'after_deputy') return 'SEND TO FINANCE DEPARTMENT';
+    if (stage == 'after_finance') return 'SEND TO REGISTRAR';
+    return '';
+  }
+
+  Future<void> _forwardApproval(Event event) async {
+    final rawId = (event.approvalRequestId ?? '').trim().replaceFirst(
+      'approval-',
+      '',
+    );
+    if (rawId.isEmpty) return;
+
+    final stage = (event.pipelineStage ?? '').toLowerCase().trim();
+    final toFinance = stage == 'after_deputy';
+    final toRegistrar = stage == 'after_finance';
+    if (!toFinance && !toRegistrar) return;
+
+    final endpoint = toFinance
+        ? '/approvals/$rawId/forward-to-finance'
+        : '/approvals/$rawId/forward-to-registrar';
+
+    try {
+      await _api.post<Map<String, dynamic>>(endpoint);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            toFinance
+                ? 'Sent to Finance for approval.'
+                : 'Sent to Registrar for final approval.',
+          ),
+        ),
+      );
+      _eventsByTab.clear();
+      await _loadEventsForTab(_tabController.index, force: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   Future<void> _handleRefresh() async {
     setState(() => _isRefreshing = true);
     await _loadEventsForTab(_tabController.index, force: true);
@@ -168,9 +215,11 @@ class _EventsScreenState extends State<EventsScreen>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     return Scaffold(
-      backgroundColor: isDark ? theme.scaffoldBackgroundColor : const Color(0xFFF4F7FE),
+      backgroundColor: isDark
+          ? theme.scaffoldBackgroundColor
+          : const Color(0xFFF4F7FE),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,10 +239,16 @@ class _EventsScreenState extends State<EventsScreen>
   Widget _buildTopSection() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final headingColor = isDark ? Colors.white : const Color(0xFF1E293B); // slate-800
-    final refreshFg = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF64748B); // slate-500
+    final headingColor = isDark
+        ? Colors.white
+        : const Color(0xFF1E293B); // slate-800
+    final refreshFg = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF64748B); // slate-500
     final refreshBg = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final refreshBorder = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0); // slate-200
+    final refreshBorder = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0); // slate-200
 
     final currentTabEvents =
         _eventsByTab[_tabs[_tabController.index]]?.length ?? 0;
@@ -249,25 +304,28 @@ class _EventsScreenState extends State<EventsScreen>
                 onPressed: () => context.go('/events/create'),
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('New Event'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ).copyWith(
-                  shadowColor: WidgetStateProperty.all(const Color(0x332563EB)),
-                  elevation: WidgetStateProperty.all(8),
-                ),
+                style:
+                    ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ).copyWith(
+                      shadowColor: WidgetStateProperty.all(
+                        const Color(0x332563EB),
+                      ),
+                      elevation: WidgetStateProperty.all(8),
+                    ),
               ),
               const SizedBox(width: 12),
               OutlinedButton.icon(
@@ -283,26 +341,29 @@ class _EventsScreenState extends State<EventsScreen>
                       )
                     : const Icon(Icons.sync, size: 16),
                 label: const Text('Refresh'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: refreshFg,
-                  backgroundColor: refreshBg,
-                  side: BorderSide(color: refreshBorder),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  elevation: 0,
-                ).copyWith(
-                  shadowColor: WidgetStateProperty.all(Colors.black.withOpacity(0.05)),
-                  elevation: WidgetStateProperty.all(2),
-                ),
+                style:
+                    OutlinedButton.styleFrom(
+                      foregroundColor: refreshFg,
+                      backgroundColor: refreshBg,
+                      side: BorderSide(color: refreshBorder),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      elevation: 0,
+                    ).copyWith(
+                      shadowColor: WidgetStateProperty.all(
+                        Colors.black.withOpacity(0.05),
+                      ),
+                      elevation: WidgetStateProperty.all(2),
+                    ),
               ),
             ],
           ),
@@ -410,6 +471,8 @@ class _EventsScreenState extends State<EventsScreen>
               itemBuilder: (ctx, i) => _EventCard(
                 event: events[i],
                 onTap: () => context.go('/events/${events[i].id}'),
+                approvalForwardLabel: _approvalForwardLabel(events[i]),
+                onApprovalForward: () => _forwardApproval(events[i]),
               ),
             ),
           );
@@ -440,13 +503,21 @@ class _MyEventsEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
-    final iconColor = isDark ? const Color(0xFF64748B) : const Color(0xFFCBD5E1); // slate-300
-    final titleColor = isDark ? Colors.white : const Color(0xFF334155); // slate-700
-    final subtitleColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF94A3B8); // slate-400
-    
+
+    final iconColor = isDark
+        ? const Color(0xFF64748B)
+        : const Color(0xFFCBD5E1); // slate-300
+    final titleColor = isDark
+        ? Colors.white
+        : const Color(0xFF334155); // slate-700
+    final subtitleColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF94A3B8); // slate-400
+
     final boxBg = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final boxBorder = isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9); // slate-100
+    final boxBorder = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFF1F5F9); // slate-100
 
     return Center(
       child: Padding(
@@ -469,7 +540,11 @@ class _MyEventsEmptyState extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Icon(Icons.calendar_today_outlined, size: 40, color: iconColor),
+              child: Icon(
+                Icons.calendar_today_outlined,
+                size: 40,
+                color: iconColor,
+              ),
             ),
             const SizedBox(height: 24), // mb-6 equivalent
             Text(
@@ -501,23 +576,42 @@ class _MyEventsEmptyState extends StatelessWidget {
 class _EventCard extends StatelessWidget {
   final Event event;
   final VoidCallback onTap;
+  final String approvalForwardLabel;
+  final VoidCallback? onApprovalForward;
 
-  const _EventCard({required this.event, required this.onTap});
+  const _EventCard({
+    required this.event,
+    required this.onTap,
+    this.approvalForwardLabel = '',
+    this.onApprovalForward,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
-    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final borderColor = isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9); // slate-100
-    final titleColor = isDark ? Colors.white : const Color(0xFF1E293B); // slate-800
-    
-    final labelColor = isDark ? const Color(0xFF64748B) : const Color(0xFFCBD5E1); // slate-300
-    final valueColor = isDark ? const Color(0xFFE2E8F0) : const Color(0xFF334155); // slate-700
 
-    final detailsBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFEFF6FF).withOpacity(0.5); // blue-50/50
-    final detailsFg = isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB); // blue-600
+    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFF1F5F9); // slate-100
+    final titleColor = isDark
+        ? Colors.white
+        : const Color(0xFF1E293B); // slate-800
+
+    final labelColor = isDark
+        ? const Color(0xFF64748B)
+        : const Color(0xFFCBD5E1); // slate-300
+    final valueColor = isDark
+        ? const Color(0xFFE2E8F0)
+        : const Color(0xFF334155); // slate-700
+
+    final detailsBg = isDark
+        ? const Color(0xFF0F172A)
+        : const Color(0xFFEFF6FF).withOpacity(0.5); // blue-50/50
+    final detailsFg = isDark
+        ? const Color(0xFF60A5FA)
+        : const Color(0xFF2563EB); // blue-600
 
     final df = DateFormat('MMM d, yyyy');
     final tf = DateFormat('h:mm a');
@@ -525,6 +619,8 @@ class _EventCard extends StatelessWidget {
     final statusColor = _getStatusColor(event.status);
     final statusBgColor = _getStatusBgColor(event.status);
     final statusBorderColor = _getStatusBorderColor(event.status);
+    final pipelineText = _approvalPipelineText(event);
+    final showForwardAction = approvalForwardLabel.trim().isNotEmpty;
 
     return InkWell(
       onTap: onTap,
@@ -640,6 +736,65 @@ class _EventCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
+            if (pipelineText.isNotEmpty) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF0B1220)
+                      : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Text(
+                  pipelineText,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isDark
+                        ? const Color(0xFFBFDBFE)
+                        : const Color(0xFF1E3A8A),
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            if (showForwardAction) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: onApprovalForward,
+                  icon: const Icon(Icons.send_outlined, size: 16),
+                  label: Text(
+                    approvalForwardLabel,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0891B2),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14), // py-3.5
@@ -650,7 +805,11 @@ class _EventCard extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.remove_red_eye, size: 16, color: detailsFg), // Eye icon
+                  Icon(
+                    Icons.remove_red_eye,
+                    size: 16,
+                    color: detailsFg,
+                  ), // Eye icon
                   const SizedBox(width: 8),
                   Text(
                     'VIEW DETAILS',
@@ -668,6 +827,32 @@ class _EventCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _approvalPipelineText(Event value) {
+    if (!value.id.startsWith('approval-')) return '';
+
+    final status = value.status.toLowerCase().trim();
+    if (status == 'rejected') return 'Rejected';
+    if (status == 'clarification_requested') return 'Clarification requested';
+
+    final stage = (value.pipelineStage ?? '').toLowerCase().trim();
+    switch (stage) {
+      case 'deputy':
+        return 'Awaiting Deputy Registrar';
+      case 'after_deputy':
+        return 'Deputy approved - send to Finance';
+      case 'finance':
+        return 'Awaiting Finance Team';
+      case 'after_finance':
+        return 'Finance approved - send to Registrar';
+      case 'registrar':
+        return 'Awaiting Registrar / Vice Chancellor';
+      case 'complete':
+        return 'Final approval completed';
+      default:
+        return 'Awaiting approval';
+    }
   }
 
   Color _getStatusColor(String status) {

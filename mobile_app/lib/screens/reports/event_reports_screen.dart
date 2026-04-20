@@ -26,7 +26,11 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
     final role = (context.read<AuthProvider>().user?.roleKey ?? '')
         .toLowerCase()
         .trim();
-    return role == 'admin' || role == 'registrar' || role == 'vice_chancellor';
+    return role == 'admin' ||
+        role == 'registrar' ||
+        role == 'vice_chancellor' ||
+        role == 'deputy_registrar' ||
+        role == 'finance_team';
   }
 
   @override
@@ -268,7 +272,7 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
                                 color: Colors.black.withOpacity(0.1),
                                 blurRadius: 4,
                                 offset: const Offset(0, 2),
-                              )
+                              ),
                             ],
                           ),
                           alignment: Alignment.center,
@@ -298,7 +302,9 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
                         decoration: BoxDecoration(
                           boxShadow: [
                             BoxShadow(
-                              color: isDark ? Colors.transparent : const Color(0xFF4F46E5).withOpacity(0.05),
+                              color: isDark
+                                  ? Colors.transparent
+                                  : const Color(0xFF4F46E5).withOpacity(0.05),
                               blurRadius: 10,
                               offset: const Offset(0, 2),
                             ),
@@ -312,10 +318,23 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
                           },
                           decoration: InputDecoration(
                             hintText: 'Search reports by name or date...',
-                            hintStyle: TextStyle(color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8), fontSize: 14),
-                            prefixIcon: Icon(Icons.search, size: 20, color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8)),
+                            hintStyle: TextStyle(
+                              color: isDark
+                                  ? const Color(0xFF64748B)
+                                  : const Color(0xFF94A3B8),
+                              fontSize: 14,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.search,
+                              size: 20,
+                              color: isDark
+                                  ? const Color(0xFF64748B)
+                                  : const Color(0xFF94A3B8),
+                            ),
                             filled: true,
-                            fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                            fillColor: isDark
+                                ? const Color(0xFF1E293B)
+                                : Colors.white,
                             contentPadding: const EdgeInsets.symmetric(
                               vertical: 14,
                               horizontal: 16,
@@ -355,7 +374,9 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
                         decoration: BoxDecoration(
                           boxShadow: [
                             BoxShadow(
-                              color: isDark ? Colors.transparent : Colors.black.withOpacity(0.03),
+                              color: isDark
+                                  ? Colors.transparent
+                                  : Colors.black.withOpacity(0.03),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -366,7 +387,9 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
                               ? null
                               : () => _loadReports(forceRefresh: true),
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                            backgroundColor: isDark
+                                ? const Color(0xFF1E293B)
+                                : Colors.white,
                             padding: EdgeInsets.zero,
                             side: BorderSide(
                               color: isDark
@@ -386,7 +409,13 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
                                     color: Color(0xFF4F46E5),
                                   ),
                                 )
-                              : Icon(Icons.refresh, size: 20, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                              : Icon(
+                                  Icons.refresh,
+                                  size: 20,
+                                  color: isDark
+                                      ? const Color(0xFF94A3B8)
+                                      : const Color(0xFF64748B),
+                                ),
                         ),
                       ),
                     ),
@@ -579,9 +608,10 @@ class _ReportCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final borderColor = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -610,12 +640,24 @@ class _ReportCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF312E81).withOpacity(0.5) : const Color(0xFFEEF2FF).withOpacity(0.5),
-                  border: Border.all(color: isDark ? const Color(0xFF3730A3) : const Color(0xFFE0E7FF)),
+                  color: isDark
+                      ? const Color(0xFF312E81).withOpacity(0.5)
+                      : const Color(0xFFEEF2FF).withOpacity(0.5),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF3730A3)
+                        : const Color(0xFFE0E7FF),
+                  ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 alignment: Alignment.center,
-                child: Icon(Icons.bar_chart, color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5), size: 24),
+                child: Icon(
+                  Icons.bar_chart,
+                  color: isDark
+                      ? const Color(0xFF818CF8)
+                      : const Color(0xFF4F46E5),
+                  size: 24,
+                ),
               ),
               const SizedBox(width: 16),
               // Text Content
@@ -626,9 +668,14 @@ class _ReportCard extends StatelessWidget {
                     // Status Badge
                     Container(
                       margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                        color: isDark
+                            ? const Color(0xFF334155)
+                            : const Color(0xFFF1F5F9),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -637,7 +684,9 @@ class _ReportCard extends StatelessWidget {
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5,
-                          color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                          color: isDark
+                              ? const Color(0xFFCBD5E1)
+                              : const Color(0xFF475569),
                         ),
                       ),
                     ),
@@ -649,7 +698,9 @@ class _ReportCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A),
+                        color: isDark
+                            ? const Color(0xFFF8FAFC)
+                            : const Color(0xFF0F172A),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -660,7 +711,9 @@ class _ReportCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 14,
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -669,8 +722,16 @@ class _ReportCard extends StatelessWidget {
                       spacing: 12,
                       runSpacing: 8,
                       children: [
-                        _MetaBadge(icon: Icons.calendar_today_outlined, text: date, isDark: isDark),
-                        _MetaBadge(icon: Icons.people_outline, text: attendees, isDark: isDark),
+                        _MetaBadge(
+                          icon: Icons.calendar_today_outlined,
+                          text: date,
+                          isDark: isDark,
+                        ),
+                        _MetaBadge(
+                          icon: Icons.people_outline,
+                          text: attendees,
+                          isDark: isDark,
+                        ),
                       ],
                     ),
                   ],
@@ -685,12 +746,24 @@ class _ReportCard extends StatelessWidget {
               icon: const Icon(Icons.remove_red_eye_outlined, size: 16),
               label: const Text('View Report'),
               style: ElevatedButton.styleFrom(
-                foregroundColor: isDark ? const Color(0xFF818CF8) : const Color(0xFF4338CA),
-                backgroundColor: isDark ? const Color(0xFF312E81).withOpacity(0.5) : const Color(0xFFEEF2FF),
+                foregroundColor: isDark
+                    ? const Color(0xFF818CF8)
+                    : const Color(0xFF4338CA),
+                backgroundColor: isDark
+                    ? const Color(0xFF312E81).withOpacity(0.5)
+                    : const Color(0xFFEEF2FF),
                 elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                textStyle: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
               ),
             );
           }
@@ -701,12 +774,26 @@ class _ReportCard extends StatelessWidget {
               icon: const Icon(Icons.description_outlined, size: 16),
               label: const Text('Attendance'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: isDark ? const Color(0xFFC084FC) : const Color(0xFF7E22CE),
-                side: BorderSide(color: isDark ? const Color(0xFF6B21A8) : const Color(0xFFE9D5FF)),
+                foregroundColor: isDark
+                    ? const Color(0xFFC084FC)
+                    : const Color(0xFF7E22CE),
+                side: BorderSide(
+                  color: isDark
+                      ? const Color(0xFF6B21A8)
+                      : const Color(0xFFE9D5FF),
+                ),
                 backgroundColor: isDark ? Colors.transparent : Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                textStyle: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
               ),
             );
           }
@@ -719,7 +806,7 @@ class _ReportCard extends StatelessWidget {
                   if (hasAttendance) ...[
                     const SizedBox(width: 10),
                     Expanded(child: buildAttendanceBtn()),
-                  ]
+                  ],
                 ],
               );
             } else {
@@ -731,7 +818,7 @@ class _ReportCard extends StatelessWidget {
                   if (hasAttendance) ...[
                     const SizedBox(height: 10),
                     buildAttendanceBtn(),
-                  ]
+                  ],
                 ],
               );
             }
@@ -743,7 +830,12 @@ class _ReportCard extends StatelessWidget {
               children: [
                 content,
                 const SizedBox(height: 16),
-                Divider(height: 1, color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9)),
+                Divider(
+                  height: 1,
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFF1F5F9),
+                ),
                 const SizedBox(height: 16),
                 buildActions(),
               ],
@@ -755,10 +847,7 @@ class _ReportCard extends StatelessWidget {
             children: [
               Expanded(child: content),
               const SizedBox(width: 16),
-              SizedBox(
-                 width: 140,
-                 child: buildActions(),
-              )
+              SizedBox(width: 140, child: buildActions()),
             ],
           );
         },
@@ -772,7 +861,11 @@ class _MetaBadge extends StatelessWidget {
   final String text;
   final bool isDark;
 
-  const _MetaBadge({required this.icon, required this.text, required this.isDark});
+  const _MetaBadge({
+    required this.icon,
+    required this.text,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context) {

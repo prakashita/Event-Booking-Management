@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../constants/app_colors.dart';
 import '../../models/models.dart';
@@ -21,7 +20,6 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
   List<ApprovalRequest> _mySubmissions = [];
   bool _loadingInbox = true;
   bool _loadingMine = false;
-  bool _inboxLoaded = false;
   bool _mineLoaded = false;
 
   @override
@@ -49,7 +47,6 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
             .map((e) => ApprovalRequest.fromJson(e))
             .toList();
         _loadingInbox = false;
-        _inboxLoaded = true;
       });
     } catch (e) {
       setState(() => _loadingInbox = false);
@@ -77,30 +74,65 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
       context,
       title: approve ? 'Approve Event' : 'Reject Event',
       message: approve
-          ? 'Approve "${req.eventTitle}"? This will create the event and notify the requester.'
-          : 'Reject "${req.eventTitle}"? This action cannot be undone.',
+          ? 'Approve "${req.eventTitle}"?'
+          : 'Reject "${req.eventTitle}"? Please provide a comment for the requester.',
       confirmLabel: approve ? 'Approve' : 'Reject',
       isDestructive: !approve,
     );
     if (confirmed != true || !mounted) return;
 
+    String? comment;
+    if (!approve) {
+      comment = await _promptDecisionComment(
+        title: 'Reject request',
+        hint: 'Add rejection reason',
+      );
+      if (!mounted || comment == null) return;
+      if (comment.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Comment is required when rejecting a request.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+    }
+
     try {
-      await _api.patch('/approvals/${req.id}', data: {
-        'decision': approve ? 'approved' : 'rejected',
-      });
+      final updated = await _api.patch<Map<String, dynamic>>(
+        '/approvals/${req.id}',
+        data: {
+          'status': approve ? 'approved' : 'rejected',
+          if ((comment ?? '').trim().isNotEmpty) 'comment': comment!.trim(),
+        },
+      );
+
+      final status = (updated['status'] ?? '').toString().toLowerCase();
+      final stage = (updated['pipeline_stage'] ?? '').toString().toLowerCase();
+      String message;
+      if (approve && stage == 'after_deputy') {
+        message =
+            'Approved at Deputy stage. Requester can now send to Finance.';
+      } else if (approve && stage == 'after_finance') {
+        message =
+            'Approved at Finance stage. Requester can now send to Registrar.';
+      } else if (approve && status == 'approved') {
+        message = 'Final approval completed.';
+      } else {
+        message = approve ? 'Request approved.' : 'Request rejected.';
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(approve
-                ? 'Event approved and created!'
-                : 'Request rejected.'),
-            backgroundColor:
-                approve ? AppColors.success : AppColors.textSecondary,
+            content: Text(message),
+            backgroundColor: approve
+                ? AppColors.success
+                : AppColors.textSecondary,
           ),
         );
-        // Reload inbox
         _inbox = [];
-        _inboxLoaded = false;
         _loadInbox();
       }
     } catch (e) {
@@ -113,6 +145,44 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
         );
       }
     }
+  }
+
+  Future<String?> _promptDecisionComment({
+    required String title,
+    required String hint,
+  }) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: TextField(
+            controller: controller,
+            maxLines: 4,
+            minLines: 3,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: hint,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    return result;
   }
 
   @override
@@ -132,14 +202,21 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
                   if (_inbox.isNotEmpty) ...[
                     const SizedBox(width: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.primary,
                         borderRadius: BorderRadius.circular(100),
                       ),
                       child: Text(
                         '${_inbox.where((r) => r.status == 'pending').length}',
-                        style: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],
@@ -159,7 +236,6 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
               : RefreshIndicator(
                   onRefresh: () async {
                     _inbox = [];
-                    _inboxLoaded = false;
                     await _loadInbox();
                   },
                   child: _inbox.isEmpty
@@ -277,7 +353,8 @@ class _ApprovalCard extends StatelessWidget {
               StatusBadge(request.status),
             ],
           ),
-          if (request.description != null && request.description!.isNotEmpty) ...[
+          if (request.description != null &&
+              request.description!.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
               request.description!,
@@ -291,7 +368,10 @@ class _ApprovalCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          InfoRow(icon: Icons.person_outline, text: 'By: ${request.requestedBy}'),
+          InfoRow(
+            icon: Icons.person_outline,
+            text: 'By: ${request.requestedBy}',
+          ),
           const SizedBox(height: 5),
           InfoRow(icon: Icons.location_on_outlined, text: request.venueName),
           const SizedBox(height: 5),
@@ -300,6 +380,13 @@ class _ApprovalCard extends StatelessWidget {
             text:
                 '${df.format(request.startDatetime)} · ${tf.format(request.startDatetime)} → ${tf.format(request.endDatetime)}',
           ),
+          if ((request.pipelineStage ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 5),
+            InfoRow(
+              icon: Icons.route_outlined,
+              text: _pipelineStageLabel(request.pipelineStage),
+            ),
+          ],
           if (request.overrideConflict) ...[
             const SizedBox(height: 10),
             Container(
@@ -315,7 +402,11 @@ class _ApprovalCard extends StatelessWidget {
                   SizedBox(width: 6),
                   Text(
                     'Conflict override requested',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.warning),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.warning,
+                    ),
                   ),
                 ],
               ),
@@ -355,5 +446,25 @@ class _ApprovalCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _pipelineStageLabel(String? stage) {
+    final s = (stage ?? '').trim().toLowerCase();
+    switch (s) {
+      case 'deputy':
+        return 'Stage: Awaiting Deputy Registrar';
+      case 'after_deputy':
+        return 'Stage: Deputy approved - waiting requester action';
+      case 'finance':
+        return 'Stage: Awaiting Finance Team';
+      case 'after_finance':
+        return 'Stage: Finance approved - waiting requester action';
+      case 'registrar':
+        return 'Stage: Awaiting Registrar / Vice Chancellor';
+      case 'complete':
+        return 'Stage: Final approval completed';
+      default:
+        return 'Stage: Awaiting approval';
+    }
   }
 }
