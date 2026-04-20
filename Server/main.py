@@ -36,13 +36,18 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize MongoDB connection
     logger.info("Starting API in %s environment", settings.app_env)
     await init_db()
-    await update_event_statuses()
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(update_event_statuses, "interval", minutes=5)
-    scheduler.start()
-    app.state.scheduler = scheduler
+    scheduler = None
+    if os.getenv("VERCEL") == "1":
+        logger.info("Skipping startup status sweep and scheduler on Vercel")
+    else:
+        await update_event_statuses()
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(update_event_statuses, "interval", minutes=5)
+        scheduler.start()
+        app.state.scheduler = scheduler
     yield
-    scheduler.shutdown(wait=False)
+    if scheduler:
+        scheduler.shutdown(wait=False)
     # Shutdown: Close MongoDB connection
     await close_db()
     logger.info("API shutdown complete")

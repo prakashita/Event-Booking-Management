@@ -359,11 +359,12 @@ def _serialize_conflict_doc(doc: dict) -> dict:
     }
 
 
-async def _fetch_event_conflict_docs() -> list[dict]:
+async def _fetch_event_conflict_docs(venue_name: str) -> list[dict]:
     # Read raw Mongo documents so malformed legacy rows do not fail Beanie model parsing.
+    # Restrict to one venue to avoid scanning the full events collection on each request.
     collection = Event.get_motor_collection()
     cursor = collection.find(
-        {},
+        {"venue_name": venue_name},
         {
             "_id": 1,
             "name": 1,
@@ -631,7 +632,9 @@ async def check_conflicts(payload: EventCreate, user: User = Depends(get_current
             detail="End datetime must be after start datetime",
         )
 
-    existing_events = await _fetch_event_conflict_docs()
+    logger.info("Checking conflicts venue=%s", payload.venue_name)
+    existing_events = await _fetch_event_conflict_docs(payload.venue_name)
+    logger.info("Conflict candidate count venue=%s count=%s", payload.venue_name, len(existing_events))
     conflicts = []
     for existing in existing_events:
         try:
@@ -671,7 +674,7 @@ async def create_event(request: Request, payload: EventCreate, user: User = Depe
         )
 
     if not payload.override_conflict:
-        existing_events = await _fetch_event_conflict_docs()
+        existing_events = await _fetch_event_conflict_docs(payload.venue_name)
         conflicts = []
         for existing in existing_events:
             try:
