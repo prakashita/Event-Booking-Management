@@ -347,6 +347,36 @@ def serialize_conflict(event: Event) -> dict:
     }
 
 
+def _serialize_conflict_doc(doc: dict) -> dict:
+    return {
+        "id": str(doc.get("_id", "")),
+        "name": str(doc.get("name", "") or ""),
+        "venue_name": str(doc.get("venue_name", "") or ""),
+        "start_date": doc.get("start_date"),
+        "start_time": doc.get("start_time"),
+        "end_date": doc.get("end_date"),
+        "end_time": doc.get("end_time"),
+    }
+
+
+async def _fetch_event_conflict_docs() -> list[dict]:
+    # Read raw Mongo documents so malformed legacy rows do not fail Beanie model parsing.
+    collection = Event.get_motor_collection()
+    cursor = collection.find(
+        {},
+        {
+            "_id": 1,
+            "name": 1,
+            "venue_name": 1,
+            "start_date": 1,
+            "start_time": 1,
+            "end_date": 1,
+            "end_time": 1,
+        },
+    )
+    return await cursor.to_list(length=None)
+
+
 def _build_raw_email(
     to_email: str,
     subject: str,
@@ -601,24 +631,24 @@ async def check_conflicts(payload: EventCreate, user: User = Depends(get_current
             detail="End datetime must be after start datetime",
         )
 
-    existing_events = await Event.find_all().to_list()
+    existing_events = await _fetch_event_conflict_docs()
     conflicts = []
     for existing in existing_events:
         try:
-            existing_start = combine_datetime(existing.start_date, existing.start_time)
-            existing_end = combine_datetime(existing.end_date, existing.end_time)
+            existing_start = combine_datetime(existing.get("start_date"), existing.get("start_time"))
+            existing_end = combine_datetime(existing.get("end_date"), existing.get("end_time"))
         except (TypeError, ValueError):
             logger.warning(
                 "Skipping event with invalid date/time while checking conflicts",
-                extra={"event_id": str(existing.id)},
+                extra={"event_id": str(existing.get("_id", ""))},
             )
             continue
         if (
-            existing.venue_name == payload.venue_name
+            str(existing.get("venue_name", "") or "") == payload.venue_name
             and start_dt < existing_end
             and end_dt > existing_start
         ):
-            conflicts.append(serialize_conflict(existing))
+            conflicts.append(_serialize_conflict_doc(existing))
 
     return {"conflicts": conflicts}
 
@@ -641,24 +671,24 @@ async def create_event(request: Request, payload: EventCreate, user: User = Depe
         )
 
     if not payload.override_conflict:
-        existing_events = await Event.find_all().to_list()
+        existing_events = await _fetch_event_conflict_docs()
         conflicts = []
         for existing in existing_events:
             try:
-                existing_start = combine_datetime(existing.start_date, existing.start_time)
-                existing_end = combine_datetime(existing.end_date, existing.end_time)
+                existing_start = combine_datetime(existing.get("start_date"), existing.get("start_time"))
+                existing_end = combine_datetime(existing.get("end_date"), existing.get("end_time"))
             except (TypeError, ValueError):
                 logger.warning(
                     "Skipping event with invalid date/time while creating event",
-                    extra={"event_id": str(existing.id)},
+                    extra={"event_id": str(existing.get("_id", ""))},
                 )
                 continue
             if (
-                existing.venue_name == payload.venue_name
+                str(existing.get("venue_name", "") or "") == payload.venue_name
                 and start_dt < existing_end
                 and end_dt > existing_start
             ):
-                conflicts.append(serialize_conflict(existing))
+                conflicts.append(_serialize_conflict_doc(existing))
 
         if conflicts:
             request_id = getattr(request.state, "request_id", "")
