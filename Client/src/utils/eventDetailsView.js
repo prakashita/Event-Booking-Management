@@ -98,18 +98,21 @@ export function buildWorkflowStepperSteps(details) {
 }
 
 export function wfBadgeClass(status) {
-  if (status === "approved") return "wf-badge wf-badge--approved";
+  if (status === "approved" || status === "completed") return "wf-badge wf-badge--approved";
   if (status === "pending") return "wf-badge wf-badge--pending";
   if (status === "clarification_requested") return "wf-badge wf-badge--clarification";
   if (status === "rejected") return "wf-badge wf-badge--rejected";
+  if (status === "in_review") return "wf-badge wf-badge--pending";
   return "wf-badge wf-badge--neutral";
 }
 
 export function wfBadgeLabel(status) {
   if (status === "approved") return "Approved";
+  if (status === "completed") return "Completed";
   if (status === "pending") return "Pending";
   if (status === "clarification_requested") return "Clarification";
   if (status === "rejected") return "Rejected";
+  if (status === "in_review") return "In Review";
   return "—";
 }
 
@@ -185,6 +188,64 @@ export function formatInboxDecisionStatusLabel(status) {
   if (s === "clarification_requested") return "Clarification";
   if (!s) return "—";
   return `${s.charAt(0).toUpperCase()}${s.slice(1)}`;
+}
+
+/**
+ * For historical (non-actionable) items in the list view:
+ * returns a short primary badge label ("Approved" / "Rejected" etc.) and an
+ * optional sublabel showing next-stage context ("→ Finance", "→ Registrar").
+ */
+export function getCompactListBadge(item) {
+  const st = String(item?.status || "").toLowerCase();
+  const ps = String(item?.pipeline_stage || "").toLowerCase();
+  // Primary label — always short
+  let primary = "Approved";
+  if (st === "rejected") primary = "Rejected";
+  else if (st === "clarification_requested") primary = "Clarification";
+  // Sub-label: where it currently sits in the pipeline
+  let sub = null;
+  if (ps === "after_deputy") sub = "→ Finance";
+  else if (ps === "after_finance") sub = "→ Registrar";
+  else if (ps === "complete" || st === "approved") sub = "Completed";
+  else if (ps === "registrar") sub = "At Registrar";
+  else if (ps === "finance") sub = "At Finance";
+  else if (ps === "deputy") sub = "At Deputy Registrar";
+  return { primary, sub };
+}
+
+/**
+ * Derive current stage label from the API response.
+ * Prefers `current_stage_label` from backend; falls back to pipeline_stage derivation.
+ */
+export function getCurrentStageLabel(request) {
+  if (request?.current_stage_label) return request.current_stage_label;
+  // Fallback derivation for backward compat with old backend responses
+  const st = String(request?.status || "").toLowerCase();
+  const ps = String(request?.pipeline_stage || "").toLowerCase();
+  if (st === "approved" && (ps === "complete" || request?.event_id)) return "Completed";
+  if (st === "rejected") return "Rejected";
+  if (st === "clarification_requested") {
+    if (ps === "deputy") return "Deputy Registrar — Clarification";
+    if (ps === "finance") return "Finance — Clarification";
+    if (ps === "registrar") return "Registrar — Clarification";
+    return "Clarification Requested";
+  }
+  if (ps === "deputy") return "Awaiting Deputy Registrar";
+  if (ps === "after_deputy") return "Deputy Approved — Forward to Finance";
+  if (ps === "finance") return "Awaiting Finance";
+  if (ps === "after_finance") return "Finance Approved — Forward to Registrar";
+  if (ps === "registrar") return "Awaiting Registrar / VC";
+  if (ps === "complete") return "Completed";
+  if (st === "pending") return "Awaiting Approval";
+  return "Pending";
+}
+
+/**
+ * Return approved-by role label from the API response (with fallback).
+ */
+export function getApprovedByRoleLabel(request) {
+  if (request?.approved_by_role) return request.approved_by_role;
+  return null;
 }
 
 export function buildMarketingPhaseGroups(normalizedReq) {

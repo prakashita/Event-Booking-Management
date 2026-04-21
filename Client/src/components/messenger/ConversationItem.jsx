@@ -65,6 +65,9 @@ const ConversationItem = React.memo(function ConversationItem({
         {workflowLabel ? (
           <p className="msger-conv-workflow-label">{workflowLabel}</p>
         ) : null}
+        {isWorkflow && participantNamesTitle ? (
+          <p className="msger-conv-workflow-participants">{participantNamesTitle}</p>
+        ) : null}
         {memberCountLabel ? (
           <p className="msger-conv-members">{memberCountLabel}</p>
         ) : null}

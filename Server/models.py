@@ -159,6 +159,11 @@ class ApprovalRequest(Document):
     approval_cc: List[str] = Field(default_factory=list)
     # Multi-stage routing: deputy → finance → registrar/VC (final). Legacy rows omit this (treated as registrar-only).
     pipeline_stage: Optional[str] = Field(default=None)
+    # Stage-history: who decided at the deputy / finance gates (for post-approval visibility).
+    deputy_decided_by: Optional[str] = None
+    deputy_decided_at: Optional[datetime] = None
+    finance_decided_by: Optional[str] = None
+    finance_decided_at: Optional[datetime] = None
 
     class Settings:
         name = "approval_requests"
@@ -394,12 +399,22 @@ class ChatConversation(Document):
     participant_unreads: dict = Field(default_factory=dict)  # {user_id: unread_count}
     # Approval-thread fields (thread_kind="approval_thread")
     approval_request_id: Optional[str] = None
-    department: Optional[str] = None  # registrar | facility_manager | marketing | it | transport
-    related_request_id: Optional[str] = None  # dept request id (or approval id for registrar)
+    # department key encodes BOTH the dept-request channel (facility_manager,
+    # it, marketing, transport, iqac) AND the approval pipeline stage:
+    #   "deputy_registrar"  — Deputy Registrar clarification stage
+    #   "finance_team"      — Finance Team clarification stage
+    #   "registrar"         — Registrar / VC final-approval stage
+    # Each pipeline stage uses a distinct key so conversations are NEVER shared
+    # across stages even for the same approval_request_id.
+    department: Optional[str] = None
+    related_request_id: Optional[str] = None  # dept request id (or approval id for pipeline-stage threads)
     related_kind: Optional[str] = None  # approval_request | facility_request | ...
     thread_status: Optional[str] = None  # active | waiting_for_faculty | waiting_for_department | resolved | closed
     closed_at: Optional[datetime] = None
     closed_reason: Optional[str] = None  # "approved" | "rejected" | "event_closed" | "manual"
+    # Migration audit trail — set when a legacy "registrar" thread is reclassified
+    migrated_from_dept: Optional[str] = None
+    migrated_at: Optional[datetime] = None
 
     class Settings:
         name = "chat_conversations"

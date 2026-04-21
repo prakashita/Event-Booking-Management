@@ -1,9 +1,13 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import api from "../services/api";
 import { IconShieldCheck } from "./icons/EventModalIcons";
 import DiscussionPanel from "./DiscussionPanel";
 
 // Maps viewer role to the department string used in threads.
+// Facility/IT/Marketing/Transport roles use dept-request threads.
+// Approval-stage roles (deputy_registrar, finance_team, registrar, vice_chancellor)
+// have their own stage-specific keys; they are identified by participant membership
+// on the backend so no client-side dept-key filtering is needed for them.
 const ROLE_TO_DEPT = {
   facility_manager: "facility_manager",
   it: "it",
@@ -28,6 +32,8 @@ const ACTIONABLE_STATUSES = new Set(["pending", "clarification_requested"]);
    ───────────────────────────────────────────── */
 const DEPT_OPTIONS = [
   { value: "registrar", label: "Registrar" },
+  { value: "deputy_registrar", label: "Deputy Registrar" },
+  { value: "finance_team", label: "Finance" },
   { value: "facility_manager", label: "Facility" },
   { value: "it", label: "IT" },
   { value: "marketing", label: "Marketing" },
@@ -140,6 +146,9 @@ export default function ApprovalDiscussionTree({
   // Dept action support
   viewerRole,
   onOpenActionModal,
+  // Registrar-level inline action props
+  isApprovalActionable,
+  approvalRequestItemId,
   // legacy props (ignored — kept for backward compat)
   rootsFromApi: _rootsFromApi,
   workflowLogs: _workflowLogs,
@@ -150,6 +159,20 @@ export default function ApprovalDiscussionTree({
 }) {
   const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [inlineActOpen, setInlineActOpen] = useState(false);
+  const inlineActRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!inlineActOpen) return;
+    function handleOutside(e) {
+      if (inlineActRef.current && !inlineActRef.current.contains(e.target)) {
+        setInlineActOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [inlineActOpen]);
 
   const fetchThreads = useCallback(async () => {
     if (!approvalRequestId) return;
@@ -216,6 +239,10 @@ export default function ApprovalDiscussionTree({
 
   const existingDepts = threads.map((t) => t.department);
 
+  // Registrar-level roles can take approval actions inline from the discussion area
+  const isRegistrarLevelRole = !ROLE_TO_DEPT[viewerRole] && !isFacultyViewer && viewerRole;
+  const showInlineApprovalActions = isRegistrarLevelRole && isApprovalActionable && onOpenActionModal && approvalRequestItemId;
+
   return (
     <section className="adt-section" aria-labelledby="adt-heading">
       <div className="evt-section-head">
@@ -248,8 +275,64 @@ export default function ApprovalDiscussionTree({
           onSubmitReply={handleSubmitReply}
           onOpenInChat={handleOpenInChat}
           onOpenActionModal={getThreadActionModal(thread)}
+          isApprovalResolved={isApprovalActionable === false}
         />
       ))}
+
+      {/* Inline approval action dropdown for registrar/deputy/finance — shown after discussions */}
+      {showInlineApprovalActions ? (
+        <div className="adt-approval-inline-actions" ref={inlineActRef}>
+          <div className="adt-approval-inline-actions-row">
+            <p className="adt-approval-inline-actions-label">Action on this request</p>
+            <div className="msger-wf-action-root">
+              <button
+                type="button"
+                className={`msger-wf-action-trigger${inlineActOpen ? " open" : ""}`}
+                onClick={() => setInlineActOpen((v) => !v)}
+                aria-haspopup="true"
+                aria-expanded={inlineActOpen}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                Take action
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              {inlineActOpen && (
+                <div className="msger-wf-action-menu" role="menu">
+                  <button
+                    type="button" role="menuitem"
+                    className="msger-wf-action-item msger-wf-action-item--approve"
+                    onClick={() => { setInlineActOpen(false); onOpenActionModal("approval", approvalRequestItemId, "approved", "Approve"); }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12"/></svg>
+                    Approve
+                  </button>
+                  <button
+                    type="button" role="menuitem"
+                    className="msger-wf-action-item msger-wf-action-item--clarify"
+                    onClick={() => { setInlineActOpen(false); onOpenActionModal("approval", approvalRequestItemId, "clarification_requested", "Need clarification"); }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+                    Need clarification
+                  </button>
+                  <button
+                    type="button" role="menuitem"
+                    className="msger-wf-action-item msger-wf-action-item--reject"
+                    onClick={() => { setInlineActOpen(false); onOpenActionModal("approval", approvalRequestItemId, "rejected", "Reject"); }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    Reject
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : isRegistrarLevelRole && isApprovalActionable === false ? (
+        <div className="adt-approval-resolved-state">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12"/></svg>
+          <span>This request has been reviewed and is no longer actionable.</span>
+        </div>
+      ) : null}
 
       <NewThreadPanel
         approvalRequestId={approvalRequestId}

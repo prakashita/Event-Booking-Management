@@ -287,6 +287,17 @@ class ApprovalRequestResponse(BaseModel):
     created_at: datetime
     approval_cc: List[str] = Field(default_factory=list)
     pipeline_stage: Optional[str] = None
+    # Enriched fields for frontend display
+    current_stage_label: Optional[str] = None
+    approved_by_role: Optional[str] = None
+    completed: bool = False
+    # Stage-history: who decided at each gate
+    deputy_decided_by: Optional[str] = None
+    deputy_decided_at: Optional[datetime] = None
+    finance_decided_by: Optional[str] = None
+    finance_decided_at: Optional[datetime] = None
+    # Whether this item is still actionable (vs read-only history)
+    is_actionable: bool = True
 
 
 class ApprovalDecision(BaseModel):

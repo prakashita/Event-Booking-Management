@@ -57,7 +57,74 @@ def serialize_event(event: Event) -> EventResponse:
     )
 
 
-def serialize_approval(item: ApprovalRequest) -> ApprovalRequestResponse:
+def _compute_current_stage_label(item: ApprovalRequest) -> str:
+    """Derive a human-readable stage label from pipeline_stage + status."""
+    st = (item.status or "").strip().lower()
+    ps = (getattr(item, "pipeline_stage", None) or "").strip().lower()
+    if st == "approved" and (ps == "complete" or item.event_id):
+        return "Completed"
+    if st == "rejected":
+        return "Rejected"
+    if st == "clarification_requested":
+        if ps == "deputy":
+            return "Deputy Registrar — Clarification"
+        if ps == "finance":
+            return "Finance — Clarification"
+        if ps == "registrar":
+            return "Registrar — Clarification"
+        return "Clarification Requested"
+    if ps == "deputy":
+        return "Awaiting Deputy Registrar"
+    if ps == "after_deputy":
+        return "Deputy Approved — Forward to Finance"
+    if ps == "finance":
+        return "Awaiting Finance"
+    if ps == "after_finance":
+        return "Finance Approved — Forward to Registrar"
+    if ps == "registrar":
+        return "Awaiting Registrar / VC"
+    if ps == "complete":
+        return "Completed"
+    if st == "pending":
+        return "Awaiting Approval"
+    return "Pending"
+
+
+def _compute_approved_by_role(item: ApprovalRequest) -> str | None:
+    """Return a role label for who last decided on this approval, if decided."""
+    st = (item.status or "").strip().lower()
+    ps = (getattr(item, "pipeline_stage", None) or "").strip().lower()
+    decided_by = item.decided_by
+    # Check stage-specific decided_by fields
+    deputy_decided = getattr(item, "deputy_decided_by", None)
+    finance_decided = getattr(item, "finance_decided_by", None)
+    if st == "approved" and ps in ("complete", ""):
+        return "Registrar / VC"
+    if st == "rejected":
+        if ps == "deputy" and deputy_decided:
+            return "Deputy Registrar"
+        if ps == "finance" and finance_decided:
+            return "Finance"
+        return "Registrar / VC"
+    if ps == "after_deputy":
+        return "Deputy Registrar"
+    if ps == "after_finance":
+        return "Finance"
+    if st == "clarification_requested":
+        if ps == "deputy":
+            return "Deputy Registrar"
+        if ps == "finance":
+            return "Finance"
+        return "Registrar / VC"
+    if not decided_by:
+        return None
+    return None
+
+
+def serialize_approval(item: ApprovalRequest, *, is_actionable: bool = True) -> ApprovalRequestResponse:
+    st = (item.status or "").strip().lower()
+    ps = (getattr(item, "pipeline_stage", None) or "").strip().lower()
+    is_completed = (st == "approved" and bool(item.event_id)) or ps == "complete"
     return ApprovalRequestResponse(
         id=str(item.id),
         status=item.status,
@@ -87,6 +154,14 @@ def serialize_approval(item: ApprovalRequest) -> ApprovalRequestResponse:
         created_at=item.created_at,
         approval_cc=list(getattr(item, "approval_cc", None) or []),
         pipeline_stage=getattr(item, "pipeline_stage", None),
+        current_stage_label=_compute_current_stage_label(item),
+        approved_by_role=_compute_approved_by_role(item),
+        completed=is_completed,
+        deputy_decided_by=getattr(item, "deputy_decided_by", None),
+        deputy_decided_at=getattr(item, "deputy_decided_at", None),
+        finance_decided_by=getattr(item, "finance_decided_by", None),
+        finance_decided_at=getattr(item, "finance_decided_at", None),
+        is_actionable=is_actionable,
     )
 
 

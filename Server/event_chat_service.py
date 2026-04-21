@@ -75,12 +75,31 @@ async def add_participant_to_event_chat(event_id: str, user_id: str) -> None:
 
 DEPARTMENT_LABELS = {
     "registrar": "Registrar",
+    "deputy_registrar": "Deputy Registrar",
+    "finance_team": "Finance",
     "facility_manager": "Facility",
     "marketing": "Marketing",
     "it": "IT",
     "transport": "Transport",
     "iqac": "IQAC",
 }
+
+# Maps approval pipeline stage to the department key used for that stage's
+# clarification thread.  This is the single source of truth — never hard-code
+# "registrar" as the department when the active stage is deputy or finance.
+STAGE_TO_DEPT_KEY: dict[str, str] = {
+    "deputy": "deputy_registrar",
+    "finance": "finance_team",
+    "registrar": "registrar",
+}
+
+
+def dept_key_for_stage(pipeline_stage: str) -> str:
+    """Return the approval-thread department key for a pipeline stage.
+
+    Defaults to 'registrar' for legacy rows that omit pipeline_stage.
+    """
+    return STAGE_TO_DEPT_KEY.get((pipeline_stage or "").strip().lower(), "registrar")
 
 
 async def get_approval_thread(
