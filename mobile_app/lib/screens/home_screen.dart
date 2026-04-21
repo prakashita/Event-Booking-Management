@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -5,7 +7,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/side_nav_bar.dart';
 import '../../widgets/dashboard/profile_dropdown.dart';
@@ -22,13 +26,163 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   final ValueNotifier<bool> _chatFabVisible = ValueNotifier<bool>(true);
   Offset? _fabPos;
+  final _api = ApiService();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkGoogleScopes();
+      // Initialize real-time notifications
+      _initializeNotifications();
     });
+  }
+
+  Future<void> _initializeNotifications() async {
+    if (!mounted) return;
+    final notificationProvider =
+        Provider.of<NotificationProvider>(context, listen: false);
+    await notificationProvider.initialize();
+  }
+
+  Future<void> _openNotificationsPanel() async {
+    if (!mounted) return;
+
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final notificationProvider =
+        Provider.of<NotificationProvider>(context, listen: false);
+    final totalUnread = notificationProvider.totalUnread;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Notifications',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    if (totalUnread > 0)
+                      Text(
+                        '$totalUnread unread',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (totalUnread > 0)
+                  InkWell(
+                    onTap: () {
+                      Navigator.of(sheetContext).pop();
+                      context.push('/chat');
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? theme.colorScheme.surfaceContainerHigh
+                            : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDark
+                              ? theme.colorScheme.outline.withValues(
+                                  alpha: 0.35,
+                                )
+                              : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.message_outlined, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Unread Messages',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.colorScheme.onSurface,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '$totalUnread unread in chats and discussions',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2563EB),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              totalUnread > 99 ? '99+' : '$totalUnread',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      child: Text(
+                        "You're all caught up",
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _checkGoogleScopes() async {
@@ -266,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final searchBg = isDark
         ? theme.colorScheme.surfaceContainerHighest
         : const Color(0xFFF4F7FE);
-    final shadowColor = Colors.black.withOpacity(isDark ? 0.35 : 0.05);
+    final shadowColor = Colors.black.withValues(alpha: isDark ? 0.35 : 0.05);
 
     return Scaffold(
       backgroundColor: pageBg,
@@ -344,6 +498,56 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           const SizedBox(width: 16),
+                          Consumer<NotificationProvider>(
+                            builder: (context, notificationProvider, _) {
+                              final totalUnread =
+                                  notificationProvider.totalUnread;
+                              return Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  IconButton(
+                                    tooltip: 'Notifications',
+                                    onPressed: _openNotificationsPanel,
+                                    icon: const Icon(
+                                      LucideIcons.bell,
+                                      size: 18,
+                                    ),
+                                  ),
+                                  if (totalUnread > 0)
+                                    Positioned(
+                                      right: 6,
+                                      top: 6,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 5,
+                                          vertical: 1,
+                                        ),
+                                        constraints: const BoxConstraints(
+                                          minWidth: 16,
+                                          minHeight: 14,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFDC2626),
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                        ),
+                                        child: Text(
+                                          totalUnread > 99
+                                              ? '99+'
+                                              : '$totalUnread',
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
                           if (user != null)
                             ProfileDropdown(user: user)
                           else
@@ -377,9 +581,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           ValueListenableBuilder<bool>(
                             valueListenable: _chatFabVisible,
                             builder: (context, visible, _) {
-                              final isChatRoute = currentRoute == '/chat' || currentRoute.startsWith('/chat/');
-                              final showFab = isTopRoute && visible && !isChatRoute;
-                              
+                              final isChatRoute =
+                                  currentRoute == '/chat' ||
+                                  currentRoute.startsWith('/chat/');
+                              final showFab =
+                                  isTopRoute && visible && !isChatRoute;
+
                               if (!showFab) return const SizedBox.shrink();
 
                               // Keep logic for dynamically calculating the default position based on page
@@ -387,9 +594,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                   currentRoute == '/requirements' ||
                                   currentRoute == '/admin' ||
                                   currentRoute == '/events/create';
-                                  
-                              final baseBottomOffset = hasPageLevelActions ? 96.0 : 16.0;
-                              final defaultBottom = bottomInset > 0 ? bottomInset + 16.0 : baseBottomOffset;
+
+                              final baseBottomOffset = hasPageLevelActions
+                                  ? 96.0
+                                  : 16.0;
+                              final defaultBottom = bottomInset > 0
+                                  ? bottomInset + 16.0
+                                  : baseBottomOffset;
                               final defaultRight = 16.0;
 
                               return Positioned(
@@ -400,20 +611,36 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: GestureDetector(
                                   onPanUpdate: (details) {
                                     setState(() {
-                                      double curX = _fabPos?.dx ?? (constraints.maxWidth - 56 - defaultRight);
-                                      double curY = _fabPos?.dy ?? (constraints.maxHeight - 56 - defaultBottom);
-                                      
+                                      double curX =
+                                          _fabPos?.dx ??
+                                          (constraints.maxWidth -
+                                              56 -
+                                              defaultRight);
+                                      double curY =
+                                          _fabPos?.dy ??
+                                          (constraints.maxHeight -
+                                              56 -
+                                              defaultBottom);
+
                                       double newX = curX + details.delta.dx;
                                       double newY = curY + details.delta.dy;
-                                      
-                                      newX = newX.clamp(0.0, constraints.maxWidth - 56.0);
-                                      newY = newY.clamp(0.0, constraints.maxHeight - 56.0);
-                                      
+
+                                      newX = newX.clamp(
+                                        0.0,
+                                        constraints.maxWidth - 56.0,
+                                      );
+                                      newY = newY.clamp(
+                                        0.0,
+                                        constraints.maxHeight - 56.0,
+                                      );
+
                                       _fabPos = Offset(newX, newY);
                                     });
                                   },
                                   child: FloatingActionButton(
-                                    key: const ValueKey<String>('chat_fab_visible'),
+                                    key: const ValueKey<String>(
+                                      'chat_fab_visible',
+                                    ),
                                     onPressed: () {
                                       context.push('/chat');
                                     },

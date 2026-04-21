@@ -32,7 +32,7 @@ class EventCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.25 : 0.05),
+              color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.05),
               spreadRadius: 1,
               blurRadius: 10,
               offset: const Offset(0, 4),
@@ -50,7 +50,7 @@ class EventCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: _getStatusColor().withOpacity(0.1),
+                    color: _getStatusColor().withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Icon(LucideIcons.calendar, color: _getStatusColor()),
@@ -61,7 +61,7 @@ class EventCard extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: _getStatusColor().withOpacity(0.1),
+                    color: _getStatusColor().withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(

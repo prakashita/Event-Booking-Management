@@ -2,8 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../constants/app_colors.dart';
+import '../../providers/auth_provider.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
@@ -29,6 +31,16 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
   bool _mineLoaded = false;
   bool _refreshing = false;
 
+  bool get _canAccess {
+    final role = (context.read<AuthProvider>().user?.roleKey ?? '')
+        .toLowerCase()
+        .trim();
+    return role == 'registrar' ||
+        role == 'vice_chancellor' ||
+        role == 'deputy_registrar' ||
+        role == 'finance_team';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -36,7 +48,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
     _tabController.addListener(() {
       if (_tabController.index == 1 && !_mineLoaded) _loadMine();
     });
-    _loadInbox();
+    if (_canAccess) {
+      _loadInbox();
+    } else {
+      _loadingInbox = false;
+    }
   }
 
   @override
@@ -290,6 +306,16 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (!_canAccess) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            'Access denied. This page is available to Registrar dashboard roles only.',
+          ),
+        ),
+      );
+    }
+
     final pendingCount = _inbox.where((r) => _isActionable(r)).length;
     final tabIndex = _tabController.index;
 
@@ -566,7 +592,7 @@ class _ApprovalCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.warningLight,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.warning.withOpacity(0.3)),
+                border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
               ),
               child: const Row(
                 children: [

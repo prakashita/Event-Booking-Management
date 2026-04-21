@@ -1571,7 +1571,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                                     Icon(
                                       Icons.calendar_today_rounded,
                                       size: 48,
-                                      color: subheading.withOpacity(0.5),
+                                      color: subheading.withValues(alpha: 0.5),
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
@@ -1632,7 +1632,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
 
     final bgSurface = isDark ? const Color(0xFF1E293B) : Colors.white;
     final topBarBg = isDark
-        ? const Color(0xFF0F172A).withOpacity(0.5)
+        ? const Color(0xFF0F172A).withValues(alpha: 0.5)
         : const Color(0xFFF8FAFC); // slate-50
     final borderCol = isDark
         ? const Color(0xFF334155)
@@ -1646,7 +1646,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
         border: Border.all(color: borderCol),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1709,7 +1709,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
             border: Border.all(color: borderColor),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -1933,7 +1933,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                   ),
                   decoration: BoxDecoration(
                     color: isDark
-                        ? const Color(0xFF7F1D1D).withOpacity(0.3)
+                        ? const Color(0xFF7F1D1D).withValues(alpha: 0.3)
                         : const Color(0xFFFEF2F2),
                     border: Border.all(
                       color: isDark
@@ -1984,7 +1984,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
         borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.01),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.01),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),
@@ -2102,7 +2102,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                     ),
                   ).copyWith(
                     shadowColor: WidgetStateProperty.all(
-                      Colors.black.withOpacity(0.05),
+                      Colors.black.withValues(alpha: 0.05),
                     ),
                     elevation: WidgetStateProperty.all(2),
                   ),
@@ -2136,7 +2136,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                     ),
                   ).copyWith(
                     shadowColor: WidgetStateProperty.all(
-                      Colors.black.withOpacity(0.05),
+                      Colors.black.withValues(alpha: 0.05),
                     ),
                     elevation: WidgetStateProperty.all(2),
                   ),
@@ -2159,7 +2159,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                 minimumSize: const Size(40, 40),
               ).copyWith(
                 shadowColor: WidgetStateProperty.all(
-                  Colors.black.withOpacity(0.05),
+                  Colors.black.withValues(alpha: 0.05),
                 ),
                 elevation: WidgetStateProperty.all(2),
               ),
@@ -2200,7 +2200,7 @@ class _EntryCard extends StatelessWidget {
         ? const Color(0xFF94A3B8)
         : const Color(0xFF64748B); // slate-500
     final detailsBg = isDark
-        ? const Color(0xFF0F172A).withOpacity(0.5)
+        ? const Color(0xFF0F172A).withValues(alpha: 0.5)
         : const Color(0xFFF8FAFC); // slate-50
     final detailsBorder = isDark
         ? const Color(0xFF334155)
@@ -2243,7 +2243,7 @@ class _EntryCard extends StatelessWidget {
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
             blurRadius: 4,
             offset: const Offset(0, 1),
           ),

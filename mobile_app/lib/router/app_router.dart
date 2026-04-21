@@ -1,4 +1,5 @@
 import 'package:go_router/go_router.dart';
+import '../constants/app_constants.dart';
 import '../providers/auth_provider.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/approval_gate_screen.dart';
@@ -29,8 +30,28 @@ class AppRouter {
         final isLoading = authProvider.isLoading;
         final approvalPending = authProvider.isApprovalPending;
         final approvalRejected = authProvider.isApprovalRejected;
+        final roleKey = (authProvider.user?.roleKey ?? '').trim().toLowerCase();
         final goingToLogin = state.matchedLocation == '/login';
         final goingToApprovalGate = state.matchedLocation == '/approval-gate';
+        final currentPath = state.matchedLocation;
+
+        final isAdmin = roleKey == 'admin';
+        final isRegistrarDashboard =
+            roleKey == 'registrar' ||
+            roleKey == 'vice_chancellor' ||
+            roleKey == 'deputy_registrar' ||
+            roleKey == 'finance_team';
+        final canAccessApprovals = isRegistrarDashboard;
+        final canAccessRequirements =
+            roleKey == 'facility_manager' ||
+            roleKey == 'marketing' ||
+            roleKey == 'it' ||
+            roleKey == 'transport';
+        final canAccessCalendarUpdates = isAdmin || isRegistrarDashboard;
+        final canAccessIqac = AppConstants.iqacAllowedRoles.contains(roleKey);
+        final canAccessUserApprovals = isAdmin;
+        final canAccessAdminConsole = isAdmin;
+        final canAccessEventReports = isAdmin || isRegistrarDashboard;
 
         if (isLoading) return null;
         if (!isAuth && !goingToLogin) return '/login';
@@ -40,8 +61,23 @@ class AppRouter {
           return null;
         }
 
-        if (isAuth && (goingToLogin || goingToApprovalGate))
+        if (isAuth && (goingToLogin || goingToApprovalGate)) {
           return '/dashboard';
+        }
+
+        if (isAuth) {
+          if ((currentPath == '/approvals' && !canAccessApprovals) ||
+              (currentPath == '/requirements' && !canAccessRequirements) ||
+              (currentPath == '/calendar-updates' &&
+                  !canAccessCalendarUpdates) ||
+              (currentPath == '/iqac' && !canAccessIqac) ||
+              (currentPath == '/user-approvals' && !canAccessUserApprovals) ||
+              (currentPath == '/admin' && !canAccessAdminConsole) ||
+              (currentPath == '/reports' && !canAccessEventReports)) {
+            return '/dashboard';
+          }
+        }
+
         return null;
       },
       routes: [

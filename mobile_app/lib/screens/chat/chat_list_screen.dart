@@ -332,7 +332,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             name: u.name,
             subtitle2: u.department ?? u.role.name,
             initials: _getInitials(u.name),
-            avatarBg: color.withOpacity(0.15),
+            avatarBg: color.withValues(alpha: 0.15),
             avatarFg: color,
             isOnline: false,
             onTap: () => _startDirectMessage(u),
@@ -454,7 +454,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 name: title.isEmpty ? 'Unknown' : title,
                 subtitle2: conv.lastMessage,
                 initials: _getInitials(title.isEmpty ? 'U' : title),
-                avatarBg: color.withOpacity(0.12),
+                avatarBg: color.withValues(alpha: 0.12),
                 avatarFg: color,
                 isOnline: conv.otherUserOnline,
                 date: conv.lastMessageAt != null
