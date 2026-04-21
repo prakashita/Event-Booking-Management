@@ -249,6 +249,10 @@ export default function ConversationList() {
                   const unread = conv.unread_count || 0;
                   const lm = conv.last_message;
                   const meta = lm ? (lm.text || "").slice(0, 50) : "";
+                  const threadParticipants = (conv.participants_preview || [])
+                    .map((p) => p.name)
+                    .filter(Boolean)
+                    .join(", ");
                   return (
                     <ConversationItem
                       key={conv.id}
@@ -258,6 +262,7 @@ export default function ConversationList() {
                       isWorkflow
                       isLocked={false}
                       workflowLabel={deptLabel}
+                      participantNamesTitle={threadParticipants}
                       unread={unread}
                       meta={meta}
                       time={lm?.created_at ? formatChatTime(lm.created_at) : ""}
@@ -277,6 +282,10 @@ export default function ConversationList() {
                   const avatarLabel = deptLabel.trim().charAt(0).toUpperCase() || "W";
                   const lm = conv.last_message;
                   const meta = lm ? (lm.text || "").slice(0, 50) : "";
+                  const threadParticipants = (conv.participants_preview || [])
+                    .map((p) => p.name)
+                    .filter(Boolean)
+                    .join(", ");
                   return (
                     <ConversationItem
                       key={conv.id}
@@ -286,6 +295,7 @@ export default function ConversationList() {
                       isWorkflow
                       isLocked
                       workflowLabel={deptLabel}
+                      participantNamesTitle={threadParticipants}
                       unread={0}
                       meta={meta}
                       time={lm?.created_at ? formatChatTime(lm.created_at) : ""}

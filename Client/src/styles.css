@@ -4647,6 +4647,159 @@ button.marketing-attachment-remove {
   font-size: 0.78rem;
 }
 
+.evt-decided-role {
+  font-size: 0.78rem;
+  color: #8a7f85;
+  font-weight: 500;
+}
+
+/* Approval context: status overview row (modal) */
+.evt-apprctx-status-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 14px 18px;
+  background: var(--surface-raised, #f8f9fc);
+  border-radius: 10px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border-soft, #eef0f4);
+}
+
+.evt-apprctx-status-block,
+.evt-apprctx-stage-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.evt-apprctx-stage-block {
+  flex: 1;
+  border-left: 1px solid var(--border-soft, #e5e7eb);
+  padding-left: 24px;
+}
+
+.evt-apprctx-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-soft, #9ca3af);
+  margin: 0;
+}
+
+.evt-apprctx-stage-value {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink, #1a1a2e);
+}
+
+/* Pipeline stage timeline (modal) */
+.evt-apprctx-pipeline {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding: 12px 18px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border-soft, #eef0f4);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  overflow-x: auto;
+}
+
+.evt-pipeline-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.evt-pipeline-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border-soft, #d1d5db);
+  background: var(--surface, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.evt-pipeline-step--done .evt-pipeline-dot {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.evt-pipeline-step--active .evt-pipeline-dot {
+  background: #fff;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.evt-pipeline-step--idle .evt-pipeline-dot {
+  background: var(--surface-raised, #f3f4f8);
+  border-color: var(--border-soft, #e5e7eb);
+}
+
+.evt-pipeline-connector {
+  flex-shrink: 0;
+  width: 28px;
+  height: 2px;
+  background: var(--border-soft, #e5e7eb);
+  margin-top: 12px;
+  align-self: flex-start;
+}
+
+.evt-pipeline-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.evt-pipeline-role {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--ink, #1a1a2e);
+  white-space: nowrap;
+}
+
+.evt-pipeline-step--idle .evt-pipeline-role,
+.evt-pipeline-step--idle .evt-pipeline-pending {
+  color: var(--ink-soft, #b0b4be);
+}
+
+.evt-pipeline-by {
+  font-size: 0.72rem;
+  color: #16a34a;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 130px;
+}
+
+.evt-pipeline-pending {
+  font-size: 0.7rem;
+  color: var(--ink-soft, #9ca3af);
+  font-style: italic;
+}
+
+.evt-pipeline-step--active .evt-pipeline-pending {
+  color: #2563eb;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.evt-meta-muted {
+  color: var(--ink-soft, #9ca3af);
+  font-style: italic;
+  font-size: 0.84rem;
+}
+
 .wf-badge {
   display: inline-flex;
   align-items: center;
@@ -10559,6 +10712,40 @@ button.marketing-attachment-remove {
   font-size: 0.76rem; color: var(--color-primary, #7c3aed); font-weight: 500;
 }
 
+/* Workflow thread: 2-party participant line + privacy hint in chat header */
+.msger-wf-participants {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.msger-wf-privacy-hint {
+  font-size: 0.68rem;
+  color: var(--ink-soft, #9ca3af);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* Workflow status hint (e.g. "· Waiting for faculty") in chat header */
+.msger-wf-status-hint {
+  font-size: 0.7rem;
+  color: var(--ink-soft, #9ca3af);
+  font-weight: 400;
+}
+
+/* Workflow conversation item: participant names subtitle */
+.msger-conv-workflow-participants {
+  font-size: 0.68rem;
+  color: var(--ink-soft, #9ca3af);
+  line-height: 1.3;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+}
+
 /* =========================================================
    APPROVALS TABLE — appr-* premium design system
    ========================================================= */
@@ -10878,7 +11065,215 @@ button.marketing-attachment-remove {
   letter-spacing: 0.01em;
 }
 
-/* Marketing upload button */
+/* ── Historical row treatment ───────────────────────── */
+.appr-row--historical {
+  opacity: 0.78;
+}
+
+.appr-row--historical:hover {
+  opacity: 1;
+}
+
+.appr-row--historical .appr-col-event {
+  color: var(--ink-soft, #6b7280);
+  font-weight: 500;
+}
+
+/* Sub-badge stage sublabel (list view) */
+.appr-stage-sublabel {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--ink-soft, #9ca3af);
+  margin-top: 3px;
+  letter-spacing: 0.01em;
+}
+
+/* Sub-label inside the event name cell for historical rows */
+.appr-col-meta-sub {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--ink-soft, #9ca3af);
+  margin-top: 2px;
+  letter-spacing: 0.01em;
+}
+
+/* "Reviewed" tag for historical action column */
+.appr-history-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-success, #16a34a);
+  background: var(--color-success-bg, #dcfce7);
+  padding: 4px 10px;
+  border-radius: 999px;
+  letter-spacing: 0.01em;
+}
+
+/* Pending count chip inside section count */
+.appr-count-pending {
+  color: #d97706;
+  font-weight: 600;
+}
+
+/* ── Filter bar ─────────────────────────────────────── */
+.appr-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 20px 12px;
+  border-bottom: 1px solid var(--border-soft, #f0f0f4);
+  background: var(--surface-raised, #f8f9fc);
+}
+
+.appr-filter-search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 180px;
+  max-width: 300px;
+}
+
+.appr-filter-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-soft, #9ca3af);
+  pointer-events: none;
+}
+
+.appr-filter-search {
+  width: 100%;
+  padding: 7px 10px 7px 28px;
+  font-size: 0.82rem;
+  border: 1.5px solid var(--border-soft, #e5e7eb);
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  color: var(--ink, #1a1a2e);
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.appr-filter-search:focus {
+  border-color: var(--accent-blue, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.appr-filter-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--surface, #fff) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 10px center;
+  padding: 7px 28px 7px 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: 1.5px solid var(--border-soft, #e5e7eb);
+  border-radius: 999px;
+  color: var(--ink, #1a1a2e);
+  cursor: pointer;
+  white-space: nowrap;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.appr-filter-select:focus {
+  border-color: var(--accent-blue, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.appr-filter-clear {
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1.5px solid var(--border-soft, #e5e7eb);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft, #6b7280);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.appr-filter-clear:hover {
+  background: var(--surface-raised, #f3f4f8);
+  color: var(--ink, #1a1a2e);
+  border-color: var(--border, #d1d5db);
+}
+
+/* ── Approval context section — redesigned ─────────── */
+/* (Pipeline, status/stage block styles are near .evt-decided-role above) */
+
+/* ── Discussion inline approval actions ─────────────── */
+.adt-approval-inline-actions {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-soft, #e5e7eb);
+  border-radius: 10px;
+  background: var(--surface-raised, #f8f9fc);
+}
+
+/* Row layout: label on left, dropdown on right */
+.adt-approval-inline-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Position dropdown above instead of below when near bottom */
+.adt-approval-inline-actions-row .msger-wf-action-root .msger-wf-action-menu {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.adt-approval-inline-actions-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft, #9ca3af);
+  margin: 0;
+}
+
+.adt-approval-resolved-state {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--color-success-bg, #dcfce7);
+  color: var(--color-success, #15803d);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+/* Approval-resolved thread (parent request done, thread still readable) */
+.adt-panel--approval-resolved {
+  opacity: 0.7;
+  background: var(--surface-raised, #f9fafb);
+}
+
+.adt-panel--approval-resolved:hover {
+  opacity: 1;
+}
+
+/* Strengthen existing resolved panel */
+.adt-panel--resolved {
+  opacity: 0.65;
+  border-color: var(--color-success-border, #86efac);
+  background: #f6fdf8;
+}
+
+.adt-panel--resolved:hover {
+  opacity: 0.9;
+}
+
+
 .appr-upload-btn {
   display: inline-flex;
   align-items: center;

@@ -20,6 +20,7 @@ from models import (
 from event_status import combine_datetime, compute_event_status, event_has_started
 from event_chat_service import (
     DEPARTMENT_LABELS,
+    dept_key_for_stage,
     ensure_approval_thread_chat,
     list_approval_threads,
     resolve_approval_thread_status,
@@ -233,12 +234,43 @@ async def list_inbox(
             next_offset=None,
         )
     regex = re.compile(f"^{re.escape(email)}$", re.IGNORECASE)
-    query = ApprovalRequest.find({"requested_to": {"$regex": regex}}).sort("-created_at")
+
+    # Build query: active items (requested_to == email) PLUS historical items
+    # where this user was the deputy or finance approver for stage-history visibility.
+    active_filter = {"requested_to": {"$regex": regex}}
+
+    history_filters = []
+    if role == "deputy_registrar":
+        history_filters.append({"deputy_decided_by": {"$regex": regex}})
+    elif role == "finance_team":
+        history_filters.append({"finance_decided_by": {"$regex": regex}})
+    elif role in ("registrar", "vice_chancellor"):
+        # Registrar / VC also see items they've finally decided (status approved/rejected with decided_by)
+        history_filters.append({"deputy_decided_by": {"$regex": regex}})
+        history_filters.append({"finance_decided_by": {"$regex": regex}})
+
+    if history_filters:
+        combined_filter = {"$or": [active_filter] + history_filters}
+    else:
+        combined_filter = active_filter
+
+    query = ApprovalRequest.find(combined_filter).sort("-created_at")
     total = await query.count()
     requests = await query.skip(offset).limit(limit).to_list()
     next_offset = offset + limit if offset + limit < total else None
+
+    # Mark each item as actionable or read-only history
+    items = []
+    for item in requests:
+        requested_to_lower = (item.requested_to or "").strip().lower()
+        email_lower = email.lower()
+        is_active = bool(requested_to_lower and requested_to_lower == email_lower)
+        st = (item.status or "").strip().lower()
+        actionable = is_active and st in ("pending", "clarification_requested")
+        items.append(serialize_approval(item, is_actionable=actionable))
+
     return PaginatedResponse[ApprovalRequestResponse](
-        items=[serialize_approval(item) for item in requests],
+        items=items,
         total=total,
         limit=limit,
         offset=offset,
@@ -392,10 +424,13 @@ async def get_approval_threads(
 
     Visibility rules (strict conversation isolation):
     - Faculty requester: sees only threads where they are a participant.
-    - Department user: sees only threads where they are a participant.
+    - Department/stage user: sees only threads where they are a participant.
     - Admin: sees all threads for oversight.
-    - Registrar: sees only threads where they are a participant (registrar
-      threads) — NOT other department threads unless explicitly added.
+    - VC: sees registrar-stage threads for oversight (VC acts as final approver
+      for high-budget events) plus any thread they are a participant of.
+    Each pipeline stage (deputy, finance, registrar) stores its clarification
+    thread under a distinct department key so threads are NEVER shared across
+    stages, even for the same approval request.
     """
     try:
         oid = PydanticObjectId(request_id)
@@ -409,7 +444,6 @@ async def get_approval_threads(
     uid = str(user.id)
     is_admin = role == "admin" or is_admin_email(user.email or "")
     is_vc = role == "vice_chancellor"
-    is_reg_queue_oversight = role in ("deputy_registrar", "finance_team")
 
     conversations = await list_approval_threads(str(approval.id))
 
@@ -421,17 +455,18 @@ async def get_approval_threads(
     for conv in conversations:
         user_is_participant = uid in conv.participants
 
-        # Strict visibility: participant or admin only
+        # Strict visibility: participant or admin only.
+        # NOTE: No role-based cross-stage bypass is allowed here.  Each stage
+        # (deputy_registrar, finance_team, registrar) uses a distinct department
+        # key so a participant check alone enforces complete isolation.
         if is_admin:
-            pass  # admin oversight
+            pass  # admin oversight: see all threads
         elif user_is_participant:
             pass  # direct participant
         elif is_vc and (conv.department or "").strip().lower() == "registrar":
-            pass  # vice chancellor: same oversight as registrar dashboard for registrar threads
-        elif is_reg_queue_oversight and (conv.department or "").strip().lower() == "registrar":
-            pass  # deputy registrar / finance: oversight on registrar threads without being primary approver
+            pass  # VC: oversight on registrar-stage threads (VC can be the final approver)
         else:
-            continue  # PRIVACY: skip threads user is not part of
+            continue  # PRIVACY: skip threads this user is not a party to
 
         participants: list[ApprovalThreadParticipant] = []
         for pid in conv.participants:
@@ -518,7 +553,10 @@ async def ensure_department_thread(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
 
     department = payload.department.strip().lower()
-    valid_departments = ("registrar", "facility_manager", "it", "marketing", "transport", "iqac")
+    valid_departments = (
+        "registrar", "deputy_registrar", "finance_team",
+        "facility_manager", "it", "marketing", "transport", "iqac",
+    )
     if department not in valid_departments:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid department: {department}")
 
@@ -538,15 +576,22 @@ async def ensure_department_thread(
     department_user_id: str | None = None
 
     if is_requester or is_admin_or_reg:
-        # Faculty or registrar initiating — find department person
-        if department == "registrar":
-            # Find the registrar user (the one in requested_to or by role)
-            reg_email = (approval.requested_to or "").strip().lower()
-            dept_u = await User.find_one({"email": reg_email}) if reg_email else None
+        # Faculty or approval-stage actor initiating — find the other party.
+        if department in ("registrar", "deputy_registrar", "finance_team"):
+            # For pipeline-stage threads the other party is the current or
+            # historical approver stored in requested_to, or the primary for
+            # that role when requested_to has already been cleared.
+            role_for_lookup = {
+                "registrar": "registrar",
+                "deputy_registrar": "deputy_registrar",
+                "finance_team": "finance_team",
+            }[department]
+            assigned_email = (approval.requested_to or "").strip().lower()
+            dept_u = await User.find_one({"email": assigned_email}) if assigned_email else None
             if not dept_u:
                 from auth import get_primary_email_by_role as _get_pe
-                reg_email2 = await _get_pe("registrar")
-                dept_u = await User.find_one({"email": reg_email2}) if reg_email2 else None
+                fallback_email = await _get_pe(role_for_lookup)
+                dept_u = await User.find_one({"email": fallback_email}) if fallback_email else None
             department_user_id = str(dept_u.id) if dept_u else uid
         elif department == "iqac":
             from auth import get_primary_email_by_role as _get_pe
@@ -576,8 +621,8 @@ async def ensure_department_thread(
                 dept_u = await User.find_one({"email": dept_email}) if dept_email else None
                 department_user_id = str(dept_u.id) if dept_u else uid
 
-    elif role == department:
-        # Department user initiating — they are the dept side
+    elif role == department or (role == "deputy_registrar" and department == "deputy_registrar") or (role == "finance_team" and department == "finance_team"):
+        # Stage actor initiating their own thread side
         department_user_id = uid
     else:
         # Check if user is already a participant in a thread for this dept
@@ -837,6 +882,10 @@ async def post_approval_discussion_reply(
 
         # Global discussion_status on the approval (backward compat)
         approval.discussion_status = conv.thread_status
+        # When faculty replies to a clarification, revert approval status to pending
+        # so the approver can act on it again.
+        if is_reply_from_requester and (approval.status or "").lower() == "clarification_requested":
+            approval.status = "pending"
         await approval.save()
 
         # Email notification to the other participant(s)
@@ -916,6 +965,9 @@ async def post_approval_discussion_reply(
 
     is_reply_from_requester = str(user.id) == str(approval.requester_id)
     approval.discussion_status = "waiting_for_department" if is_reply_from_requester else "waiting_for_faculty"
+    # When faculty replies to a clarification, revert approval status to pending
+    if is_reply_from_requester and (approval.status or "").lower() == "clarification_requested":
+        approval.status = "pending"
     await approval.save()
 
     # Email notification: notify the "other side" of the registrar discussion
@@ -1005,16 +1057,22 @@ async def decide_request(
                 )
             except Exception as exc:
                 logger.warning("Requester clarification notification failed: %s", exc)
-            # Auto-create an approval thread between registrar and requester
+            # Auto-create a stage-specific approval thread between the current
+            # stage actor and the requester.  The department key is derived from
+            # the pipeline_stage so deputy, finance and registrar each get their
+            # own isolated thread and NEVER share history.
+            active_stage = effective_pipeline_stage(approval)
+            thread_dept_key = dept_key_for_stage(active_stage)
+            dept_label_for_thread = DEPARTMENT_LABELS.get(thread_dept_key, "Registrar")
             try:
                 await ensure_approval_thread_chat(
                     approval_request_id=str(approval.id),
-                    department="registrar",
+                    department=thread_dept_key,
                     faculty_user_id=str(approval.requester_id),
                     department_user_id=str(user.id),
                     related_request_id=str(approval.id),
                     related_kind="approval_request",
-                    title=f"Registrar clarification – {approval.event_name}",
+                    title=f"{dept_label_for_thread} clarification – {approval.event_name}",
                     initial_message=comment,
                     sender_name=user.name,
                     sender_email=user.email or "",
@@ -1044,6 +1102,8 @@ async def decide_request(
             approval.pipeline_stage = "after_deputy"
             approval.requested_to = None
             approval.discussion_status = None
+            approval.deputy_decided_by = user.email
+            approval.deputy_decided_at = datetime.utcnow()
             await approval.save()
             await record_workflow_action(
                 event_id=approval.event_id,
@@ -1074,6 +1134,8 @@ async def decide_request(
             approval.pipeline_stage = "after_finance"
             approval.requested_to = None
             approval.discussion_status = None
+            approval.finance_decided_by = user.email
+            approval.finance_decided_at = datetime.utcnow()
             await approval.save()
             await record_workflow_action(
                 event_id=approval.event_id,

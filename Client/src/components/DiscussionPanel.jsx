@@ -1,6 +1,24 @@
 import { useState, useCallback } from "react";
 import { formatModalDateTime } from "../utils/eventDetailsView";
 
+/* ── Role label map — maps raw role strings to display labels ── */
+const PARTICIPANT_ROLE_LABELS = {
+  faculty: "Faculty",
+  deputy_registrar: "Deputy Registrar",
+  finance_team: "Finance Team",
+  registrar: "Registrar",
+  vice_chancellor: "Vice Chancellor",
+  facility_manager: "Facility",
+  it: "IT",
+  marketing: "Marketing",
+  transport: "Transport",
+  iqac: "IQAC",
+};
+
+function formatParticipantRole(role) {
+  return PARTICIPANT_ROLE_LABELS[String(role || "").toLowerCase()] || role;
+}
+
 /* ── Inline quoted reply preview (inside a bubble) ── */
 function InlineMsgReplyQuote({ snapshot }) {
   if (!snapshot) return null;
@@ -89,8 +107,11 @@ export default function DiscussionPanel({
   onSubmitReply,
   onOpenInChat,
   onOpenActionModal,
+  isApprovalResolved = false,
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const isLocked_init =
+    thread.thread_status === "resolved" || thread.thread_status === "closed";
+  const [expanded, setExpanded] = useState(!isLocked_init);
   const [replyingToMsg, setReplyingToMsg] = useState(null); // full message object
   const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -144,7 +165,7 @@ export default function DiscussionPanel({
 
   return (
     <div
-      className={`adt-panel${isLocked ? " adt-panel--resolved" : ""}`}
+      className={`adt-panel${isLocked ? " adt-panel--resolved" : ""}${isApprovalResolved && !isLocked ? " adt-panel--approval-resolved" : ""}`}
       data-dept={thread.department}
     >
       {/* Collapsible header */}
@@ -206,12 +227,12 @@ export default function DiscussionPanel({
             <div className="adt-participants-block">
               <p className="adt-participants">
                 {thread.participants
-                  .map((p) => `${p.name}${p.role ? ` (${p.role})` : ""}`)
+                  .map((p) => `${p.name}${p.role ? ` (${formatParticipantRole(p.role)})` : ""}`)
                   .join(" \u00b7 ")}
               </p>
               <p className="adt-privacy-notice">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                {" "}Only visible to participants above
+                {" "}Only visible to this thread&#39;s participants
               </p>
             </div>
           )}
@@ -290,9 +311,9 @@ export default function DiscussionPanel({
                     <button
                       type="button"
                       className="dp-action-btn dp-action-btn--clarify"
-                      onClick={() => onOpenActionModal("clarification_requested", "Need confirmation")}
+                      onClick={() => onOpenActionModal("clarification_requested", "Need clarification")}
                     >
-                      Need confirmation
+                      Need clarification
                     </button>
                   </span>
                 )}
@@ -339,9 +360,9 @@ export default function DiscussionPanel({
                   <button
                     type="button"
                     className="dp-action-btn dp-action-btn--clarify"
-                    onClick={() => onOpenActionModal("clarification_requested", "Need confirmation")}
+                    onClick={() => onOpenActionModal("clarification_requested", "Need clarification")}
                   >
-                    Need confirmation
+                    Need clarification
                   </button>
                 </span>
               )}

@@ -24,7 +24,7 @@ import {
   parse24ToTimeParts,
   timePartsTo24
 } from "./utils/format";
-import { formatInboxDecisionStatusLabel } from "./utils/eventDetailsView";
+import { formatInboxDecisionStatusLabel, getCompactListBadge } from "./utils/eventDetailsView";
 import { GoogleIcon, SimpleIcon, PlaceholderCard } from "./components/icons";
 import { LoginPage, Sidebar } from "./components/layout";
 import { Modal, StatusMessage } from "./components/ui";
@@ -49,14 +49,16 @@ function normalizePathname(pathname) {
   return pathname;
 }
 
-function canActOnWorkflowRow(status) {
+function canActOnWorkflowRow(status, item) {
+  // If backend provides is_actionable, use it as the source of truth
+  if (item && item.is_actionable === false) return false;
   const s = String(status || "").toLowerCase();
   return s === "pending" || s === "clarification_requested";
 }
 
 function workflowInboxAttentionCount(items) {
   if (!Array.isArray(items)) return 0;
-  return items.filter((i) => canActOnWorkflowRow(i?.status)).length;
+  return items.filter((i) => canActOnWorkflowRow(i?.status, i)).length;
 }
 
 function transportRequestTypeLabel(type) {
@@ -228,6 +230,7 @@ export default function App() {
   });
   const [requirementsModal, setRequirementsModal] = useState({ open: false, event: null });
   const [approvalsTab, setApprovalsTab] = useState("approval-requests");
+  const [apprInboxFilter, setApprInboxFilter] = useState({ search: "", statusView: "all", viewMode: "all" });
   const [reportModal, setReportModal] = useState({
     open: false,
     status: "idle",
@@ -1453,7 +1456,12 @@ export default function App() {
         }
       });
       const approvalItems = approvalsData
-        .filter((item) => item.status !== "approved")
+        .filter((item) => {
+          // Hide fully completed approvals that have an event_id (event record exists and shows separately)
+          // BUT keep them if they are historical stage-history items (is_actionable false)
+          if (item.status === "approved" && item.event_id && item.is_actionable !== false) return false;
+          return true;
+        })
         .map((item) => ({
           ...item,
           id: `approval-${item.id}`,
@@ -1464,6 +1472,12 @@ export default function App() {
           end_time: item.end_time,
           status: item.status,
           pipeline_stage: item.pipeline_stage ?? null,
+          current_stage_label: item.current_stage_label ?? null,
+          approved_by_role: item.approved_by_role ?? null,
+          completed: item.completed ?? false,
+          is_actionable: item.is_actionable ?? true,
+          deputy_decided_by: item.deputy_decided_by ?? null,
+          finance_decided_by: item.finance_decided_by ?? null,
           requester_id: item.requester_id,
           approval_request_id: item.id
         }));
@@ -2702,6 +2716,8 @@ export default function App() {
   const approvalDiscussionCanReply = useMemo(() => {
     const r = approvalDetailsModal.request;
     if (!r?.id || !user) return false;
+    // Historical (non-actionable) items are read-only
+    if (r.is_actionable === false) return false;
     const st = String(r.status || "").toLowerCase();
     if (!["pending", "clarification_requested"].includes(st)) return false;
     if (String(user.id) === String(r.requester_id)) return true;
@@ -3397,16 +3413,27 @@ export default function App() {
     if (String(event.id || "").startsWith("approval-")) {
       const st = (event.status || "").toLowerCase();
       const ps = (event.pipeline_stage || "").toLowerCase();
-      let pipelineLabel = "Pending";
-      if (st === "rejected") pipelineLabel = "Rejected";
-      else if (st === "clarification_requested") pipelineLabel = "Clarification requested";
-      else if (ps === "deputy") pipelineLabel = "Awaiting Deputy Registrar";
-      else if (ps === "after_deputy") pipelineLabel = "Deputy approved — send to finance";
-      else if (ps === "finance") pipelineLabel = "Awaiting Finance";
-      else if (ps === "after_finance") pipelineLabel = "Finance approved — send to Registrar";
-      else if (ps === "registrar") pipelineLabel = "Awaiting Registrar / VC";
-      else if (!ps && st === "pending") pipelineLabel = "Awaiting approval";
-      const statusClass = st === "rejected" ? "rejected" : st === "clarification_requested" ? "clarification-requested" : "pending";
+      // Prefer backend-computed label; fall back to local derivation for backward compat
+      let pipelineLabel = event.current_stage_label || "Pending";
+      if (!event.current_stage_label) {
+        if (st === "approved") pipelineLabel = "Approved";
+        else if (st === "rejected") pipelineLabel = "Rejected";
+        else if (st === "clarification_requested") pipelineLabel = "Clarification requested";
+        else if (ps === "deputy") pipelineLabel = "Awaiting Deputy Registrar";
+        else if (ps === "after_deputy") pipelineLabel = "Deputy approved — send to finance";
+        else if (ps === "finance") pipelineLabel = "Awaiting Finance";
+        else if (ps === "after_finance") pipelineLabel = "Finance approved — send to Registrar";
+        else if (ps === "registrar") pipelineLabel = "Awaiting Registrar / VC";
+        else if (!ps && st === "pending") pipelineLabel = "Awaiting approval";
+      }
+      // Show approved-by role when fully approved
+      if (st === "approved" && event.approved_by_role) {
+        pipelineLabel = `Approved by ${event.approved_by_role}`;
+      }
+      let statusClass = "pending";
+      if (st === "approved") statusClass = "approved";
+      else if (st === "rejected") statusClass = "rejected";
+      else if (st === "clarification_requested") statusClass = "clarification-requested";
       return { statusLabel: pipelineLabel, statusClass };
     }
     const statusValue = event.status || "";
@@ -3450,6 +3477,8 @@ export default function App() {
   /** Approval-queue rows still in progress (any pipeline stage before final event creation). */
   const isPendingApprovalRow = (event) => {
     if (!String(event.id || "").startsWith("approval-")) return false;
+    // Historical items (non-actionable) are not pending from this user's perspective
+    if (event.is_actionable === false) return false;
     const st = (event.status || "").toLowerCase();
     return st !== "approved" && st !== "rejected";
   };
@@ -8046,14 +8075,44 @@ export default function App() {
       }
 
       if (isApprovals || isRequirements) {
-        const renderWorkflowTable = ({ title, state, loadFn, channel, onDetailsClick, detailsDisabled, renderExtraActions }) => (
+        // Client-side filter logic for the approvals inbox
+        const applyApprInboxFilter = (items) => {
+          const { search, statusView, viewMode } = apprInboxFilter;
+          return items.filter((item) => {
+            if (viewMode === "actionable" && item.is_actionable === false) return false;
+            if (viewMode === "completed" && item.is_actionable !== false) return false;
+            if (statusView !== "all") {
+              const st = String(item.status || "").toLowerCase();
+              if (statusView === "pending" && st !== "pending") return false;
+              if (statusView === "approved" && st !== "approved") return false;
+              if (statusView === "clarification" && st !== "clarification_requested") return false;
+              if (statusView === "rejected" && st !== "rejected") return false;
+            }
+            if (search.trim()) {
+              const q = search.trim().toLowerCase();
+              const inName = String(item.event_name || "").toLowerCase().includes(q);
+              const inEmail = String(item.requester_email || "").toLowerCase().includes(q);
+              if (!inName && !inEmail) return false;
+            }
+            return true;
+          });
+        };
+
+        const renderWorkflowTable = ({ title, state, loadFn, channel, onDetailsClick, detailsDisabled, renderExtraActions, showFilters }) => {
+          const rawItems = state.status === "ready" ? state.items : [];
+          const visibleItems = showFilters ? applyApprInboxFilter(rawItems) : rawItems;
+          const totalCount = rawItems.length;
+          const pendingCount = rawItems.filter((i) => canActOnWorkflowRow(i.status, i)).length;
+
+          return (
           <div className="events-table-card appr-card">
             <div className="table-header table-header--toolbar appr-toolbar">
               <div className="appr-toolbar-left">
                 <h3 className="appr-section-title">{title}</h3>
                 {state.status === "ready" ? (
                   <span className="appr-section-count">
-                    {state.items.length} request{state.items.length !== 1 ? "s" : ""}
+                    {totalCount} request{totalCount !== 1 ? "s" : ""}
+                    {pendingCount > 0 ? <span className="appr-count-pending"> · {pendingCount} pending</span> : null}
                   </span>
                 ) : null}
               </div>
@@ -8062,6 +8121,56 @@ export default function App() {
                 Refresh
               </button>
             </div>
+
+            {/* Filter bar — only for approvals inbox */}
+            {showFilters && state.status === "ready" && totalCount > 0 ? (
+              <div className="appr-filter-bar">
+                <div className="appr-filter-search-wrap">
+                  <svg className="appr-filter-search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  <input
+                    type="search"
+                    className="appr-filter-search"
+                    placeholder="Search event or requester…"
+                    value={apprInboxFilter.search}
+                    onChange={(e) => setApprInboxFilter((f) => ({ ...f, search: e.target.value }))}
+                    aria-label="Search approval requests"
+                  />
+                </div>
+                <select
+                  className="appr-filter-select"
+                  value={apprInboxFilter.statusView}
+                  onChange={(e) => setApprInboxFilter((f) => ({ ...f, statusView: e.target.value }))}
+                  aria-label="Filter by status"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="clarification">Clarification</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                <select
+                  className="appr-filter-select"
+                  value={apprInboxFilter.viewMode}
+                  onChange={(e) => setApprInboxFilter((f) => ({ ...f, viewMode: e.target.value }))}
+                  aria-label="Filter by actionable"
+                >
+                  <option value="all">All items</option>
+                  <option value="actionable">Needs action</option>
+                  <option value="completed">Completed / history</option>
+                </select>
+                {(apprInboxFilter.search || apprInboxFilter.statusView !== "all" || apprInboxFilter.viewMode !== "all") ? (
+                  <button
+                    type="button"
+                    className="appr-filter-clear"
+                    onClick={() => setApprInboxFilter({ search: "", statusView: "all", viewMode: "all" })}
+                    aria-label="Clear all filters"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="appr-table" role="table" aria-label={title}>
               <div className="appr-table-row appr-table-header" role="row">
                 <span role="columnheader">Event</span>
@@ -8076,25 +8185,42 @@ export default function App() {
               {state.status === "error" ? (
                 <p className="table-message appr-table-message">{state.error}</p>
               ) : null}
-              {state.status === "ready" && state.items.length === 0 ? (
+              {state.status === "ready" && visibleItems.length === 0 && totalCount === 0 ? (
                 <p className="table-message appr-table-message">No {title.toLowerCase()} yet.</p>
               ) : null}
+              {state.status === "ready" && visibleItems.length === 0 && totalCount > 0 ? (
+                <p className="table-message appr-table-message">No items match your filters.</p>
+              ) : null}
               {state.status === "ready"
-                ? state.items.map((item) => {
-                    const statusLabel = formatInboxDecisionStatusLabel(item.status);
+                ? visibleItems.map((item) => {
+                    const isHistorical = item.is_actionable === false;
+                    // Compact badge for list: historical → "Approved" + sublabel; active → status label
+                    const badgeInfo = isHistorical ? getCompactListBadge(item) : null;
+                    const statusLabel = badgeInfo ? badgeInfo.primary : formatInboxDecisionStatusLabel(item.status);
+                    const stageSublabel = badgeInfo ? badgeInfo.sub : null;
                     const eventHasStarted = isEventStarted(item);
-                    const rowAttention = canActOnWorkflowRow(item.status);
+                    const rowAttention = canActOnWorkflowRow(item.status, item);
                     const hasExtra = renderExtraActions != null;
                     return (
                       <div
                         key={item.id}
-                        className={`appr-table-row${rowAttention ? " appr-row--attention" : ""}`}
+                        className={`appr-table-row${rowAttention ? " appr-row--attention" : ""}${isHistorical ? " appr-row--historical" : ""}`}
                         role="row"
                       >
-                        <span className="appr-col-event" role="cell">{item.event_name}</span>
+                        <span className="appr-col-event" role="cell">
+                          {item.event_name}
+                          {isHistorical && item.deputy_decided_by ? (
+                            <span className="appr-col-meta-sub" title={`Deputy: ${item.deputy_decided_by}`}>Deputy reviewed</span>
+                          ) : null}
+                        </span>
                         <span className="appr-col-meta" role="cell">{item.requester_email}</span>
                         <span role="cell">
-                          <span className={`appr-status-badge appr-status--${item.status}`}>{statusLabel}</span>
+                          <span className={`appr-status-badge appr-status--${isHistorical ? (item.status === "rejected" ? "rejected" : "approved") : item.status}`}>
+                            {statusLabel}
+                          </span>
+                          {stageSublabel ? (
+                            <span className="appr-stage-sublabel" title={item.current_stage_label || stageSublabel}>{stageSublabel}</span>
+                          ) : null}
                         </span>
                         <span role="cell">
                           <button
@@ -8131,6 +8257,11 @@ export default function App() {
                                 <option value="clarification_requested">Need clarification</option>
                               </select>
                             </div>
+                          ) : isHistorical ? (
+                            <span className="appr-history-tag" aria-label="Reviewed">
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden><polyline points="20 6 9 17 4 12"/></svg>
+                              Reviewed
+                            </span>
                           ) : !hasExtra ? (
                             <span className="appr-no-action" aria-hidden="true">No action</span>
                           ) : null}
@@ -8141,7 +8272,8 @@ export default function App() {
                 : null}
             </div>
           </div>
-        );
+          );
+        };
 
         return (
           <div className="primary-column">
@@ -8223,6 +8355,7 @@ export default function App() {
                   loadFn: loadApprovalsInbox,
                   channel: "approval",
                   onDetailsClick: (item) => handleApprovalDetailsOpen(item),
+                  showFilters: true,
                 })
               : null}
 
