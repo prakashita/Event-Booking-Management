@@ -269,7 +269,7 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
                             borderRadius: BorderRadius.circular(999),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 4,
                                 offset: const Offset(0, 2),
                               ),
@@ -304,7 +304,7 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
                             BoxShadow(
                               color: isDark
                                   ? Colors.transparent
-                                  : const Color(0xFF4F46E5).withOpacity(0.05),
+                                  : const Color(0xFF4F46E5).withValues(alpha: 0.05),
                               blurRadius: 10,
                               offset: const Offset(0, 2),
                             ),
@@ -376,7 +376,7 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
                             BoxShadow(
                               color: isDark
                                   ? Colors.transparent
-                                  : Colors.black.withOpacity(0.03),
+                                  : Colors.black.withValues(alpha: 0.03),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -621,7 +621,7 @@ class _ReportCard extends StatelessWidget {
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0651ED).withOpacity(isDark ? 0.0 : 0.05),
+            color: const Color(0xFF0651ED).withValues(alpha: isDark ? 0.0 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
             spreadRadius: -3,
@@ -641,8 +641,8 @@ class _ReportCard extends StatelessWidget {
                 height: 48,
                 decoration: BoxDecoration(
                   color: isDark
-                      ? const Color(0xFF312E81).withOpacity(0.5)
-                      : const Color(0xFFEEF2FF).withOpacity(0.5),
+                      ? const Color(0xFF312E81).withValues(alpha: 0.5)
+                      : const Color(0xFFEEF2FF).withValues(alpha: 0.5),
                   border: Border.all(
                     color: isDark
                         ? const Color(0xFF3730A3)
@@ -750,7 +750,7 @@ class _ReportCard extends StatelessWidget {
                     ? const Color(0xFF818CF8)
                     : const Color(0xFF4338CA),
                 backgroundColor: isDark
-                    ? const Color(0xFF312E81).withOpacity(0.5)
+                    ? const Color(0xFF312E81).withValues(alpha: 0.5)
                     : const Color(0xFFEEF2FF),
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(

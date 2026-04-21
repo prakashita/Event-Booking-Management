@@ -28,14 +28,14 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
         : const Color(0xFFE2E8F0);
     final settingsBg = isDark
         ? const Color(0xFF1E293B)
-        : Colors.grey.withOpacity(0.1);
+        : Colors.grey.withValues(alpha: 0.1);
     final settingsFg = isDark ? const Color(0xFFCBD5E1) : Colors.grey[800]!;
     final dividerColor = isDark
         ? const Color(0xFF334155)
         : const Color(0xFFE5E7EB);
     final avatarBg = isDark
         ? const Color(0xFF1E3A5F)
-        : theme.colorScheme.primary.withOpacity(0.1);
+        : theme.colorScheme.primary.withValues(alpha: 0.1);
     final avatarIcon = isDark
         ? const Color(0xFFDBEAFE)
         : theme.colorScheme.primary;
@@ -67,7 +67,7 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                       border: Border.all(color: cardBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(isDark ? 0.35 : 0.08),
+                          color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
                           blurRadius: 24,
                           offset: const Offset(0, 12),
                         ),
@@ -116,7 +116,7 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                           ),
                           backgroundColor: isDark
                               ? const Color(0xFF0F2E1A)
-                              : Colors.green.withOpacity(0.1),
+                              : Colors.green.withValues(alpha: 0.1),
                           labelStyle: const TextStyle(color: Colors.green),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
@@ -125,7 +125,7 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20),
                             side: BorderSide(
-                              color: Colors.green.withOpacity(0.2),
+                              color: Colors.green.withValues(alpha: 0.2),
                             ),
                           ),
                         ),
@@ -210,7 +210,7 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                               foregroundColor: Colors.red,
                               backgroundColor: isDark
                                   ? const Color(0xFF3F1D1D)
-                                  : Colors.red.withOpacity(0.1),
+                                  : Colors.red.withValues(alpha: 0.1),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
@@ -237,7 +237,7 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(LucideIcons.user, color: Colors.white, size: 18),

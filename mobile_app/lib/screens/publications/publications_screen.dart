@@ -1504,7 +1504,7 @@ class _PublicationCard extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: _typeColor.withOpacity(0.1),
+                  color: _typeColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(_typeIcon, size: 22, color: _typeColor),
@@ -1561,7 +1561,7 @@ class _PublicationCard extends StatelessWidget {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: _typeColor.withOpacity(0.1),
+                  color: _typeColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(

@@ -362,7 +362,7 @@ class _EventsScreenState extends State<EventsScreen>
                       elevation: 0,
                     ).copyWith(
                       shadowColor: WidgetStateProperty.all(
-                        Colors.black.withOpacity(0.05),
+                        Colors.black.withValues(alpha: 0.05),
                       ),
                       elevation: WidgetStateProperty.all(2),
                     ),
@@ -536,7 +536,7 @@ class _MyEventsEmptyState extends StatelessWidget {
                 border: Border.all(color: boxBorder),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -610,7 +610,7 @@ class _EventCard extends StatelessWidget {
 
     final detailsBg = isDark
         ? const Color(0xFF0F172A)
-        : const Color(0xFFEFF6FF).withOpacity(0.5); // blue-50/50
+        : const Color(0xFFEFF6FF).withValues(alpha: 0.5); // blue-50/50
     final detailsFg = isDark
         ? const Color(0xFF60A5FA)
         : const Color(0xFF2563EB); // blue-600
@@ -635,7 +635,7 @@ class _EventCard extends StatelessWidget {
           border: Border.all(color: borderColor),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),

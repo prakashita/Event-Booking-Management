@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'constants/app_theme.dart';
 import 'providers/auth_provider.dart';
+import 'providers/notification_provider.dart';
 import 'providers/theme_provider.dart';
 import 'router/app_router.dart';
+import 'services/api_service.dart';
 
 // Configure API base URL here
 // For development: use your FastAPI server URL
@@ -42,6 +44,14 @@ void main() {
           create: (_) => AuthProvider()..init(kApiBaseUrl),
         ),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ProxyProvider<AuthProvider, NotificationProvider>(
+          create: (_) => NotificationProvider(
+            AuthProvider(),
+            ApiService(),
+          ),
+          update: (_, authProvider, notificationProvider) =>
+              notificationProvider ?? NotificationProvider(authProvider, ApiService()),
+        ),
       ],
       child: const EventBookingApp(),
     ),

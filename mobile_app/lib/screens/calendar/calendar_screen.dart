@@ -727,7 +727,7 @@ class _CalendarScreenState extends State<CalendarScreen>
           shape: BoxShape.circle,
         ),
         todayDecoration: BoxDecoration(
-          color: const Color(0xFF4299E1).withOpacity(0.3),
+          color: const Color(0xFF4299E1).withValues(alpha: 0.3),
           shape: BoxShape.circle,
         ),
         markerDecoration: const BoxDecoration(

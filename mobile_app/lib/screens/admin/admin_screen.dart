@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../home_screen.dart';
@@ -18,6 +20,13 @@ enum _AdminTab { users, venues, events, requests, invites, publications }
 class _AdminScreenState extends State<AdminScreen> {
   final _api = ApiService();
   ValueNotifier<bool>? _chatFabVisibility;
+
+  bool get _canAccess {
+    final role = (context.read<AuthProvider>().user?.roleKey ?? '')
+        .toLowerCase()
+        .trim();
+    return role == 'admin';
+  }
 
   void _setChatFabVisible(bool visible) {
     _chatFabVisibility?.value = visible;
@@ -54,7 +63,11 @@ class _AdminScreenState extends State<AdminScreen> {
   @override
   void initState() {
     super.initState();
-    _loadCurrentSection();
+    if (_canAccess) {
+      _loadCurrentSection();
+    } else {
+      _isLoading = false;
+    }
   }
 
   @override
@@ -822,7 +835,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     width: 34,
                     height: 34,
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.14),
+                      color: color.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(icon, size: 18, color: color),
@@ -1075,7 +1088,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       radius: 18,
                       backgroundColor: const Color(
                         0xFF4F46E5,
-                      ).withOpacity(0.16),
+                      ).withValues(alpha: 0.16),
                       child: Text(
                         user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
                         style: const TextStyle(
@@ -1116,7 +1129,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4F46E5).withOpacity(0.12),
+                        color: const Color(0xFF4F46E5).withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
@@ -1583,6 +1596,14 @@ class _AdminScreenState extends State<AdminScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_canAccess) {
+      return const Scaffold(
+        body: Center(
+          child: Text('Access denied. This page is available to Admin only.'),
+        ),
+      );
+    }
+
     final theme = Theme.of(context);
 
     return Scaffold(

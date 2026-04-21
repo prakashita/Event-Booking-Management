@@ -374,7 +374,7 @@ class _ChatBubble extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 10,
                     color: isOwn
-                        ? Colors.white.withOpacity(0.7)
+                        ? Colors.white.withValues(alpha: 0.7)
                         : AppColors.textMuted,
                   ),
                 ),
@@ -451,7 +451,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
                     height: 7,
                     decoration: BoxDecoration(
                       color: AppColors.textMuted
-                          .withOpacity(0.4 + _controllers[i].value * 0.6),
+                          .withValues(alpha: 0.4 + _controllers[i].value * 0.6),
                       shape: BoxShape.circle,
                     ),
                   ),

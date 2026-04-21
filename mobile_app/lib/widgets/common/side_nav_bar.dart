@@ -240,7 +240,7 @@ class SideNavBar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: isSelected
-                ? Colors.blue.withOpacity(0.2)
+                ? Colors.blue.withValues(alpha: 0.2)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: isSelected

@@ -757,7 +757,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         border: Border.all(color: _border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(_isDark ? 0.24 : 0.03),
+            color: Colors.black.withValues(alpha: _isDark ? 0.24 : 0.03),
             offset: Offset(0, 2),
             blurRadius: 4,
           ),
@@ -1623,7 +1623,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(_isDark ? 0.05 : 0.7),
+                  color: Colors.white.withValues(alpha: _isDark ? 0.05 : 0.7),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: _border),
                 ),
@@ -1868,7 +1868,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(_isDark ? 0.22 : 0.04),
+                      color: Colors.black.withValues(alpha: _isDark ? 0.22 : 0.04),
                       offset: const Offset(0, 1),
                       blurRadius: 2,
                     ),

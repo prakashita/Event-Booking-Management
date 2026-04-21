@@ -228,7 +228,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.25 : 0.02),
+                    color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.02),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -275,11 +275,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         border: Border.all(
           color: isDark
               ? const Color(0xFF334155)
-              : Colors.white.withOpacity(0.5),
+              : Colors.white.withValues(alpha: 0.5),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.22 : 0.02),
+            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.02),
             blurRadius: 10,
             spreadRadius: 0,
             offset: const Offset(0, 4),
@@ -516,7 +516,7 @@ class _DashboardEventCard extends StatelessWidget {
         child: Icon(
           Icons.image_rounded,
           size: 34,
-          color: Colors.white.withOpacity(0.9),
+          color: Colors.white.withValues(alpha: 0.9),
         ),
       ),
     );
@@ -564,7 +564,7 @@ class _DashboardEventCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.18 : 0.04),
+              color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.04),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),

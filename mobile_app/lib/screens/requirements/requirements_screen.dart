@@ -41,7 +41,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
   @override
   void initState() {
     super.initState();
-    _role = context.read<AuthProvider>().user?.role.name ?? 'faculty';
+    _role = context.read<AuthProvider>().user?.roleKey ?? 'faculty';
     _tabController = TabController(length: 1, vsync: this);
     _loadInbox();
   }

@@ -72,7 +72,7 @@ class _LoginScreenState extends State<LoginScreen>
               height: 280,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.primaryLight.withOpacity(0.3),
+                color: AppColors.primaryLight.withValues(alpha: 0.3),
               ),
             ),
           ),
@@ -84,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen>
               height: 320,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.primaryDark.withOpacity(0.4),
+                color: AppColors.primaryDark.withValues(alpha: 0.4),
               ),
             ),
           ),
@@ -112,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 borderRadius: BorderRadius.circular(22),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.25),
+                                    color: Colors.black.withValues(alpha: 0.25),
                                     blurRadius: 24,
                                     offset: const Offset(0, 8),
                                   ),
@@ -149,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen>
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w400,
-                                color: Colors.white.withOpacity(0.75),
+                                color: Colors.white.withValues(alpha: 0.75),
                               ),
                             ),
                           ],

@@ -7,6 +7,7 @@ import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
+import '../../constants/app_constants.dart';
 import '../../constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
@@ -27,10 +28,21 @@ class _IQACScreenState extends State<IQACScreen> {
   bool _loading = true;
   String? _error;
 
+  bool get _canAccess {
+    final role = (context.read<AuthProvider>().user?.roleKey ?? '')
+        .toLowerCase()
+        .trim();
+    return AppConstants.iqacAllowedRoles.contains(role);
+  }
+
   @override
   void initState() {
     super.initState();
-    _loadData();
+    if (_canAccess) {
+      _loadData();
+    } else {
+      _loading = false;
+    }
   }
 
   Future<void> _loadData() async {
@@ -365,6 +377,16 @@ class _IQACScreenState extends State<IQACScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_canAccess) {
+      return const Scaffold(
+        body: Center(
+          child: Text(
+            'Access denied. You do not have permission to view IQAC data.',
+          ),
+        ),
+      );
+    }
+
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final borderColor = isDark

@@ -30,12 +30,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         : theme.colorScheme.outlineVariant;
     final heading = theme.colorScheme.onSurface;
     final subheading = isDark
-        ? theme.colorScheme.onSurface.withOpacity(0.7)
-        : theme.colorScheme.onSurface.withOpacity(0.6);
+        ? theme.colorScheme.onSurface.withValues(alpha: 0.7)
+        : theme.colorScheme.onSurface.withValues(alpha: 0.6);
     final iconTile = isDark
         ? theme.colorScheme.surfaceContainerHighest
         : theme.colorScheme.surfaceContainer;
-    final closeIcon = theme.colorScheme.onSurface.withOpacity(0.7);
+    final closeIcon = theme.colorScheme.onSurface.withValues(alpha: 0.7);
     final closeHover = isDark
         ? theme.colorScheme.surfaceContainerHighest
         : theme.colorScheme.surfaceContainer;
@@ -44,7 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       backgroundColor: Colors
           .transparent, // Making background transparent for modal look if navigated via showDialog
       // Or if solid background:
-      // backgroundColor: const Color(0xFF0F172A).withOpacity(0.4), // bg-slate-900/40
+      // backgroundColor: const Color(0xFF0F172A).withValues(alpha: 0.4), // bg-slate-900/40
       body: Stack(
         children: [
           // Background Backdrop (Simulated)
@@ -52,7 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: GestureDetector(
               onTap: () => _close(context),
               child: Container(
-                color: Colors.black.withOpacity(isDark ? 0.55 : 0.28),
+                color: Colors.black.withValues(alpha: isDark ? 0.55 : 0.28),
               ),
             ),
           ),
@@ -71,7 +71,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     borderRadius: BorderRadius.circular(40), // rounded-[2.5rem]
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(isDark ? 0.45 : 0.1),
+                        color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.1),
                         blurRadius: 30,
                         offset: const Offset(0, 20),
                       ),
@@ -150,7 +150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Container(
                         padding: const EdgeInsets.all(32),
                         decoration: BoxDecoration(
-                          color: panel.withOpacity(0.9),
+                          color: panel.withValues(alpha: 0.9),
                           borderRadius: const BorderRadius.vertical(
                             bottom: Radius.circular(40),
                           ),
@@ -280,11 +280,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ? theme.colorScheme.outline
         : theme.colorScheme.outlineVariant;
     final inactiveTitle = theme.colorScheme.onSurface;
-    final inactiveSubtitle = theme.colorScheme.onSurface.withOpacity(0.62);
+    final inactiveSubtitle = theme.colorScheme.onSurface.withValues(alpha: 0.62);
     final inactiveIconBg = isDark
         ? theme.colorScheme.surfaceContainerHighest
         : theme.colorScheme.surfaceContainer;
-    final inactiveIcon = theme.colorScheme.onSurface.withOpacity(0.65);
+    final inactiveIcon = theme.colorScheme.onSurface.withValues(alpha: 0.65);
 
     return GestureDetector(
       onTap: () async {
@@ -306,7 +306,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           boxShadow: isActive
               ? [
                   BoxShadow(
-                    color: activeColor.withOpacity(0.1),
+                    color: activeColor.withValues(alpha: 0.1),
                     blurRadius: 0,
                     spreadRadius: 4,
                   ),
