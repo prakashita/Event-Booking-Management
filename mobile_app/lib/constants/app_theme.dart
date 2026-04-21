@@ -17,73 +17,73 @@ class AppTheme {
         error: AppColors.error,
       ),
       scaffoldBackgroundColor: Colors.transparent,
-      textTheme: GoogleFonts.interTextTheme().copyWith(
-        displayLarge: GoogleFonts.inter(
+      textTheme: GoogleFonts.poppinsTextTheme().copyWith(
+        displayLarge: GoogleFonts.poppins(
           fontSize: 32,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
         ),
-        displayMedium: GoogleFonts.inter(
+        displayMedium: GoogleFonts.poppins(
           fontSize: 28,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
         ),
-        headlineLarge: GoogleFonts.inter(
+        headlineLarge: GoogleFonts.poppins(
           fontSize: 24,
           fontWeight: FontWeight.w700,
           color: AppColors.textPrimary,
         ),
-        headlineMedium: GoogleFonts.inter(
+        headlineMedium: GoogleFonts.poppins(
           fontSize: 20,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
         ),
-        headlineSmall: GoogleFonts.inter(
+        headlineSmall: GoogleFonts.poppins(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
         ),
-        titleLarge: GoogleFonts.inter(
+        titleLarge: GoogleFonts.poppins(
           fontSize: 16,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
         ),
-        titleMedium: GoogleFonts.inter(
+        titleMedium: GoogleFonts.poppins(
           fontSize: 15,
           fontWeight: FontWeight.w500,
           color: AppColors.textPrimary,
         ),
-        titleSmall: GoogleFonts.inter(
+        titleSmall: GoogleFonts.poppins(
           fontSize: 13,
           fontWeight: FontWeight.w500,
           color: AppColors.textSecondary,
         ),
-        bodyLarge: GoogleFonts.inter(
+        bodyLarge: GoogleFonts.poppins(
           fontSize: 15,
           fontWeight: FontWeight.w400,
           color: AppColors.textPrimary,
         ),
-        bodyMedium: GoogleFonts.inter(
+        bodyMedium: GoogleFonts.poppins(
           fontSize: 14,
           fontWeight: FontWeight.w400,
           color: AppColors.textPrimary,
         ),
-        bodySmall: GoogleFonts.inter(
+        bodySmall: GoogleFonts.poppins(
           fontSize: 12,
           fontWeight: FontWeight.w400,
           color: AppColors.textSecondary,
         ),
-        labelLarge: GoogleFonts.inter(
+        labelLarge: GoogleFonts.poppins(
           fontSize: 14,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
         ),
-        labelMedium: GoogleFonts.inter(
+        labelMedium: GoogleFonts.poppins(
           fontSize: 12,
           fontWeight: FontWeight.w500,
           color: AppColors.textSecondary,
         ),
-        labelSmall: GoogleFonts.inter(
+        labelSmall: GoogleFonts.poppins(
           fontSize: 11,
           fontWeight: FontWeight.w500,
           color: AppColors.textMuted,
@@ -96,7 +96,7 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 1,
         shadowColor: Colors.black12,
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: GoogleFonts.poppins(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
@@ -121,7 +121,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.poppins(
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -135,7 +135,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.poppins(
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -144,7 +144,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primary,
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.poppins(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -173,16 +173,16 @@ class AppTheme {
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.error),
         ),
-        hintStyle: GoogleFonts.inter(color: AppColors.textMuted, fontSize: 14),
-        labelStyle: GoogleFonts.inter(
+        hintStyle: GoogleFonts.poppins(color: AppColors.textMuted, fontSize: 14),
+        labelStyle: GoogleFonts.poppins(
           color: AppColors.textSecondary,
           fontSize: 14,
         ),
-        helperStyle: GoogleFonts.inter(
+        helperStyle: GoogleFonts.poppins(
           color: AppColors.textMuted,
           fontSize: 12,
         ),
-        errorStyle: GoogleFonts.inter(color: AppColors.error, fontSize: 12),
+        errorStyle: GoogleFonts.poppins(color: AppColors.error, fontSize: 12),
       ),
       dropdownMenuTheme: DropdownMenuThemeData(
         menuStyle: MenuStyle(
@@ -194,7 +194,7 @@ class AppTheme {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
-        textStyle: GoogleFonts.inter(
+        textStyle: GoogleFonts.poppins(
           fontSize: 14,
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w500,
@@ -212,7 +212,7 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.primaryContainer,
-        labelStyle: GoogleFonts.inter(
+        labelStyle: GoogleFonts.poppins(
           fontSize: 12,
           fontWeight: FontWeight.w500,
           color: AppColors.primary,
@@ -233,13 +233,13 @@ class AppTheme {
         indicatorColor: AppColors.primaryContainer,
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return GoogleFonts.inter(
+            return GoogleFonts.poppins(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: AppColors.primary,
             );
           }
-          return GoogleFonts.inter(
+          return GoogleFonts.poppins(
             fontSize: 11,
             fontWeight: FontWeight.w400,
             color: AppColors.textMuted,
@@ -304,17 +304,17 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         backgroundColor: AppColors.textPrimary,
-        contentTextStyle: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+        contentTextStyle: GoogleFonts.poppins(color: Colors.white, fontSize: 14),
       ),
       tabBarTheme: TabBarThemeData(
         labelColor: AppColors.primary,
         unselectedLabelColor: AppColors.textSecondary,
         indicatorColor: AppColors.primary,
-        labelStyle: GoogleFonts.inter(
+        labelStyle: GoogleFonts.poppins(
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
-        unselectedLabelStyle: GoogleFonts.inter(
+        unselectedLabelStyle: GoogleFonts.poppins(
           fontSize: 14,
           fontWeight: FontWeight.w400,
         ),
@@ -344,7 +344,7 @@ class AppTheme {
       ),
     );
 
-    final textTheme = GoogleFonts.interTextTheme(
+    final textTheme = GoogleFonts.poppinsTextTheme(
       base.textTheme,
     ).apply(bodyColor: Colors.white, displayColor: Colors.white);
 
@@ -382,7 +382,7 @@ class AppTheme {
       ),
       chipTheme: base.chipTheme.copyWith(
         backgroundColor: const Color(0xFF1E3A5F),
-        labelStyle: GoogleFonts.inter(
+        labelStyle: GoogleFonts.poppins(
           fontSize: 12,
           fontWeight: FontWeight.w500,
           color: const Color(0xFFBFDBFE),
@@ -397,7 +397,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.poppins(
             fontSize: 15,
             fontWeight: FontWeight.w700,
           ),
@@ -411,7 +411,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          textStyle: GoogleFonts.inter(
+          textStyle: GoogleFonts.poppins(
             fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
@@ -432,19 +432,19 @@ class AppTheme {
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: darkPrimary, width: 2),
         ),
-        hintStyle: GoogleFonts.inter(
+        hintStyle: GoogleFonts.poppins(
           color: const Color(0xFF94A3B8),
           fontSize: 14,
         ),
-        labelStyle: GoogleFonts.inter(
+        labelStyle: GoogleFonts.poppins(
           color: const Color(0xFFCBD5E1),
           fontSize: 14,
         ),
-        helperStyle: GoogleFonts.inter(
+        helperStyle: GoogleFonts.poppins(
           color: const Color(0xFF94A3B8),
           fontSize: 12,
         ),
-        errorStyle: GoogleFonts.inter(
+        errorStyle: GoogleFonts.poppins(
           color: const Color(0xFFFCA5A5),
           fontSize: 12,
         ),
@@ -457,7 +457,7 @@ class AppTheme {
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
-        textStyle: GoogleFonts.inter(
+        textStyle: GoogleFonts.poppins(
           fontSize: 14,
           color: const Color(0xFFE2E8F0),
           fontWeight: FontWeight.w500,
@@ -511,7 +511,7 @@ class AppTheme {
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: darkSurfaceRaised,
-        contentTextStyle: GoogleFonts.inter(
+        contentTextStyle: GoogleFonts.poppins(
           color: const Color(0xFFE2E8F0),
           fontSize: 14,
         ),

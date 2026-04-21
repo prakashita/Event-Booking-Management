@@ -4,11 +4,13 @@ import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../constants/app_colors.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 import 'package:provider/provider.dart';
 
 class EventApprovalScreen extends StatefulWidget {
@@ -63,6 +65,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
       ? const Color(0xFF6366F1)
       : const Color(0xFF521EEA);
   bool _submitting = false;
+  bool _overrideConflict = false;
   bool _confirmed = false;
   bool _loadingApprovalEmails = true;
 
@@ -71,9 +74,261 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
   String _registrarEmail = "";
   String _viceChancellorEmail = "";
 
+  void _showConflictDialog(List<dynamic> conflicts) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final surface = theme.colorScheme.surface;
+    final text = theme.colorScheme.onSurface;
+    final softText = text.withValues(alpha: 0.7);
+    final panel = isDark
+        ? theme.colorScheme.surfaceContainerHighest
+        : theme.colorScheme.surfaceContainerLow;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(
+                            0xFFF59E0B,
+                          ).withValues(alpha: 0.45),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.priority_high,
+                        color: Color(0xFFD97706),
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        'Schedule Conflict',
+                        style: TextStyle(
+                          color: AppColors.error,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'The following event(s) are already scheduled at the selected time:',
+                  style: TextStyle(
+                    color: AppColors.error.withValues(alpha: 0.88),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 250),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: conflicts.map((c) {
+                        final mapData = c as Map<String, dynamic>;
+                        final name = (mapData['name'] ?? 'Untitled').toString();
+                        final date = (mapData['start_date'] ?? '').toString();
+                        final time = (mapData['start_time'] ?? '').toString();
+                        final venue = (mapData['venue_name'] ?? '').toString();
+
+                        return Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: panel,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: theme.colorScheme.outline.withValues(
+                                alpha: 0.35,
+                              ),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: text,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _conflictMetaChip(
+                                    label: 'Date',
+                                    value: date,
+                                    textColor: softText,
+                                  ),
+                                  _conflictMetaChip(
+                                    label: 'Time',
+                                    value: time,
+                                    textColor: softText,
+                                  ),
+                                  _conflictMetaChip(
+                                    label: 'Venue',
+                                    value: venue,
+                                    textColor: softText,
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Would you like to reschedule your event or override this conflict?',
+                  style: TextStyle(
+                    color: AppColors.error.withValues(alpha: 0.88),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 360;
+                    final children = [
+                      _conflictActionButton(
+                        label: 'Reschedule',
+                        bg: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                        fg: const Color(0xFF4F46E5),
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                      _conflictActionButton(
+                        label: 'Cancel',
+                        bg: theme.colorScheme.surfaceContainerHighest,
+                        fg: text,
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          context.go('/events');
+                        },
+                      ),
+                      _conflictActionButton(
+                        label: 'Override',
+                        bg: const Color(0xFF6366F1).withValues(alpha: 0.2),
+                        fg: const Color(0xFF4F46E5),
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          setState(() => _overrideConflict = true);
+                          _submit();
+                        },
+                      ),
+                    ];
+
+                    if (compact) {
+                      return Column(
+                        children: [
+                          for (final button in children) ...[
+                            SizedBox(width: double.infinity, child: button),
+                            if (button != children.last)
+                              const SizedBox(height: 8),
+                          ],
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: children[0]),
+                        const SizedBox(width: 8),
+                        Expanded(child: children[1]),
+                        const SizedBox(width: 8),
+                        Expanded(child: children[2]),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _conflictMetaChip({
+    required String label,
+    required String value,
+    required Color textColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Text(
+        '$label: $value',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: textColor,
+        ),
+      ),
+    );
+  }
+
+  Widget _conflictActionButton({
+    required String label,
+    required Color bg,
+    required Color fg,
+    required VoidCallback onPressed,
+  }) {
+    return TextButton(
+      style: TextButton.styleFrom(
+        backgroundColor: bg,
+        foregroundColor: fg,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      onPressed: onPressed,
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+    _overrideConflict = widget.eventData['override_conflict'] == true;
     _loadApprovalEmails();
   }
 
@@ -146,6 +401,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
     try {
       final payload = {
         ...widget.eventData,
+        'override_conflict': _overrideConflict,
         'discussedWithProgrammingChair': true,
         'requirements': const <String>[],
         'other_notes': '',
@@ -204,6 +460,15 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
       }
     } on DioException catch (e) {
       if (mounted) {
+        if (e.response?.statusCode == 409) {
+          final conflictData = e.response?.data;
+          if (conflictData is Map<String, dynamic> &&
+              conflictData.containsKey('conflicts')) {
+            _showConflictDialog(conflictData['conflicts'] as List<dynamic>);
+            return;
+          }
+        }
+
         final detail = e.response?.data is Map<String, dynamic>
             ? (e.response?.data['detail']?.toString() ??
                   e.message ??
@@ -229,6 +494,8 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final userEmail = authProvider.user?.email ?? 'partha.worklife@gmail.com';
 
@@ -290,14 +557,34 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                             Expanded(
                               child: Text(
                                 'Deputy Registrar Approval (Stage 1)',
-                                style: TextStyle(
+                                style: GoogleFonts.poppins(
                                   color: _slate800,
                                   fontSize: 18,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w700,
                                   letterSpacing: 1.1,
                                 ),
                               ),
                             ),
+                            IconButton(
+                              style: IconButton.styleFrom(
+                                backgroundColor: _slate50,
+                              ),
+                              icon: Icon(
+                                isDark ? LucideIcons.sun : LucideIcons.moon,
+                                color: isDark
+                                    ? const Color(0xFFF59E0B)
+                                    : const Color(0xFF4F46E5),
+                                size: 18,
+                              ),
+                              onPressed: () {
+                                final next = isDark ? 'light' : 'dark';
+                                themeProvider.setThemeModeByValue(next);
+                              },
+                              tooltip: isDark
+                                  ? 'Switch to light mode'
+                                  : 'Switch to dark mode',
+                            ),
+                            const SizedBox(width: 8),
                             IconButton(
                               style: IconButton.styleFrom(
                                 backgroundColor: _slate50,
@@ -495,18 +782,25 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                   horizontal: 26,
                                   vertical: 14,
                                 ),
-                                side: BorderSide(color: _slate200),
+                                side: BorderSide(
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? const Color(0xFF475569)
+                                      : const Color(0xFFDADCE0),
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
+                                backgroundColor: Theme.of(context).brightness == Brightness.dark
+                                    ? Theme.of(context).colorScheme.surfaceContainerHighest
+                                    : Colors.white,
                                 foregroundColor: _slate600,
                               ),
                               onPressed: () => context.pop(),
-                              child: const Text(
+                              child: Text(
                                 'Cancel',
-                                style: TextStyle(
+                                style: GoogleFonts.roboto(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),
@@ -517,7 +811,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                   horizontal: 32,
                                   vertical: 14,
                                 ),
-                                backgroundColor: _indigo600,
+                                backgroundColor: const Color(0xFF1A73E8),
                                 disabledBackgroundColor: const Color(
                                   0xFFB8B0D4,
                                 ),
@@ -531,11 +825,11 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                               onPressed: (canSend && _confirmed)
                                   ? _submit
                                   : null,
-                              child: const Text(
+                              child: Text(
                                 'Send',
-                                style: TextStyle(
+                                style: GoogleFonts.roboto(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w700,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ),

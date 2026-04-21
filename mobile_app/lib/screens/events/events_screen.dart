@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
@@ -246,9 +247,6 @@ class _EventsScreenState extends State<EventsScreen>
         ? const Color(0xFFCBD5E1)
         : const Color(0xFF64748B); // slate-500
     final refreshBg = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final refreshBorder = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0); // slate-200
 
     final currentTabEvents =
         _eventsByTab[_tabs[_tabController.index]]?.length ?? 0;
@@ -262,9 +260,9 @@ class _EventsScreenState extends State<EventsScreen>
             children: [
               Text(
                 'My Events',
-                style: TextStyle(
+                style: GoogleFonts.poppins(
                   fontSize: 30,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w700,
                   color: headingColor,
                   letterSpacing: -0.5,
                 ),
@@ -306,7 +304,7 @@ class _EventsScreenState extends State<EventsScreen>
                 label: const Text('New Event'),
                 style:
                     ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
+                      backgroundColor: const Color(0xFF1A73E8),
                       foregroundColor: Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(
@@ -316,9 +314,9 @@ class _EventsScreenState extends State<EventsScreen>
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      textStyle: const TextStyle(
+                      textStyle: GoogleFonts.roboto(
                         fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w500,
                       ),
                     ).copyWith(
                       shadowColor: WidgetStateProperty.all(
@@ -345,7 +343,11 @@ class _EventsScreenState extends State<EventsScreen>
                     OutlinedButton.styleFrom(
                       foregroundColor: refreshFg,
                       backgroundColor: refreshBg,
-                      side: BorderSide(color: refreshBorder),
+                      side: BorderSide(
+                        color: isDark
+                            ? const Color(0xFF475569)
+                            : const Color(0xFFDADCE0),
+                      ),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 24,
                         vertical: 14,
@@ -353,9 +355,9 @@ class _EventsScreenState extends State<EventsScreen>
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      textStyle: const TextStyle(
+                      textStyle: GoogleFonts.roboto(
                         fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w500,
                       ),
                       elevation: 0,
                     ).copyWith(

@@ -21,6 +21,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   final ValueNotifier<bool> _chatFabVisible = ValueNotifier<bool>(true);
+  Offset? _fabPos;
 
   @override
   void initState() {
@@ -38,10 +39,10 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final promptedKey = 'google_connect_prompted_${user.id}';
-      
+
       final api = ApiService();
       final res = await api.get<Map<String, dynamic>>('/auth/google/status');
-      
+
       final connected = res['connected'] == true;
       final missing = List<String>.from(res['missing_scopes'] ?? []);
 
@@ -71,15 +72,23 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (BuildContext dialogContext) {
         final theme = Theme.of(dialogContext);
         final isDark = theme.brightness == Brightness.dark;
-        
+
         final bgColor = isDark ? const Color(0xFF1E293B) : Colors.white;
-        final textColor = isDark ? const Color(0xFFF8FAFC) : const Color(0xFF0F172A);
-        final subColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
-        final dividerColor = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
-        
+        final textColor = isDark
+            ? const Color(0xFFF8FAFC)
+            : const Color(0xFF0F172A);
+        final subColor = isDark
+            ? const Color(0xFF94A3B8)
+            : const Color(0xFF64748B);
+        final dividerColor = isDark
+            ? const Color(0xFF334155)
+            : const Color(0xFFE2E8F0);
+
         return Dialog(
           backgroundColor: bgColor,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
@@ -103,7 +112,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                          color: isDark
+                              ? const Color(0xFF0F172A)
+                              : const Color(0xFFF1F5F9),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(Icons.close, color: subColor, size: 16),
@@ -116,11 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(height: 16),
                 Text(
                   'Your Google connection is missing permissions needed for calendar, invites, or report uploads. Please connect Google to continue.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1.5,
-                    color: subColor,
-                  ),
+                  style: TextStyle(fontSize: 14, height: 1.5, color: subColor),
                 ),
                 const SizedBox(height: 16),
                 RichText(
@@ -133,7 +140,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       TextSpan(
                         text: 'Missing scopes: ',
-                        style: TextStyle(fontWeight: FontWeight.w700, color: textColor),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: textColor,
+                        ),
                       ),
                       TextSpan(text: missing.join(', ')),
                     ],
@@ -148,46 +158,82 @@ class _HomeScreenState extends State<HomeScreen> {
                     TextButton(
                       style: TextButton.styleFrom(
                         foregroundColor: textColor,
-                        backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        backgroundColor: isDark
+                            ? const Color(0xFF0F172A)
+                            : const Color(0xFFF1F5F9),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                       onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: const Text('Later', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      child: const Text(
+                        'Later',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         foregroundColor: Colors.white,
                         backgroundColor: const Color(0xFF6366F1),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         elevation: 0,
                       ),
                       onPressed: () async {
                         Navigator.of(dialogContext).pop();
                         try {
                           final api = ApiService();
-                          final res = await api.get<Map<String, dynamic>>('/calendar/connect-url');
+                          final res = await api.get<Map<String, dynamic>>(
+                            '/calendar/connect-url',
+                          );
                           final url = res['url']?.toString();
                           if (url != null && url.isNotEmpty) {
                             final uri = Uri.parse(url);
                             try {
-                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                              await launchUrl(
+                                uri,
+                                mode: LaunchMode.externalApplication,
+                              );
                             } catch (_) {
                               // Fallback if external application fails
-                              await launchUrl(uri, mode: LaunchMode.platformDefault);
+                              await launchUrl(
+                                uri,
+                                mode: LaunchMode.platformDefault,
+                              );
                             }
                           }
                         } catch (_) {
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Failed to obtain Google Connect URL.')),
+                              const SnackBar(
+                                content: Text(
+                                  'Failed to obtain Google Connect URL.',
+                                ),
+                              ),
                             );
                           }
                         }
                       },
-                      child: const Text('Connect Google', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      child: const Text(
+                        'Connect Google',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -212,6 +258,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final currentRoute = GoRouterState.of(context).matchedLocation;
     final isTopRoute = ModalRoute.of(context)?.isCurrent ?? true;
     final isDesktop = MediaQuery.of(context).size.width >= 768;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final pageBg = theme.scaffoldBackgroundColor;
@@ -314,59 +361,84 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 // Main Content
                 Expanded(
-                  child: ChatFabVisibilityScope(
-                    visibleNotifier: _chatFabVisible,
-                    child: DashboardSearchScope(
-                      searchQuery: _searchQuery,
-                      child: widget.child,
-                    ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Stack(
+                        children: [
+                          Positioned.fill(
+                            child: ChatFabVisibilityScope(
+                              visibleNotifier: _chatFabVisible,
+                              child: DashboardSearchScope(
+                                searchQuery: _searchQuery,
+                                child: widget.child,
+                              ),
+                            ),
+                          ),
+                          ValueListenableBuilder<bool>(
+                            valueListenable: _chatFabVisible,
+                            builder: (context, visible, _) {
+                              final isChatRoute = currentRoute == '/chat' || currentRoute.startsWith('/chat/');
+                              final showFab = isTopRoute && visible && !isChatRoute;
+                              
+                              if (!showFab) return const SizedBox.shrink();
+
+                              // Keep logic for dynamically calculating the default position based on page
+                              final hasPageLevelActions =
+                                  currentRoute == '/requirements' ||
+                                  currentRoute == '/admin' ||
+                                  currentRoute == '/events/create';
+                                  
+                              final baseBottomOffset = hasPageLevelActions ? 96.0 : 16.0;
+                              final defaultBottom = bottomInset > 0 ? bottomInset + 16.0 : baseBottomOffset;
+                              final defaultRight = 16.0;
+
+                              return Positioned(
+                                left: _fabPos?.dx,
+                                top: _fabPos?.dy,
+                                right: _fabPos == null ? defaultRight : null,
+                                bottom: _fabPos == null ? defaultBottom : null,
+                                child: GestureDetector(
+                                  onPanUpdate: (details) {
+                                    setState(() {
+                                      double curX = _fabPos?.dx ?? (constraints.maxWidth - 56 - defaultRight);
+                                      double curY = _fabPos?.dy ?? (constraints.maxHeight - 56 - defaultBottom);
+                                      
+                                      double newX = curX + details.delta.dx;
+                                      double newY = curY + details.delta.dy;
+                                      
+                                      newX = newX.clamp(0.0, constraints.maxWidth - 56.0);
+                                      newY = newY.clamp(0.0, constraints.maxHeight - 56.0);
+                                      
+                                      _fabPos = Offset(newX, newY);
+                                    });
+                                  },
+                                  child: FloatingActionButton(
+                                    key: const ValueKey<String>('chat_fab_visible'),
+                                    onPressed: () {
+                                      context.push('/chat');
+                                    },
+                                    backgroundColor: const Color(0xFF2563EB),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: const Icon(
+                                      LucideIcons.messageSquare,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
             ),
           ),
         ],
-      ),
-      floatingActionButton: ValueListenableBuilder<bool>(
-        valueListenable: _chatFabVisible,
-        builder: (context, visible, _) {
-          final showFab = isTopRoute && visible;
-          return AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(
-                  scale: Tween<double>(
-                    begin: 0.92,
-                    end: 1.0,
-                  ).animate(animation),
-                  child: child,
-                ),
-              );
-            },
-            child: showFab
-                ? FloatingActionButton(
-                    key: const ValueKey<String>('chat_fab_visible'),
-                    onPressed: () {
-                      context.go('/chat');
-                    },
-                    backgroundColor: const Color(0xFF2563EB),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      LucideIcons.messageSquare,
-                      color: Colors.white,
-                    ),
-                  )
-                : const SizedBox.shrink(
-                    key: ValueKey<String>('chat_fab_hidden'),
-                  ),
-          );
-        },
       ),
     );
   }
