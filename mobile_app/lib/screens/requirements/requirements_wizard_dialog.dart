@@ -7,11 +7,13 @@ import '../../services/api_service.dart';
 class RequirementsWizardDialog extends StatefulWidget {
   final Event event;
   final VoidCallback onSuccess;
+  final String requesterEmail;
 
   const RequirementsWizardDialog({
     super.key,
     required this.event,
     required this.onSuccess,
+    this.requesterEmail = '',
   });
 
   @override
@@ -21,18 +23,18 @@ class RequirementsWizardDialog extends StatefulWidget {
 
 class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
   final _api = ApiService();
-  
+
   // Departments in order
   final List<String> _departments = [
     'facility',
     'it',
     'marketing',
-    'transport'
+    'transport',
   ];
-  
+
   int _currentStep = 0;
   String _phase = 'edit'; // 'edit' or 'review'
-  
+
   // Track skipped departments
   final Map<String, bool> _skipped = {
     'facility': false,
@@ -40,40 +42,40 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     'marketing': false,
     'transport': false,
   };
-  
+
   // Form data
   final Map<String, dynamic> _facilityForm = {
     'to': '',
-    'venue_required': false,
+    'venue_required': true,
     'refreshments': false,
     'other_notes': '',
   };
-  
+
   final Map<String, dynamic> _itForm = {
     'to': '',
     'event_mode': 'offline',
-    'pa_system': false,
+    'pa_system': true,
     'projection': false,
     'other_notes': '',
   };
-  
+
   final Map<String, dynamic> _marketingForm = {
     'to': '',
-    'requirements': {
+    'marketing_requirements': {
       'pre_event': {'poster': false, 'social_media': false},
       'during_event': {'photo': false, 'video': false},
       'post_event': {
         'social_media': false,
         'photo_upload': false,
         'video': false,
-      }
+      },
     },
     'other_notes': '',
   };
-  
+
   final Map<String, dynamic> _transportForm = {
     'to': '',
-    'include_guest_cab': false,
+    'include_guest_cab': true,
     'include_students': false,
     'guest_pickup_location': '',
     'guest_pickup_date': '',
@@ -88,42 +90,123 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     'student_pickup_point': '',
     'other_notes': '',
   };
-  
+
   String _status = 'idle'; // 'idle', 'loading', 'error'
   String _errorMessage = '';
-  
+
   String get _currentDept => _departments[_currentStep];
-  bool get _hasAnySelected =>
-      _departments.any((d) => !_skipped[d]!);
-  
+  bool get _hasAnySelected => _departments.any((d) => !_skipped[d]!);
+
   int get _totalSteps => _departments.length;
 
+  String _trimmed(dynamic value) => value?.toString().trim() ?? '';
+
+  String? _validateTransportForm() {
+    final wantsGuest = _transportForm['include_guest_cab'] as bool;
+    final wantsStudents = _transportForm['include_students'] as bool;
+
+    if (!wantsGuest && !wantsStudents) {
+      return 'Select at least one transport option.';
+    }
+
+    if (wantsGuest) {
+      final missingGuest =
+          _trimmed(_transportForm['guest_pickup_location']).isEmpty ||
+          _trimmed(_transportForm['guest_pickup_date']).isEmpty ||
+          _trimmed(_transportForm['guest_pickup_time']).isEmpty ||
+          _trimmed(_transportForm['guest_dropoff_location']).isEmpty ||
+          _trimmed(_transportForm['guest_dropoff_time']).isEmpty;
+      if (missingGuest) {
+        return 'Fill guest cab details: pickup location, pickup date & time, dropoff location, and dropoff time.';
+      }
+    }
+
+    if (wantsStudents) {
+      final studentCount = int.tryParse(
+        _trimmed(_transportForm['student_count']),
+      );
+      final missingStudents =
+          studentCount == null ||
+          studentCount < 1 ||
+          _trimmed(_transportForm['student_transport_kind']).isEmpty ||
+          _trimmed(_transportForm['student_date']).isEmpty ||
+          _trimmed(_transportForm['student_time']).isEmpty ||
+          _trimmed(_transportForm['student_pickup_point']).isEmpty;
+      if (missingStudents) {
+        return 'Fill student transport details: count, transport kind, date, time, and pickup point.';
+      }
+    }
+
+    return null;
+  }
+
   void _goNext() {
+    if (_phase == 'edit' && _currentDept == 'transport') {
+      final validationError = _validateTransportForm();
+      if (validationError != null) {
+        setState(() {
+          _status = 'error';
+          _errorMessage = validationError;
+        });
+        return;
+      }
+    }
+
     if (_phase == 'edit') {
       if (_currentStep < _totalSteps - 1) {
-        setState(() => _currentStep++);
+        setState(() {
+          _currentStep++;
+          _status = 'idle';
+          _errorMessage = '';
+        });
       } else {
-        setState(() => _phase = 'review');
+        setState(() {
+          _phase = 'review';
+          _status = 'idle';
+          _errorMessage = '';
+        });
       }
     }
   }
 
   void _goPrev() {
     if (_phase == 'edit' && _currentStep > 0) {
-      setState(() => _currentStep--);
+      setState(() {
+        _currentStep--;
+        _status = 'idle';
+        _errorMessage = '';
+      });
     } else if (_phase == 'review') {
-      setState(() => _phase = 'edit');
+      setState(() {
+        _phase = 'edit';
+        _status = 'idle';
+        _errorMessage = '';
+      });
     }
   }
 
   void _skip() {
-    setState(() => _skipped[_currentDept] = true);
+    setState(() {
+      _skipped[_currentDept] = true;
+      _status = 'idle';
+      _errorMessage = '';
+    });
     _goNext();
   }
 
   Future<void> _sendAll() async {
-    if (!_hasAnySelected) return;
-    
+    if (!_hasAnySelected) {
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No requirements were sent (all steps skipped).'),
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() {
       _status = 'loading';
       _errorMessage = '';
@@ -144,12 +227,22 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
         }
       }
 
+      final labels = toSend
+          .map((dept) {
+            if (dept == 'facility') return 'Facility';
+            if (dept == 'it') return 'IT';
+            if (dept == 'marketing') return 'Marketing';
+            if (dept == 'transport') return 'Transport';
+            return dept;
+          })
+          .join(', ');
+
       if (mounted) {
         Navigator.of(context).pop();
         widget.onSuccess();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('All requirements sent successfully!'),
+          SnackBar(
+            content: Text('Requirements sent to: $labels.'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -166,7 +259,9 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     final res = await _api.post(
       '/facility/requests',
       data: {
-        'requested_to': _facilityForm['to'].isEmpty ? null : _facilityForm['to'],
+        'requested_to': _facilityForm['to'].isEmpty
+            ? null
+            : _facilityForm['to'],
         'event_id': widget.event.id,
         'event_name': widget.event.title,
         'start_date': widget.event.startTime.toString().split(' ')[0],
@@ -205,14 +300,16 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     final res = await _api.post(
       '/marketing/requests',
       data: {
-        'requested_to': _marketingForm['to'].isEmpty ? null : _marketingForm['to'],
+        'requested_to': _marketingForm['to'].isEmpty
+            ? null
+            : _marketingForm['to'],
         'event_id': widget.event.id,
         'event_name': widget.event.title,
         'start_date': widget.event.startTime.toString().split(' ')[0],
         'start_time': _formatTime(widget.event.startTime),
         'end_date': widget.event.endTime.toString().split(' ')[0],
         'end_time': _formatTime(widget.event.endTime),
-        'marketing_requirements': _marketingForm['requirements'],
+        'marketing_requirements': _marketingForm['marketing_requirements'],
         'other_notes': _marketingForm['other_notes'],
       },
     );
@@ -220,53 +317,28 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
   }
 
   Future<void> _sendTransportRequest() async {
-    // Validate transport
+    final validationError = _validateTransportForm();
+    if (validationError != null) {
+      throw Exception(validationError);
+    }
+
     final wantsGuest = _transportForm['include_guest_cab'] as bool;
     final wantsStudents = _transportForm['include_students'] as bool;
-    
-    if (!wantsGuest && !wantsStudents) {
-      throw Exception('Select at least one transport option');
-    }
-    
-    if (wantsGuest) {
-      if (_transportForm['guest_pickup_location'].toString().isEmpty) {
-        throw Exception('Guest pickup location is required');
-      }
-      if (_transportForm['guest_pickup_date'].toString().isEmpty) {
-        throw Exception('Guest pickup date is required');
-      }
-      if (_transportForm['guest_dropoff_location'].toString().isEmpty) {
-        throw Exception('Guest dropoff location is required');
-      }
-    }
-    
-    if (wantsStudents) {
-      if (_transportForm['student_count'].toString().isEmpty) {
-        throw Exception('Student count is required');
-      }
-      if (_transportForm['student_transport_kind'].toString().isEmpty) {
-        throw Exception('Transport kind is required');
-      }
-      if (_transportForm['student_date'].toString().isEmpty) {
-        throw Exception('Student date is required');
-      }
-      if (_transportForm['student_pickup_point'].toString().isEmpty) {
-        throw Exception('Pickup point is required');
-      }
-    }
-    
     final transportType = wantsGuest && wantsStudents
         ? 'both'
         : wantsGuest
-            ? 'guest_cab'
-            : 'students_off_campus';
-    
-    final studentCountParsed = int.tryParse(_transportForm['student_count'].toString()) ?? 0;
-    
+        ? 'guest_cab'
+        : 'students_off_campus';
+
+    final studentCountParsed =
+        int.tryParse(_transportForm['student_count'].toString()) ?? 0;
+
     final res = await _api.post(
       '/transport/requests',
       data: {
-        'requested_to': _transportForm['to'].isEmpty ? null : _transportForm['to'],
+        'requested_to': _transportForm['to'].isEmpty
+            ? null
+            : _transportForm['to'],
         'event_id': widget.event.id,
         'event_name': widget.event.title,
         'start_date': widget.event.startTime.toString().split(' ')[0],
@@ -274,17 +346,35 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
         'end_date': widget.event.endTime.toString().split(' ')[0],
         'end_time': _formatTime(widget.event.endTime),
         'transport_type': transportType,
-        'guest_pickup_location': wantsGuest ? _transportForm['guest_pickup_location'] : null,
-        'guest_pickup_date': wantsGuest ? _transportForm['guest_pickup_date'] : null,
-        'guest_pickup_time': wantsGuest ? _transportForm['guest_pickup_time'] : null,
-        'guest_dropoff_location': wantsGuest ? _transportForm['guest_dropoff_location'] : null,
-        'guest_dropoff_date': wantsGuest ? _transportForm['guest_dropoff_date'] : null,
-        'guest_dropoff_time': wantsGuest ? _transportForm['guest_dropoff_time'] : null,
-        'student_count': wantsStudents && studentCountParsed > 0 ? studentCountParsed : null,
-        'student_transport_kind': wantsStudents ? _transportForm['student_transport_kind'] : null,
+        'guest_pickup_location': wantsGuest
+            ? _transportForm['guest_pickup_location']
+            : null,
+        'guest_pickup_date': wantsGuest
+            ? _transportForm['guest_pickup_date']
+            : null,
+        'guest_pickup_time': wantsGuest
+            ? _transportForm['guest_pickup_time']
+            : null,
+        'guest_dropoff_location': wantsGuest
+            ? _transportForm['guest_dropoff_location']
+            : null,
+        'guest_dropoff_date': wantsGuest
+            ? _transportForm['guest_dropoff_date']
+            : null,
+        'guest_dropoff_time': wantsGuest
+            ? _transportForm['guest_dropoff_time']
+            : null,
+        'student_count': wantsStudents && studentCountParsed > 0
+            ? studentCountParsed
+            : null,
+        'student_transport_kind': wantsStudents
+            ? _transportForm['student_transport_kind']
+            : null,
         'student_date': wantsStudents ? _transportForm['student_date'] : null,
         'student_time': wantsStudents ? _transportForm['student_time'] : null,
-        'student_pickup_point': wantsStudents ? _transportForm['student_pickup_point'] : null,
+        'student_pickup_point': wantsStudents
+            ? _transportForm['student_pickup_point']
+            : null,
         'other_notes': _transportForm['other_notes'],
       },
     );
@@ -334,12 +424,15 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
-              readOnly: true,
-              decoration: InputDecoration(
+            InputDecorator(
+              decoration: const InputDecoration(
                 labelText: 'From',
-                hintText: 'Your email',
                 border: OutlineInputBorder(),
+              ),
+              child: Text(
+                widget.requesterEmail.isEmpty
+                    ? 'Your account'
+                    : widget.requesterEmail,
               ),
             ),
             const SizedBox(height: 12),
@@ -354,16 +447,21 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             const SizedBox(height: 16),
             _buildEventSummary(),
             const SizedBox(height: 16),
-            Text('Requirements:', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              'Requirements:',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             CheckboxListTile(
               value: _facilityForm['venue_required'],
-              onChanged: (v) => setState(() => _facilityForm['venue_required'] = v ?? false),
+              onChanged: (v) =>
+                  setState(() => _facilityForm['venue_required'] = v ?? false),
               title: const Text('Venue setup'),
               contentPadding: EdgeInsets.zero,
             ),
             CheckboxListTile(
               value: _facilityForm['refreshments'],
-              onChanged: (v) => setState(() => _facilityForm['refreshments'] = v ?? false),
+              onChanged: (v) =>
+                  setState(() => _facilityForm['refreshments'] = v ?? false),
               title: const Text('Refreshments'),
               contentPadding: EdgeInsets.zero,
             ),
@@ -402,11 +500,15 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
-              readOnly: true,
-              decoration: InputDecoration(
+            InputDecorator(
+              decoration: const InputDecoration(
                 labelText: 'From',
                 border: OutlineInputBorder(),
+              ),
+              child: Text(
+                widget.requesterEmail.isEmpty
+                    ? 'Your account'
+                    : widget.requesterEmail,
               ),
             ),
             const SizedBox(height: 12),
@@ -421,7 +523,10 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             const SizedBox(height: 16),
             _buildEventSummary(),
             const SizedBox(height: 16),
-            Text('Event mode:', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              'Event mode:',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             RadioListTile(
               value: 'online',
               groupValue: _itForm['event_mode'],
@@ -437,16 +542,21 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
               contentPadding: EdgeInsets.zero,
             ),
             const SizedBox(height: 12),
-            Text('Requirements:', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              'Requirements:',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             CheckboxListTile(
               value: _itForm['pa_system'],
-              onChanged: (v) => setState(() => _itForm['pa_system'] = v ?? false),
+              onChanged: (v) =>
+                  setState(() => _itForm['pa_system'] = v ?? false),
               title: const Text('PA System'),
               contentPadding: EdgeInsets.zero,
             ),
             CheckboxListTile(
               value: _itForm['projection'],
-              onChanged: (v) => setState(() => _itForm['projection'] = v ?? false),
+              onChanged: (v) =>
+                  setState(() => _itForm['projection'] = v ?? false),
               title: const Text('Projection'),
               contentPadding: EdgeInsets.zero,
             ),
@@ -466,7 +576,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
   }
 
   Widget _buildMarketingStep() {
-    final req = _marketingForm['requirements'] as Map<String, dynamic>;
+    final req =
+        _marketingForm['marketing_requirements'] as Map<String, dynamic>;
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -486,11 +597,15 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
-              readOnly: true,
-              decoration: InputDecoration(
+            InputDecorator(
+              decoration: const InputDecoration(
                 labelText: 'From',
                 border: OutlineInputBorder(),
+              ),
+              child: Text(
+                widget.requesterEmail.isEmpty
+                    ? 'Your account'
+                    : widget.requesterEmail,
               ),
             ),
             const SizedBox(height: 12),
@@ -505,50 +620,80 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             const SizedBox(height: 16),
             _buildEventSummary(),
             const SizedBox(height: 16),
-            Text('Pre-Event:', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.grey)),
+            Text(
+              'Pre-Event:',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
             CheckboxListTile(
               value: req['pre_event']['poster'],
-              onChanged: (v) => setState(() => req['pre_event']['poster'] = v ?? false),
+              onChanged: (v) =>
+                  setState(() => req['pre_event']['poster'] = v ?? false),
               title: const Text('Poster'),
               contentPadding: EdgeInsets.zero,
             ),
             CheckboxListTile(
               value: req['pre_event']['social_media'],
-              onChanged: (v) => setState(() => req['pre_event']['social_media'] = v ?? false),
+              onChanged: (v) =>
+                  setState(() => req['pre_event']['social_media'] = v ?? false),
               title: const Text('Social Media Post'),
               contentPadding: EdgeInsets.zero,
             ),
             const SizedBox(height: 8),
-            Text('During Event:', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.grey)),
+            Text(
+              'During Event:',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
             CheckboxListTile(
               value: req['during_event']['photo'],
-              onChanged: (v) => setState(() => req['during_event']['photo'] = v ?? false),
+              onChanged: (v) =>
+                  setState(() => req['during_event']['photo'] = v ?? false),
               title: const Text('Photography'),
               contentPadding: EdgeInsets.zero,
             ),
             CheckboxListTile(
               value: req['during_event']['video'],
-              onChanged: (v) => setState(() => req['during_event']['video'] = v ?? false),
+              onChanged: (v) =>
+                  setState(() => req['during_event']['video'] = v ?? false),
               title: const Text('Videoshoot'),
               contentPadding: EdgeInsets.zero,
             ),
             const SizedBox(height: 8),
-            Text('Post-Event:', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: Colors.grey)),
+            Text(
+              'Post-Event:',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
             CheckboxListTile(
               value: req['post_event']['social_media'],
-              onChanged: (v) => setState(() => req['post_event']['social_media'] = v ?? false),
+              onChanged: (v) => setState(
+                () => req['post_event']['social_media'] = v ?? false,
+              ),
               title: const Text('Social Media Post'),
               contentPadding: EdgeInsets.zero,
             ),
             CheckboxListTile(
               value: req['post_event']['photo_upload'],
-              onChanged: (v) => setState(() => req['post_event']['photo_upload'] = v ?? false),
+              onChanged: (v) => setState(
+                () => req['post_event']['photo_upload'] = v ?? false,
+              ),
               title: const Text('Photo Upload'),
               contentPadding: EdgeInsets.zero,
             ),
             CheckboxListTile(
               value: req['post_event']['video'],
-              onChanged: (v) => setState(() => req['post_event']['video'] = v ?? false),
+              onChanged: (v) =>
+                  setState(() => req['post_event']['video'] = v ?? false),
               title: const Text('Video Upload'),
               contentPadding: EdgeInsets.zero,
             ),
@@ -587,11 +732,15 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
-              readOnly: true,
-              decoration: InputDecoration(
+            InputDecorator(
+              decoration: const InputDecoration(
                 labelText: 'From',
                 border: OutlineInputBorder(),
+              ),
+              child: Text(
+                widget.requesterEmail.isEmpty
+                    ? 'Your account'
+                    : widget.requesterEmail,
               ),
             ),
             const SizedBox(height: 12),
@@ -612,19 +761,29 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             ),
             CheckboxListTile(
               value: _transportForm['include_guest_cab'],
-              onChanged: (v) => setState(() => _transportForm['include_guest_cab'] = v ?? false),
+              onChanged: (v) => setState(
+                () => _transportForm['include_guest_cab'] = v ?? false,
+              ),
               title: const Text('Cab for guest'),
               contentPadding: EdgeInsets.zero,
             ),
             CheckboxListTile(
               value: _transportForm['include_students'],
-              onChanged: (v) => setState(() => _transportForm['include_students'] = v ?? false),
+              onChanged: (v) => setState(
+                () => _transportForm['include_students'] = v ?? false,
+              ),
               title: const Text('Students (off-campus event)'),
               contentPadding: EdgeInsets.zero,
             ),
             if (_transportForm['include_guest_cab']) ...[
               const SizedBox(height: 12),
-              Text('Guest cab details:', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+              Text(
+                'Guest cab details:',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
               const SizedBox(height: 8),
               TextField(
                 onChanged: (v) => _transportForm['guest_pickup_location'] = v,
@@ -671,7 +830,13 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             ],
             if (_transportForm['include_students']) ...[
               const SizedBox(height: 12),
-              Text('Student transport details:', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+              Text(
+                'Student transport details:',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
               const SizedBox(height: 8),
               TextField(
                 onChanged: (v) => _transportForm['student_count'] = v,
@@ -762,7 +927,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                 padding: const EdgeInsets.only(bottom: 16),
                 child: _buildReviewItem(dept),
               );
-            }).toList(),
+            }),
             if (!_hasAnySelected)
               const Padding(
                 padding: EdgeInsets.only(top: 16),
@@ -781,39 +946,102 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     final title = dept == 'facility'
         ? 'Facility'
         : dept == 'it'
-            ? 'IT'
-            : dept == 'marketing'
-                ? 'Marketing'
-                : 'Transport';
+        ? 'IT'
+        : dept == 'marketing'
+        ? 'Marketing'
+        : 'Transport';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 4),
         if (dept == 'facility') ...[
-          Text('To: ${_facilityForm['to'].isEmpty ? '(default)' : _facilityForm['to']}', style: const TextStyle(fontSize: 12)),
-          Text('Venue: ${_facilityForm['venue_required'] ? 'Yes' : 'No'}', style: const TextStyle(fontSize: 12)),
-          Text('Refreshments: ${_facilityForm['refreshments'] ? 'Yes' : 'No'}', style: const TextStyle(fontSize: 12)),
+          Text(
+            'To: ${_facilityForm['to'].isEmpty ? '(default)' : _facilityForm['to']}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            'Venue: ${_facilityForm['venue_required'] ? 'Yes' : 'No'}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            'Refreshments: ${_facilityForm['refreshments'] ? 'Yes' : 'No'}',
+            style: const TextStyle(fontSize: 12),
+          ),
         ] else if (dept == 'it') ...[
-          Text('To: ${_itForm['to'].isEmpty ? '(default)' : _itForm['to']}', style: const TextStyle(fontSize: 12)),
-          Text('Mode: ${_itForm['event_mode']}', style: const TextStyle(fontSize: 12)),
-          Text('PA System: ${_itForm['pa_system'] ? 'Yes' : 'No'}', style: const TextStyle(fontSize: 12)),
-          Text('Projection: ${_itForm['projection'] ? 'Yes' : 'No'}', style: const TextStyle(fontSize: 12)),
+          Text(
+            'To: ${_itForm['to'].isEmpty ? '(default)' : _itForm['to']}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            'Mode: ${_itForm['event_mode']}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            'PA System: ${_itForm['pa_system'] ? 'Yes' : 'No'}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            'Projection: ${_itForm['projection'] ? 'Yes' : 'No'}',
+            style: const TextStyle(fontSize: 12),
+          ),
         ] else if (dept == 'marketing') ...[
-          Text('To: ${_marketingForm['to'].isEmpty ? '(default)' : _marketingForm['to']}', style: const TextStyle(fontSize: 12)),
-          Text('Pre-Event items selected', style: const TextStyle(fontSize: 12)),
+          Text(
+            'To: ${_marketingForm['to'].isEmpty ? '(default)' : _marketingForm['to']}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          ..._selectedMarketingLines().map(
+            (line) => Text(line, style: const TextStyle(fontSize: 12)),
+          ),
         ] else if (dept == 'transport') ...[
-          Text('To: ${_transportForm['to'].isEmpty ? '(default)' : _transportForm['to']}', style: const TextStyle(fontSize: 12)),
-          Text('Guest cab: ${_transportForm['include_guest_cab'] ? 'Yes' : 'No'}', style: const TextStyle(fontSize: 12)),
-          Text('Students: ${_transportForm['include_students'] ? 'Yes' : 'No'}', style: const TextStyle(fontSize: 12)),
+          Text(
+            'To: ${_transportForm['to'].isEmpty ? '(default)' : _transportForm['to']}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            'Guest cab: ${_transportForm['include_guest_cab'] ? 'Yes' : 'No'}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            'Students: ${_transportForm['include_students'] ? 'Yes' : 'No'}',
+            style: const TextStyle(fontSize: 12),
+          ),
         ],
         const Divider(),
       ],
     );
+  }
+
+  List<String> _selectedMarketingLines() {
+    final req =
+        _marketingForm['marketing_requirements'] as Map<String, dynamic>;
+    final out = <String>[];
+    if (req['pre_event']['poster'] == true) {
+      out.add('Pre-Event: Poster');
+    }
+    if (req['pre_event']['social_media'] == true) {
+      out.add('Pre-Event: Social Media Post');
+    }
+    if (req['during_event']['photo'] == true) {
+      out.add('During Event: Photography');
+    }
+    if (req['during_event']['video'] == true) {
+      out.add('During Event: Videoshoot');
+    }
+    if (req['post_event']['social_media'] == true) {
+      out.add('Post-Event: Social Media Upload');
+    }
+    if (req['post_event']['photo_upload'] == true) {
+      out.add('Post-Event: Photo Upload');
+    }
+    if (req['post_event']['video'] == true) {
+      out.add('Post-Event: Video Upload');
+    }
+    if (out.isEmpty) {
+      out.add('No marketing items selected.');
+    }
+    return out;
   }
 
   Widget _buildEventSummary() {
@@ -826,7 +1054,10 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Event: ${widget.event.title}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+          Text(
+            'Event: ${widget.event.title}',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
           const SizedBox(height: 4),
           Text(
             'Date: ${widget.event.startTime.toString().split(' ')[0]} to ${widget.event.endTime.toString().split(' ')[0]}',
@@ -845,82 +1076,90 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  _phase == 'review' ? 'Review requirements' : 'Send Requirements',
-                  style: GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w600),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          ),
-          Expanded(child: _buildStep()),
-          if (_errorMessage.isNotEmpty)
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: SizedBox(
+        width: 720,
+        height: MediaQuery.of(context).size.height * 0.86,
+        child: Column(
+          children: [
             Container(
-              padding: const EdgeInsets.all(12),
-              color: Colors.red[50],
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+              ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Icon(Icons.error, color: Colors.red, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _errorMessage,
-                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                  Text(
+                    _phase == 'review'
+                        ? 'Review requirements'
+                        : 'Send Requirements',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                if (_phase == 'edit')
-                  ElevatedButton(
-                    onPressed: _currentStep > 0 ? _goPrev : null,
-                    child: const Text('Prev'),
-                  ),
-                if (_phase == 'review')
-                  ElevatedButton(
-                    onPressed: _goPrev,
-                    child: const Text('Prev'),
-                  ),
-                if (_phase == 'edit')
-                  ElevatedButton(
-                    onPressed: _skip,
-                    child: const Text('Skip'),
-                  ),
-                if (_phase == 'edit')
-                  ElevatedButton(
-                    onPressed: _goNext,
-                    child: Text(_currentStep >= _totalSteps - 1 ? 'Review' : 'Next'),
-                  ),
-                if (_phase == 'review')
-                  ElevatedButton(
-                    onPressed: _status == 'loading' || !_hasAnySelected
-                        ? null
-                        : _sendAll,
-                    child: Text(_status == 'loading' ? 'Sending...' : 'Send'),
-                  ),
-              ],
+            Expanded(child: _buildStep()),
+            if (_errorMessage.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.all(12),
+                color: Colors.red[50],
+                child: Row(
+                  children: [
+                    Icon(Icons.error, color: Colors.red, size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _errorMessage,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  if (_phase == 'edit')
+                    ElevatedButton(
+                      onPressed: _currentStep > 0 ? _goPrev : null,
+                      child: const Text('Prev'),
+                    ),
+                  if (_phase == 'review')
+                    ElevatedButton(
+                      onPressed: _goPrev,
+                      child: const Text('Prev'),
+                    ),
+                  if (_phase == 'edit')
+                    ElevatedButton(onPressed: _skip, child: const Text('Skip')),
+                  if (_phase == 'edit')
+                    ElevatedButton(
+                      onPressed: _goNext,
+                      child: Text(
+                        _currentStep >= _totalSteps - 1 ? 'Review' : 'Next',
+                      ),
+                    ),
+                  if (_phase == 'review')
+                    ElevatedButton(
+                      onPressed: _status == 'loading' || !_hasAnySelected
+                          ? null
+                          : _sendAll,
+                      child: Text(_status == 'loading' ? 'Sending...' : 'Send'),
+                    ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -168,6 +168,16 @@ List<String> _deriveMarketingItems(Map<String, dynamic> json) {
   return out;
 }
 
+Map<String, dynamic> _toStringDynamicMap(dynamic value) {
+  if (value is Map<String, dynamic>) return Map<String, dynamic>.from(value);
+  if (value is Map) {
+    return Map<String, dynamic>.fromEntries(
+      value.entries.map((e) => MapEntry(e.key.toString(), e.value)),
+    );
+  }
+  return <String, dynamic>{};
+}
+
 // ─── Event ────────────────────────────────────────────────────────────────────
 
 class Event {
@@ -313,6 +323,151 @@ class ApprovalRequest {
       );
 }
 
+class ApprovalThreadReplySnapshot {
+  final String? messageId;
+  final String senderName;
+  final String contentPreview;
+  final bool isDeleted;
+
+  const ApprovalThreadReplySnapshot({
+    this.messageId,
+    required this.senderName,
+    required this.contentPreview,
+    this.isDeleted = false,
+  });
+
+  factory ApprovalThreadReplySnapshot.fromJson(Map<String, dynamic> json) =>
+      ApprovalThreadReplySnapshot(
+        messageId: json['message_id']?.toString(),
+        senderName: (json['sender_name'] ?? '').toString(),
+        contentPreview: (json['content_preview'] ?? '').toString(),
+        isDeleted: json['is_deleted'] == true,
+      );
+}
+
+class ApprovalThreadParticipant {
+  final String id;
+  final String name;
+  final String email;
+  final String role;
+
+  const ApprovalThreadParticipant({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.role,
+  });
+
+  factory ApprovalThreadParticipant.fromJson(Map<String, dynamic> json) =>
+      ApprovalThreadParticipant(
+        id: (json['id'] ?? json['_id'] ?? '').toString(),
+        name: (json['name'] ?? '').toString(),
+        email: (json['email'] ?? '').toString(),
+        role: (json['role'] ?? '').toString(),
+      );
+}
+
+class ApprovalThreadMessage {
+  final String id;
+  final String senderId;
+  final String senderName;
+  final String content;
+  final DateTime createdAt;
+  final bool isLegacy;
+  final String? replyToMessageId;
+  final ApprovalThreadReplySnapshot? replyToSnapshot;
+
+  const ApprovalThreadMessage({
+    required this.id,
+    required this.senderId,
+    required this.senderName,
+    required this.content,
+    required this.createdAt,
+    this.isLegacy = false,
+    this.replyToMessageId,
+    this.replyToSnapshot,
+  });
+
+  factory ApprovalThreadMessage.fromJson(Map<String, dynamic> json) =>
+      ApprovalThreadMessage(
+        id: (json['id'] ?? json['_id'] ?? '').toString(),
+        senderId: (json['sender_id'] ?? '').toString(),
+        senderName: (json['sender_name'] ?? '').toString(),
+        content: (json['content'] ?? '').toString(),
+        createdAt:
+            DateTime.tryParse(
+              (json['created_at'] ?? '').toString(),
+            )?.toLocal() ??
+            DateTime.now(),
+        isLegacy: json['is_legacy'] == true,
+        replyToMessageId: json['reply_to_message_id']?.toString(),
+        replyToSnapshot: json['reply_to_snapshot'] is Map<String, dynamic>
+            ? ApprovalThreadReplySnapshot.fromJson(
+                json['reply_to_snapshot'] as Map<String, dynamic>,
+              )
+            : null,
+      );
+}
+
+class ApprovalThreadInfo {
+  final String id;
+  final String department;
+  final String departmentLabel;
+  final String? relatedRequestId;
+  final String? relatedKind;
+  final String threadStatus;
+  final String? deptRequestStatus;
+  final List<ApprovalThreadParticipant> participants;
+  final DateTime createdAt;
+  final List<ApprovalThreadMessage> messages;
+  final DateTime? closedAt;
+  final String? closedReason;
+
+  const ApprovalThreadInfo({
+    required this.id,
+    required this.department,
+    required this.departmentLabel,
+    this.relatedRequestId,
+    this.relatedKind,
+    required this.threadStatus,
+    this.deptRequestStatus,
+    required this.participants,
+    required this.createdAt,
+    required this.messages,
+    this.closedAt,
+    this.closedReason,
+  });
+
+  factory ApprovalThreadInfo.fromJson(Map<String, dynamic> json) =>
+      ApprovalThreadInfo(
+        id: (json['id'] ?? json['_id'] ?? '').toString(),
+        department: (json['department'] ?? '').toString(),
+        departmentLabel: (json['department_label'] ?? json['department'] ?? '')
+            .toString(),
+        relatedRequestId: json['related_request_id']?.toString(),
+        relatedKind: json['related_kind']?.toString(),
+        threadStatus: (json['thread_status'] ?? 'active').toString(),
+        deptRequestStatus: json['dept_request_status']?.toString(),
+        participants: (json['participants'] as List? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map(ApprovalThreadParticipant.fromJson)
+            .toList(),
+        createdAt:
+            DateTime.tryParse(
+              (json['created_at'] ?? '').toString(),
+            )?.toLocal() ??
+            DateTime.now(),
+        messages: (json['messages'] as List? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map(ApprovalThreadMessage.fromJson)
+            .toList(),
+        closedAt: DateTime.tryParse(
+          (json['closed_at'] ?? '').toString(),
+        )?.toLocal(),
+        closedReason: json['closed_reason']?.toString(),
+      );
+}
+
 // ─── Venue ────────────────────────────────────────────────────────────────────
 
 class Venue {
@@ -333,6 +488,10 @@ class FacilityRequest {
   final String id;
   final String? eventId;
   final String eventTitle;
+  final String? startDate;
+  final String? startTime;
+  final String? endDate;
+  final String? endTime;
   final String? setupDetails;
   final String? refreshmentDetails;
   final String status;
@@ -343,6 +502,10 @@ class FacilityRequest {
     required this.id,
     this.eventId,
     required this.eventTitle,
+    this.startDate,
+    this.startTime,
+    this.endDate,
+    this.endTime,
     this.setupDetails,
     this.refreshmentDetails,
     required this.status,
@@ -356,6 +519,10 @@ class FacilityRequest {
         eventId: json['event_id'],
         eventTitle: (json['event_name'] ?? json['event_title'] ?? '')
             .toString(),
+        startDate: json['start_date']?.toString(),
+        startTime: json['start_time']?.toString(),
+        endDate: json['end_date']?.toString(),
+        endTime: json['end_time']?.toString(),
         setupDetails:
             json['setup_details'] ??
             (json['venue_required'] is bool
@@ -386,6 +553,10 @@ class ITRequest {
   final String id;
   final String? eventId;
   final String eventTitle;
+  final String? startDate;
+  final String? startTime;
+  final String? endDate;
+  final String? endTime;
   final String mode;
   final bool paSystem;
   final bool projection;
@@ -398,6 +569,10 @@ class ITRequest {
     required this.id,
     this.eventId,
     required this.eventTitle,
+    this.startDate,
+    this.startTime,
+    this.endDate,
+    this.endTime,
     required this.mode,
     required this.paSystem,
     required this.projection,
@@ -411,6 +586,10 @@ class ITRequest {
     id: json['id'] ?? json['_id'] ?? '',
     eventId: json['event_id'],
     eventTitle: (json['event_name'] ?? json['event_title'] ?? '').toString(),
+    startDate: json['start_date']?.toString(),
+    startTime: json['start_time']?.toString(),
+    endDate: json['end_date']?.toString(),
+    endTime: json['end_time']?.toString(),
     mode: json['event_mode'] ?? json['mode'] ?? 'offline',
     paSystem: json['pa_system'] ?? false,
     projection: json['projection'] ?? false,
@@ -431,10 +610,20 @@ class MarketingRequest {
   final String id;
   final String? eventId;
   final String eventTitle;
+  final String? startDate;
+  final String? startTime;
+  final String? endDate;
+  final String? endTime;
   final List<String> items;
   final String? notes;
   final String status;
   final String requestedBy;
+  final bool posterRequired;
+  final bool videoRequired;
+  final bool linkedinPost;
+  final bool photography;
+  final bool recording;
+  final Map<String, dynamic> marketingRequirements;
   final List<MarketingDeliverable> deliverables;
   final DateTime createdAt;
 
@@ -442,32 +631,53 @@ class MarketingRequest {
     required this.id,
     this.eventId,
     required this.eventTitle,
+    this.startDate,
+    this.startTime,
+    this.endDate,
+    this.endTime,
     required this.items,
     this.notes,
     required this.status,
     required this.requestedBy,
+    this.posterRequired = false,
+    this.videoRequired = false,
+    this.linkedinPost = false,
+    this.photography = false,
+    this.recording = false,
+    this.marketingRequirements = const <String, dynamic>{},
     required this.deliverables,
     required this.createdAt,
   });
 
-  factory MarketingRequest.fromJson(Map<String, dynamic> json) =>
-      MarketingRequest(
-        id: json['id'] ?? json['_id'] ?? '',
-        eventId: json['event_id'],
-        eventTitle: (json['event_name'] ?? json['event_title'] ?? '')
-            .toString(),
-        items: _deriveMarketingItems(json),
-        notes: json['other_notes'] ?? json['notes'],
-        status: json['status'] ?? 'pending',
-        requestedBy: (json['requester_email'] ?? json['requested_by'] ?? '')
-            .toString(),
-        deliverables: (json['deliverables'] as List? ?? [])
-            .map((d) => MarketingDeliverable.fromJson(d))
-            .toList(),
-        createdAt:
-            DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
-            DateTime.now(),
-      );
+  factory MarketingRequest.fromJson(Map<String, dynamic> json) {
+    final req = _toStringDynamicMap(json['marketing_requirements']);
+    return MarketingRequest(
+      id: json['id'] ?? json['_id'] ?? '',
+      eventId: json['event_id'],
+      eventTitle: (json['event_name'] ?? json['event_title'] ?? '').toString(),
+      startDate: json['start_date']?.toString(),
+      startTime: json['start_time']?.toString(),
+      endDate: json['end_date']?.toString(),
+      endTime: json['end_time']?.toString(),
+      items: _deriveMarketingItems(json),
+      notes: json['other_notes'] ?? json['notes'],
+      status: json['status'] ?? 'pending',
+      requestedBy: (json['requester_email'] ?? json['requested_by'] ?? '')
+          .toString(),
+      posterRequired: json['poster_required'] == true,
+      videoRequired: json['video_required'] == true,
+      linkedinPost: json['linkedin_post'] == true,
+      photography: json['photography'] == true,
+      recording: json['recording'] == true,
+      marketingRequirements: req,
+      deliverables: (json['deliverables'] as List? ?? [])
+          .map((d) => MarketingDeliverable.fromJson(d))
+          .toList(),
+      createdAt:
+          DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
+          DateTime.now(),
+    );
+  }
 }
 
 class MarketingDeliverable {
@@ -499,6 +709,10 @@ class TransportRequest {
   final String id;
   final String? eventId;
   final String eventTitle;
+  final String? startDate;
+  final String? startTime;
+  final String? endDate;
+  final String? endTime;
   final String transportType;
   final String? guestPickupLocation;
   final String? guestPickupDate;
@@ -520,6 +734,10 @@ class TransportRequest {
     required this.id,
     this.eventId,
     required this.eventTitle,
+    this.startDate,
+    this.startTime,
+    this.endDate,
+    this.endTime,
     required this.transportType,
     this.guestPickupLocation,
     this.guestPickupDate,
@@ -544,6 +762,10 @@ class TransportRequest {
         eventId: json['event_id'],
         eventTitle: (json['event_name'] ?? json['event_title'] ?? '')
             .toString(),
+        startDate: json['start_date']?.toString(),
+        startTime: json['start_time']?.toString(),
+        endDate: json['end_date']?.toString(),
+        endTime: json['end_time']?.toString(),
         transportType: json['transport_type'] ?? 'guest_cab',
         guestPickupLocation: json['guest_pickup_location'],
         guestPickupDate: json['guest_pickup_date'],
@@ -558,9 +780,8 @@ class TransportRequest {
         studentPickupPoint: json['student_pickup_point'],
         notes: json['other_notes'] ?? json['notes'],
         status: json['status'] ?? 'pending',
-        requestedBy:
-            (json['requester_email'] ?? json['requested_by'] ?? '')
-                .toString(),
+        requestedBy: (json['requester_email'] ?? json['requested_by'] ?? '')
+            .toString(),
         createdAt:
             DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
             DateTime.now(),
