@@ -3,10 +3,21 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
 import '../requirements/requirements_wizard_dialog.dart';
+
+const List<({String value, String label})> _discussionDepartmentOptions = [
+  (value: 'registrar', label: 'Registrar'),
+  (value: 'facility_manager', label: 'Facility'),
+  (value: 'it', label: 'IT'),
+  (value: 'marketing', label: 'Marketing'),
+  (value: 'transport', label: 'Transport'),
+  (value: 'iqac', label: 'IQAC'),
+];
 
 class EventDetailsScreen extends StatefulWidget {
   final String eventId;
@@ -23,6 +34,21 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   String? _error;
   Map<String, dynamic>? _detailsData;
   final Set<String> _expandedDepartments = <String>{};
+  List<ApprovalThreadInfo> _approvalThreads = const [];
+  final Map<String, bool> _expandedDiscussionThreads = <String, bool>{};
+  final Map<String, TextEditingController> _replyControllers =
+      <String, TextEditingController>{};
+  final Map<String, ApprovalThreadMessage?> _replyTargets =
+      <String, ApprovalThreadMessage?>{};
+  final Set<String> _submittingReplyThreads = <String>{};
+  final TextEditingController _newDiscussionMessageCtrl =
+      TextEditingController();
+  bool _newDiscussionOpen = false;
+  bool _creatingDiscussion = false;
+  String _newDiscussionDepartment = '';
+  String? _discussionError;
+
+  bool get _isApprovalOnlyEntry => widget.eventId.startsWith('approval-');
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
   Color get _pageBg => Theme.of(context).scaffoldBackgroundColor;
@@ -42,17 +68,59 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     _fetchDetails();
   }
 
+  @override
+  void dispose() {
+    _newDiscussionMessageCtrl.dispose();
+    for (final controller in _replyControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  TextEditingController _replyControllerFor(String threadId) {
+    return _replyControllers.putIfAbsent(threadId, TextEditingController.new);
+  }
+
   Future<void> _fetchDetails() async {
     setState(() {
       _isLoading = true;
       _error = null;
+      _discussionError = null;
     });
     try {
       final res = await _api.get<Map<String, dynamic>>(
         '/events/${widget.eventId}/details',
       );
+      final approvalRequest = res['approval_request'] is Map<String, dynamic>
+          ? res['approval_request'] as Map<String, dynamic>
+          : const <String, dynamic>{};
+      final approvalRequestId = (approvalRequest['id'] ?? '').toString().trim();
+      List<ApprovalThreadInfo> approvalThreads = const [];
+      String? discussionError;
+
+      if (approvalRequestId.isNotEmpty) {
+        try {
+          final threadData = await _api.get<dynamic>(
+            '/approvals/$approvalRequestId/threads',
+          );
+          final items = threadData is List
+              ? threadData
+              : (threadData is Map<String, dynamic>
+                    ? threadData['items']
+                    : null);
+          approvalThreads = (items as List? ?? [])
+              .whereType<Map<String, dynamic>>()
+              .map(ApprovalThreadInfo.fromJson)
+              .toList();
+        } catch (e) {
+          discussionError = e.toString();
+        }
+      }
+
       setState(() {
         _detailsData = res;
+        _approvalThreads = approvalThreads;
+        _discussionError = discussionError;
         _isLoading = false;
       });
     } catch (e) {
@@ -120,8 +188,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   String _buildAudience(Map<String, dynamic> event) {
-    final audience = event['intendedAudience'];
-    final other = _s(event['intendedAudienceOther'], fallback: '');
+    final audience = event['intendedAudience'] ?? event['intended_audience'];
+    final other = _s(
+      event['intendedAudienceOther'] ?? event['intended_audience_other'],
+      fallback: '',
+    );
     if (audience is List && audience.isNotEmpty) {
       final items = audience
           .map((e) => e.toString().trim())
@@ -138,6 +209,39 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       return audience.trim();
     }
     return other.isNotEmpty ? other : 'Unknown';
+  }
+
+  String _normalizeRequirementStatus(dynamic status) {
+    final normalized = (status ?? '').toString().trim().toLowerCase();
+    if (normalized == 'accepted') return 'approved';
+    if (normalized.isEmpty) return 'none';
+    return normalized;
+  }
+
+  String _aggregateRequirementStatus(List<Map<String, dynamic>> requests) {
+    if (requests.isEmpty) return 'none';
+    final statuses = requests
+        .map((request) => _normalizeRequirementStatus(request['status']))
+        .toList();
+
+    if (statuses.any((status) => status == 'rejected')) return 'rejected';
+    if (statuses.any((status) => status == 'clarification_requested')) {
+      return 'clarification_requested';
+    }
+    if (statuses.any((status) => status == 'pending')) return 'pending';
+    if (statuses.every((status) => status == 'approved')) return 'approved';
+    return 'pending';
+  }
+
+  String _iqacRequirementStatus() {
+    final hasReport =
+        _s(_event['report_web_view_link'], fallback: '').isNotEmpty ||
+        _s(_event['report_file_id'], fallback: '').isNotEmpty;
+    if (hasReport) return 'approved';
+
+    final eventStatus = _s(_event['status'], fallback: '').toLowerCase();
+    if (eventStatus == 'draft') return 'none';
+    return 'pending';
   }
 
   String _buildReviewRole(
@@ -166,6 +270,187 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final budget = (approval['budget'] ?? event['budget']);
     if (budget is num && budget > 30000) return 'Vice Chancellor review';
     return 'Registrar review';
+  }
+
+  String get _approvalRequestId => _s(_approval['id'], fallback: '');
+
+  String get _currentUserId =>
+      context.read<AuthProvider>().user?.id.trim() ?? '';
+
+  bool get _isRequester {
+    final requesterId = _s(_approval['requester_id'], fallback: '');
+    final eventOwner = _s(_event['created_by'], fallback: '');
+    return _currentUserId.isNotEmpty &&
+        (_currentUserId == requesterId || _currentUserId == eventOwner);
+  }
+
+  List<ApprovalThreadInfo> get _deptRequestThreads => _mapList(
+    'dept_request_threads',
+  ).map(ApprovalThreadInfo.fromJson).toList();
+
+  String _workflowStageLabel() {
+    final pipelineStage = _s(
+      _approval['pipeline_stage'],
+      fallback: '',
+    ).toLowerCase();
+    final approvalStatus = _s(_approval['status'], fallback: '').toLowerCase();
+    if (pipelineStage == 'deputy') return 'Deputy Registrar review';
+    if (pipelineStage == 'after_deputy') return 'Waiting for requester';
+    if (pipelineStage == 'finance') return 'Finance Team review';
+    if (pipelineStage == 'after_finance') return 'Waiting for requester';
+    if (approvalStatus == 'approved') {
+      final reviewRole = _buildReviewRole(_approval, _event);
+      return reviewRole.contains('Vice Chancellor')
+          ? 'Vice Chancellor approved'
+          : 'Registrar approved';
+    }
+    if (approvalStatus == 'rejected') return 'Rejected';
+    if (approvalStatus == 'clarification_requested') {
+      return 'Clarification requested';
+    }
+    return _buildReviewRole(_approval, _event);
+  }
+
+  String _requesterActionLabel() {
+    final pipelineStage = _s(
+      _approval['pipeline_stage'],
+      fallback: '',
+    ).toLowerCase();
+    if (pipelineStage == 'after_deputy') {
+      return 'Send this request to Finance from My Events.';
+    }
+    if (pipelineStage == 'after_finance') {
+      return 'Send this request to Registrar from My Events.';
+    }
+    if (_canSendRequirements) {
+      return 'Final approval is complete. You can now send department requirements.';
+    }
+    return 'No requester action pending.';
+  }
+
+  bool _threadIsLocked(ApprovalThreadInfo thread) {
+    final status = thread.threadStatus.trim().toLowerCase();
+    return status == 'resolved' || status == 'closed';
+  }
+
+  bool _userIsThreadParticipant(ApprovalThreadInfo thread) {
+    if (_currentUserId.isEmpty) return false;
+    return thread.participants.any(
+      (participant) => participant.id.trim() == _currentUserId,
+    );
+  }
+
+  String _threadStatusLabel(String status) {
+    final normalized = status.trim().toLowerCase();
+    if (normalized == 'waiting_for_faculty') return 'Waiting for faculty';
+    if (normalized == 'waiting_for_department') return 'Waiting for department';
+    if (normalized == 'resolved') return 'Resolved';
+    if (normalized == 'closed') return 'Closed';
+    return normalized.isEmpty ? 'Active' : normalized.replaceAll('_', ' ');
+  }
+
+  Color _threadStatusBg(String status) {
+    switch (status.trim().toLowerCase()) {
+      case 'waiting_for_faculty':
+        return const Color(0xFFFFF7ED);
+      case 'waiting_for_department':
+        return const Color(0xFFEEF2FF);
+      case 'resolved':
+      case 'closed':
+        return const Color(0xFFF1F5F9);
+      default:
+        return const Color(0xFFECFDF5);
+    }
+  }
+
+  Color _threadStatusFg(String status) {
+    switch (status.trim().toLowerCase()) {
+      case 'waiting_for_faculty':
+        return const Color(0xFFC2410C);
+      case 'waiting_for_department':
+        return const Color(0xFF4338CA);
+      case 'resolved':
+      case 'closed':
+        return const Color(0xFF475569);
+      default:
+        return const Color(0xFF047857);
+    }
+  }
+
+  Future<void> _startDiscussion() async {
+    final approvalRequestId = _approvalRequestId;
+    if (approvalRequestId.isEmpty || _newDiscussionDepartment.isEmpty) return;
+
+    setState(() {
+      _creatingDiscussion = true;
+      _discussionError = null;
+    });
+    try {
+      await _api.post<Map<String, dynamic>>(
+        '/approvals/$approvalRequestId/threads/ensure',
+        data: {
+          'department': _newDiscussionDepartment,
+          if (_newDiscussionMessageCtrl.text.trim().isNotEmpty)
+            'message': _newDiscussionMessageCtrl.text.trim(),
+        },
+      );
+      _newDiscussionMessageCtrl.clear();
+      setState(() {
+        _newDiscussionOpen = false;
+        _newDiscussionDepartment = '';
+      });
+      await _fetchDetails();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _discussionError = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _creatingDiscussion = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _submitThreadReply(ApprovalThreadInfo thread) async {
+    final approvalRequestId = _approvalRequestId;
+    final controller = _replyControllerFor(thread.id);
+    final message = controller.text.trim();
+    if (approvalRequestId.isEmpty || message.isEmpty) return;
+
+    setState(() {
+      _submittingReplyThreads.add(thread.id);
+      _discussionError = null;
+    });
+    try {
+      await _api.post<Map<String, dynamic>>(
+        '/approvals/$approvalRequestId/reply',
+        data: {
+          'thread_id': thread.id,
+          'message': message,
+          if (_replyTargets[thread.id]?.id != null)
+            'reply_to_message_id': _replyTargets[thread.id]!.id,
+        },
+      );
+      controller.clear();
+      setState(() {
+        _replyTargets.remove(thread.id);
+      });
+      await _fetchDetails();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _discussionError = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _submittingReplyThreads.remove(thread.id);
+        });
+      }
+    }
   }
 
   Future<void> _openExternalLink(String? rawUrl) async {
@@ -226,6 +511,46 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     return combined.isEmpty ? 'N/A' : combined;
   }
 
+  bool _isRequirementResolved(String status) {
+    final normalized = status.trim().toLowerCase();
+    return normalized == 'approved' || normalized == 'accepted';
+  }
+
+  bool _eventHasStarted() {
+    final startDate = _s(_event['start_date'], fallback: '');
+    final startTime = _s(_event['start_time'], fallback: '');
+    if (startDate.isEmpty) return false;
+    final parsed = DateTime.tryParse(
+      '$startDate ${startTime.isEmpty ? '00:00' : startTime}',
+    );
+    if (parsed == null) return false;
+    return !parsed.isAfter(DateTime.now());
+  }
+
+  bool get _canSendRequirements {
+    final approvalStatus = _s(_approval['status'], fallback: '').toLowerCase();
+    final eventStatus = _s(_event['status'], fallback: '').toLowerCase();
+    if (approvalStatus != 'approved') return false;
+    if (_eventHasStarted()) return false;
+    if (eventStatus == 'completed' || eventStatus == 'closed') return false;
+
+    final facility = _mapList('facility_requests');
+    final marketing = _mapList('marketing_requests');
+    final it = _mapList('it_requests');
+    final transport = _mapList('transport_requests');
+
+    final statuses = <String?>[
+      facility.isNotEmpty ? _aggregateRequirementStatus(facility) : null,
+      marketing.isNotEmpty ? _aggregateRequirementStatus(marketing) : null,
+      it.isNotEmpty ? _aggregateRequirementStatus(it) : null,
+      transport.isNotEmpty ? _aggregateRequirementStatus(transport) : null,
+    ];
+
+    return statuses.any(
+      (status) => status == null || !_isRequirementResolved(status),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -244,7 +569,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Approval request',
+                    _isApprovalOnlyEntry ? 'Approval details' : 'Event details',
                     style: GoogleFonts.poppins(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
@@ -341,7 +666,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     onPressed: _closeDetails,
                     style: OutlinedButton.styleFrom(
                       backgroundColor: _isDark
-                          ? Theme.of(context).colorScheme.surfaceContainerHighest
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest
                           : Colors.white,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 24,
@@ -364,39 +691,44 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       ),
                     ),
                   ),
-                  ElevatedButton(
-                    onPressed: () {
-                      final event = Event.fromJson(_detailsData?['event'] ?? {});
-                      showDialog(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (ctx) => RequirementsWizardDialog(
-                          event: event,
-                          onSuccess: () {
-                            _fetchDetails();
-                            setState(() {});
-                          },
+                  if (_canSendRequirements)
+                    ElevatedButton(
+                      onPressed: () {
+                        final event = Event.fromJson(
+                          _detailsData?['event'] ?? {},
+                        );
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (ctx) => RequirementsWizardDialog(
+                            event: event,
+                            requesterEmail: _s(
+                              _approval['requester_email'],
+                              fallback: '',
+                            ),
+                            onSuccess: () {
+                              _fetchDetails();
+                              setState(() {});
+                            },
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2563EB),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
                         ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                      child: Text(
+                        'Send Requirements',
+                        style: GoogleFonts.roboto(fontWeight: FontWeight.w500),
                       ),
                     ),
-                    child: Text(
-                      'Send Requirements',
-                      style: GoogleFonts.roboto(
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -747,7 +1079,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
   Widget _buildApprovalContext() {
     final approval = _approval;
-    final event = _event;
     final status = _s(approval['status'], fallback: 'Pending');
 
     return _buildCard(
@@ -790,13 +1121,25 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ),
           _buildLabelValue(
             null,
-            'Role',
+            'Workflow Stage',
             Text(
-              _buildReviewRole(approval, event),
+              _workflowStageLabel(),
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
                 color: Color(0xFF1E293B),
+              ),
+            ),
+          ),
+          _buildLabelValue(
+            null,
+            'Requester Action',
+            Text(
+              _requesterActionLabel(),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF475569),
               ),
             ),
           ),
@@ -806,9 +1149,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Widget _buildDiscussion() {
-    final approvalThreads = _mapList('approval_discussion_threads');
-    final deptThreads = _mapList('dept_request_threads');
-    final threads = approvalThreads.isNotEmpty ? approvalThreads : deptThreads;
+    final approvalThreads = _approvalThreads;
+    final deptThreads = _deptRequestThreads;
+    final existingDepartments = approvalThreads
+        .map((thread) => thread.department.trim().toLowerCase())
+        .toSet();
+    final availableDepartments = _discussionDepartmentOptions
+        .where((option) => !existingDepartments.contains(option.value))
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -828,96 +1176,522 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        if (threads.isEmpty)
-          const Text(
-            'No department discussions yet. Use the button below to start a conversation with any department.',
-            style: TextStyle(
-              fontSize: 14,
-              color: Color(0xFF64748B),
-              height: 1.5,
-            ),
+        if (approvalThreads.isEmpty && deptThreads.isEmpty)
+          Text(
+            _isRequester
+                ? 'No department discussions yet. Start a conversation with a department from here, like on the web workflow.'
+                : 'No department discussions yet. A discussion will appear here when a department or approver sends a message.',
+            style: TextStyle(fontSize: 14, color: _muted, height: 1.5),
           )
         else
-          ...threads.map((thread) {
-            final conversationId = _s(thread['id'], fallback: '');
-            final label = _s(
-              thread['department_label'],
-              fallback: _s(thread['department'], fallback: 'Department'),
-            );
-            final status = _s(
-              thread['dept_request_status'],
-              fallback: _s(thread['thread_status'], fallback: 'active'),
-            );
-            final messages = thread['messages'];
-            final messageCount = messages is List ? messages.length : 0;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: InkWell(
-                onTap: conversationId.isEmpty
+          ...approvalThreads.map(
+            (thread) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildThreadPanel(thread, showRequestStatus: false),
+            ),
+          ),
+        if (deptThreads.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Department request discussions',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: _muted,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...deptThreads.map(
+            (thread) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildThreadPanel(thread, showRequestStatus: true),
+            ),
+          ),
+        ],
+        if (_discussionError != null &&
+            _discussionError!.trim().isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            _discussionError!,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFFB91C1C),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+        const SizedBox(height: 16),
+        if (_isRequester && _approvalRequestId.isNotEmpty)
+          _buildNewDiscussionPanel(availableDepartments),
+      ],
+    );
+  }
+
+  Widget _buildNewDiscussionPanel(
+    List<({String value, String label})> options,
+  ) {
+    if (options.isEmpty) {
+      return Text(
+        'You already have active discussion threads for all supported departments.',
+        style: TextStyle(
+          fontSize: 12,
+          color: _muted,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
+
+    if (!_newDiscussionOpen) {
+      return OutlinedButton.icon(
+        onPressed: () {
+          setState(() {
+            _newDiscussionOpen = true;
+            _newDiscussionDepartment = '';
+          });
+        },
+        icon: const Icon(LucideIcons.plus, size: 16),
+        label: const Text('Start new discussion'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF8B5CF6),
+          side: const BorderSide(
+            color: Color(0xFF8B5CF6),
+            width: 1,
+            style: BorderStyle.solid,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Start a discussion with',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: _onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _newDiscussionDepartment.isEmpty
+                ? null
+                : _newDiscussionDepartment,
+            items: options
+                .map(
+                  (option) => DropdownMenuItem<String>(
+                    value: option.value,
+                    child: Text(option.label),
+                  ),
+                )
+                .toList(),
+            decoration: const InputDecoration(
+              labelText: 'Department',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (value) {
+              setState(() {
+                _newDiscussionDepartment = value ?? '';
+              });
+            },
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _newDiscussionMessageCtrl,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Opening message (optional)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              TextButton(
+                onPressed: _creatingDiscussion
                     ? null
-                    : () => context.go('/chat/$conversationId'),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _surface,
-                    border: Border.all(color: _border),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        LucideIcons.messageSquare,
-                        size: 16,
-                        color: Color(0xFF2563EB),
+                    : () {
+                        _newDiscussionMessageCtrl.clear();
+                        setState(() {
+                          _newDiscussionOpen = false;
+                          _newDiscussionDepartment = '';
+                        });
+                      },
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton(
+                onPressed:
+                    _creatingDiscussion || _newDiscussionDepartment.isEmpty
+                    ? null
+                    : _startDiscussion,
+                child: Text(
+                  _creatingDiscussion ? 'Creating...' : 'Start discussion',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThreadPanel(
+    ApprovalThreadInfo thread, {
+    required bool showRequestStatus,
+  }) {
+    final isExpanded = _expandedDiscussionThreads[thread.id] ?? true;
+    final canReply =
+        _userIsThreadParticipant(thread) && !_threadIsLocked(thread);
+    final replyController = _replyControllerFor(thread.id);
+    final replyTarget = _replyTargets[thread.id];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                _expandedDiscussionThreads[thread.id] = !isExpanded;
+              });
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      thread.departmentLabel,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF1D4ED8),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '$label · $messageCount message${messageCount == 1 ? '' : 's'}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: _onSurface,
-                          ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${thread.messages.length} message${thread.messages.length == 1 ? '' : 's'}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _onSurface,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _threadStatusBg(thread.threadStatus),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _threadStatusLabel(thread.threadStatus),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: _threadStatusFg(thread.threadStatus),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    isExpanded
+                        ? LucideIcons.chevronDown
+                        : LucideIcons.chevronRight,
+                    size: 18,
+                    color: _muted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (thread.participants.isNotEmpty)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: thread.participants
+                          .map(
+                            (participant) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _panel,
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: _border),
+                              ),
+                              child: Text(
+                                '${participant.name}${participant.role.isEmpty ? '' : ' (${participant.role})'}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: _muted,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  if (showRequestStatus &&
+                      (thread.deptRequestStatus ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Request status: ${thread.deptRequestStatus!.replaceAll('_', ' ')}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _muted,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  if (thread.messages.isEmpty)
+                    Text(
+                      'No messages yet.',
+                      style: TextStyle(fontSize: 13, color: _muted),
+                    )
+                  else
+                    ...thread.messages.map(
+                      (message) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _buildThreadMessage(thread, message),
+                      ),
+                    ),
+                  const SizedBox(height: 6),
+                  TextButton.icon(
+                    onPressed: () => context.push('/chat/${thread.id}'),
+                    icon: const Icon(LucideIcons.externalLink, size: 14),
+                    label: const Text('Open in chat'),
+                  ),
+                  if (_threadIsLocked(thread))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        thread.closedAt != null
+                            ? 'This discussion is ${_threadStatusLabel(thread.threadStatus).toLowerCase()} since ${DateFormat('yyyy-MM-dd · h:mm a').format(thread.closedAt!)}.'
+                            : 'This discussion is ${_threadStatusLabel(thread.threadStatus).toLowerCase()}.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _muted,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Text(
-                        status.replaceAll('_', ' '),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: _muted,
+                    ),
+                  if (canReply) ...[
+                    if (replyTarget != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: _panel,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _border),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Replying to ${replyTarget.senderName}: ${replyTarget.content}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: _muted,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () {
+                                setState(() {
+                                  _replyTargets.remove(thread.id);
+                                });
+                              },
+                              icon: const Icon(Icons.close, size: 16),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ],
                         ),
                       ),
                     ],
-                  ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: replyController,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Reply to this discussion',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        ElevatedButton(
+                          onPressed: _submittingReplyThreads.contains(thread.id)
+                              ? null
+                              : () => _submitThreadReply(thread),
+                          child: Text(
+                            _submittingReplyThreads.contains(thread.id)
+                                ? 'Posting...'
+                                : 'Post reply',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildThreadMessage(
+    ApprovalThreadInfo thread,
+    ApprovalThreadMessage message,
+  ) {
+    final isOwn = message.senderId.trim() == _currentUserId;
+
+    return Align(
+      alignment: isOwn ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.72,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isOwn ? const Color(0xFFDBEAFE) : _panel,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isOwn)
+              Text(
+                message.senderName,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: _onSurface,
                 ),
               ),
-            );
-          }),
-        const SizedBox(height: 16),
-        OutlinedButton.icon(
-          onPressed: () => context.go('/chat'),
-          icon: const Icon(LucideIcons.plus, size: 16),
-          label: const Text('Start new discussion'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF8B5CF6),
-            side: const BorderSide(
-              color: Color(0xFF8B5CF6),
-              width: 1,
-              style: BorderStyle.solid,
+            if (message.replyToSnapshot != null) ...[
+              if (!isOwn) const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(_isDark ? 0.05 : 0.7),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      message.replyToSnapshot!.senderName,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: _muted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      message.replyToSnapshot!.contentPreview.isEmpty
+                          ? 'Message'
+                          : message.replyToSnapshot!.contentPreview,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: _muted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ] else if (!isOwn)
+              const SizedBox(height: 8),
+            Text(
+              message.content.isEmpty ? '—' : message.content,
+              style: TextStyle(fontSize: 13, height: 1.45, color: _onSurface),
             ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  DateFormat('yyyy-MM-dd · h:mm a').format(message.createdAt),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _muted,
+                  ),
+                ),
+                if (_userIsThreadParticipant(thread) &&
+                    !_threadIsLocked(thread))
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _replyTargets[thread.id] = message;
+                      });
+                    },
+                    style: TextButton.styleFrom(
+                      minimumSize: Size.zero,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 0,
+                      ),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('Reply'),
+                  ),
+              ],
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -933,7 +1707,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       items.add((
         key: 'facility',
         title: 'Facility',
-        status: _s(facility.first['status'], fallback: 'pending'),
+        status: _aggregateRequirementStatus(facility),
         count: facility.length,
       ));
     }
@@ -941,7 +1715,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       items.add((
         key: 'it',
         title: 'IT',
-        status: _s(it.first['status'], fallback: 'pending'),
+        status: _aggregateRequirementStatus(it),
         count: it.length,
       ));
     }
@@ -949,7 +1723,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       items.add((
         key: 'marketing',
         title: 'Marketing',
-        status: _s(marketing.first['status'], fallback: 'pending'),
+        status: _aggregateRequirementStatus(marketing),
         count: marketing.length,
       ));
     }
@@ -957,7 +1731,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       items.add((
         key: 'transport',
         title: 'Transport',
-        status: _s(transport.first['status'], fallback: 'pending'),
+        status: _aggregateRequirementStatus(transport),
         count: transport.length,
       ));
     }
@@ -1021,8 +1795,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       }
 
       if (items.isEmpty) {
-        items.add((key: 'iqac', title: 'IQAC', status: 'pending', count: 0));
+        items.add((
+          key: 'iqac',
+          title: 'IQAC',
+          status: _iqacRequirementStatus(),
+          count: 0,
+        ));
       }
+    }
+
+    if (!items.any((item) => item.key == 'iqac')) {
+      items.add((
+        key: 'iqac',
+        title: 'IQAC',
+        status: _iqacRequirementStatus(),
+        count: 0,
+      ));
     }
 
     return Column(
@@ -1050,6 +1838,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         const SizedBox(height: 16),
         ...items.map((item) {
           final isOpen = _expandedDepartments.contains(item.key);
+          final source = item.key == 'facility'
+              ? facility
+              : item.key == 'it'
+              ? it
+              : item.key == 'marketing'
+              ? marketing
+              : item.key == 'transport'
+              ? transport
+              : const <Map<String, dynamic>>[];
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: InkWell(
@@ -1141,6 +1938,46 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                             : '${item.count} request${item.count == 1 ? '' : 's'} linked to this event.',
                         style: TextStyle(fontSize: 12, color: _muted),
                       ),
+                      if (source.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        ...source.take(3).map((req) {
+                          final requestedTo = _s(
+                            req['requested_to'],
+                            fallback: 'Unassigned',
+                          );
+                          final decidedBy = _s(
+                            req['decided_by'],
+                            fallback: '—',
+                          );
+                          final rawDecidedAt = _s(
+                            req['decided_at'],
+                            fallback: '',
+                          );
+                          final decidedAt = rawDecidedAt.isEmpty
+                              ? '—'
+                              : (DateTime.tryParse(rawDecidedAt) != null
+                                    ? DateFormat('yyyy-MM-dd · h:mm a').format(
+                                        DateTime.parse(rawDecidedAt).toLocal(),
+                                      )
+                                    : rawDecidedAt);
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              'Assigned: $requestedTo · By: $decidedBy · Updated: $decidedAt',
+                              style: TextStyle(fontSize: 12, color: _muted),
+                            ),
+                          );
+                        }),
+                        if (source.length > 3)
+                          Text(
+                            '+${source.length - 3} more',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _muted,
+                            ),
+                          ),
+                      ],
                     ],
                   ],
                 ),

@@ -53,6 +53,7 @@ class AppConstants {
   static const List<String> facilityRoles = ['facility_manager'];
   static const List<String> marketingRoles = ['marketing'];
   static const List<String> itRoles = ['it'];
+  static const List<String> transportRoles = ['transport'];
 
   // Event status
   static const String statusUpcoming = 'upcoming';
