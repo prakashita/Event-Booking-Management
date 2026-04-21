@@ -56,19 +56,23 @@ class _RequirementsScreenState extends State<RequirementsScreen>
   }
 
   String get _minePath {
-    if (AppConstants.facilityRoles.contains(_role))
+    if (AppConstants.facilityRoles.contains(_role)) {
       return '/facility/requests/me';
-    if (AppConstants.marketingRoles.contains(_role))
+    }
+    if (AppConstants.marketingRoles.contains(_role)) {
       return '/marketing/requests/me';
+    }
     if (AppConstants.itRoles.contains(_role)) return '/it/requests/me';
     return '/facility/requests/me';
   }
 
   String _patchPath(String id) {
-    if (AppConstants.facilityRoles.contains(_role))
+    if (AppConstants.facilityRoles.contains(_role)) {
       return '/facility/requests/$id';
-    if (AppConstants.marketingRoles.contains(_role))
+    }
+    if (AppConstants.marketingRoles.contains(_role)) {
       return '/marketing/requests/$id';
+    }
     return '/it/requests/$id';
   }
 
@@ -151,7 +155,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
           _loadingInbox
               ? _buildLoading()
               : _inboxItems.isEmpty
-              ? const EmptyState(
+              ? EmptyState(
                   icon: Icons.check_circle_outline,
                   title: 'All caught up',
                   message: 'No pending requests in your inbox.',
@@ -178,7 +182,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
             _loadingMine
                 ? _buildLoading()
                 : _myItems.isEmpty
-                ? const EmptyState(
+                ? EmptyState(
                     icon: Icons.assignment_outlined,
                     title: 'No requests',
                     message: 'Requests you submit will appear here.',
@@ -218,19 +222,25 @@ class _RequirementsScreenState extends State<RequirementsScreen>
       itemCount: 5,
       itemBuilder: (_, i) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
-        child: ShimmerBox(width: double.infinity, height: 110, radius: 12),
+        child: Container(
+          height: 110,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+        ),
       ),
     );
   }
 
   void _showCreateDialog(BuildContext context) {
-    if (AppConstants.facilityRoles.contains(_role)) {
-      _showFacilityDialog(context);
-    } else if (AppConstants.itRoles.contains(_role) || _role == 'faculty') {
-      _showITDialog(context);
-    } else {
-      _showMarketingDialog(context);
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Create requests from event details. Requirements wizard coming soon on this screen.'),
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   void _showFacilityDialog(BuildContext context) {
@@ -470,10 +480,11 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                     selected: sel,
                     onSelected: (v) {
                       setS(() {
-                        if (v)
+                        if (v) {
                           selected.add(item);
-                        else
+                        } else {
                           selected.remove(item);
+                        }
                       });
                     },
                   );
@@ -596,11 +607,40 @@ class _RequestCard extends StatelessWidget {
                   ),
                 ),
               ),
-              StatusBadge(status),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: status == 'pending' ? const Color(0xFFFEF3C7) : const Color(0xD0E8F5),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  status.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: status == 'pending' ? const Color(0xFF92400E) : const Color(0xFF1E40AF),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
-          InfoRow(icon: Icons.person_outline, text: requestedBy),
+          Row(
+            children: [
+              const Icon(Icons.person_outline, size: 16, color: AppColors.textSecondary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  requestedBy,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
           if (details.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(

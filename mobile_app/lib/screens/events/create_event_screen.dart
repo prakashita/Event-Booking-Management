@@ -3,9 +3,12 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../constants/app_colors.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
 import 'package:mobile_app/screens/events/event_approval_screen.dart';
@@ -239,7 +242,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final tStart = DateTime(0, 1, 1, _startTime!.hour, _startTime!.minute);
     final tEnd = DateTime(0, 1, 1, _endTime!.hour, _endTime!.minute);
 
-    final eventData = {
+    final eventData = <String, dynamic>{
       'name': _nameCtrl.text.trim(),
       'facilitator': _facilitatorCtrl.text.trim(),
       'description': _descCtrl.text.trim(),
@@ -256,11 +259,230 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       'override_conflict': false,
     };
 
+    try {
+      final conflictRes = await _api.post<Map<String, dynamic>>(
+        '/events/conflicts',
+        data: eventData,
+      );
+      if (!mounted) return;
+      final conflicts = conflictRes['conflicts'];
+      if (conflicts is List && conflicts.isNotEmpty) {
+        _showConflictDialog(eventData: eventData, conflicts: conflicts);
+        return;
+      }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final detail = e.response?.data is Map<String, dynamic>
+          ? (e.response?.data['detail']?.toString() ??
+                e.message ??
+                'Unable to check schedule conflicts.')
+          : (e.message ?? 'Unable to check schedule conflicts.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(detail), backgroundColor: AppColors.error),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    _openApprovalScreen(eventData, overrideConflict: false);
+  }
+
+  String _formatConflictTime(dynamic value) {
+    final raw = (value ?? '').toString().trim();
+    if (raw.isEmpty) return '';
+    try {
+      final parsed = DateFormat('HH:mm:ss').parseStrict(raw);
+      return DateFormat('h:mm a').format(parsed);
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  void _openApprovalScreen(
+    Map<String, dynamic> eventData, {
+    required bool overrideConflict,
+  }) {
+    final payload = {...eventData, 'override_conflict': overrideConflict};
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) =>
-            EventApprovalScreen(eventData: eventData, budgetPdf: _budgetPdf),
+            EventApprovalScreen(eventData: payload, budgetPdf: _budgetPdf),
       ),
+    );
+  }
+
+  void _showConflictDialog({
+    required Map<String, dynamic> eventData,
+    required List<dynamic> conflicts,
+  }) {
+    final theme = Theme.of(context);
+    final text = theme.colorScheme.onSurface;
+    final card = theme.colorScheme.surfaceContainerHighest;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: theme.colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Schedule Conflict',
+                  style: TextStyle(
+                    color: AppColors.error,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'The following event(s) are already scheduled at the selected time:',
+                  style: TextStyle(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 250),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: conflicts.map((c) {
+                        final conflict = c is Map<String, dynamic>
+                            ? c
+                            : Map<String, dynamic>.from(c as Map);
+                        return Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: card,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (conflict['name'] ?? '').toString(),
+                                style: TextStyle(
+                                  color: text,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${(conflict['start_date'] ?? '').toString()} • ${_formatConflictTime(conflict['start_time'])} • ${(conflict['venue_name'] ?? '').toString()}',
+                                style: TextStyle(
+                                  color: text.withValues(alpha: 0.75),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Would you like to reschedule your event or override this conflict?',
+                  style: TextStyle(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 360;
+                    final buttons = [
+                      _dialogButton(
+                        label: 'Reschedule',
+                        onPressed: () => Navigator.of(ctx).pop(),
+                      ),
+                      _dialogButton(
+                        label: 'Cancel',
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          context.go('/events');
+                        },
+                        isPrimary: false,
+                      ),
+                      _dialogButton(
+                        label: 'Override',
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          _openApprovalScreen(
+                            eventData,
+                            overrideConflict: true,
+                          );
+                        },
+                      ),
+                    ];
+
+                    if (compact) {
+                      return Column(
+                        children: [
+                          for (final button in buttons) ...[
+                            SizedBox(width: double.infinity, child: button),
+                            if (button != buttons.last)
+                              const SizedBox(height: 8),
+                          ],
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: buttons[0]),
+                        const SizedBox(width: 8),
+                        Expanded(child: buttons[1]),
+                        const SizedBox(width: 8),
+                        Expanded(child: buttons[2]),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _dialogButton({
+    required String label,
+    required VoidCallback onPressed,
+    bool isPrimary = true,
+  }) {
+    final theme = Theme.of(context);
+    final bg = isPrimary
+        ? const Color(0xFF6366F1).withValues(alpha: 0.2)
+        : theme.colorScheme.surfaceContainerHighest;
+    final fg = isPrimary
+        ? const Color(0xFF4F46E5)
+        : theme.colorScheme.onSurface;
+    return TextButton(
+      style: TextButton.styleFrom(
+        backgroundColor: bg,
+        foregroundColor: fg,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      onPressed: onPressed,
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
     );
   }
 
@@ -358,6 +580,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   Widget build(BuildContext context) {
     final df = DateFormat('MMM d, yyyy');
     final theme = Theme.of(context);
+    final themeProvider = context.watch<ThemeProvider>();
     final isDark = theme.brightness == Brightness.dark;
     final pageBg = theme.scaffoldBackgroundColor;
     final surface = theme.colorScheme.surface;
@@ -386,9 +609,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             const SizedBox(width: 12),
             Text(
               'Create Event',
-              style: TextStyle(
+              style: GoogleFonts.poppins(
                 fontSize: 20,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w700,
                 color: heading,
                 letterSpacing: -0.5,
               ),
@@ -396,6 +619,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            onPressed: () {
+              final next = isDark ? 'light' : 'dark';
+              themeProvider.setThemeModeByValue(next);
+            },
+            icon: Icon(
+              isDark ? LucideIcons.sun : LucideIcons.moon,
+              size: 18,
+              color: isDark ? const Color(0xFFF59E0B) : const Color(0xFF4F46E5),
+            ),
+            tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
+          ),
           IconButton(
             onPressed: () {
               if (context.canPop()) {
@@ -926,20 +1161,28 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         }
                       },
                       style: TextButton.styleFrom(
+                        foregroundColor: muted,
+                        backgroundColor: isDark
+                            ? theme.colorScheme.surfaceContainerHighest
+                            : Colors.white,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 24,
                           vertical: 16,
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: borderColor),
+                          side: BorderSide(
+                            color: isDark
+                                ? const Color(0xFF475569)
+                                : const Color(0xFFDADCE0),
+                          ),
                         ),
                       ),
                       child: Text(
                         'Cancel',
-                        style: TextStyle(
+                        style: GoogleFonts.roboto(
                           fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w500,
                           color: muted,
                         ),
                       ),
@@ -948,7 +1191,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     ElevatedButton(
                       onPressed: _submit,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB), // blue-600
+                        backgroundColor: const Color(0xFF1A73E8),
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 24,
@@ -967,11 +1210,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             color: Colors.white,
                           ),
                           const SizedBox(width: 8),
-                          const Text(
+                          Text(
                             'Create Event',
-                            style: TextStyle(
+                            style: GoogleFonts.roboto(
                               fontSize: 14,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w500,
                               color: Colors.white,
                             ),
                           ),

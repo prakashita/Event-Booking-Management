@@ -1,9 +1,14 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+
 import '../../constants/app_colors.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
+
+enum _DecisionAction { approve, reject, clarify }
 
 class ApprovalsScreen extends StatefulWidget {
   const ApprovalsScreen({super.key});
@@ -16,11 +21,13 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _api = ApiService();
+  final _searchCtrl = TextEditingController();
   List<ApprovalRequest> _inbox = [];
   List<ApprovalRequest> _mySubmissions = [];
   bool _loadingInbox = true;
   bool _loadingMine = false;
   bool _mineLoaded = false;
+  bool _refreshing = false;
 
   @override
   void initState() {
@@ -35,6 +42,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -48,7 +56,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
             .toList();
         _loadingInbox = false;
       });
-    } catch (e) {
+    } catch (_) {
       setState(() => _loadingInbox = false);
     }
   }
@@ -64,34 +72,75 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
         _loadingMine = false;
         _mineLoaded = true;
       });
-    } catch (e) {
+    } catch (_) {
       setState(() => _loadingMine = false);
     }
   }
 
-  Future<void> _decide(ApprovalRequest req, bool approve) async {
+  bool _isActionable(ApprovalRequest req) {
+    final status = req.status.trim().toLowerCase();
+    return status == 'pending' || status == 'clarification_requested';
+  }
+
+  String _decisionStatus(_DecisionAction action) {
+    switch (action) {
+      case _DecisionAction.approve:
+        return 'approved';
+      case _DecisionAction.reject:
+        return 'rejected';
+      case _DecisionAction.clarify:
+        return 'clarification_requested';
+    }
+  }
+
+  String _decisionLabel(_DecisionAction action) {
+    switch (action) {
+      case _DecisionAction.approve:
+        return 'Approve';
+      case _DecisionAction.reject:
+        return 'Reject';
+      case _DecisionAction.clarify:
+        return 'Need clarification';
+    }
+  }
+
+  Future<void> _handleDecision(
+    ApprovalRequest req,
+    _DecisionAction action,
+  ) async {
+    final isApprove = action == _DecisionAction.approve;
+    final isReject = action == _DecisionAction.reject;
+
     final confirmed = await showConfirmDialog(
       context,
-      title: approve ? 'Approve Event' : 'Reject Event',
-      message: approve
-          ? 'Approve "${req.eventTitle}"?'
-          : 'Reject "${req.eventTitle}"? Please provide a comment for the requester.',
-      confirmLabel: approve ? 'Approve' : 'Reject',
-      isDestructive: !approve,
+      title: '${_decisionLabel(action)} Event',
+      message: isApprove
+          ? '${_decisionLabel(action)} "${req.eventTitle}"?'
+          : '${_decisionLabel(action)} "${req.eventTitle}"? Please provide a comment for the requester.',
+      confirmLabel: _decisionLabel(action),
+      isDestructive: isReject,
     );
     if (confirmed != true || !mounted) return;
 
     String? comment;
-    if (!approve) {
+    if (!isApprove) {
       comment = await _promptDecisionComment(
-        title: 'Reject request',
-        hint: 'Add rejection reason',
+        title: action == _DecisionAction.reject
+            ? 'Reject request'
+            : 'Request clarification',
+        hint: action == _DecisionAction.reject
+            ? 'Add rejection reason'
+            : 'Ask for clarification',
       );
       if (!mounted || comment == null) return;
       if (comment.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Comment is required when rejecting a request.'),
+          SnackBar(
+            content: Text(
+              action == _DecisionAction.reject
+                  ? 'Comment is required when rejecting a request.'
+                  : 'Comment is required when requesting clarification.',
+            ),
             backgroundColor: AppColors.error,
           ),
         );
@@ -103,7 +152,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
       final updated = await _api.patch<Map<String, dynamic>>(
         '/approvals/${req.id}',
         data: {
-          'status': approve ? 'approved' : 'rejected',
+          'status': _decisionStatus(action),
           if ((comment ?? '').trim().isNotEmpty) 'comment': comment!.trim(),
         },
       );
@@ -111,23 +160,26 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
       final status = (updated['status'] ?? '').toString().toLowerCase();
       final stage = (updated['pipeline_stage'] ?? '').toString().toLowerCase();
       String message;
-      if (approve && stage == 'after_deputy') {
+      if (action == _DecisionAction.approve && stage == 'after_deputy') {
         message =
             'Approved at Deputy stage. Requester can now send to Finance.';
-      } else if (approve && stage == 'after_finance') {
+      } else if (action == _DecisionAction.approve &&
+          stage == 'after_finance') {
         message =
             'Approved at Finance stage. Requester can now send to Registrar.';
-      } else if (approve && status == 'approved') {
+      } else if (action == _DecisionAction.approve && status == 'approved') {
         message = 'Final approval completed.';
+      } else if (action == _DecisionAction.clarify) {
+        message = 'Clarification requested from requester.';
       } else {
-        message = approve ? 'Request approved.' : 'Request rejected.';
+        message = isApprove ? 'Request approved.' : 'Request rejected.';
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
-            backgroundColor: approve
+            backgroundColor: isApprove
                 ? AppColors.success
                 : AppColors.textSecondary,
           ),
@@ -137,14 +189,65 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
       }
     } catch (e) {
       if (mounted) {
+        final message = _extractApiErrorMessage(e);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: AppColors.error,
-          ),
+          SnackBar(content: Text(message), backgroundColor: AppColors.error),
         );
       }
     }
+  }
+
+  String _extractApiErrorMessage(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic>) {
+        final detail = data['detail'];
+        if (detail is String && detail.trim().isNotEmpty) {
+          return detail.trim();
+        }
+        if (detail is List && detail.isNotEmpty) {
+          final joined = detail
+              .map((e) {
+                if (e is Map<String, dynamic>) {
+                  return (e['msg'] ?? e.toString()).toString();
+                }
+                return e.toString();
+              })
+              .where((e) => e.trim().isNotEmpty)
+              .join(' ')
+              .trim();
+          if (joined.isNotEmpty) return joined;
+        }
+      }
+      return error.message ?? 'Request failed. Please try again.';
+    }
+    return error.toString();
+  }
+
+  Future<void> _refreshActiveTab() async {
+    setState(() => _refreshing = true);
+    try {
+      if (_tabController.index == 0) {
+        await _loadInbox();
+      } else {
+        await _loadMine();
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _refreshing = false);
+      }
+    }
+  }
+
+  List<ApprovalRequest> _applySearch(List<ApprovalRequest> source) {
+    final query = _searchCtrl.text.trim().toLowerCase();
+    if (query.isEmpty) return source;
+    return source.where((item) {
+      return item.eventTitle.toLowerCase().contains(query) ||
+          item.requestedBy.toLowerCase().contains(query) ||
+          item.requestedTo.toLowerCase().contains(query) ||
+          (item.description ?? '').toLowerCase().contains(query);
+    }).toList();
   }
 
   Future<String?> _promptDecisionComment({
@@ -187,106 +290,171 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final pendingCount = _inbox.where((r) => _isActionable(r)).length;
+    final tabIndex = _tabController.index;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Approvals'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+      backgroundColor: const Color(0xFFF8FAFC),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Inbox'),
-                  if (_inbox.isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(100),
-                      ),
-                      child: Text(
-                        '${_inbox.where((r) => r.status == 'pending').length}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Approvals',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF0F172A),
+                          ),
                         ),
                       ),
+                      IconButton(
+                        onPressed: _refreshing ? null : _refreshActiveTab,
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFFE2E8F0)),
+                        ),
+                        icon: AnimatedRotation(
+                          turns: _refreshing ? 0.35 : 0,
+                          duration: const Duration(milliseconds: 220),
+                          child: const Icon(Icons.refresh),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _searchCtrl,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Search events, requester, email...',
+                      prefixIcon: const Icon(Icons.search, size: 18),
+                      isDense: true,
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
                     ),
-                  ],
+                  ),
+                  const SizedBox(height: 12),
+                  TabBar(
+                    controller: _tabController,
+                    indicatorColor: const Color(0xFF4F46E5),
+                    labelColor: const Color(0xFF4F46E5),
+                    unselectedLabelColor: const Color(0xFF64748B),
+                    tabs: [
+                      Tab(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('Approval Requests'),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF43F5E),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                '$pendingCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Tab(text: 'My Requests'),
+                    ],
+                  ),
                 ],
               ),
             ),
-            const Tab(text: 'My Requests'),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildRequestList(
+                    loading: _loadingInbox,
+                    source: _inbox,
+                    emptyIcon: Icons.inbox_outlined,
+                    emptyTitle: 'Inbox is empty',
+                    emptyMessage: 'No pending approval requests.',
+                    showActions: true,
+                  ),
+                  _buildRequestList(
+                    loading: _loadingMine,
+                    source: _mySubmissions,
+                    emptyIcon: Icons.send_outlined,
+                    emptyTitle: 'No submissions',
+                    emptyMessage: 'Your event requests will appear here.',
+                    showActions: false,
+                  ),
+                ],
+              ),
+            ),
+            if (tabIndex == 0) const SizedBox(height: 2),
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // Inbox
-          _loadingInbox
-              ? _buildLoadingList()
-              : RefreshIndicator(
-                  onRefresh: () async {
-                    _inbox = [];
-                    await _loadInbox();
-                  },
-                  child: _inbox.isEmpty
-                      ? const EmptyState(
-                          icon: Icons.inbox_outlined,
-                          title: 'Inbox is empty',
-                          message: 'No pending approval requests.',
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                          itemCount: _inbox.length,
-                          itemBuilder: (ctx, i) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _ApprovalCard(
-                              request: _inbox[i],
-                              showActions: _inbox[i].status == 'pending',
-                              onApprove: () => _decide(_inbox[i], true),
-                              onReject: () => _decide(_inbox[i], false),
-                            ),
-                          ),
-                        ),
-                ),
+    );
+  }
 
-          // My submissions
-          _loadingMine
-              ? _buildLoadingList()
-              : RefreshIndicator(
-                  onRefresh: () async {
-                    _mineLoaded = false;
-                    await _loadMine();
-                  },
-                  child: _mySubmissions.isEmpty
-                      ? const EmptyState(
-                          icon: Icons.send_outlined,
-                          title: 'No submissions',
-                          message: 'Your event requests will appear here.',
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                          itemCount: _mySubmissions.length,
-                          itemBuilder: (ctx, i) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _ApprovalCard(
-                              request: _mySubmissions[i],
-                              showActions: false,
-                            ),
-                          ),
-                        ),
-                ),
-        ],
-      ),
+  Widget _buildRequestList({
+    required bool loading,
+    required List<ApprovalRequest> source,
+    required IconData emptyIcon,
+    required String emptyTitle,
+    required String emptyMessage,
+    required bool showActions,
+  }) {
+    final requests = _applySearch(source);
+    if (loading) return _buildLoadingList();
+
+    return RefreshIndicator(
+      onRefresh: _refreshActiveTab,
+      child: requests.isEmpty
+          ? EmptyState(
+              icon: emptyIcon,
+              title: emptyTitle,
+              message: emptyMessage,
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
+              itemCount: requests.length,
+              itemBuilder: (ctx, i) {
+                final req = requests[i];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _ApprovalCard(
+                    request: req,
+                    showActions: showActions && _isActionable(req),
+                    onDetails: () => context.go('/events/approval-${req.id}'),
+                    onDecision: (action) => _handleDecision(req, action),
+                  ),
+                );
+              },
+            ),
     );
   }
 
@@ -305,14 +473,14 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
 class _ApprovalCard extends StatelessWidget {
   final ApprovalRequest request;
   final bool showActions;
-  final VoidCallback? onApprove;
-  final VoidCallback? onReject;
+  final VoidCallback? onDetails;
+  final Future<void> Function(_DecisionAction action)? onDecision;
 
   const _ApprovalCard({
     required this.request,
     required this.showActions,
-    this.onApprove,
-    this.onReject,
+    this.onDetails,
+    this.onDecision,
   });
 
   @override
@@ -321,16 +489,16 @@ class _ApprovalCard extends StatelessWidget {
     final tf = DateFormat('h:mm a');
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x06000000),
-            blurRadius: 8,
-            offset: Offset(0, 2),
+            color: Color(0x12000000),
+            blurRadius: 14,
+            offset: Offset(0, 5),
           ),
         ],
       ),
@@ -338,14 +506,15 @@ class _ApprovalCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Text(
                   request.eventTitle,
                   style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF0F172A),
                   ),
                 ),
               ),
@@ -360,7 +529,7 @@ class _ApprovalCard extends StatelessWidget {
               request.description!,
               style: const TextStyle(
                 fontSize: 13,
-                color: AppColors.textSecondary,
+                color: Color(0xFF64748B),
                 height: 1.4,
               ),
               maxLines: 2,
@@ -373,7 +542,10 @@ class _ApprovalCard extends StatelessWidget {
             text: 'By: ${request.requestedBy}',
           ),
           const SizedBox(height: 5),
-          InfoRow(icon: Icons.location_on_outlined, text: request.venueName),
+          InfoRow(
+            icon: Icons.alternate_email_rounded,
+            text: request.requestedBy,
+          ),
           const SizedBox(height: 5),
           InfoRow(
             icon: Icons.schedule,
@@ -412,37 +584,22 @@ class _ApprovalCard extends StatelessWidget {
               ),
             ),
           ],
-          if (showActions) ...[
-            const SizedBox(height: 14),
-            const Divider(),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onReject,
-                    icon: const Icon(Icons.close, size: 16),
-                    label: const Text('Reject'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.error,
-                      side: const BorderSide(color: AppColors.error),
-                    ),
-                  ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: onDetails,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF4F46E5),
+                  side: const BorderSide(color: Color(0xFFC7D2FE)),
+                  backgroundColor: const Color(0xFFEEF2FF),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: onApprove,
-                    icon: const Icon(Icons.check, size: 16),
-                    label: const Text('Approve'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.success,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+                child: const Text('Details'),
+              ),
+              const Spacer(),
+              if (showActions) _ActionDropdown(onSelected: onDecision),
+            ],
+          ),
         ],
       ),
     );
@@ -466,5 +623,82 @@ class _ApprovalCard extends StatelessWidget {
       default:
         return 'Stage: Awaiting approval';
     }
+  }
+}
+
+class _ActionDropdown extends StatelessWidget {
+  final Future<void> Function(_DecisionAction action)? onSelected;
+
+  const _ActionDropdown({this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<_DecisionAction>(
+      onSelected: (action) {
+        onSelected?.call(action);
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem<_DecisionAction>(
+          value: _DecisionAction.approve,
+          child: Row(
+            children: [
+              Icon(
+                Icons.check_circle_outline,
+                color: Color(0xFF059669),
+                size: 18,
+              ),
+              SizedBox(width: 8),
+              Text('Approve'),
+            ],
+          ),
+        ),
+        PopupMenuItem<_DecisionAction>(
+          value: _DecisionAction.reject,
+          child: Row(
+            children: [
+              Icon(Icons.cancel_outlined, color: Color(0xFFDC2626), size: 18),
+              SizedBox(width: 8),
+              Text('Reject'),
+            ],
+          ),
+        ),
+        PopupMenuItem<_DecisionAction>(
+          value: _DecisionAction.clarify,
+          child: Row(
+            children: [
+              Icon(
+                Icons.help_outline_rounded,
+                color: Color(0xFFD97706),
+                size: 18,
+              ),
+              SizedBox(width: 8),
+              Text('Need clarification'),
+            ],
+          ),
+        ),
+      ].toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Text(
+              'Action',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF334155),
+              ),
+            ),
+            SizedBox(width: 6),
+            Icon(Icons.expand_more_rounded, size: 18, color: Color(0xFF64748B)),
+          ],
+        ),
+      ),
+    );
   }
 }

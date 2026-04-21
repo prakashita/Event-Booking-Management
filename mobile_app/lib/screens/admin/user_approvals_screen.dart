@@ -134,7 +134,10 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
   Future<void> _showApproveDialog(Map<String, dynamic> user) async {
     const roles = [
       'faculty',
+      'registrar',
       'vice_chancellor',
+      'deputy_registrar',
+      'finance_team',
       'facility_manager',
       'marketing',
       'it',

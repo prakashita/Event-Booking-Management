@@ -11,12 +11,28 @@ class SideNavBar extends StatelessWidget {
 
   const SideNavBar({super.key, required this.currentRoute});
 
+  String _headerRoleLabel(String roleKey, String fallbackRoleLabel) {
+    switch ((roleKey).trim().toLowerCase()) {
+      case 'deputy_registrar':
+        return 'DEPUTY\nREGISTRAR';
+      case 'vice_chancellor':
+        return 'VICE\nCHANCELLOR';
+      case 'facility_manager':
+        return 'FACILITY\nMANAGER';
+      case 'finance_team':
+        return 'FINANCE\nTEAM';
+      default:
+        return fallbackRoleLabel;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
     final roleKey = user?.roleKey ?? 'faculty';
     final roleLabel = user?.roleLabel ?? 'FACULTY';
+    final headerRoleLabel = _headerRoleLabel(roleKey, roleLabel);
 
     final isAdmin = roleKey == 'admin';
     final isRegistrar = roleKey == 'registrar';
@@ -65,13 +81,19 @@ class SideNavBar extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    roleLabel,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
+                  Expanded(
+                    child: Text(
+                      headerRoleLabel,
+                      maxLines: 2,
+                      softWrap: true,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        height: 1.1,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.8,
+                      ),
                     ),
                   ),
                 ],

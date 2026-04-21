@@ -256,11 +256,11 @@ class _LoginScreenState extends State<LoginScreen>
                         const SizedBox(height: 24),
                         Row(
                           children: [
-                            Expanded(
-                                child: Divider(color: AppColors.border)),
+                            Expanded(child: Divider(color: AppColors.border)),
                             Padding(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12),
+                                horizontal: 12,
+                              ),
                               child: Text(
                                 'Secure & encrypted',
                                 style: TextStyle(
@@ -269,8 +269,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                               ),
                             ),
-                            Expanded(
-                                child: Divider(color: AppColors.border)),
+                            Expanded(child: Divider(color: AppColors.border)),
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -318,19 +317,51 @@ class _GoogleIconPainter extends CustomPainter {
     final yellowPaint = Paint()..color = const Color(0xFFFBBC05);
     final greenPaint = Paint()..color = const Color(0xFF34A853);
 
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius),
-        -0.52, 1.05, false, redPaint..style = PaintingStyle.stroke..strokeWidth = size.width * 0.2);
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius),
-        0.53, 1.05, false, yellowPaint..style = PaintingStyle.stroke..strokeWidth = size.width * 0.2);
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius),
-        1.58, 1.05, false, greenPaint..style = PaintingStyle.stroke..strokeWidth = size.width * 0.2);
-    canvas.drawArc(Rect.fromCircle(center: center, radius: radius),
-        2.63, 0.9, false, bluePaint..style = PaintingStyle.stroke..strokeWidth = size.width * 0.2);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      -0.52,
+      1.05,
+      false,
+      redPaint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.width * 0.2,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      0.53,
+      1.05,
+      false,
+      yellowPaint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.width * 0.2,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      1.58,
+      1.05,
+      false,
+      greenPaint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.width * 0.2,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      2.63,
+      0.9,
+      false,
+      bluePaint
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.width * 0.2,
+    );
 
     // Blue arm
     canvas.drawRect(
-      Rect.fromLTWH(center.dx, center.dy - size.height * 0.12,
-          radius * 0.9, size.height * 0.24),
+      Rect.fromLTWH(
+        center.dx,
+        center.dy - size.height * 0.12,
+        radius * 0.9,
+        size.height * 0.24,
+      ),
       Paint()..color = const Color(0xFF4285F4),
     );
   }

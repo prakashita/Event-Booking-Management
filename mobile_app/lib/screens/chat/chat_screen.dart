@@ -174,12 +174,15 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     } catch (e) {
       // Restore message on error
+      if (!mounted) return;
       _msgCtrl.text = content;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to send: $e'), backgroundColor: AppColors.error),
       );
     } finally {
-      setState(() => _isSending = false);
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
     }
   }
 
@@ -417,7 +420,9 @@ class _TypingIndicatorState extends State<_TypingIndicator>
 
   @override
   void dispose() {
-    for (final c in _controllers) c.dispose();
+    for (final c in _controllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
@@ -440,7 +445,7 @@ class _TypingIndicatorState extends State<_TypingIndicator>
                 3,
                 (i) => AnimatedBuilder(
                   animation: _controllers[i],
-                  builder: (_, __) => Container(
+                  builder: (_, _) => Container(
                     margin: const EdgeInsets.symmetric(horizontal: 2),
                     width: 7,
                     height: 7,

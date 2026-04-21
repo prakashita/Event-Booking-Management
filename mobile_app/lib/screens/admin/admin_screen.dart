@@ -287,6 +287,8 @@ class _AdminScreenState extends State<AdminScreen> {
       'admin',
       'registrar',
       'vice_chancellor',
+      'deputy_registrar',
+      'finance_team',
       'faculty',
       'facility_manager',
       'marketing',
@@ -295,65 +297,68 @@ class _AdminScreenState extends State<AdminScreen> {
       'transport',
     ];
 
-    var selected = user.roleKey;
+    var selected = (user.roleKey).trim().toLowerCase();
+    if (!allowedRoles.contains(selected)) {
+      selected = 'faculty';
+    }
     await _runWithFormFabHidden<void>(
       () => showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setLocal) {
-            return AlertDialog(
-              title: Text('Change Role - ${user.name}'),
-              content: DropdownButtonFormField<String>(
-                initialValue: selected,
-                items: allowedRoles
-                    .map(
-                      (r) => DropdownMenuItem<String>(
-                        value: r,
-                        child: Text(r.replaceAll('_', ' ').toUpperCase()),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) {
-                  if (v == null) return;
-                  setLocal(() {
-                    selected = v;
-                  });
-                },
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    Navigator.of(ctx).pop();
-                    try {
-                      await _api.patch(
-                        '/users/${user.id}/role',
-                        data: {'role': selected},
-                      );
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Role updated.')),
-                      );
-                      await _loadCurrentSection(forceRefresh: true);
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text(_extractError(e))));
-                    }
+        context: context,
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (ctx, setLocal) {
+              return AlertDialog(
+                title: Text('Change Role - ${user.name}'),
+                content: DropdownButtonFormField<String>(
+                  initialValue: selected,
+                  items: allowedRoles
+                      .map(
+                        (r) => DropdownMenuItem<String>(
+                          value: r,
+                          child: Text(r.replaceAll('_', ' ').toUpperCase()),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setLocal(() {
+                      selected = v;
+                    });
                   },
-                  child: const Text('Save'),
                 ),
-              ],
-            );
-          },
-        );
-      },
-    ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () async {
+                      Navigator.of(ctx).pop();
+                      try {
+                        await _api.patch(
+                          '/users/${user.id}/role',
+                          data: {'role': selected},
+                        );
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Role updated.')),
+                        );
+                        await _loadCurrentSection(forceRefresh: true);
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(_extractError(e))),
+                        );
+                      }
+                    },
+                    child: const Text('Save'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -363,6 +368,8 @@ class _AdminScreenState extends State<AdminScreen> {
     const addRoles = [
       'registrar',
       'vice_chancellor',
+      'deputy_registrar',
+      'finance_team',
       'facility_manager',
       'marketing',
       'it',
@@ -371,74 +378,74 @@ class _AdminScreenState extends State<AdminScreen> {
 
     await _runWithFormFabHidden<void>(
       () => showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setLocal) {
-            return AlertDialog(
-              title: const Text('Add User'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: emailCtrl,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(labelText: 'Email'),
+        context: context,
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (ctx, setLocal) {
+              return AlertDialog(
+                title: const Text('Add User'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: role,
+                      decoration: const InputDecoration(labelText: 'Role'),
+                      items: addRoles
+                          .map(
+                            (r) => DropdownMenuItem<String>(
+                              value: r,
+                              child: Text(r.replaceAll('_', ' ').toUpperCase()),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setLocal(() {
+                          role = v;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Cancel'),
                   ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: role,
-                    decoration: const InputDecoration(labelText: 'Role'),
-                    items: addRoles
-                        .map(
-                          (r) => DropdownMenuItem<String>(
-                            value: r,
-                            child: Text(r.replaceAll('_', ' ').toUpperCase()),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setLocal(() {
-                        role = v;
-                      });
+                  FilledButton(
+                    onPressed: () async {
+                      Navigator.of(ctx).pop();
+                      try {
+                        await _api.post(
+                          '/users/add',
+                          data: {'email': emailCtrl.text.trim(), 'role': role},
+                        );
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('User added.')),
+                        );
+                        await _loadCurrentSection(forceRefresh: true);
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(_extractError(e))),
+                        );
+                      }
                     },
+                    child: const Text('Add'),
                   ),
                 ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    Navigator.of(ctx).pop();
-                    try {
-                      await _api.post(
-                        '/users/add',
-                        data: {'email': emailCtrl.text.trim(), 'role': role},
-                      );
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('User added.')),
-                      );
-                      await _loadCurrentSection(forceRefresh: true);
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text(_extractError(e))));
-                    }
-                  },
-                  child: const Text('Add'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -446,44 +453,44 @@ class _AdminScreenState extends State<AdminScreen> {
     final venueCtrl = TextEditingController();
     await _runWithFormFabHidden<void>(
       () => showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Add Venue'),
-        content: TextField(
-          controller: venueCtrl,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(labelText: 'Venue name'),
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Add Venue'),
+          content: TextField(
+            controller: venueCtrl,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Venue name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                try {
+                  await _api.post(
+                    '/venues',
+                    data: {'name': venueCtrl.text.trim()},
+                  );
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('Venue added.')));
+                  await _loadCurrentSection(forceRefresh: true);
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(_extractError(e))));
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              try {
-                await _api.post(
-                  '/venues',
-                  data: {'name': venueCtrl.text.trim()},
-                );
-                if (!mounted) return;
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('Venue added.')));
-                await _loadCurrentSection(forceRefresh: true);
-              } catch (e) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(SnackBar(content: Text(_extractError(e))));
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
       ),
-    ),
     );
   }
 
@@ -541,7 +548,10 @@ class _AdminScreenState extends State<AdminScreen> {
   Future<void> _showApproveUserDialog(Map<String, dynamic> user) async {
     const roles = [
       'faculty',
+      'registrar',
       'vice_chancellor',
+      'deputy_registrar',
+      'finance_team',
       'facility_manager',
       'marketing',
       'it',
@@ -557,48 +567,48 @@ class _AdminScreenState extends State<AdminScreen> {
 
     await _runWithFormFabHidden<void>(
       () => showDialog<void>(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setLocal) {
-            return AlertDialog(
-              title: const Text('Approve User'),
-              content: DropdownButtonFormField<String>(
-                initialValue: selected,
-                decoration: const InputDecoration(labelText: 'Assigned Role'),
-                items: roles
-                    .map(
-                      (r) => DropdownMenuItem<String>(
-                        value: r,
-                        child: Text(r.replaceAll('_', ' ').toUpperCase()),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) {
-                  if (v == null) return;
-                  setLocal(() {
-                    selected = v;
-                  });
-                },
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('Cancel'),
-                ),
-                FilledButton(
-                  onPressed: () async {
-                    Navigator.of(ctx).pop();
-                    await _approvePendingUser(user, selected);
+        context: context,
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (ctx, setLocal) {
+              return AlertDialog(
+                title: const Text('Approve User'),
+                content: DropdownButtonFormField<String>(
+                  initialValue: selected,
+                  decoration: const InputDecoration(labelText: 'Assigned Role'),
+                  items: roles
+                      .map(
+                        (r) => DropdownMenuItem<String>(
+                          value: r,
+                          child: Text(r.replaceAll('_', ' ').toUpperCase()),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v == null) return;
+                    setLocal(() {
+                      selected = v;
+                    });
                   },
-                  child: const Text('Approve'),
                 ),
-              ],
-            );
-          },
-        );
-      },
-    ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () async {
+                      Navigator.of(ctx).pop();
+                      await _approvePendingUser(user, selected);
+                    },
+                    child: const Text('Approve'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -606,32 +616,32 @@ class _AdminScreenState extends State<AdminScreen> {
     final reasonCtrl = TextEditingController();
     await _runWithFormFabHidden<void>(
       () => showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Reject User'),
-        content: TextField(
-          controller: reasonCtrl,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            labelText: 'Reason (optional)',
-            hintText: 'Provide a reason for rejection',
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Reject User'),
+          content: TextField(
+            controller: reasonCtrl,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Reason (optional)',
+              hintText: 'Provide a reason for rejection',
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                await _rejectPendingUser(user, reasonCtrl.text);
+              },
+              child: const Text('Reject'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await _rejectPendingUser(user, reasonCtrl.text);
-            },
-            child: const Text('Reject'),
-          ),
-        ],
       ),
-    ),
     );
   }
 

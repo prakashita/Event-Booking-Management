@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../services/api_service.dart';
+import '../../models/models.dart';
+import '../requirements/requirements_wizard_dialog.dart';
 
 class EventDetailsScreen extends StatefulWidget {
   final String eventId;
@@ -76,6 +79,38 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final raw = _detailsData?[key];
     if (raw is! List) return const [];
     return raw.whereType<Map<String, dynamic>>().toList();
+  }
+
+  List<String> _stringList(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
+
+  String? _classifyRequirementLine(String line) {
+    final s = line.toLowerCase();
+    if (s.contains('marketing') ||
+        s.contains('poster') ||
+        s.contains('social media')) {
+      return 'marketing';
+    }
+    if (s.contains('facility') ||
+        s.contains('venue') ||
+        s.contains('refreshment') ||
+        s.contains('hall')) {
+      return 'facility';
+    }
+    if (s.contains('it') ||
+        s.contains('projection') ||
+        s.contains('pa system') ||
+        s.contains('laptop')) {
+      return 'it';
+    }
+    if (s.contains('transport')) return 'transport';
+    if (s.contains('iqac')) return 'iqac';
+    return null;
   }
 
   String _s(dynamic value, {String fallback = '—'}) {
@@ -210,7 +245,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 children: [
                   Text(
                     'Approval request',
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: _onSurface,
@@ -260,6 +295,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               onPressed: _fetchDetails,
                               icon: const Icon(LucideIcons.refreshCw, size: 16),
                               label: const Text('Retry'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1A73E8),
+                                foregroundColor: Colors.white,
+                                textStyle: GoogleFonts.roboto(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -292,11 +335,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 border: Border(top: BorderSide(color: _border)),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   OutlinedButton(
                     onPressed: _closeDetails,
                     style: OutlinedButton.styleFrom(
+                      backgroundColor: _isDark
+                          ? Theme.of(context).colorScheme.surfaceContainerHighest
+                          : Colors.white,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 24,
                         vertical: 12,
@@ -304,13 +350,50 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      side: BorderSide(color: _border),
+                      side: BorderSide(
+                        color: _isDark
+                            ? const Color(0xFF475569)
+                            : const Color(0xFFDADCE0),
+                      ),
                     ),
                     child: Text(
                       'Close',
-                      style: TextStyle(
+                      style: GoogleFonts.roboto(
                         color: _muted,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      final event = Event.fromJson(_detailsData?['event'] ?? {});
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (ctx) => RequirementsWizardDialog(
+                          event: event,
+                          onSuccess: () {
+                            _fetchDetails();
+                            setState(() {});
+                          },
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      'Send Requirements',
+                      style: GoogleFonts.roboto(
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -357,9 +440,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               const SizedBox(width: 12),
               Text(
                 title,
-                style: TextStyle(
+                style: GoogleFonts.poppins(
                   fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w700,
                   color: _onSurface,
                 ),
               ),
@@ -412,11 +495,29 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final status = _s(event['status'], fallback: 'pending');
     final approvalStatus = _s(approval['status'], fallback: 'pending');
     final budgetValue = approval['budget'] ?? event['budget'];
-    final budgetBreakdownLink = _s(
+    final budgetWebLink = _s(
       event['budget_breakdown_web_view_link'] ??
           approval['budget_breakdown_web_view_link'],
       fallback: '',
     );
+    final budgetFileId = _s(
+      event['budget_breakdown_file_id'] ?? approval['budget_breakdown_file_id'],
+      fallback: '',
+    );
+    final budgetFileName = _s(
+      event['budget_breakdown_file_name'] ??
+          approval['budget_breakdown_file_name'],
+      fallback: '',
+    );
+    final hasBudgetFile =
+        budgetWebLink.isNotEmpty ||
+        budgetFileId.isNotEmpty ||
+        budgetFileName.isNotEmpty;
+    final budgetOpenLink = budgetWebLink.isNotEmpty
+        ? budgetWebLink
+        : (budgetFileId.isNotEmpty
+              ? 'https://drive.google.com/file/d/$budgetFileId/view'
+              : '');
 
     return _buildCard(
       icon: LucideIcons.fileText,
@@ -428,7 +529,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             LucideIcons.flag,
             'Event Name',
             Text(
-              _s(event['name'], fallback: 'Untitled'),
+              _s(
+                event['name'],
+                fallback: _s(approval['event_name'], fallback: 'Untitled'),
+              ),
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -477,7 +581,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             LucideIcons.users,
             'Intended Audience',
             Text(
-              _buildAudience(event),
+              _buildAudience(event).trim().toLowerCase() == 'unknown'
+                  ? _s(approval['intendedAudience'], fallback: 'Unknown')
+                  : _buildAudience(event),
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -489,7 +595,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             LucideIcons.creditCard,
             'Budget',
             Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   _formatBudget(budgetValue),
@@ -500,31 +605,41 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                InkWell(
-                  onTap: budgetBreakdownLink.isEmpty
-                      ? null
-                      : () => _openExternalLink(budgetBreakdownLink),
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: InkWell(
+                      onTap: budgetOpenLink.isEmpty
+                          ? null
+                          : () => _openExternalLink(budgetOpenLink),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFFBFDBFE)),
-                    ),
-                    child: Text(
-                      budgetBreakdownLink.isEmpty
-                          ? 'No budget file'
-                          : 'Budget breakdown (PDF)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: budgetBreakdownLink.isEmpty
-                            ? const Color(0xFF64748B)
-                            : const Color(0xFF2563EB),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Text(
+                          hasBudgetFile
+                              ? (budgetFileName.isEmpty
+                                    ? 'Budget breakdown (PDF)'
+                                    : budgetFileName)
+                              : 'No budget file',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: hasBudgetFile
+                                ? const Color(0xFF2563EB)
+                                : const Color(0xFF64748B),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -691,7 +806,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Widget _buildDiscussion() {
-    final threads = _mapList('dept_request_threads');
+    final approvalThreads = _mapList('approval_discussion_threads');
+    final deptThreads = _mapList('dept_request_threads');
+    final threads = approvalThreads.isNotEmpty ? approvalThreads : deptThreads;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -810,6 +927,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final marketing = _mapList('marketing_requests');
     final it = _mapList('it_requests');
     final transport = _mapList('transport_requests');
+    final approval = _approval;
 
     if (facility.isNotEmpty) {
       items.add((
@@ -845,7 +963,66 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
 
     if (items.isEmpty) {
-      items.add((key: 'iqac', title: 'IQAC', status: 'pending', count: 0));
+      final requirements = _stringList(approval['requirements']);
+      final bucketCounts = <String, int>{
+        'facility': 0,
+        'it': 0,
+        'marketing': 0,
+        'transport': 0,
+        'iqac': 0,
+      };
+
+      for (final line in requirements) {
+        final key = _classifyRequirementLine(line);
+        if (key != null) {
+          bucketCounts[key] = (bucketCounts[key] ?? 0) + 1;
+        }
+      }
+
+      if ((bucketCounts['facility'] ?? 0) > 0) {
+        items.add((
+          key: 'facility',
+          title: 'Facility',
+          status: 'pending',
+          count: bucketCounts['facility']!,
+        ));
+      }
+      if ((bucketCounts['it'] ?? 0) > 0) {
+        items.add((
+          key: 'it',
+          title: 'IT',
+          status: 'pending',
+          count: bucketCounts['it']!,
+        ));
+      }
+      if ((bucketCounts['marketing'] ?? 0) > 0) {
+        items.add((
+          key: 'marketing',
+          title: 'Marketing',
+          status: 'pending',
+          count: bucketCounts['marketing']!,
+        ));
+      }
+      if ((bucketCounts['transport'] ?? 0) > 0) {
+        items.add((
+          key: 'transport',
+          title: 'Transport',
+          status: 'pending',
+          count: bucketCounts['transport']!,
+        ));
+      }
+      if ((bucketCounts['iqac'] ?? 0) > 0) {
+        items.add((
+          key: 'iqac',
+          title: 'IQAC',
+          status: 'pending',
+          count: bucketCounts['iqac']!,
+        ));
+      }
+
+      if (items.isEmpty) {
+        items.add((key: 'iqac', title: 'IQAC', status: 'pending', count: 0));
+      }
     }
 
     return Column(

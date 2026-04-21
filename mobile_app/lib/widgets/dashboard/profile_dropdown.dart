@@ -26,9 +26,6 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
     final cardBorder = isDark
         ? const Color(0xFF334155)
         : const Color(0xFFE2E8F0);
-    final mutedText = isDark
-        ? const Color(0xFF94A3B8)
-        : const Color(0xFF64748B);
     final settingsBg = isDark
         ? const Color(0xFF1E293B)
         : Colors.grey.withOpacity(0.1);
@@ -36,10 +33,6 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
     final dividerColor = isDark
         ? const Color(0xFF334155)
         : const Color(0xFFE5E7EB);
-    final triggerBg = isDark
-        ? const Color(0xFF1E3A5F)
-        : const Color(0xFF4F46E5);
-    final triggerIconColor = isDark ? const Color(0xFFDBEAFE) : Colors.white;
     final avatarBg = isDark
         ? const Color(0xFF1E3A5F)
         : theme.colorScheme.primary.withOpacity(0.1);
@@ -232,20 +225,27 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
             ],
           );
         },
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: triggerBg,
-                borderRadius: BorderRadius.circular(12.0),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF4F46E5), // Indigo matching React exact UI
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(LucideIcons.user, color: Colors.white, size: 18),
               ),
-              child: Icon(LucideIcons.user, color: triggerIconColor, size: 20),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.arrow_drop_down, color: mutedText),
-          ],
+              const SizedBox(width: 8),
+              const Icon(LucideIcons.chevronDown, color: Colors.white, size: 18),
+            ],
+          ),
         ),
       ),
     );

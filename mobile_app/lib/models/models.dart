@@ -259,6 +259,7 @@ class ApprovalRequest {
   final String requestedTo;
   final bool overrideConflict;
   final String? notes;
+  final String? budgetBreakdownFileId;
   final DateTime createdAt;
   final String? pipelineStage;
 
@@ -274,6 +275,7 @@ class ApprovalRequest {
     required this.requestedTo,
     this.overrideConflict = false,
     this.notes,
+    this.budgetBreakdownFileId,
     required this.createdAt,
     this.pipelineStage,
   });
@@ -303,6 +305,7 @@ class ApprovalRequest {
         requestedTo: json['requested_to'] ?? '',
         overrideConflict: json['override_conflict'] ?? false,
         notes: json['other_notes'] ?? json['notes'],
+        budgetBreakdownFileId: json['budget_breakdown_file_id']?.toString(),
         pipelineStage: json['pipeline_stage']?.toString(),
         createdAt:
             DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
@@ -490,6 +493,80 @@ class MarketingDeliverable {
       );
 }
 
+// ─── Transport Request ────────────────────────────────────────────────────────
+
+class TransportRequest {
+  final String id;
+  final String? eventId;
+  final String eventTitle;
+  final String transportType;
+  final String? guestPickupLocation;
+  final String? guestPickupDate;
+  final String? guestPickupTime;
+  final String? guestDropoffLocation;
+  final String? guestDropoffDate;
+  final String? guestDropoffTime;
+  final int? studentCount;
+  final String? studentTransportKind;
+  final String? studentDate;
+  final String? studentTime;
+  final String? studentPickupPoint;
+  final String? notes;
+  final String status;
+  final String requestedBy;
+  final DateTime createdAt;
+
+  const TransportRequest({
+    required this.id,
+    this.eventId,
+    required this.eventTitle,
+    required this.transportType,
+    this.guestPickupLocation,
+    this.guestPickupDate,
+    this.guestPickupTime,
+    this.guestDropoffLocation,
+    this.guestDropoffDate,
+    this.guestDropoffTime,
+    this.studentCount,
+    this.studentTransportKind,
+    this.studentDate,
+    this.studentTime,
+    this.studentPickupPoint,
+    this.notes,
+    required this.status,
+    required this.requestedBy,
+    required this.createdAt,
+  });
+
+  factory TransportRequest.fromJson(Map<String, dynamic> json) =>
+      TransportRequest(
+        id: json['id'] ?? json['_id'] ?? '',
+        eventId: json['event_id'],
+        eventTitle: (json['event_name'] ?? json['event_title'] ?? '')
+            .toString(),
+        transportType: json['transport_type'] ?? 'guest_cab',
+        guestPickupLocation: json['guest_pickup_location'],
+        guestPickupDate: json['guest_pickup_date'],
+        guestPickupTime: json['guest_pickup_time'],
+        guestDropoffLocation: json['guest_dropoff_location'],
+        guestDropoffDate: json['guest_dropoff_date'],
+        guestDropoffTime: json['guest_dropoff_time'],
+        studentCount: json['student_count'],
+        studentTransportKind: json['student_transport_kind'],
+        studentDate: json['student_date'],
+        studentTime: json['student_time'],
+        studentPickupPoint: json['student_pickup_point'],
+        notes: json['other_notes'] ?? json['notes'],
+        status: json['status'] ?? 'pending',
+        requestedBy:
+            (json['requester_email'] ?? json['requested_by'] ?? '')
+                .toString(),
+        createdAt:
+            DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
+            DateTime.now(),
+      );
+}
+
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 class ChatConversation {
@@ -503,6 +580,11 @@ class ChatConversation {
   final DateTime? lastMessageAt;
   final int unreadCount;
   final List<String> participantNames;
+  final int participantCount;
+  final String? otherUserName;
+  final bool otherUserOnline;
+  final String? department;
+  final String? departmentLabel;
 
   const ChatConversation({
     required this.id,
@@ -514,20 +596,45 @@ class ChatConversation {
     this.lastMessageAt,
     this.unreadCount = 0,
     required this.participantNames,
+    this.participantCount = 0,
+    this.otherUserName,
+    this.otherUserOnline = false,
+    this.department,
+    this.departmentLabel,
   });
 
-  factory ChatConversation.fromJson(Map<String, dynamic> json) =>
-      ChatConversation(
-        id: json['id'] ?? json['_id'] ?? '',
-        kind: json['kind'] ?? json['thread_kind'] ?? 'direct',
-        participants: List<String>.from(json['participants'] ?? []),
-        eventId: json['event_id'],
-        eventTitle: json['event_title'] ?? json['title'],
-        lastMessage: _extractLastMessage(json['last_message']),
-        lastMessageAt: _extractLastMessageAt(json),
-        unreadCount: json['unread_count'] ?? 0,
-        participantNames: _extractParticipantNames(json),
-      );
+  factory ChatConversation.fromJson(Map<String, dynamic> json) {
+    int parsedParticipantCount = json['participant_count'] ?? 0;
+    if (parsedParticipantCount == 0) {
+      final parts = json['participants'];
+      if (parts is List) parsedParticipantCount = parts.length;
+    }
+
+    String? otherName;
+    bool online = false;
+    final otherUser = json['other_user'];
+    if (otherUser is Map<String, dynamic>) {
+      otherName = otherUser['name'];
+      online = otherUser['online'] == true;
+    }
+
+    return ChatConversation(
+      id: json['id'] ?? json['_id'] ?? '',
+      kind: json['kind'] ?? json['thread_kind'] ?? 'direct',
+      participants: List<String>.from(json['participants'] ?? []),
+      eventId: json['event_id'],
+      eventTitle: json['event_title'] ?? json['title'],
+      lastMessage: _extractLastMessage(json['last_message']),
+      lastMessageAt: _extractLastMessageAt(json),
+      unreadCount: json['unread_count'] ?? 0,
+      participantNames: _extractParticipantNames(json),
+      participantCount: parsedParticipantCount,
+      otherUserName: otherName,
+      otherUserOnline: online,
+      department: json['department'],
+      departmentLabel: json['department_label'],
+    );
+  }
 
   static String? _extractLastMessage(dynamic lastMessageField) {
     // ... existing code ...
