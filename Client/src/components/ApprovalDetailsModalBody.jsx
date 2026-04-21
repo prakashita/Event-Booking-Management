@@ -20,6 +20,8 @@ import {
   formatModalDateTime,
   formatWorkflowActionTypeLabel,
   formatWorkflowRoleLabel,
+  getApprovedByRoleLabel,
+  getCurrentStageLabel,
   nestApprovalDiscussionFromLogs,
   normalizeDecisionStatusForWf,
   orderDepartmentSectionsForRole,
@@ -250,33 +252,127 @@ export default function ApprovalDetailsModalBody({
             Approval context
           </h4>
         </div>
+
+        {/* Status + Stage: side-by-side prominent row */}
+        <div className="evt-apprctx-status-row">
+          <div className="evt-apprctx-status-block">
+            <p className="evt-apprctx-label">Current status</p>
+            <span className={wfBadgeClass(approvalWf)}>{wfBadgeLabel(approvalWf)}</span>
+          </div>
+          <div className="evt-apprctx-stage-block">
+            <p className="evt-apprctx-label">Stage</p>
+            <span className="evt-apprctx-stage-value">{getCurrentStageLabel(request)}</span>
+          </div>
+        </div>
+
+        {/* Pipeline stage timeline: deputy → finance → registrar */}
+        {(request?.deputy_decided_by || request?.finance_decided_by || request?.pipeline_stage) ? (
+          <div className="evt-apprctx-pipeline">
+            {/* Deputy */}
+            {(() => {
+              const done = !!request?.deputy_decided_by;
+              const active = !done && (request?.pipeline_stage === "deputy" || request?.pipeline_stage === "after_deputy");
+              return (
+                <div className={`evt-pipeline-step${done ? " evt-pipeline-step--done" : active ? " evt-pipeline-step--active" : " evt-pipeline-step--idle"}`}>
+                  <div className="evt-pipeline-dot" aria-hidden>
+                    {done ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : null}
+                  </div>
+                  <div className="evt-pipeline-info">
+                    <span className="evt-pipeline-role">Deputy Registrar</span>
+                    {done ? (
+                      <span className="evt-pipeline-by">{request.deputy_decided_by}</span>
+                    ) : active ? (
+                      <span className="evt-pipeline-pending">Awaiting</span>
+                    ) : (
+                      <span className="evt-pipeline-pending">Not started</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+            <div className="evt-pipeline-connector" aria-hidden />
+            {/* Finance */}
+            {(() => {
+              const done = !!request?.finance_decided_by;
+              const active = !done && (request?.pipeline_stage === "finance" || request?.pipeline_stage === "after_finance");
+              return (
+                <div className={`evt-pipeline-step${done ? " evt-pipeline-step--done" : active ? " evt-pipeline-step--active" : " evt-pipeline-step--idle"}`}>
+                  <div className="evt-pipeline-dot" aria-hidden>
+                    {done ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : null}
+                  </div>
+                  <div className="evt-pipeline-info">
+                    <span className="evt-pipeline-role">Finance</span>
+                    {done ? (
+                      <span className="evt-pipeline-by">{request.finance_decided_by}</span>
+                    ) : active ? (
+                      <span className="evt-pipeline-pending">Awaiting</span>
+                    ) : (
+                      <span className="evt-pipeline-pending">Not started</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+            <div className="evt-pipeline-connector" aria-hidden />
+            {/* Registrar */}
+            {(() => {
+              const done = request?.status === "approved" && (request?.pipeline_stage === "complete" || !request?.pipeline_stage);
+              const active = !done && request?.pipeline_stage === "registrar";
+              return (
+                <div className={`evt-pipeline-step${done ? " evt-pipeline-step--done" : active ? " evt-pipeline-step--active" : " evt-pipeline-step--idle"}`}>
+                  <div className="evt-pipeline-dot" aria-hidden>
+                    {done ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : null}
+                  </div>
+                  <div className="evt-pipeline-info">
+                    <span className="evt-pipeline-role">Registrar / VC</span>
+                    {done ? (
+                      <span className="evt-pipeline-by">{request?.decided_by || "Approved"}</span>
+                    ) : active ? (
+                      <span className="evt-pipeline-pending">Awaiting</span>
+                    ) : (
+                      <span className="evt-pipeline-pending">Not started</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        ) : null}
+
+        {/* Secondary meta rows */}
         <div className="evt-approval-context-grid">
           <div className="evt-approval-context-row">
             <span className="evt-meta-k">Requested to</span>
-            <span className="evt-approval-context-value">
-              {request?.requested_to ? (
+            {request?.requested_to ? (
+              <span className="evt-approval-context-value">
                 <a href={`mailto:${request.requested_to}`}>{request.requested_to}</a>
-              ) : (
-                "—"
-              )}
-            </span>
-          </div>
-          <div className="evt-approval-context-row">
-            <span className="evt-meta-k">Current status</span>
-            <span className={wfBadgeClass(approvalWf)}>{wfBadgeLabel(approvalWf)}</span>
-          </div>
-          <div className="evt-approval-context-row">
-            <span className="evt-meta-k">Role</span>
-            <span className="evt-approval-context-value">Registrar review</span>
+              </span>
+            ) : (
+              <span className="evt-approval-context-value evt-meta-muted">
+                {request?.pipeline_stage === "after_deputy"
+                  ? "Forwarded to Finance"
+                  : request?.pipeline_stage === "after_finance"
+                    ? "Forwarded to Registrar"
+                    : request?.pipeline_stage === "complete" || request?.status === "approved"
+                      ? "Completed"
+                      : "Not assigned"}
+              </span>
+            )}
           </div>
           {request?.decided_by ? (
             <div className="evt-approval-context-row">
-              <span className="evt-meta-k">Decided by</span>
-              <span className="evt-approval-context-value">{request.decided_by}</span>
+              <span className="evt-meta-k">Final decision by</span>
+              <span className="evt-approval-context-value">
+                {request.decided_by}
+                {getApprovedByRoleLabel(request) ? (
+                  <span className="evt-decided-role"> ({getApprovedByRoleLabel(request)})</span>
+                ) : null}
+              </span>
             </div>
           ) : null}
         </div>
-        {request?.discussion_status && request?.status === "clarification_requested" ? (
+
+        {request?.discussion_status && (request?.status === "clarification_requested" || request?.discussion_status === "waiting_for_department") ? (
           <div className={`approval-discussion-status-banner ${
             request.discussion_status === "waiting_for_faculty"
               ? "approval-discussion-status-banner--waiting-faculty"
@@ -284,10 +380,10 @@ export default function ApprovalDetailsModalBody({
           }`}>
             {request.discussion_status === "waiting_for_faculty"
               ? isFacultyViewer
-                ? "The registrar has requested clarification. Please review and reply."
+                ? "The reviewer has requested clarification. Please review and reply."
                 : "Waiting for the faculty to respond to your clarification request."
               : isFacultyViewer
-                ? "Your reply has been sent. Waiting for the registrar to review."
+                ? "Your reply has been sent. Waiting for the reviewer."
                 : "The faculty has replied. Please review their response."}
           </div>
         ) : null}
@@ -308,6 +404,8 @@ export default function ApprovalDetailsModalBody({
           eventId={request?.event_id}
           canReply={approvalDiscussionCanReply}
           openMessengerForApprovalReply={openMessengerForApprovalReply}
+          isApprovalActionable={request?.is_actionable !== false}
+          approvalRequestItemId={request?.id}
         />
       ) : null}
       {detailsStatus === "ready" && discussionRoots.length === 0 && actionLogs.length > 0 ? (
