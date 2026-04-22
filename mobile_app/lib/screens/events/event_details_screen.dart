@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:dio/dio.dart';
 import '../../services/api_service.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
@@ -28,6 +29,8 @@ class EventDetailsScreen extends StatefulWidget {
   State<EventDetailsScreen> createState() => _EventDetailsScreenState();
 }
 
+enum _ApprovalDecisionAction { approve, reject, clarify }
+
 class _EventDetailsScreenState extends State<EventDetailsScreen> {
   final _api = ApiService();
   bool _isLoading = true;
@@ -35,6 +38,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Map<String, dynamic>? _detailsData;
   final Set<String> _expandedDepartments = <String>{};
   List<ApprovalThreadInfo> _approvalThreads = const [];
+  bool _decisionSubmitting = false;
   final Map<String, bool> _expandedDiscussionThreads = <String, bool>{};
   final Map<String, TextEditingController> _replyControllers =
       <String, TextEditingController>{};
@@ -277,11 +281,182 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   String get _currentUserId =>
       context.read<AuthProvider>().user?.id.trim() ?? '';
 
+  String get _currentRoleKey =>
+      (context.read<AuthProvider>().user?.roleKey ?? '').trim().toLowerCase();
+
   bool get _isRequester {
     final requesterId = _s(_approval['requester_id'], fallback: '');
     final eventOwner = _s(_event['created_by'], fallback: '');
     return _currentUserId.isNotEmpty &&
         (_currentUserId == requesterId || _currentUserId == eventOwner);
+  }
+
+  bool get _isApprovalActionable {
+    final status = _s(_approval['status'], fallback: '').toLowerCase();
+    return _approvalRequestId.isNotEmpty &&
+        (status == 'pending' || status == 'clarification_requested');
+  }
+
+  bool get _isApprovalStageReviewer {
+    return _currentRoleKey == 'registrar' ||
+        _currentRoleKey == 'vice_chancellor' ||
+        _currentRoleKey == 'deputy_registrar' ||
+        _currentRoleKey == 'finance_team';
+  }
+
+  bool get _showApprovalActions =>
+      _isApprovalActionable && _isApprovalStageReviewer && !_isRequester;
+
+  List<Map<String, String?>> _buildApprovalWorkflowSteps() {
+    final approval = _approval;
+    final status = _s(approval['status'], fallback: '').toLowerCase();
+    final stage = _s(approval['pipeline_stage'], fallback: '').toLowerCase();
+    final budgetRaw = approval['budget'] ?? _event['budget'];
+    final budget = budgetRaw is num
+        ? budgetRaw.toDouble()
+        : double.tryParse('$budgetRaw') ?? 0;
+    final finalStageLabel = budget > 30000
+        ? 'Registrar / VC'
+        : 'Registrar';
+
+    String deputyStatus = 'none';
+    String financeStatus = 'none';
+    String finalStatus = 'none';
+
+    if (stage == 'deputy') {
+      deputyStatus = status == 'clarification_requested'
+          ? 'clarification_requested'
+          : status == 'rejected'
+          ? 'rejected'
+          : 'pending';
+    } else if (stage == 'after_deputy' || stage == 'finance') {
+      deputyStatus = 'approved';
+      financeStatus = status == 'clarification_requested'
+          ? 'clarification_requested'
+          : status == 'rejected'
+          ? 'rejected'
+          : 'pending';
+    } else if (stage == 'after_finance') {
+      deputyStatus = 'approved';
+      financeStatus = 'approved';
+      finalStatus = 'pending';
+    } else if (stage == 'registrar') {
+      deputyStatus = _s(approval['deputy_decided_by'], fallback: '').isNotEmpty
+          ? 'approved'
+          : 'none';
+      financeStatus = _s(approval['finance_decided_by'], fallback: '').isNotEmpty
+          ? 'approved'
+          : 'none';
+      finalStatus = status == 'clarification_requested'
+          ? 'clarification_requested'
+          : status == 'rejected'
+          ? 'rejected'
+          : 'pending';
+    } else if (stage == 'complete' || status == 'approved') {
+      deputyStatus = _s(approval['deputy_decided_by'], fallback: '').isNotEmpty
+          ? 'approved'
+          : 'none';
+      financeStatus = _s(approval['finance_decided_by'], fallback: '').isNotEmpty
+          ? 'approved'
+          : 'none';
+      finalStatus = 'approved';
+      if (stage == 'after_deputy') {
+        deputyStatus = 'approved';
+      }
+      if (stage == 'after_finance') {
+        deputyStatus = 'approved';
+        financeStatus = 'approved';
+      }
+      if (stage.isEmpty && deputyStatus == 'none' && financeStatus == 'none') {
+        finalStatus = 'approved';
+      }
+    } else if (status == 'rejected') {
+      if (stage == 'finance') {
+        deputyStatus = 'approved';
+        financeStatus = 'rejected';
+      } else if (stage == 'registrar') {
+        deputyStatus = _s(approval['deputy_decided_by'], fallback: '').isNotEmpty
+            ? 'approved'
+            : 'none';
+        financeStatus = _s(approval['finance_decided_by'], fallback: '').isNotEmpty
+            ? 'approved'
+            : 'none';
+        finalStatus = 'rejected';
+      } else {
+        deputyStatus = 'rejected';
+      }
+    } else if (status == 'pending' && stage.isEmpty) {
+      finalStatus = 'pending';
+    }
+
+    return [
+      {
+        'label': 'Deputy Registrar',
+        'status': deputyStatus,
+        'assignee': _s(approval['deputy_decided_by'], fallback: ''),
+        'updated_at': _s(approval['deputy_decided_at'], fallback: ''),
+      },
+      {
+        'label': 'Finance Team',
+        'status': financeStatus,
+        'assignee': _s(approval['finance_decided_by'], fallback: ''),
+        'updated_at': _s(approval['finance_decided_at'], fallback: ''),
+      },
+      {
+        'label': finalStageLabel,
+        'status': finalStatus,
+        'assignee': _s(
+          approval['decided_by'] ?? approval['requested_to'],
+          fallback: '',
+        ),
+        'updated_at': _s(approval['decided_at'], fallback: ''),
+      },
+    ];
+  }
+
+  String _workflowBadgeLabel(String status) {
+    switch (status) {
+      case 'approved':
+        return 'Approved';
+      case 'pending':
+        return 'Pending';
+      case 'clarification_requested':
+        return 'Clarification';
+      case 'rejected':
+        return 'Rejected';
+      default:
+        return '—';
+    }
+  }
+
+  Color _workflowBadgeBg(String status) {
+    switch (status) {
+      case 'approved':
+        return const Color(0xFFDCFCE7);
+      case 'pending':
+        return const Color(0xFFFEF3C7);
+      case 'clarification_requested':
+        return const Color(0xFFE0E7FF);
+      case 'rejected':
+        return const Color(0xFFFEE2E2);
+      default:
+        return _panel;
+    }
+  }
+
+  Color _workflowBadgeFg(String status) {
+    switch (status) {
+      case 'approved':
+        return const Color(0xFF166534);
+      case 'pending':
+        return const Color(0xFFB45309);
+      case 'clarification_requested':
+        return const Color(0xFF4338CA);
+      case 'rejected':
+        return const Color(0xFFB91C1C);
+      default:
+        return _muted;
+    }
   }
 
   List<ApprovalThreadInfo> get _deptRequestThreads => _mapList(
@@ -347,6 +522,213 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     if (normalized == 'resolved') return 'Resolved';
     if (normalized == 'closed') return 'Closed';
     return normalized.isEmpty ? 'Active' : normalized.replaceAll('_', ' ');
+  }
+
+  String _decisionStatus(_ApprovalDecisionAction action) {
+    switch (action) {
+      case _ApprovalDecisionAction.approve:
+        return 'approved';
+      case _ApprovalDecisionAction.reject:
+        return 'rejected';
+      case _ApprovalDecisionAction.clarify:
+        return 'clarification_requested';
+    }
+  }
+
+  String _decisionLabel(_ApprovalDecisionAction action) {
+    switch (action) {
+      case _ApprovalDecisionAction.approve:
+        return 'Approve';
+      case _ApprovalDecisionAction.reject:
+        return 'Reject';
+      case _ApprovalDecisionAction.clarify:
+        return 'Need clarification';
+    }
+  }
+
+  String _extractApiErrorMessage(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic>) {
+        final detail = data['detail'];
+        if (detail is String && detail.trim().isNotEmpty) {
+          return detail.trim();
+        }
+        if (detail is List && detail.isNotEmpty) {
+          final joined = detail
+              .map((e) {
+                if (e is Map<String, dynamic>) {
+                  return (e['msg'] ?? e.toString()).toString();
+                }
+                return e.toString();
+              })
+              .where((e) => e.trim().isNotEmpty)
+              .join(' ')
+              .trim();
+          if (joined.isNotEmpty) return joined;
+        }
+      }
+      return error.message ?? 'Request failed. Please try again.';
+    }
+    return error.toString();
+  }
+
+  Future<String?> _promptDecisionComment({
+    required String title,
+    required String hint,
+    required bool requiredComment,
+  }) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: TextField(
+            controller: controller,
+            minLines: 3,
+            maxLines: 6,
+            decoration: InputDecoration(
+              hintText: hint,
+              border: const OutlineInputBorder(),
+              helperText: requiredComment
+                  ? 'Comment is required for this action.'
+                  : 'Comment is optional.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(null),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.of(dialogContext).pop(controller.text.trim()),
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _handleApprovalDecision(_ApprovalDecisionAction action) async {
+    if (!_showApprovalActions || _decisionSubmitting) return;
+
+    final isApprove = action == _ApprovalDecisionAction.approve;
+    final isReject = action == _ApprovalDecisionAction.reject;
+    final requiresComment = !isApprove;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text('${_decisionLabel(action)} Event'),
+          content: Text(
+            isApprove
+                ? 'Do you want to approve "${_s(_approval['event_name'], fallback: _s(_event['name'], fallback: 'this event'))}"?'
+                : 'Do you want to ${_decisionLabel(action).toLowerCase()} "${_s(_approval['event_name'], fallback: _s(_event['name'], fallback: 'this event'))}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(_decisionLabel(action)),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final comment = await _promptDecisionComment(
+      title: isApprove
+          ? 'Optional approval message'
+          : (isReject ? 'Reject request' : 'Request clarification'),
+      hint: isApprove
+          ? 'Add an optional message for the requester'
+          : (isReject ? 'Add rejection reason' : 'Ask for clarification'),
+      requiredComment: requiresComment,
+    );
+
+    if (!mounted || comment == null) return;
+    if (requiresComment && comment.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isReject
+                ? 'Comment is required when rejecting a request.'
+                : 'Comment is required when requesting clarification.',
+          ),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _decisionSubmitting = true;
+    });
+
+    try {
+      final updated = await _api.patch<Map<String, dynamic>>(
+        '/approvals/$_approvalRequestId',
+        data: {
+          'status': _decisionStatus(action),
+          if (comment.trim().isNotEmpty) 'comment': comment.trim(),
+        },
+      );
+
+      final status = (updated['status'] ?? '').toString().toLowerCase();
+      final stage = (updated['pipeline_stage'] ?? '').toString().toLowerCase();
+      String message;
+      if (action == _ApprovalDecisionAction.approve && stage == 'after_deputy') {
+        message =
+            'Approved at Deputy stage. Requester can now send to Finance.';
+      } else if (action == _ApprovalDecisionAction.approve &&
+          stage == 'after_finance') {
+        message =
+            'Approved at Finance stage. Requester can now send to Registrar.';
+      } else if (action == _ApprovalDecisionAction.approve &&
+          status == 'approved') {
+        message = 'Final approval completed.';
+      } else if (action == _ApprovalDecisionAction.clarify) {
+        message = 'Clarification requested from requester.';
+      } else {
+        message = isApprove ? 'Request approved.' : 'Request rejected.';
+      }
+
+      await _fetchDetails();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isApprove
+              ? const Color(0xFF16A34A)
+              : const Color(0xFF475569),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_extractApiErrorMessage(e)),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _decisionSubmitting = false;
+        });
+      }
+    }
   }
 
   Color _threadStatusBg(String status) {
@@ -639,6 +1021,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _buildEventOverview(),
+                          const SizedBox(height: 24),
+                          _buildApprovalWorkflow(),
                           const SizedBox(height: 24),
                           _buildApprovalContext(),
                           const SizedBox(height: 24),
@@ -1080,6 +1464,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Widget _buildApprovalContext() {
     final approval = _approval;
     final status = _s(approval['status'], fallback: 'Pending');
+    final statusValue = status.toLowerCase().replaceAll('_', ' ');
 
     return _buildCard(
       icon: LucideIcons.shieldCheck,
@@ -1106,15 +1491,27 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFFDF0D5),
+                color: statusValue.contains('approved')
+                    ? const Color(0xFFDCFCE7)
+                    : statusValue.contains('reject')
+                    ? const Color(0xFFFEE2E2)
+                    : statusValue.contains('clarification')
+                    ? const Color(0xFFE0E7FF)
+                    : const Color(0xFFFDF0D5),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 status,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFFB47B1E),
+                  color: statusValue.contains('approved')
+                      ? const Color(0xFF166534)
+                      : statusValue.contains('reject')
+                      ? const Color(0xFFB91C1C)
+                      : statusValue.contains('clarification')
+                      ? const Color(0xFF4338CA)
+                      : const Color(0xFFB47B1E),
                 ),
               ),
             ),
@@ -1143,7 +1540,236 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               ),
             ),
           ),
+          if (_showApprovalActions) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Take action',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: _muted,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _buildDecisionButton(
+                  label: 'Approve',
+                  background: const Color(0xFFDCFCE7),
+                  foreground: const Color(0xFF166534),
+                  border: const Color(0xFF86EFAC),
+                  onTap: () => _handleApprovalDecision(
+                    _ApprovalDecisionAction.approve,
+                  ),
+                ),
+                _buildDecisionButton(
+                  label: 'Need clarification',
+                  background: const Color(0xFFE0E7FF),
+                  foreground: const Color(0xFF4338CA),
+                  border: const Color(0xFFC7D2FE),
+                  onTap: () => _handleApprovalDecision(
+                    _ApprovalDecisionAction.clarify,
+                  ),
+                ),
+                _buildDecisionButton(
+                  label: 'Reject',
+                  background: const Color(0xFFFEE2E2),
+                  foreground: const Color(0xFFB91C1C),
+                  border: const Color(0xFFFECACA),
+                  onTap: () => _handleApprovalDecision(
+                    _ApprovalDecisionAction.reject,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Approve can include an optional message. Reject and clarification require a comment, matching the website workflow.',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: _muted,
+                height: 1.4,
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildApprovalWorkflow() {
+    final steps = _buildApprovalWorkflowSteps();
+    final currentStageLabel = _s(
+      _approval['current_stage_label'],
+      fallback: _workflowStageLabel(),
+    );
+
+    return _buildCard(
+      icon: LucideIcons.gitBranch,
+      title: 'Approval flow',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Deputy Registrar → Finance Team → Registrar / VC',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: _muted,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Current stage: $currentStageLabel',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: _onSurface,
+            ),
+          ),
+          const SizedBox(height: 18),
+          ...List.generate(steps.length, (index) {
+            final step = steps[index];
+            final status = (step['status'] ?? 'none').trim().toLowerCase();
+            final isLast = index == steps.length - 1;
+            final assignee = (step['assignee'] ?? '').trim();
+            final updatedAt = (step['updated_at'] ?? '').trim();
+            final parsedUpdatedAt = updatedAt.isEmpty
+                ? null
+                : DateTime.tryParse(updatedAt)?.toLocal();
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  children: [
+                    Container(
+                      width: 14,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: status == 'none'
+                            ? _panel
+                            : _workflowBadgeBg(status),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: status == 'none'
+                              ? _border
+                              : _workflowBadgeFg(status),
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    if (!isLast)
+                      Container(
+                        width: 2,
+                        height: 58,
+                        margin: const EdgeInsets.symmetric(vertical: 6),
+                        color: _border,
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                step['label'] ?? '',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: _onSurface,
+                                ),
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _workflowBadgeBg(status),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                _workflowBadgeLabel(status),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: _workflowBadgeFg(status),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (assignee.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Assigned / decided by: $assignee',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _muted,
+                            ),
+                          ),
+                        ],
+                        if (parsedUpdatedAt != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Updated: ${DateFormat('yyyy-MM-dd · h:mm a').format(parsedUpdatedAt)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _muted,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDecisionButton({
+    required String label,
+    required Color background,
+    required Color foreground,
+    required Color border,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: _decisionSubmitting ? null : onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: border),
+        ),
+        child: Text(
+          _decisionSubmitting ? 'Working...' : label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: foreground,
+          ),
+        ),
       ),
     );
   }

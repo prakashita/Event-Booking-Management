@@ -58,7 +58,17 @@ class ApiService {
           } else {
             options.headers.remove('Authorization');
           }
-          options.headers['Content-Type'] = 'application/json';
+
+          final isMultipartRequest =
+              options.data is FormData ||
+              (options.contentType?.toLowerCase().contains('multipart/form-data') ??
+                  false);
+
+          if (isMultipartRequest) {
+            options.headers.remove('Content-Type');
+          } else {
+            options.headers['Content-Type'] = 'application/json';
+          }
           handler.next(options);
         },
         onError: (error, handler) {

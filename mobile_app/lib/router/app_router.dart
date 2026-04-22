@@ -1,4 +1,5 @@
 import 'package:go_router/go_router.dart';
+import 'package:flutter/widgets.dart';
 import '../constants/app_constants.dart';
 import '../providers/auth_provider.dart';
 import '../screens/auth/login_screen.dart';
@@ -20,9 +21,12 @@ import '../screens/admin/user_approvals_screen.dart';
 import '../screens/reports/event_reports_screen.dart';
 import '../screens/home_screen.dart';
 
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 class AppRouter {
   static GoRouter createRouter(AuthProvider authProvider) {
     return GoRouter(
+      navigatorKey: rootNavigatorKey,
       refreshListenable: authProvider,
       initialLocation: '/dashboard',
       redirect: (context, state) {

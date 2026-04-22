@@ -804,8 +804,12 @@ class ChatConversation {
   final int participantCount;
   final String? otherUserName;
   final bool otherUserOnline;
+  final DateTime? otherUserLastSeen;
   final String? department;
   final String? departmentLabel;
+  final String? threadStatus;
+  final DateTime? closedAt;
+  final String? closedReason;
 
   const ChatConversation({
     required this.id,
@@ -820,9 +824,59 @@ class ChatConversation {
     this.participantCount = 0,
     this.otherUserName,
     this.otherUserOnline = false,
+    this.otherUserLastSeen,
     this.department,
     this.departmentLabel,
+    this.threadStatus,
+    this.closedAt,
+    this.closedReason,
   });
+
+  ChatConversation copyWith({
+    String? id,
+    String? kind,
+    List<String>? participants,
+    String? eventId,
+    String? eventTitle,
+    String? lastMessage,
+    DateTime? lastMessageAt,
+    int? unreadCount,
+    List<String>? participantNames,
+    int? participantCount,
+    String? otherUserName,
+    bool? otherUserOnline,
+    DateTime? otherUserLastSeen,
+    String? department,
+    String? departmentLabel,
+    String? threadStatus,
+    DateTime? closedAt,
+    String? closedReason,
+    bool clearLastMessage = false,
+    bool clearLastMessageAt = false,
+  }) {
+    return ChatConversation(
+      id: id ?? this.id,
+      kind: kind ?? this.kind,
+      participants: participants ?? this.participants,
+      eventId: eventId ?? this.eventId,
+      eventTitle: eventTitle ?? this.eventTitle,
+      lastMessage: clearLastMessage ? null : (lastMessage ?? this.lastMessage),
+      lastMessageAt: clearLastMessageAt
+          ? null
+          : (lastMessageAt ?? this.lastMessageAt),
+      unreadCount: unreadCount ?? this.unreadCount,
+      participantNames: participantNames ?? this.participantNames,
+      participantCount: participantCount ?? this.participantCount,
+      otherUserName: otherUserName ?? this.otherUserName,
+      otherUserOnline: otherUserOnline ?? this.otherUserOnline,
+      otherUserLastSeen: otherUserLastSeen ?? this.otherUserLastSeen,
+      department: department ?? this.department,
+      departmentLabel: departmentLabel ?? this.departmentLabel,
+      threadStatus: threadStatus ?? this.threadStatus,
+      closedAt: closedAt ?? this.closedAt,
+      closedReason: closedReason ?? this.closedReason,
+    );
+  }
 
   factory ChatConversation.fromJson(Map<String, dynamic> json) {
     int parsedParticipantCount = json['participant_count'] ?? 0;
@@ -833,10 +887,12 @@ class ChatConversation {
 
     String? otherName;
     bool online = false;
+    DateTime? lastSeen;
     final otherUser = json['other_user'];
     if (otherUser is Map<String, dynamic>) {
       otherName = otherUser['name'];
       online = otherUser['online'] == true;
+      lastSeen = _parseOptionalDate(otherUser['last_seen']);
     }
 
     return ChatConversation(
@@ -852,8 +908,12 @@ class ChatConversation {
       participantCount: parsedParticipantCount,
       otherUserName: otherName,
       otherUserOnline: online,
+      otherUserLastSeen: lastSeen,
       department: json['department'],
       departmentLabel: json['department_label'],
+      threadStatus: json['thread_status']?.toString(),
+      closedAt: _parseOptionalDate(json['closed_at']),
+      closedReason: json['closed_reason']?.toString(),
     );
   }
 
@@ -883,6 +943,13 @@ class ChatConversation {
     return null;
   }
 
+  static DateTime? _parseOptionalDate(dynamic value) {
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value)?.toLocal();
+    }
+    return null;
+  }
+
   static List<String> _extractParticipantNames(Map<String, dynamic> json) {
     // ... existing code ...
     final directNames = json['participant_names'];
@@ -908,8 +975,30 @@ class ChatConversation {
   }
 }
 
+class ChatReplySnapshot {
+  final String? messageId;
+  final String senderName;
+  final String contentPreview;
+  final bool isDeleted;
+
+  const ChatReplySnapshot({
+    this.messageId,
+    required this.senderName,
+    required this.contentPreview,
+    this.isDeleted = false,
+  });
+
+  factory ChatReplySnapshot.fromJson(Map<String, dynamic> json) {
+    return ChatReplySnapshot(
+      messageId: json['message_id']?.toString(),
+      senderName: (json['sender_name'] ?? '').toString(),
+      contentPreview: (json['content_preview'] ?? '').toString(),
+      isDeleted: json['is_deleted'] == true,
+    );
+  }
+}
+
 class ChatMessage {
-  // ... existing code ...
   final String id;
   final String conversationId;
   final String senderId;
@@ -917,6 +1006,15 @@ class ChatMessage {
   final String content;
   final DateTime createdAt;
   final List<String> readBy;
+  final List<dynamic> attachments;
+  final String? senderEmail;
+  final String? replyToMessageId;
+  final ChatReplySnapshot? replyToSnapshot;
+  final bool isDeleted;
+  final bool deletedForEveryone;
+  final bool edited;
+  final DateTime? editedAt;
+  final String? clientId;
 
   const ChatMessage({
     required this.id,
@@ -926,7 +1024,54 @@ class ChatMessage {
     required this.content,
     required this.createdAt,
     required this.readBy,
+    this.attachments = const [],
+    this.senderEmail,
+    this.replyToMessageId,
+    this.replyToSnapshot,
+    this.isDeleted = false,
+    this.deletedForEveryone = false,
+    this.edited = false,
+    this.editedAt,
+    this.clientId,
   });
+
+  ChatMessage copyWith({
+    String? id,
+    String? conversationId,
+    String? senderId,
+    String? senderName,
+    String? content,
+    DateTime? createdAt,
+    List<String>? readBy,
+    List<dynamic>? attachments,
+    String? senderEmail,
+    String? replyToMessageId,
+    ChatReplySnapshot? replyToSnapshot,
+    bool? isDeleted,
+    bool? deletedForEveryone,
+    bool? edited,
+    DateTime? editedAt,
+    String? clientId,
+  }) {
+    return ChatMessage(
+      id: id ?? this.id,
+      conversationId: conversationId ?? this.conversationId,
+      senderId: senderId ?? this.senderId,
+      senderName: senderName ?? this.senderName,
+      content: content ?? this.content,
+      createdAt: createdAt ?? this.createdAt,
+      readBy: readBy ?? this.readBy,
+      attachments: attachments ?? this.attachments,
+      senderEmail: senderEmail ?? this.senderEmail,
+      replyToMessageId: replyToMessageId ?? this.replyToMessageId,
+      replyToSnapshot: replyToSnapshot ?? this.replyToSnapshot,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedForEveryone: deletedForEveryone ?? this.deletedForEveryone,
+      edited: edited ?? this.edited,
+      editedAt: editedAt ?? this.editedAt,
+      clientId: clientId ?? this.clientId,
+    );
+  }
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
     id: json['id'] ?? json['_id'] ?? '',
@@ -938,6 +1083,21 @@ class ChatMessage {
         DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
         DateTime.now(),
     readBy: List<String>.from(json['read_by'] ?? []),
+    attachments: List<dynamic>.from(json['attachments'] ?? []),
+    senderEmail: json['sender_email']?.toString(),
+    replyToMessageId: json['reply_to_message_id']?.toString(),
+    replyToSnapshot: json['reply_to_snapshot'] is Map<String, dynamic>
+        ? ChatReplySnapshot.fromJson(
+            json['reply_to_snapshot'] as Map<String, dynamic>,
+          )
+        : null,
+    isDeleted: json['is_deleted'] == true,
+    deletedForEveryone: json['deleted_for_everyone'] == true,
+    edited: json['edited'] == true,
+    editedAt: json['edited_at'] != null
+        ? DateTime.tryParse(json['edited_at'])?.toLocal()
+        : null,
+    clientId: json['client_id']?.toString(),
   );
 }
 
