@@ -1,3 +1,5 @@
+// ignore_for_file: constant_identifier_names
+
 // ─── User & Auth ──────────────────────────────────────────────────────────────
 
 class User {
@@ -183,6 +185,7 @@ Map<String, dynamic> _toStringDynamicMap(dynamic value) {
 class Event {
   final String id;
   final String title;
+  final String? facilitator;
   final String? description;
   final String? imageUrl;
   final String venueName;
@@ -192,14 +195,22 @@ class Event {
   final String createdBy;
   final DateTime? createdAt;
   final String? reportFileId;
+  final String? reportFileName;
+  final String? reportWebViewLink;
+  final String? attendanceFileId;
+  final String? attendanceFileName;
+  final String? attendanceWebViewLink;
   final int? audienceCount;
   final String? notes;
   final String? pipelineStage;
   final String? approvalRequestId;
+  final String? inviteStatus;
+  final String? googleEventLink;
 
   const Event({
     required this.id,
     required this.title,
+    this.facilitator,
     this.description,
     this.imageUrl,
     required this.venueName,
@@ -209,10 +220,17 @@ class Event {
     required this.createdBy,
     this.createdAt,
     this.reportFileId,
+    this.reportFileName,
+    this.reportWebViewLink,
+    this.attendanceFileId,
+    this.attendanceFileName,
+    this.attendanceWebViewLink,
     this.audienceCount,
     this.notes,
     this.pipelineStage,
     this.approvalRequestId,
+    this.inviteStatus,
+    this.googleEventLink,
   });
 
   factory Event.fromJson(Map<String, dynamic> json) => Event(
@@ -220,6 +238,7 @@ class Event {
     title:
         (json['name'] ?? json['title'] ?? json['summary'] ?? 'Untitled event')
             .toString(),
+    facilitator: json['facilitator']?.toString(),
     description: json['description'],
     imageUrl:
         (json['image_url'] ??
@@ -247,11 +266,18 @@ class Event {
       (json['created_at'] ?? '').toString(),
     )?.toLocal(),
     reportFileId: json['report_file_id'],
+    reportFileName: json['report_file_name']?.toString(),
+    reportWebViewLink: json['report_web_view_link']?.toString(),
+    attendanceFileId: json['attendance_file_id']?.toString(),
+    attendanceFileName: json['attendance_file_name']?.toString(),
+    attendanceWebViewLink: json['attendance_web_view_link']?.toString(),
     audienceCount: json['audience_count'],
     notes: json['notes'] ?? json['htmlLink'],
     pipelineStage: json['pipeline_stage']?.toString(),
     approvalRequestId:
         (json['approval_request_id'] ?? json['id'] ?? json['_id'])?.toString(),
+    inviteStatus: json['invite_status']?.toString(),
+    googleEventLink: json['google_event_link']?.toString(),
   );
 }
 

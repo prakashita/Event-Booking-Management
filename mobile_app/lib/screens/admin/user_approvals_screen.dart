@@ -64,11 +64,12 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
         _error = _extractError(e);
       });
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _refreshing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _refreshing = false;
+        });
+      }
     }
   }
 
@@ -123,11 +124,12 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text(_extractError(e))));
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _actingUserId = null;
-        _actingAction = null;
-      });
+      if (mounted) {
+        setState(() {
+          _actingUserId = null;
+          _actingAction = null;
+        });
+      }
     }
   }
 

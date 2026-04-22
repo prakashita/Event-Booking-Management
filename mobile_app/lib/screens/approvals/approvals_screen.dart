@@ -475,7 +475,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
                   child: _ApprovalCard(
                     request: req,
                     showActions: showActions && _isActionable(req),
-                    onDetails: () => context.go('/events/approval-${req.id}'),
+                    onDetails: () => context.go('/approval-details/${req.id}'),
                     onDecision: (action) => _handleDecision(req, action),
                   ),
                 );

@@ -119,11 +119,12 @@ class _AdminScreenState extends State<AdminScreen> {
         _error = _extractError(e);
       });
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _isRefreshing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isRefreshing = false;
+        });
+      }
     }
   }
 

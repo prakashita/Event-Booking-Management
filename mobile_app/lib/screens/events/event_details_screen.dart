@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -6,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../services/api_service.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
@@ -13,6 +15,8 @@ import '../requirements/requirements_wizard_dialog.dart';
 
 const List<({String value, String label})> _discussionDepartmentOptions = [
   (value: 'registrar', label: 'Registrar'),
+  (value: 'deputy_registrar', label: 'Deputy Registrar'),
+  (value: 'finance_team', label: 'Finance'),
   (value: 'facility_manager', label: 'Facility'),
   (value: 'it', label: 'IT'),
   (value: 'marketing', label: 'Marketing'),
@@ -22,17 +26,35 @@ const List<({String value, String label})> _discussionDepartmentOptions = [
 
 class EventDetailsScreen extends StatefulWidget {
   final String eventId;
+  final EventDetailsViewMode viewMode;
 
-  const EventDetailsScreen({super.key, required this.eventId});
+  const EventDetailsScreen({
+    super.key,
+    required this.eventId,
+    this.viewMode = EventDetailsViewMode.event,
+  });
 
   @override
   State<EventDetailsScreen> createState() => _EventDetailsScreenState();
 }
 
+enum EventDetailsViewMode { event, approval }
+
 enum _ApprovalDecisionAction { approve, reject, clarify }
 
 class _EventDetailsScreenState extends State<EventDetailsScreen> {
   final _api = ApiService();
+  static const List<Map<String, String>> _marketingDeliverableOptions = [
+    {'key': 'poster_required', 'type': 'poster', 'label': 'Poster'},
+    {'key': 'video_required', 'type': 'video', 'label': 'Videoshoot'},
+    {'key': 'linkedin_post', 'type': 'linkedin', 'label': 'Social Media Post'},
+    {
+      'key': 'photography',
+      'type': 'photography',
+      'label': 'Photoshoot / Photo upload',
+    },
+    {'key': 'recording', 'type': 'recording', 'label': 'Video Upload'},
+  ];
   bool _isLoading = true;
   String? _error;
   Map<String, dynamic>? _detailsData;
@@ -52,7 +74,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   String _newDiscussionDepartment = '';
   String? _discussionError;
 
-  bool get _isApprovalOnlyEntry => widget.eventId.startsWith('approval-');
+  bool get _isApprovalOnlyEntry =>
+      widget.viewMode == EventDetailsViewMode.approval ||
+      widget.eventId.startsWith('approval-');
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
   Color get _pageBg => Theme.of(context).scaffoldBackgroundColor;
@@ -159,6 +183,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         .map((e) => e.toString().trim())
         .where((e) => e.isNotEmpty)
         .toList();
+  }
+
+  Map<String, dynamic> _stringDynamicMap(dynamic value) {
+    if (value is Map<String, dynamic>) return Map<String, dynamic>.from(value);
+    if (value is Map) {
+      return Map<String, dynamic>.fromEntries(
+        value.entries.map((entry) => MapEntry(entry.key.toString(), entry.value)),
+      );
+    }
+    return <String, dynamic>{};
   }
 
   String? _classifyRequirementLine(String line) {
@@ -307,155 +341,43 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   bool get _showApprovalActions =>
       _isApprovalActionable && _isApprovalStageReviewer && !_isRequester;
 
-  List<Map<String, String?>> _buildApprovalWorkflowSteps() {
-    final approval = _approval;
-    final status = _s(approval['status'], fallback: '').toLowerCase();
-    final stage = _s(approval['pipeline_stage'], fallback: '').toLowerCase();
-    final budgetRaw = approval['budget'] ?? _event['budget'];
-    final budget = budgetRaw is num
-        ? budgetRaw.toDouble()
-        : double.tryParse('$budgetRaw') ?? 0;
-    final finalStageLabel = budget > 30000
-        ? 'Registrar / VC'
-        : 'Registrar';
+  bool get _showDiscussionSection => _approvalRequestId.isNotEmpty;
 
-    String deputyStatus = 'none';
-    String financeStatus = 'none';
-    String finalStatus = 'none';
-
-    if (stage == 'deputy') {
-      deputyStatus = status == 'clarification_requested'
-          ? 'clarification_requested'
-          : status == 'rejected'
-          ? 'rejected'
-          : 'pending';
-    } else if (stage == 'after_deputy' || stage == 'finance') {
-      deputyStatus = 'approved';
-      financeStatus = status == 'clarification_requested'
-          ? 'clarification_requested'
-          : status == 'rejected'
-          ? 'rejected'
-          : 'pending';
-    } else if (stage == 'after_finance') {
-      deputyStatus = 'approved';
-      financeStatus = 'approved';
-      finalStatus = 'pending';
-    } else if (stage == 'registrar') {
-      deputyStatus = _s(approval['deputy_decided_by'], fallback: '').isNotEmpty
-          ? 'approved'
-          : 'none';
-      financeStatus = _s(approval['finance_decided_by'], fallback: '').isNotEmpty
-          ? 'approved'
-          : 'none';
-      finalStatus = status == 'clarification_requested'
-          ? 'clarification_requested'
-          : status == 'rejected'
-          ? 'rejected'
-          : 'pending';
-    } else if (stage == 'complete' || status == 'approved') {
-      deputyStatus = _s(approval['deputy_decided_by'], fallback: '').isNotEmpty
-          ? 'approved'
-          : 'none';
-      financeStatus = _s(approval['finance_decided_by'], fallback: '').isNotEmpty
-          ? 'approved'
-          : 'none';
-      finalStatus = 'approved';
-      if (stage == 'after_deputy') {
-        deputyStatus = 'approved';
-      }
-      if (stage == 'after_finance') {
-        deputyStatus = 'approved';
-        financeStatus = 'approved';
-      }
-      if (stage.isEmpty && deputyStatus == 'none' && financeStatus == 'none') {
-        finalStatus = 'approved';
-      }
-    } else if (status == 'rejected') {
-      if (stage == 'finance') {
-        deputyStatus = 'approved';
-        financeStatus = 'rejected';
-      } else if (stage == 'registrar') {
-        deputyStatus = _s(approval['deputy_decided_by'], fallback: '').isNotEmpty
-            ? 'approved'
-            : 'none';
-        financeStatus = _s(approval['finance_decided_by'], fallback: '').isNotEmpty
-            ? 'approved'
-            : 'none';
-        finalStatus = 'rejected';
-      } else {
-        deputyStatus = 'rejected';
-      }
-    } else if (status == 'pending' && stage.isEmpty) {
-      finalStatus = 'pending';
-    }
-
-    return [
-      {
-        'label': 'Deputy Registrar',
-        'status': deputyStatus,
-        'assignee': _s(approval['deputy_decided_by'], fallback: ''),
-        'updated_at': _s(approval['deputy_decided_at'], fallback: ''),
-      },
-      {
-        'label': 'Finance Team',
-        'status': financeStatus,
-        'assignee': _s(approval['finance_decided_by'], fallback: ''),
-        'updated_at': _s(approval['finance_decided_at'], fallback: ''),
-      },
-      {
-        'label': finalStageLabel,
-        'status': finalStatus,
-        'assignee': _s(
-          approval['decided_by'] ?? approval['requested_to'],
-          fallback: '',
-        ),
-        'updated_at': _s(approval['decided_at'], fallback: ''),
-      },
-    ];
-  }
-
-  String _workflowBadgeLabel(String status) {
-    switch (status) {
-      case 'approved':
-        return 'Approved';
-      case 'pending':
-        return 'Pending';
-      case 'clarification_requested':
-        return 'Clarification';
-      case 'rejected':
-        return 'Rejected';
+  String? get _viewerDepartmentKey {
+    switch (_currentRoleKey) {
+      case 'marketing':
+        return 'marketing';
+      case 'facility_manager':
+        return 'facility';
+      case 'it':
+        return 'it';
+      case 'transport':
+        return 'transport';
+      case 'iqac':
+        return 'iqac';
       default:
-        return '—';
+        return null;
     }
   }
 
-  Color _workflowBadgeBg(String status) {
-    switch (status) {
-      case 'approved':
-        return const Color(0xFFDCFCE7);
-      case 'pending':
-        return const Color(0xFFFEF3C7);
-      case 'clarification_requested':
-        return const Color(0xFFE0E7FF);
-      case 'rejected':
-        return const Color(0xFFFEE2E2);
-      default:
-        return _panel;
-    }
-  }
+  bool get _isDepartmentInboxRole =>
+      _viewerDepartmentKey == 'facility' ||
+      _viewerDepartmentKey == 'it' ||
+      _viewerDepartmentKey == 'marketing' ||
+      _viewerDepartmentKey == 'transport';
 
-  Color _workflowBadgeFg(String status) {
-    switch (status) {
-      case 'approved':
-        return const Color(0xFF166534);
-      case 'pending':
-        return const Color(0xFFB45309);
-      case 'clarification_requested':
-        return const Color(0xFF4338CA);
-      case 'rejected':
-        return const Color(0xFFB91C1C);
+  String? _patchPathForDepartment(String key, String id) {
+    switch (key) {
+      case 'facility':
+        return '/facility/requests/$id';
+      case 'it':
+        return '/it/requests/$id';
+      case 'marketing':
+        return '/marketing/requests/$id';
+      case 'transport':
+        return '/transport/requests/$id';
       default:
-        return _muted;
+        return null;
     }
   }
 
@@ -515,6 +437,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
+  ApprovalThreadInfo? _threadForRequestId(String requestId) {
+    if (requestId.trim().isEmpty) return null;
+    for (final thread in _deptRequestThreads) {
+      if ((thread.relatedRequestId ?? '').trim() == requestId.trim()) {
+        return thread;
+      }
+    }
+    return null;
+  }
+
   String _threadStatusLabel(String status) {
     final normalized = status.trim().toLowerCase();
     if (normalized == 'waiting_for_faculty') return 'Waiting for faculty';
@@ -522,6 +454,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     if (normalized == 'resolved') return 'Resolved';
     if (normalized == 'closed') return 'Closed';
     return normalized.isEmpty ? 'Active' : normalized.replaceAll('_', ' ');
+  }
+
+  String _getApprovedByRoleLabel(Map<String, dynamic> approval) {
+    final reviewRole = _buildReviewRole(approval, _event);
+    if (reviewRole.contains('Vice Chancellor')) return 'Vice Chancellor';
+    if (reviewRole.contains('Registrar')) return 'Registrar';
+    if (reviewRole.contains('Finance')) return 'Finance Team';
+    if (reviewRole.contains('Deputy')) return 'Deputy Registrar';
+    return '';
   }
 
   String _decisionStatus(_ApprovalDecisionAction action) {
@@ -571,6 +512,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       return error.message ?? 'Request failed. Please try again.';
     }
     return error.toString();
+  }
+
+  Future<void> _connectGoogle() async {
+    final res = await _api.get<Map<String, dynamic>>('/calendar/connect-url');
+    final url = res['url']?.toString().trim() ?? '';
+    if (url.isEmpty) {
+      throw Exception('Failed to obtain Google connect URL.');
+    }
+    final uri = Uri.parse(url);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) {
+      final fallback = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (!fallback) {
+        throw Exception('Could not open the Google consent page.');
+      }
+    }
   }
 
   Future<String?> _promptDecisionComment({
@@ -688,7 +645,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       final status = (updated['status'] ?? '').toString().toLowerCase();
       final stage = (updated['pipeline_stage'] ?? '').toString().toLowerCase();
       String message;
-      if (action == _ApprovalDecisionAction.approve && stage == 'after_deputy') {
+      if (action == _ApprovalDecisionAction.approve &&
+          stage == 'after_deputy') {
         message =
             'Approved at Deputy stage. Requester can now send to Finance.';
       } else if (action == _ApprovalDecisionAction.approve &&
@@ -731,32 +689,452 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
   }
 
-  Color _threadStatusBg(String status) {
+  Map<String, Color> _threadStatusColor(String status) {
     switch (status.trim().toLowerCase()) {
       case 'waiting_for_faculty':
-        return const Color(0xFFFFF7ED);
+        return {'bg': const Color(0xFFFFF7ED), 'fg': const Color(0xFFC2410C)};
       case 'waiting_for_department':
-        return const Color(0xFFEEF2FF);
+        return {'bg': const Color(0xFFEEF2FF), 'fg': const Color(0xFF4338CA)};
       case 'resolved':
       case 'closed':
-        return const Color(0xFFF1F5F9);
+        return {'bg': const Color(0xFFF1F5F9), 'fg': const Color(0xFF475569)};
       default:
-        return const Color(0xFFECFDF5);
+        return {'bg': const Color(0xFFECFDF5), 'fg': const Color(0xFF047857)};
     }
   }
 
-  Color _threadStatusFg(String status) {
-    switch (status.trim().toLowerCase()) {
-      case 'waiting_for_faculty':
-        return const Color(0xFFC2410C);
-      case 'waiting_for_department':
-        return const Color(0xFF4338CA);
-      case 'resolved':
-      case 'closed':
-        return const Color(0xFF475569);
-      default:
-        return const Color(0xFF047857);
+  Future<void> _decideDepartmentRequest(
+    String key,
+    String id,
+    String decision,
+    String comment,
+  ) async {
+    final path = _patchPathForDepartment(key, id);
+    if (path == null) return;
+    try {
+      await _api.patch(path, data: {'status': decision, 'comment': comment});
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            decision == 'approved'
+                ? 'Request approved.'
+                : decision == 'rejected'
+                ? 'Request rejected.'
+                : 'Clarification requested.',
+          ),
+          backgroundColor: decision == 'approved'
+              ? const Color(0xFF16A34A)
+              : const Color(0xFF475569),
+        ),
+      );
+      await _fetchDetails();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_extractApiErrorMessage(e)),
+          backgroundColor: const Color(0xFFDC2626),
+        ),
+      );
     }
+  }
+
+  Future<void> _openDepartmentDecisionDialog(
+    String key,
+    Map<String, dynamic> request,
+  ) async {
+    final requestId = _s(request['id'], fallback: '');
+    if (requestId.isEmpty || !_canDepartmentTakeAction(request)) return;
+
+    String selected = 'approved';
+    final commentCtrl = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text('Update ${key.toUpperCase()} request'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: selected,
+                  decoration: const InputDecoration(
+                    labelText: 'Decision',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'approved', child: Text('Approve')),
+                    DropdownMenuItem(value: 'rejected', child: Text('Reject')),
+                    DropdownMenuItem(
+                      value: 'clarification_requested',
+                      child: Text('Need clarification'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setLocal(() => selected = value ?? 'approved');
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: commentCtrl,
+                  minLines: 3,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    labelText: selected == 'approved'
+                        ? 'Comment (optional)'
+                        : 'Comment (required)',
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final comment = commentCtrl.text.trim();
+                if (selected != 'approved' && comment.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Comment is required for reject/clarification.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                Navigator.of(ctx).pop();
+                await _decideDepartmentRequest(key, requestId, selected, comment);
+              },
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
+    );
+    commentCtrl.dispose();
+  }
+
+  Future<String?> _uploadMarketingDeliverablesBatch({
+    required String requestId,
+    required Map<String, bool> naByType,
+    required Map<String, MultipartFile?> filesByType,
+  }) async {
+    try {
+      final payload = <String, dynamic>{};
+      for (final entry in naByType.entries) {
+        if (entry.value) payload['na_${entry.key}'] = '1';
+      }
+      for (final entry in filesByType.entries) {
+        final file = entry.value;
+        if (file != null) {
+          payload['file_${entry.key}'] = file;
+        }
+      }
+      if (payload.isEmpty) {
+        return 'Choose at least one file or mark an item as N/A.';
+      }
+      await _api.postMultipart<Map<String, dynamic>>(
+        '/marketing/requests/$requestId/deliverables/batch',
+        FormData.fromMap(payload),
+      );
+      if (!mounted) return null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Marketing deliverables submitted.'),
+          backgroundColor: Color(0xFF16A34A),
+        ),
+      );
+      await _fetchDetails();
+      return null;
+    } catch (e) {
+      return _extractApiErrorMessage(e);
+    }
+  }
+
+  Future<void> _openMarketingUploadDialog(Map<String, dynamic> request) async {
+    final requestId = _s(request['id'], fallback: '');
+    if (requestId.isEmpty) return;
+
+    final uploadFlags = _marketingDeliverableUploadFlagsFromMap(request);
+    final enabledOptions = _marketingDeliverableOptions
+        .where((opt) => uploadFlags[opt['key']] == true)
+        .toList();
+
+    if (enabledOptions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This request only includes during-event marketing. No file uploads are required.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final deliverables = (request['deliverables'] as List? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map(MarketingDeliverable.fromJson)
+        .toList();
+    final existingByType = <String, MarketingDeliverable>{
+      for (final d in deliverables) d.type: d,
+    };
+    final naByType = <String, bool>{
+      for (final opt in enabledOptions)
+        opt['type']!: existingByType[opt['type']]?.isNa ?? false,
+    };
+    final filesByType = <String, MultipartFile?>{
+      for (final opt in enabledOptions) opt['type']!: null,
+    };
+    final fileNameByType = <String, String>{
+      for (final opt in enabledOptions)
+        if (existingByType[opt['type']]?.isNa != true &&
+            (existingByType[opt['type']]?.link ?? '').isNotEmpty)
+          opt['type']!: existingByType[opt['type']]!.link!,
+    };
+    var submitStatus = 'idle';
+    var submitError = '';
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) {
+          final hasSelection = enabledOptions.any((opt) {
+            final type = opt['type']!;
+            final lock = _marketingDeliverableRowLock(type, request);
+            if (lock.locked) return false;
+            return naByType[type] == true ||
+                filesByType[type] != null;
+          });
+
+          return AlertDialog(
+            title: const Text('Upload Marketing Deliverables'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final opt in enabledOptions) ...[
+                    Builder(
+                      builder: (_) {
+                        final type = opt['type']!;
+                        final lock = _marketingDeliverableRowLock(type, request);
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: _border),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                opt['label']!,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: _onSurface,
+                                ),
+                              ),
+                              if (lock.locked) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  lock.hint,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: _muted,
+                                  ),
+                                ),
+                              ] else ...[
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: naByType[type] == true
+                                          ? null
+                                          : () async {
+                                              final result =
+                                                  await FilePicker.platform
+                                                      .pickFiles(
+                                                        withData: kIsWeb,
+                                                        withReadStream: !kIsWeb,
+                                                        type: FileType.custom,
+                                                        allowedExtensions: [
+                                                          'pdf',
+                                                          'png',
+                                                          'jpg',
+                                                          'jpeg',
+                                                          'webp',
+                                                        ],
+                                                      );
+                                              final picked = result
+                                                  ?.files
+                                                  .single;
+                                              if (picked == null) return;
+                                              MultipartFile? multipart;
+                                              if (picked.path != null &&
+                                                  picked.path!
+                                                      .trim()
+                                                      .isNotEmpty) {
+                                                multipart =
+                                                    await MultipartFile.fromFile(
+                                                      picked.path!,
+                                                      filename: picked.name,
+                                                    );
+                                              } else if (picked.bytes != null) {
+                                                multipart =
+                                                    MultipartFile.fromBytes(
+                                                      picked.bytes!,
+                                                      filename: picked.name,
+                                                    );
+                                              } else if (picked.readStream !=
+                                                  null) {
+                                                multipart =
+                                                    MultipartFile.fromStream(
+                                                  () => picked.readStream!,
+                                                  picked.size,
+                                                  filename: picked.name,
+                                                );
+                                              }
+                                              if (multipart == null) {
+                                                if (!ctx.mounted) return;
+                                                ScaffoldMessenger.of(
+                                                  ctx,
+                                                ).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Unable to read selected file.',
+                                                    ),
+                                                  ),
+                                                );
+                                                return;
+                                              }
+                                              setLocal(() {
+                                                filesByType[type] = multipart;
+                                                fileNameByType[type] =
+                                                    picked.name;
+                                              });
+                                            },
+                                      icon: const Icon(Icons.upload_file),
+                                      label: Text(
+                                        fileNameByType[type]?.isNotEmpty == true
+                                            ? 'Replace file'
+                                            : 'Choose file',
+                                      ),
+                                    ),
+                                    FilterChip(
+                                      label: const Text('Mark N/A'),
+                                      selected: naByType[type] == true,
+                                      onSelected: (value) {
+                                        setLocal(() {
+                                          naByType[type] = value;
+                                          if (value) {
+                                            filesByType[type] = null;
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                                if ((fileNameByType[type] ?? '').isNotEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    fileNameByType[type]!,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: _muted,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                  if (submitStatus == 'error') ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            submitError,
+                            style: const TextStyle(
+                              color: Color(0xFFDC2626),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        if (submitError == 'Google not connected') ...[
+                          const SizedBox(width: 8),
+                          OutlinedButton(
+                            onPressed: () async {
+                              try {
+                                await _connectGoogle();
+                              } catch (e) {
+                                if (!ctx.mounted) return;
+                                setLocal(() {
+                                  submitError = _extractApiErrorMessage(e);
+                                });
+                              }
+                            },
+                            child: const Text('Connect Google'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: submitStatus == 'loading' || !hasSelection
+                    ? null
+                    : () async {
+                        setLocal(() {
+                          submitStatus = 'loading';
+                          submitError = '';
+                        });
+                        final error = await _uploadMarketingDeliverablesBatch(
+                          requestId: requestId,
+                          naByType: naByType,
+                          filesByType: filesByType,
+                        );
+                        if (!ctx.mounted) return;
+                        if (error == null) {
+                          Navigator.of(ctx).pop();
+                          return;
+                        }
+                        setLocal(() {
+                          submitStatus = 'error';
+                          submitError = error;
+                        });
+                      },
+                child: Text(
+                  submitStatus == 'loading' ? 'Saving...' : 'Save',
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _startDiscussion() async {
@@ -893,9 +1271,136 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     return combined.isEmpty ? 'N/A' : combined;
   }
 
-  bool _isRequirementResolved(String status) {
+  bool _requestHasStarted(Map<String, dynamic> request) {
+    final startDate = _s(request['start_date'], fallback: '');
+    final startTime = _s(request['start_time'], fallback: '');
+    if (startDate.isEmpty) return false;
+    final parsed = DateTime.tryParse(
+      '$startDate ${startTime.isEmpty ? '00:00' : startTime}',
+    );
+    if (parsed == null) return false;
+    return !parsed.isAfter(DateTime.now());
+  }
+
+  bool _requestHasEnded(Map<String, dynamic> request) {
+    final endDate = _s(request['end_date'], fallback: '');
+    final endTime = _s(request['end_time'], fallback: '');
+    if (endDate.isEmpty) return false;
+    final parsed = DateTime.tryParse(
+      '$endDate ${endTime.isEmpty ? '23:59' : endTime}',
+    );
+    if (parsed == null) return false;
+    return !parsed.isAfter(DateTime.now());
+  }
+
+  bool _canDepartmentTakeAction(Map<String, dynamic> request) {
+    final status = _s(request['status'], fallback: '').toLowerCase();
+    return (status == 'pending' || status == 'clarification_requested') &&
+        !_requestHasStarted(request);
+  }
+
+  Map<String, dynamic> _normalizeMarketingRequirementsFromMap(
+    Map<String, dynamic> request,
+  ) {
+    final req = _stringDynamicMap(request['marketing_requirements']);
+    final pre = req['pre_event'] is Map
+        ? Map<String, dynamic>.from(req['pre_event'] as Map)
+        : const <String, dynamic>{};
+    final during = req['during_event'] is Map
+        ? Map<String, dynamic>.from(req['during_event'] as Map)
+        : const <String, dynamic>{};
+    final post = req['post_event'] is Map
+        ? Map<String, dynamic>.from(req['post_event'] as Map)
+        : const <String, dynamic>{};
+
+    return {
+      'pre_event': {
+        'poster': pre['poster'] ?? request['poster_required'] == true,
+        'social_media': pre['social_media'] ?? request['linkedin_post'] == true,
+      },
+      'during_event': {
+        'photo': during['photo'] ?? request['photography'] == true,
+        'video': during['video'] ?? request['video_required'] == true,
+      },
+      'post_event': {
+        'social_media': post['social_media'] ?? false,
+        'photo_upload': post['photo_upload'] ?? false,
+        'video': post['video'] ?? request['recording'] == true,
+      },
+    };
+  }
+
+  Map<String, bool> _marketingDeliverableUploadFlagsFromMap(
+    Map<String, dynamic> request,
+  ) {
+    final normalized = _normalizeMarketingRequirementsFromMap(request);
+    final pre = normalized['pre_event'] as Map<String, dynamic>;
+    final post = normalized['post_event'] as Map<String, dynamic>;
+    return {
+      'poster_required': pre['poster'] == true,
+      'video_required': false,
+      'linkedin_post':
+          pre['social_media'] == true || post['social_media'] == true,
+      'photography': post['photo_upload'] == true,
+      'recording': post['video'] == true,
+    };
+  }
+
+  ({bool locked, String hint}) _marketingDeliverableRowLock(
+    String type,
+    Map<String, dynamic> request,
+  ) {
+    final started = _requestHasStarted(request);
+    final ended = _requestHasEnded(request);
+    if (type == 'poster' || type == 'linkedin') {
+      return started
+          ? (
+              locked: true,
+              hint: 'Pre-event social posts: upload before the event starts.',
+            )
+          : (locked: false, hint: '');
+    }
+    if (type == 'recording') {
+      return !ended
+          ? (
+              locked: true,
+              hint: 'Post-event video: upload after the event has ended.',
+            )
+          : (locked: false, hint: '');
+    }
+    if (type == 'photography') {
+      return !ended
+          ? (
+              locked: true,
+              hint: 'Post-event photo: upload after the event has ended.',
+            )
+          : (locked: false, hint: '');
+    }
+    return (locked: false, hint: '');
+  }
+
+  bool _canSendRequirementForStatus(String status) {
     final normalized = status.trim().toLowerCase();
-    return normalized == 'approved' || normalized == 'accepted';
+    return normalized == 'none' || normalized == 'rejected';
+  }
+
+  List<String> get _sendableRequirementDepartments {
+    final facility = _mapList('facility_requests');
+    final marketing = _mapList('marketing_requests');
+    final it = _mapList('it_requests');
+    final transport = _mapList('transport_requests');
+
+    final statuses = <String, String>{
+      'facility': _aggregateRequirementStatus(facility),
+      'it': _aggregateRequirementStatus(it),
+      'marketing': _aggregateRequirementStatus(marketing),
+      'transport': _aggregateRequirementStatus(transport),
+    };
+
+    return statuses.entries
+        .where((entry) => _canSendRequirementForStatus(entry.value))
+        .map((entry) => entry.key)
+        .toList();
   }
 
   bool _eventHasStarted() {
@@ -916,21 +1421,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     if (_eventHasStarted()) return false;
     if (eventStatus == 'completed' || eventStatus == 'closed') return false;
 
-    final facility = _mapList('facility_requests');
-    final marketing = _mapList('marketing_requests');
-    final it = _mapList('it_requests');
-    final transport = _mapList('transport_requests');
-
-    final statuses = <String?>[
-      facility.isNotEmpty ? _aggregateRequirementStatus(facility) : null,
-      marketing.isNotEmpty ? _aggregateRequirementStatus(marketing) : null,
-      it.isNotEmpty ? _aggregateRequirementStatus(it) : null,
-      transport.isNotEmpty ? _aggregateRequirementStatus(transport) : null,
-    ];
-
-    return statuses.any(
-      (status) => status == null || !_isRequirementResolved(status),
-    );
+    return _sendableRequirementDepartments.isNotEmpty;
   }
 
   @override
@@ -1022,11 +1513,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         children: [
                           _buildEventOverview(),
                           const SizedBox(height: 24),
-                          _buildApprovalWorkflow(),
-                          const SizedBox(height: 24),
-                          _buildApprovalContext(),
-                          const SizedBox(height: 24),
-                          _buildDiscussion(),
+                          _isApprovalOnlyEntry
+                              ? _buildApprovalWorkflow()
+                              : _buildEventWorkflow(),
+                          if (_showDiscussionSection) ...[
+                            const SizedBox(height: 24),
+                            _buildDiscussion(),
+                          ],
+                          if (_isApprovalOnlyEntry) ...[
+                            const SizedBox(height: 24),
+                            _buildApprovalContext(),
+                          ],
                           const SizedBox(height: 24),
                           _buildRequirements(),
                           const SizedBox(height: 24),
@@ -1075,9 +1572,21 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       ),
                     ),
                   ),
-                  if (_canSendRequirements)
+                  if (!_isApprovalOnlyEntry && _canSendRequirements)
                     ElevatedButton(
                       onPressed: () {
+                        final sendableDepartments =
+                            _sendableRequirementDepartments;
+                        if (sendableDepartments.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'All requirement requests are already active.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
                         final event = Event.fromJson(
                           _detailsData?['event'] ?? {},
                         );
@@ -1086,6 +1595,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           barrierDismissible: false,
                           builder: (ctx) => RequirementsWizardDialog(
                             event: event,
+                            departments: sendableDepartments,
                             requesterEmail: _s(
                               _approval['requester_email'],
                               fallback: '',
@@ -1207,6 +1717,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Widget _buildEventOverview() {
     final event = _event;
     final approval = _approval;
+    final showRequester = _isApprovalOnlyEntry;
+    final showCombinedStatus = _isApprovalOnlyEntry;
 
     final status = _s(event['status'], fallback: 'pending');
     final approvalStatus = _s(approval['status'], fallback: 'pending');
@@ -1256,19 +1768,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               ),
             ),
           ),
-          _buildLabelValue(
-            LucideIcons.mail,
-            'Requester',
-            Text(
-              _s(approval['requester_email'], fallback: 'Unknown'),
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF2563EB),
-                decoration: TextDecoration.underline,
+          if (showRequester)
+            _buildLabelValue(
+              LucideIcons.mail,
+              'Requester',
+              Text(
+                _s(approval['requester_email'], fallback: 'Unknown'),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF2563EB),
+                  decoration: TextDecoration.underline,
+                ),
               ),
             ),
-          ),
           _buildLabelValue(
             LucideIcons.user,
             'Facilitator',
@@ -1366,59 +1879,79 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           _buildLabelValue(
             LucideIcons.disc,
             'Status',
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFDF0D5),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    approvalStatus.toUpperCase().replaceAll('_', ' '),
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFFB47B1E),
-                      letterSpacing: 1.0,
+            showCombinedStatus
+                ? Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDF0D5),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          approvalStatus.toUpperCase().replaceAll('_', ' '),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFB47B1E),
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          '· Event:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFDF0D5),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          status.toUpperCase().replaceAll('_', ' '),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFFB47B1E),
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFDF0D5),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      status.toUpperCase().replaceAll('_', ' '),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFB47B1E),
+                        letterSpacing: 1.0,
+                      ),
                     ),
                   ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    '· Event:',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF94A3B8),
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFDF0D5),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    status.toUpperCase().replaceAll('_', ' '),
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFFB47B1E),
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ),
           _buildLabelValue(
             LucideIcons.calendar,
@@ -1448,7 +1981,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             LucideIcons.alignLeft,
             'Description',
             Text(
-              _s(event['description'], fallback: 'No description'),
+              _s(
+                event['description'],
+                fallback: _s(approval['description'], fallback: 'No description'),
+              ),
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -1465,6 +2001,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final approval = _approval;
     final status = _s(approval['status'], fallback: 'Pending');
     final statusValue = status.toLowerCase().replaceAll('_', ' ');
+    final discussionStatus = _s(approval['discussion_status'], fallback: '');
 
     return _buildCard(
       icon: LucideIcons.shieldCheck,
@@ -1472,6 +2009,150 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Status + Stage: side-by-side prominent row (matching website)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _panel,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _border),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Current status',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: _muted,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusValue.contains('approved')
+                              ? const Color(0xFFDCFCE7)
+                              : statusValue.contains('reject')
+                              ? const Color(0xFFFEE2E2)
+                              : statusValue.contains('clarification')
+                              ? const Color(0xFFE0E7FF)
+                              : const Color(0xFFFDF0D5),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          status,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: statusValue.contains('approved')
+                                ? const Color(0xFF166534)
+                                : statusValue.contains('reject')
+                                ? const Color(0xFFB91C1C)
+                                : statusValue.contains('clarification')
+                                ? const Color(0xFF4338CA)
+                                : const Color(0xFFB47B1E),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Stage',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: _muted,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _workflowStageLabel(),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Discussion status banner (matching website)
+          if (discussionStatus.isNotEmpty &&
+              (statusValue.contains('clarification') ||
+                  discussionStatus.contains('waiting'))) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: discussionStatus.contains('waiting_for_faculty')
+                    ? const Color(0xFFFFF7ED)
+                    : const Color(0xFFEEF2FF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: discussionStatus.contains('waiting_for_faculty')
+                      ? const Color(0xFFFED7AA)
+                      : const Color(0xFFC7D2FE),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    discussionStatus.contains('waiting_for_faculty')
+                        ? LucideIcons.alertCircle
+                        : LucideIcons.info,
+                    size: 18,
+                    color: discussionStatus.contains('waiting_for_faculty')
+                        ? const Color(0xFFC2410C)
+                        : const Color(0xFF4338CA),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      discussionStatus.contains('waiting_for_faculty')
+                          ? (_isRequester
+                                ? 'The reviewer has requested clarification. Please review and reply.'
+                                : 'Waiting for the faculty to respond to your clarification request.')
+                          : (_isRequester
+                                ? 'Your reply has been sent. Waiting for the reviewer.'
+                                : 'The faculty has replied. Please review their response.'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: discussionStatus.contains('waiting_for_faculty')
+                            ? const Color(0xFFC2410C)
+                            : const Color(0xFF4338CA),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+
+          // Requested To field
           _buildLabelValue(
             null,
             'Requested To',
@@ -1485,49 +2166,39 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               ),
             ),
           ),
-          _buildLabelValue(
-            null,
-            'Current Status',
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: statusValue.contains('approved')
-                    ? const Color(0xFFDCFCE7)
-                    : statusValue.contains('reject')
-                    ? const Color(0xFFFEE2E2)
-                    : statusValue.contains('clarification')
-                    ? const Color(0xFFE0E7FF)
-                    : const Color(0xFFFDF0D5),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                status,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: statusValue.contains('approved')
-                      ? const Color(0xFF166534)
-                      : statusValue.contains('reject')
-                      ? const Color(0xFFB91C1C)
-                      : statusValue.contains('clarification')
-                      ? const Color(0xFF4338CA)
-                      : const Color(0xFFB47B1E),
-                ),
-              ),
-            ),
-          ),
-          _buildLabelValue(
-            null,
-            'Workflow Stage',
-            Text(
-              _workflowStageLabel(),
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF1E293B),
+
+          // Final decision by with role label (matching website)
+          if (approval['decided_by'] != null &&
+              approval['decided_by'].toString().trim().isNotEmpty)
+            _buildLabelValue(
+              null,
+              'Final decision by',
+              Row(
+                children: [
+                  Text(
+                    _s(approval['decided_by'], fallback: ''),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF1E293B),
+                    ),
+                  ),
+                  if (_getApprovedByRoleLabel(approval).isNotEmpty) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      ' (${_getApprovedByRoleLabel(approval)})',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-          ),
+
+          // Requester action label
           _buildLabelValue(
             null,
             'Requester Action',
@@ -1540,6 +2211,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               ),
             ),
           ),
+
+          // Approval action buttons
           if (_showApprovalActions) ...[
             const SizedBox(height: 4),
             Text(
@@ -1561,27 +2234,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   background: const Color(0xFFDCFCE7),
                   foreground: const Color(0xFF166534),
                   border: const Color(0xFF86EFAC),
-                  onTap: () => _handleApprovalDecision(
-                    _ApprovalDecisionAction.approve,
-                  ),
+                  onTap: () =>
+                      _handleApprovalDecision(_ApprovalDecisionAction.approve),
                 ),
                 _buildDecisionButton(
                   label: 'Need clarification',
                   background: const Color(0xFFE0E7FF),
                   foreground: const Color(0xFF4338CA),
                   border: const Color(0xFFC7D2FE),
-                  onTap: () => _handleApprovalDecision(
-                    _ApprovalDecisionAction.clarify,
-                  ),
+                  onTap: () =>
+                      _handleApprovalDecision(_ApprovalDecisionAction.clarify),
                 ),
                 _buildDecisionButton(
                   label: 'Reject',
                   background: const Color(0xFFFEE2E2),
                   foreground: const Color(0xFFB91C1C),
                   border: const Color(0xFFFECACA),
-                  onTap: () => _handleApprovalDecision(
-                    _ApprovalDecisionAction.reject,
-                  ),
+                  onTap: () =>
+                      _handleApprovalDecision(_ApprovalDecisionAction.reject),
                 ),
               ],
             ),
@@ -1602,9 +2272,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Widget _buildApprovalWorkflow() {
-    final steps = _buildApprovalWorkflowSteps();
+    final approval = _approval;
+    final pipelineStage = _s(
+      approval['pipeline_stage'],
+      fallback: '',
+    ).toLowerCase();
     final currentStageLabel = _s(
-      _approval['current_stage_label'],
+      approval['current_stage_label'],
       fallback: _workflowStageLabel(),
     );
 
@@ -1632,114 +2306,400 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             ),
           ),
           const SizedBox(height: 18),
-          ...List.generate(steps.length, (index) {
-            final step = steps[index];
-            final status = (step['status'] ?? 'none').trim().toLowerCase();
-            final isLast = index == steps.length - 1;
-            final assignee = (step['assignee'] ?? '').trim();
-            final updatedAt = (step['updated_at'] ?? '').trim();
-            final parsedUpdatedAt = updatedAt.isEmpty
-                ? null
-                : DateTime.tryParse(updatedAt)?.toLocal();
 
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // Pipeline stage timeline: deputy → finance → registrar (matching website)
+          _buildPipelineStep(
+            label: 'Deputy Registrar',
+            decidedBy: _s(approval['deputy_decided_by'], fallback: ''),
+            isDone:
+                approval['deputy_decided_by'] != null &&
+                approval['deputy_decided_by'].toString().trim().isNotEmpty,
+            isActive:
+                approval['deputy_decided_by'] == null &&
+                (pipelineStage == 'deputy' || pipelineStage == 'after_deputy'),
+            isLast: false,
+          ),
+          _buildPipelineConnector(),
+          _buildPipelineStep(
+            label: 'Finance',
+            decidedBy: _s(approval['finance_decided_by'], fallback: ''),
+            isDone:
+                approval['finance_decided_by'] != null &&
+                approval['finance_decided_by'].toString().trim().isNotEmpty,
+            isActive:
+                approval['finance_decided_by'] == null &&
+                (pipelineStage == 'finance' ||
+                    pipelineStage == 'after_finance'),
+            isLast: false,
+          ),
+          _buildPipelineConnector(),
+          _buildPipelineStep(
+            label: 'Registrar / VC',
+            decidedBy: _s(approval['decided_by'], fallback: ''),
+            isDone:
+                approval['status'] == 'approved' &&
+                (pipelineStage == 'complete' || pipelineStage.isEmpty),
+            isActive:
+                approval['status'] != 'approved' &&
+                pipelineStage == 'registrar',
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventWorkflow() {
+    final approval = _approval;
+    final event = _event;
+    final facility = _mapList('facility_requests');
+    final it = _mapList('it_requests');
+    final marketing = _mapList('marketing_requests');
+    final eventStatus = _s(event['status'], fallback: '').toLowerCase();
+    final approvalStatus = _s(approval['status'], fallback: '').toLowerCase();
+
+    final registrarStep = (
+      label: 'Registrar',
+      status: approvalStatus.isEmpty ? 'none' : approvalStatus,
+      assignee: _s(
+        approval['requested_to'] ?? approval['decided_by'],
+        fallback: '',
+      ),
+      updatedAt: _s(approval['decided_at'], fallback: ''),
+    );
+    final facilityStep = (
+      label: 'Facility',
+      status: _aggregateRequirementStatus(facility),
+      assignee: facility
+          .map((req) => _s(req['requested_to'], fallback: ''))
+          .where((value) => value.isNotEmpty)
+          .toSet()
+          .join(', '),
+      updatedAt: facility
+          .map((req) => _s(req['decided_at'], fallback: ''))
+          .where((value) => value.isNotEmpty)
+          .fold<String>('', (latest, value) {
+            if (latest.isEmpty) return value;
+            final latestDt = DateTime.tryParse(latest);
+            final nextDt = DateTime.tryParse(value);
+            if (latestDt == null || nextDt == null) return value;
+            return nextDt.isAfter(latestDt) ? value : latest;
+          }),
+    );
+    final itStep = (
+      label: 'IT',
+      status: _aggregateRequirementStatus(it),
+      assignee: it
+          .map((req) => _s(req['requested_to'], fallback: ''))
+          .where((value) => value.isNotEmpty)
+          .toSet()
+          .join(', '),
+      updatedAt: it
+          .map((req) => _s(req['decided_at'], fallback: ''))
+          .where((value) => value.isNotEmpty)
+          .fold<String>('', (latest, value) {
+            if (latest.isEmpty) return value;
+            final latestDt = DateTime.tryParse(latest);
+            final nextDt = DateTime.tryParse(value);
+            if (latestDt == null || nextDt == null) return value;
+            return nextDt.isAfter(latestDt) ? value : latest;
+          }),
+    );
+    final marketingStep = (
+      label: 'Marketing',
+      status: _aggregateRequirementStatus(marketing),
+      assignee: marketing
+          .map((req) => _s(req['requested_to'], fallback: ''))
+          .where((value) => value.isNotEmpty)
+          .toSet()
+          .join(', '),
+      updatedAt: marketing
+          .map((req) => _s(req['decided_at'], fallback: ''))
+          .where((value) => value.isNotEmpty)
+          .fold<String>('', (latest, value) {
+            if (latest.isEmpty) return value;
+            final latestDt = DateTime.tryParse(latest);
+            final nextDt = DateTime.tryParse(value);
+            if (latestDt == null || nextDt == null) return value;
+            return nextDt.isAfter(latestDt) ? value : latest;
+          }),
+    );
+    final iqacHasReport =
+        _s(event['report_web_view_link'], fallback: '').isNotEmpty ||
+        _s(event['report_file_id'], fallback: '').isNotEmpty;
+    final iqacStep = (
+      label: 'IQAC',
+      status: iqacHasReport
+          ? 'approved'
+          : eventStatus.isNotEmpty && eventStatus != 'draft'
+          ? 'pending'
+          : 'none',
+      assignee: iqacHasReport ? 'Report on file' : '',
+      updatedAt: _s(event['report_uploaded_at'], fallback: ''),
+    );
+
+    final steps = [
+      registrarStep,
+      facilityStep,
+      itStep,
+      marketingStep,
+      iqacStep,
+    ];
+
+    return _buildCard(
+      icon: LucideIcons.gitBranch,
+      title: 'Approval flow',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Registrar through IQAC. Multiple requests for one team are aggregated into a single status.',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: _muted,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 18),
+          ...steps.asMap().entries.map((entry) {
+            final index = entry.key;
+            final step = entry.value;
+            return Column(
               children: [
-                Column(
-                  children: [
-                    Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: status == 'none'
-                            ? _panel
-                            : _workflowBadgeBg(status),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: status == 'none'
-                              ? _border
-                              : _workflowBadgeFg(status),
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                    if (!isLast)
-                      Container(
-                        width: 2,
-                        height: 58,
-                        margin: const EdgeInsets.symmetric(vertical: 6),
-                        color: _border,
-                      ),
-                  ],
+                _buildEventWorkflowStep(
+                  label: step.label,
+                  status: step.status,
+                  assignee: step.assignee,
+                  updatedAt: step.updatedAt,
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                step['label'] ?? '',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w800,
-                                  color: _onSurface,
-                                ),
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _workflowBadgeBg(status),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                _workflowBadgeLabel(status),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  color: _workflowBadgeFg(status),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (assignee.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            'Assigned / decided by: $assignee',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: _muted,
-                            ),
-                          ),
-                        ],
-                        if (parsedUpdatedAt != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'Updated: ${DateFormat('yyyy-MM-dd · h:mm a').format(parsedUpdatedAt)}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: _muted,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
+                if (index != steps.length - 1) _buildPipelineConnector(),
               ],
             );
           }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventWorkflowStep({
+    required String label,
+    required String status,
+    required String assignee,
+    required String updatedAt,
+  }) {
+    final colors = _getRequirementStatusColor(status);
+    final normalized = status.trim().toLowerCase();
+    final isDone = normalized == 'approved' || normalized == 'accepted';
+    final isPending = normalized == 'pending';
+    final isClarification = normalized == 'clarification_requested';
+    final showBadge = normalized.isNotEmpty && normalized != 'none';
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: isDone
+                ? const Color(0xFFDCFCE7)
+                : isPending || isClarification
+                ? const Color(0xFFFEF3C7)
+                : _panel,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isDone
+                  ? const Color(0xFF16A34A)
+                  : isPending || isClarification
+                  ? const Color(0xFFB45309)
+                  : _border,
+              width: 2,
+            ),
+          ),
+          child: Center(
+            child: isDone
+                ? Icon(
+                    LucideIcons.check,
+                    size: 10,
+                    color: const Color(0xFF16A34A),
+                  )
+                : null,
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: _onSurface,
+                      ),
+                    ),
+                  ),
+                  if (showBadge)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colors['bg'] as Color,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        normalized.replaceAll('_', ' ').toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: colors['fg'] as Color,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              if (assignee.isNotEmpty)
+                Text(
+                  assignee,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _muted,
+                  ),
+                )
+              else if (normalized == 'none')
+                Text(
+                  'No record yet',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _muted,
+                  ),
+                ),
+              if (updatedAt.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  _formatDateTime(updatedAt, ''),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _muted,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPipelineStep({
+    required String label,
+    required String decidedBy,
+    required bool isDone,
+    required bool isActive,
+    required bool isLast,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Pipeline dot with checkmark (matching website)
+        Container(
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: isDone
+                ? const Color(0xFFDCFCE7)
+                : isActive
+                ? const Color(0xFFFEF3C7)
+                : _panel,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isDone
+                  ? const Color(0xFF16A34A)
+                  : isActive
+                  ? const Color(0xFFB45309)
+                  : _border,
+              width: 2,
+            ),
+          ),
+          child: Center(
+            child: isDone
+                ? Icon(
+                    LucideIcons.check,
+                    size: 10,
+                    color: const Color(0xFF16A34A),
+                  )
+                : null,
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: _onSurface,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                if (decidedBy.isNotEmpty)
+                  Text(
+                    decidedBy,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _muted,
+                    ),
+                  )
+                else if (isActive)
+                  Text(
+                    'Awaiting',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFB45309),
+                    ),
+                  )
+                else
+                  Text(
+                    'Not started',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _muted,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPipelineConnector() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(width: 2, height: 24, color: _border),
+          const SizedBox(width: 14),
         ],
       ),
     );
@@ -1777,6 +2737,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Widget _buildDiscussion() {
     final approvalThreads = _approvalThreads;
     final deptThreads = _deptRequestThreads;
+    final actionLogs = _mapList('workflow_action_logs');
     final existingDepartments = approvalThreads
         .map((thread) => thread.department.trim().toLowerCase())
         .toSet();
@@ -1788,27 +2749,65 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          children: const [
-            Icon(LucideIcons.messageCircle, color: Color(0xFF2563EB), size: 20),
-            SizedBox(width: 12),
-            Text(
-              'Discussion',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
+          children: [
+            Icon(
+              LucideIcons.messageCircle,
+              color: const Color(0xFF2563EB),
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Discussion',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: _onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Department conversations and clarification threads.',
+                    style: TextStyle(fontSize: 13, color: _muted, height: 1.4),
+                  ),
+                ],
               ),
             ),
           ],
         ),
         const SizedBox(height: 16),
-        if (approvalThreads.isEmpty && deptThreads.isEmpty)
-          Text(
-            _isRequester
-                ? 'No department discussions yet. Start a conversation with a department from here, like on the web workflow.'
-                : 'No department discussions yet. A discussion will appear here when a department or approver sends a message.',
-            style: TextStyle(fontSize: 14, color: _muted, height: 1.5),
+        if (approvalThreads.isEmpty &&
+            deptThreads.isEmpty &&
+            actionLogs.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _panel,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _border),
+            ),
+            child: Row(
+              children: [
+                Icon(LucideIcons.info, size: 18, color: _muted),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _isRequester
+                        ? 'No department discussions yet. Start a conversation with a department from here, like on the web workflow.'
+                        : 'No department discussions yet. A discussion will appear here when a department or approver sends a message.',
+                    style: TextStyle(fontSize: 14, color: _muted, height: 1.5),
+                  ),
+                ),
+              ],
+            ),
           )
+        else if (approvalThreads.isEmpty &&
+            deptThreads.isEmpty &&
+            actionLogs.isNotEmpty)
+          _buildActionHistory(actionLogs)
         else
           ...approvalThreads.map(
             (thread) => Padding(
@@ -1818,13 +2817,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ),
         if (deptThreads.isNotEmpty) ...[
           const SizedBox(height: 8),
-          Text(
-            'Department request discussions',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: _muted,
-              letterSpacing: 0.4,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'Department request discussions',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF64748B),
+                letterSpacing: 0.4,
+              ),
             ),
           ),
           const SizedBox(height: 10),
@@ -1838,12 +2844,32 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         if (_discussionError != null &&
             _discussionError!.trim().isNotEmpty) ...[
           const SizedBox(height: 12),
-          Text(
-            _discussionError!,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFFB91C1C),
-              fontWeight: FontWeight.w600,
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFEE2E2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFFECACA)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  LucideIcons.alertCircle,
+                  size: 16,
+                  color: const Color(0xFFDC2626),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _discussionError!,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFFB91C1C),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1976,6 +3002,166 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
+  String _formatWorkflowRoleLabel(String? role) {
+    if (role == null) return '—';
+    final r = role.toLowerCase();
+    if (r == 'registrar') return 'Registrar';
+    if (r == 'requester') return 'Requester';
+    if (r == 'faculty') return 'Faculty';
+    if (r == 'facility_manager') return 'Facility';
+    if (r == 'marketing') return 'Marketing';
+    if (r == 'it') return 'IT';
+    if (r == 'transport') return 'Transport';
+    if (r == 'iqac') return 'IQAC';
+    if (r == 'deputy_registrar') return 'Deputy Registrar';
+    if (r == 'finance_team') return 'Finance';
+    if (r == 'vice_chancellor') return 'Vice Chancellor';
+    return role;
+  }
+
+  String _formatWorkflowActionTypeLabel(String? actionType) {
+    if (actionType == null) return '—';
+    final t = actionType.toLowerCase();
+    if (t == 'approve') return 'Approved';
+    if (t == 'reject') return 'Rejected';
+    if (t == 'clarification') return 'Need clarification';
+    if (t == 'reply' || t == 'discussion_reply') return 'Reply';
+    return actionType;
+  }
+
+  Widget _buildActionHistory(List<dynamic> actionLogs) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.history, size: 18, color: _muted),
+              const SizedBox(width: 8),
+              Text(
+                'Action history',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...actionLogs.map((log) {
+            final role = _formatWorkflowRoleLabel(log['role']?.toString());
+            final actionType = _formatWorkflowActionTypeLabel(
+              log['action_type']?.toString(),
+            );
+            final comment = log['comment']?.toString() ?? '';
+            final createdAt = log['created_at']?.toString();
+            final actorName = log['actor_name']?.toString() ?? '';
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _border.withValues(alpha: 0.5)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: actionType.contains('Approved')
+                              ? const Color(0xFFDCFCE7)
+                              : actionType.contains('Rejected')
+                              ? const Color(0xFFFEE2E2)
+                              : actionType.contains('clarification')
+                              ? const Color(0xFFE0E7FF)
+                              : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          actionType,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: actionType.contains('Approved')
+                                ? const Color(0xFF166534)
+                                : actionType.contains('Rejected')
+                                ? const Color(0xFFB91C1C)
+                                : actionType.contains('clarification')
+                                ? const Color(0xFF4338CA)
+                                : const Color(0xFF64748B),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          role,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _muted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (actorName.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      actorName,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _onSurface,
+                      ),
+                    ),
+                  ],
+                  if (comment.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      comment,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: _onSurface,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                  if (createdAt != null) ...[
+                    const SizedBox(height: 6),
+                    Text(() {
+                      try {
+                        final dt = DateTime.parse(createdAt);
+                        return DateFormat('yyyy-MM-dd · h:mm a').format(dt);
+                      } catch (_) {
+                        return createdAt;
+                      }
+                    }(), style: TextStyle(fontSize: 11, color: _muted)),
+                  ],
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildThreadPanel(
     ApprovalThreadInfo thread, {
     required bool showRequestStatus,
@@ -1985,12 +3171,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         _userIsThreadParticipant(thread) && !_threadIsLocked(thread);
     final replyController = _replyControllerFor(thread.id);
     final replyTarget = _replyTargets[thread.id];
+    final isLocked = _threadIsLocked(thread);
+    final statusColor = _threadStatusColor(thread.threadStatus);
 
     return Container(
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _border),
+        border: Border.all(
+          color: isLocked ? _border.withValues(alpha: 0.5) : _border,
+          width: isLocked ? 1 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: _isDark ? 0.24 : 0.03),
+            offset: const Offset(0, 2),
+            blurRadius: 4,
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -2000,9 +3198,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 _expandedDiscussionThreads[thread.id] = !isExpanded;
               });
             },
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: Container(
               padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _panel,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+              ),
               child: Row(
                 children: [
                   Container(
@@ -2034,24 +3238,44 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       ),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _threadStatusBg(thread.threadStatus),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      _threadStatusLabel(thread.threadStatus),
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: _threadStatusFg(thread.threadStatus),
+                  if (isLocked)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor['bg'] as Color,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        _threadStatusLabel(thread.threadStatus),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: statusColor['fg'] as Color,
+                        ),
+                      ),
+                    )
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        _threadStatusLabel(thread.threadStatus),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF16A34A),
+                        ),
                       ),
                     ),
-                  ),
                   const SizedBox(width: 8),
                   Icon(
                     isExpanded
@@ -2439,27 +3663,43 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       ));
     }
 
+    final highlightDept = _viewerDepartmentKey;
+    if (highlightDept != null) {
+      final selectedIndex = items.indexWhere((item) => item.key == highlightDept);
+      if (selectedIndex > 0) {
+        final selected = items.removeAt(selectedIndex);
+        items.insert(0, selected);
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          children: const [
-            Icon(LucideIcons.layers, color: Color(0xFF2563EB), size: 20),
-            SizedBox(width: 12),
-            Text(
-              'Requirements by department',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
+          children: [
+            Icon(LucideIcons.layers, color: const Color(0xFF2563EB), size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Requirements by department',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: _onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Expand each card for phased requirements. Your department is listed first when applicable.',
+                    style: TextStyle(fontSize: 13, color: _muted, height: 1.4),
+                  ),
+                ],
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Department requirement statuses for your event.',
-          style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
         ),
         const SizedBox(height: 16),
         ...items.map((item) {
@@ -2473,144 +3713,692 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               : item.key == 'transport'
               ? transport
               : const <Map<String, dynamic>>[];
+          final deptIcon = _getDepartmentIcon(item.key);
+          final isYourDept = _isYourDepartment(item.key);
+          final statusColor = _getRequirementStatusColor(item.status);
+
           return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: InkWell(
-              onTap: () {
-                setState(() {
-                  if (isOpen) {
-                    _expandedDepartments.remove(item.key);
-                  } else {
-                    _expandedDepartments.add(item.key);
-                  }
-                });
-              },
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: _surface,
-                  border: Border.all(color: _border),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: _isDark ? 0.22 : 0.04),
-                      offset: const Offset(0, 1),
-                      blurRadius: 2,
-                    ),
-                  ],
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: _surface,
+                border: Border.all(
+                  color: isYourDept
+                      ? const Color(0xFF3B82F6).withValues(alpha: 0.45)
+                      : _border,
+                  width: isYourDept ? 1.5 : 1,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              LucideIcons.checkSquare,
-                              size: 18,
-                              color: Color(0xFF94A3B8),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: _isDark ? 0.24 : 0.03,
+                    ),
+                    offset: const Offset(0, 2),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        if (isOpen) {
+                          _expandedDepartments.remove(item.key);
+                        } else {
+                          _expandedDepartments.add(item.key);
+                        }
+                      });
+                    },
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: _panel,
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(16),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            const SizedBox(width: 12),
-                            Text(
+                            child: Icon(
+                              deptIcon,
+                              size: 18,
+                              color: const Color(0xFF2563EB),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
                               item.title,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
                                 color: _onSurface,
                               ),
                             ),
-                          ],
-                        ),
-                        Row(
-                          children: [
+                          ),
+                          if (isYourDept)
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
+                                horizontal: 10,
+                                vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: _panel,
+                                color: const Color(
+                                  0xFF3B82F6,
+                                ).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(999),
-                                border: Border.all(color: _border),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF3B82F6,
+                                  ).withValues(alpha: 0.3),
+                                ),
                               ),
                               child: Text(
-                                item.status.replaceAll('_', ' '),
+                                'YOUR RESPONSIBILITY',
                                 style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w800,
-                                  color: _muted,
+                                  color: const Color(0xFF2563EB),
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Icon(
-                              isOpen
-                                  ? LucideIcons.chevronUp
-                                  : LucideIcons.chevronDown,
-                              size: 18,
-                              color: const Color(0xFF94A3B8),
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    if (isOpen) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        item.count == 0
-                            ? 'No requests created yet.'
-                            : '${item.count} request${item.count == 1 ? '' : 's'} linked to this event.',
-                        style: TextStyle(fontSize: 12, color: _muted),
-                      ),
-                      if (source.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        ...source.take(3).map((req) {
-                          final requestedTo = _s(
-                            req['requested_to'],
-                            fallback: 'Unassigned',
-                          );
-                          final decidedBy = _s(
-                            req['decided_by'],
-                            fallback: '—',
-                          );
-                          final rawDecidedAt = _s(
-                            req['decided_at'],
-                            fallback: '',
-                          );
-                          final decidedAt = rawDecidedAt.isEmpty
-                              ? '—'
-                              : (DateTime.tryParse(rawDecidedAt) != null
-                                    ? DateFormat('yyyy-MM-dd · h:mm a').format(
-                                        DateTime.parse(rawDecidedAt).toLocal(),
-                                      )
-                                    : rawDecidedAt);
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
+                            decoration: BoxDecoration(
+                              color: statusColor['bg'] as Color,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                             child: Text(
-                              'Assigned: $requestedTo · By: $decidedBy · Updated: $decidedAt',
-                              style: TextStyle(fontSize: 12, color: _muted),
-                            ),
-                          );
-                        }),
-                        if (source.length > 3)
-                          Text(
-                            '+${source.length - 3} more',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: _muted,
+                              (item.status.replaceAll('_', ' ')).toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                color: statusColor['fg'] as Color,
+                              ),
                             ),
                           ),
-                      ],
-                    ],
-                  ],
-                ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            isOpen
+                                ? LucideIcons.chevronDown
+                                : LucideIcons.chevronRight,
+                            size: 18,
+                            color: _muted,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (isOpen)
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: _surface,
+                        border: Border(
+                          top: BorderSide(color: _border, width: 1),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (item.count == 0)
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: _panel,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: _border),
+                              ),
+                              child: item.key == 'iqac'
+                                  ? Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              LucideIcons.info,
+                                              size: 16,
+                                              color: _muted,
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                _s(
+                                                      _event['report_web_view_link'],
+                                                      fallback: '',
+                                                    )
+                                                    .isNotEmpty
+                                                    ? 'Event report submitted.'
+                                                    : 'Report expected after the event is finalized.',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: _muted,
+                                                  height: 1.4,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        if (_s(
+                                              _event['report_web_view_link'],
+                                              fallback: '',
+                                            )
+                                            .isNotEmpty) ...[
+                                          const SizedBox(height: 10),
+                                          InkWell(
+                                            onTap: () => _openExternalLink(
+                                              _s(
+                                                _event['report_web_view_link'],
+                                                fallback: '',
+                                              ),
+                                            ),
+                                            child: Text(
+                                              _s(
+                                                _event['report_file_name'],
+                                                fallback: 'View event report',
+                                              ),
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                                color: Color(0xFF2563EB),
+                                                decoration:
+                                                    TextDecoration.underline,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    )
+                                  : Row(
+                                      children: [
+                                        Icon(
+                                          LucideIcons.info,
+                                          size: 16,
+                                          color: _muted,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            'No requests created yet.',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: _muted,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                            )
+                          else ...[
+                            Text(
+                              '${item.count} request${item.count == 1 ? '' : 's'} linked to this event.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: _muted,
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            ...source.asMap().entries.map((entry) {
+                              final req = entry.value;
+                              final index = entry.key;
+                              final reqId = _s(req['id'], fallback: '');
+                              final requestedTo = _s(
+                                req['requested_to'],
+                                fallback: 'Unassigned',
+                              );
+                              final decidedBy = _s(
+                                req['decided_by'],
+                                fallback: '—',
+                              );
+                              final rawDecidedAt = _s(
+                                req['decided_at'],
+                                fallback: '',
+                              );
+                              final decidedAt = rawDecidedAt.isEmpty
+                                  ? '—'
+                                  : (DateTime.tryParse(rawDecidedAt) != null
+                                        ? DateFormat(
+                                            'yyyy-MM-dd · h:mm a',
+                                          ).format(
+                                            DateTime.parse(
+                                              rawDecidedAt,
+                                            ).toLocal(),
+                                          )
+                                        : rawDecidedAt);
+                              final reqStatus = _s(
+                                req['status'],
+                                fallback: 'pending',
+                              );
+                              final reqStatusColor = _getRequirementStatusColor(
+                                reqStatus,
+                              );
+                              final canTakeAction =
+                                  isYourDept &&
+                                  _isDepartmentInboxRole &&
+                                  _canDepartmentTakeAction(req);
+                              final canUploadMarketing =
+                                  isYourDept &&
+                                  item.key == 'marketing' &&
+                                  _currentRoleKey == 'marketing';
+                              final uploadFlags = item.key == 'marketing'
+                                  ? _marketingDeliverableUploadFlagsFromMap(req)
+                                  : const <String, bool>{};
+                              final relevantMarketingOptions = item.key == 'marketing'
+                                  ? _marketingDeliverableOptions
+                                        .where(
+                                          (opt) => uploadFlags[opt['key']] == true,
+                                        )
+                                        .toList()
+                                  : const <Map<String, String>>[];
+                              final unlockedMarketingOptions =
+                                  relevantMarketingOptions
+                                      .where(
+                                        (opt) => !_marketingDeliverableRowLock(
+                                          opt['type']!,
+                                          req,
+                                        ).locked,
+                                      )
+                                      .toList();
+                              final uploadEnabled =
+                                  canUploadMarketing &&
+                                  unlockedMarketingOptions.isNotEmpty;
+                              final uploadHint = canUploadMarketing &&
+                                      relevantMarketingOptions.isNotEmpty &&
+                                      !uploadEnabled
+                                  ? _marketingDeliverableRowLock(
+                                      relevantMarketingOptions.first['type']!,
+                                      req,
+                                    ).hint
+                                  : '';
+                              final deliverables = (req['deliverables'] as List? ?? [])
+                                  .whereType<Map<String, dynamic>>()
+                                  .toList();
+                              final requesterAttachments =
+                                  (req['requester_attachments'] as List? ?? [])
+                                      .whereType<Map<String, dynamic>>()
+                                      .toList();
+                              final thread = _threadForRequestId(reqId);
+                              final reportLink = item.key == 'iqac'
+                                  ? _s(_event['report_web_view_link'], fallback: '')
+                                  : '';
+                              final reportName = item.key == 'iqac'
+                                  ? _s(_event['report_file_name'], fallback: '')
+                                  : '';
+
+                              return Container(
+                                margin: EdgeInsets.only(
+                                  top: index > 0 ? 14 : 0,
+                                ),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: _panel,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: _border),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 5,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                reqStatusColor['bg'] as Color,
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            (reqStatus.replaceAll(
+                                              '_',
+                                              ' ',
+                                            )).toUpperCase(),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w800,
+                                              color:
+                                                  reqStatusColor['fg'] as Color,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _buildReqPersonInfo(
+                                            'Assigned',
+                                            requestedTo,
+                                          ),
+                                        ),
+                                        if (decidedBy != '—') ...[
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: _buildReqPersonInfo(
+                                              'By',
+                                              decidedBy,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    if (decidedAt != '—') ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Updated: $decidedAt',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: _muted,
+                                        ),
+                                      ),
+                                    ],
+                                    if (thread != null) ...[
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'Discussion status: ${_threadStatusLabel(thread.threadStatus)}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: _muted,
+                                        ),
+                                      ),
+                                    ],
+                                    if (item.key == 'marketing' &&
+                                        requesterAttachments.isNotEmpty) ...[
+                                      const SizedBox(height: 14),
+                                      Text(
+                                        'Requester reference documents',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                          color: _onSurface,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      ...requesterAttachments.map((attachment) {
+                                        final name = _s(
+                                          attachment['file_name'],
+                                          fallback: 'Document',
+                                        );
+                                        final link = _s(
+                                          attachment['web_view_link'],
+                                          fallback: '',
+                                        );
+                                        return Padding(
+                                          padding: const EdgeInsets.only(bottom: 6),
+                                          child: InkWell(
+                                            onTap: link.isEmpty
+                                                ? null
+                                                : () => _openExternalLink(link),
+                                            child: Text(
+                                              name,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: link.isEmpty
+                                                    ? _muted
+                                                    : const Color(0xFF2563EB),
+                                                decoration: link.isEmpty
+                                                    ? TextDecoration.none
+                                                    : TextDecoration.underline,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                    if (item.key == 'marketing') ...[
+                                      const SizedBox(height: 14),
+                                      Text(
+                                        'Uploaded deliverables',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
+                                          color: _onSurface,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      if (deliverables.isEmpty)
+                                        Text(
+                                          'No files uploaded yet.',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: _muted,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        )
+                                      else
+                                        ...deliverables.map((deliverable) {
+                                          final type = _s(
+                                            deliverable['deliverable_type'] ??
+                                                deliverable['type'],
+                                            fallback: 'File',
+                                          );
+                                          final name = _s(
+                                            deliverable['file_name'],
+                                            fallback: type,
+                                          );
+                                          final link = _s(
+                                            deliverable['web_view_link'] ??
+                                                deliverable['link'],
+                                            fallback: '',
+                                          );
+                                          final isNa =
+                                              deliverable['is_na'] == true;
+                                          return Padding(
+                                            padding: const EdgeInsets.only(bottom: 6),
+                                            child: isNa
+                                                ? Text(
+                                                    '$type: N/A',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: _muted,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  )
+                                                : InkWell(
+                                                    onTap: link.isEmpty
+                                                        ? null
+                                                        : () => _openExternalLink(link),
+                                                    child: Text(
+                                                      name,
+                                                      style: TextStyle(
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: link.isEmpty
+                                                            ? _muted
+                                                            : const Color(0xFF2563EB),
+                                                        decoration: link.isEmpty
+                                                            ? TextDecoration.none
+                                                            : TextDecoration.underline,
+                                                      ),
+                                                    ),
+                                                  ),
+                                          );
+                                        }),
+                                    ],
+                                    if (item.key == 'iqac' && reportLink.isNotEmpty) ...[
+                                      const SizedBox(height: 14),
+                                      InkWell(
+                                        onTap: () => _openExternalLink(reportLink),
+                                        child: Text(
+                                          reportName.isEmpty
+                                              ? 'View event report'
+                                              : reportName,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF2563EB),
+                                            decoration: TextDecoration.underline,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                    if (reqStatus.toLowerCase() ==
+                                        'clarification_requested') ...[
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'Clarification requested. See the Discussion section above to respond.',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFFD97706),
+                                        ),
+                                      ),
+                                    ],
+                                    if ((canTakeAction || canUploadMarketing) &&
+                                        reqId.isNotEmpty) ...[
+                                      const SizedBox(height: 14),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: [
+                                          if (canTakeAction)
+                                            ElevatedButton(
+                                              onPressed: () =>
+                                                  _openDepartmentDecisionDialog(
+                                                    item.key,
+                                                    req,
+                                                  ),
+                                              child: const Text('Take action'),
+                                            ),
+                                          if (canUploadMarketing)
+                                            OutlinedButton(
+                                              onPressed: uploadEnabled
+                                                  ? () => _openMarketingUploadDialog(
+                                                        req,
+                                                      )
+                                                  : null,
+                                              child: const Text('Upload'),
+                                            ),
+                                          OutlinedButton(
+                                            onPressed: thread == null
+                                                ? null
+                                                : () => context.push(
+                                                      '/chat/${thread.id}',
+                                                    ),
+                                            child: const Text('Open discussion'),
+                                          ),
+                                        ],
+                                      ),
+                                      if (canUploadMarketing &&
+                                          !uploadEnabled &&
+                                          uploadHint.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          uploadHint,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: _muted,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                        ],
+                      ),
+                    ),
+                ],
               ),
             ),
           );
         }),
+      ],
+    );
+  }
+
+  IconData _getDepartmentIcon(String key) {
+    switch (key.toLowerCase()) {
+      case 'marketing':
+        return LucideIcons.megaphone;
+      case 'facility':
+        return LucideIcons.building2;
+      case 'it':
+        return LucideIcons.monitor;
+      case 'transport':
+        return LucideIcons.car;
+      case 'iqac':
+        return LucideIcons.clipboardCheck;
+      default:
+        return LucideIcons.layers;
+    }
+  }
+
+  bool _isYourDepartment(String key) {
+    return _viewerDepartmentKey == key.toLowerCase();
+  }
+
+  Map<String, Color> _getRequirementStatusColor(String status) {
+    final normalized = status.trim().toLowerCase();
+    switch (normalized) {
+      case 'approved':
+      case 'accepted':
+        return {'bg': const Color(0xFFDCFCE7), 'fg': const Color(0xFF16A34A)};
+      case 'rejected':
+      case 'declined':
+        return {'bg': const Color(0xFFFEE2E2), 'fg': const Color(0xFFDC2626)};
+      case 'clarification':
+      case 'clarification_needed':
+        return {'bg': const Color(0xFFFEF3C7), 'fg': const Color(0xFFD97706)};
+      case 'pending':
+      default:
+        return {'bg': const Color(0xFFF1F5F9), 'fg': const Color(0xFF64748B)};
+    }
+  }
+
+  Widget _buildReqPersonInfo(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            color: _muted,
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: _onSurface,
+          ),
+        ),
       ],
     );
   }

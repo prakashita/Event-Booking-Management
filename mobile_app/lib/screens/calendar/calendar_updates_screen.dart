@@ -294,7 +294,13 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Pick Display Color'),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: const Text(
+                'Pick Display Color',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
               content: SingleChildScrollView(
                 child: ColorPicker(
                   pickerColor: selected,
@@ -302,7 +308,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                     setDialogState(() {
                       selected = value;
                       current =
-                          '#${value.value.toRadixString(16).substring(2)}';
+                          '#${value.toARGB32().toRadixString(16).padLeft(8, '0').substring(2)}';
                     });
                   },
                   enableAlpha: false,
@@ -319,6 +325,11 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                 ),
                 FilledButton(
                   onPressed: () => Navigator.of(dialogContext).pop(current),
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                   child: const Text('Apply'),
                 ),
               ],
@@ -345,50 +356,64 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
         : const Color(0xFFE2E8F0);
     final normalized = _normalizeHexColor(color, fallback: '#2563eb');
     final preview = Color(int.parse(normalized.replaceFirst('#', '0xFF')));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: textColor,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: textColor.withValues(alpha: 0.8),
           ),
         ),
         const SizedBox(height: 8),
         Row(
           children: [
             Container(
-              width: 32,
-              height: 32,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: preview,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: borderColor),
+                boxShadow: [
+                  BoxShadow(
+                    color: preview.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 10),
-            OutlinedButton.icon(
-              onPressed: () => _openColorPickerDialog(
-                context: context,
-                initialColor: normalized,
-                onSelected: onChanged,
-              ),
-              icon: const Icon(Icons.palette_outlined, size: 16),
-              label: const Text('Pick Color'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: textColor,
-                side: BorderSide(color: borderColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _openColorPickerDialog(
+                  context: context,
+                  initialColor: normalized,
+                  onSelected: onChanged,
+                ),
+                icon: const Icon(Icons.palette_outlined, size: 18),
+                label: const Text('Pick Color'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: textColor,
+                  side: BorderSide(color: borderColor),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         TextFormField(
           key: ValueKey('color-$normalized'),
           initialValue: normalized,
-          decoration: _inputDecoration('Display Color (Hex)'),
+          decoration: _inputDecoration('Hex Code'),
           onChanged: onChanged,
         ),
       ],
@@ -460,8 +485,14 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Entry'),
-        content: Text('Delete "${entry.title}" from institution calendar?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Delete Entry',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          'Are you sure you want to delete "${entry.title}" from the institution calendar? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -469,6 +500,12 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -479,14 +516,21 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     try {
       await _api.delete('/institution-calendar/${entry.id}');
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Entry deleted.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Entry deleted.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       await _loadEntries();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Delete failed: ${_extractError(e)}')),
+        SnackBar(
+          content: Text('Delete failed: ${_extractError(e)}'),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -502,6 +546,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(shouldSync ? 'Sync requested.' : 'Sync removed.'),
+          behavior: SnackBarBehavior.floating,
         ),
       );
       await _loadEntries();
@@ -512,6 +557,8 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
           content: Text(
             '${shouldSync ? 'Sync' : 'Unsync'} failed: ${_extractError(e)}',
           ),
+          backgroundColor: Colors.red.shade600,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
@@ -633,6 +680,20 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     }
   }
 
+  Widget _buildDragHandle() {
+    return Center(
+      child: Container(
+        width: 40,
+        height: 5,
+        margin: const EdgeInsets.only(bottom: 20),
+        decoration: BoxDecoration(
+          color: Colors.grey.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openHolidaySheet({_InstitutionEntry? entry}) async {
     final formKey = GlobalKey<FormState>();
     final now = DateTime.now();
@@ -643,12 +704,6 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     final mutedText = isDark
         ? const Color(0xFF94A3B8)
         : const Color(0xFF64748B);
-    final secondaryAction = isDark
-        ? const Color(0xFFCBD5E1)
-        : const Color(0xFF475569);
-    final borderColor = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0);
 
     String academicYear = entry?.academicYear.isNotEmpty == true
         ? entry!.academicYear
@@ -670,15 +725,15 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
       isScrollControlled: true,
       backgroundColor: modalSurface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModal) {
             String dayLabel() {
-              if (date.isEmpty) return '---';
+              if (date.isEmpty) return 'Select a date';
               final parsed = DateTime.tryParse(date);
-              if (parsed == null) return '---';
+              if (parsed == null) return 'Invalid date';
               const names = [
                 'Monday',
                 'Tuesday',
@@ -693,93 +748,133 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
 
             return Padding(
               padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                left: 24,
+                right: 24,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
               ),
               child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
                 child: Form(
                   key: formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      _buildDragHandle(),
                       Row(
                         children: [
-                          const Icon(
-                            Icons.calendar_month,
-                            color: Color(0xFFD97706),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD97706).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.celebration,
+                              color: Color(0xFFD97706),
+                              size: 20,
+                            ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 12),
                           Text(
                             entry == null ? 'Add Holiday' : 'Edit Holiday',
                             style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.5,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 18),
-                      _buildLabeledDropdown(
-                        label: 'Academic Year *',
-                        value: academicYear,
-                        options: _yearOptions
-                            .where((e) => e != 'All Years')
-                            .toList(),
-                        onChanged: (v) =>
-                            setModal(() => academicYear = v ?? academicYear),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        key: ValueKey('holiday-year-$calendarYear'),
-                        initialValue: calendarYear.toString(),
-                        decoration: _inputDecoration('Calendar Year').copyWith(
-                          prefixIcon: IconButton(
-                            onPressed: () => setModal(() {
-                              calendarYear = _clampCalendarYear(
-                                calendarYear - 1,
-                              );
-                            }),
-                            icon: const Icon(Icons.remove_circle_outline),
-                            tooltip: 'Decrease year',
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildLabeledDropdown(
+                              label: 'Academic Year *',
+                              value: academicYear,
+                              options: _yearOptions
+                                  .where((e) => e != 'All Years')
+                                  .toList(),
+                              onChanged: (v) => setModal(
+                                () => academicYear = v ?? academicYear,
+                              ),
+                            ),
                           ),
-                          suffixIcon: IconButton(
-                            onPressed: () => setModal(() {
-                              calendarYear = _clampCalendarYear(
-                                calendarYear + 1,
-                              );
-                            }),
-                            icon: const Icon(Icons.add_circle_outline),
-                            tooltip: 'Increase year',
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextFormField(
+                              key: ValueKey('holiday-year-$calendarYear'),
+                              initialValue: calendarYear.toString(),
+                              decoration: _inputDecoration('Calendar Year')
+                                  .copyWith(
+                                    suffixIcon: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        InkWell(
+                                          onTap: () => setModal(() {
+                                            calendarYear = _clampCalendarYear(
+                                              calendarYear + 1,
+                                            );
+                                          }),
+                                          child: const Icon(
+                                            Icons.keyboard_arrow_up,
+                                            size: 20,
+                                          ),
+                                        ),
+                                        InkWell(
+                                          onTap: () => setModal(() {
+                                            calendarYear = _clampCalendarYear(
+                                              calendarYear - 1,
+                                            );
+                                          }),
+                                          child: const Icon(
+                                            Icons.keyboard_arrow_down,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              validator: (v) {
+                                final value = (v ?? '').trim();
+                                if (value.isEmpty) return null;
+                                final year = int.tryParse(value);
+                                if (year == null) return 'Invalid';
+                                if (year < _minCalendarYear ||
+                                    year > _maxCalendarYear) {
+                                  return 'Out of range';
+                                }
+                                return null;
+                              },
+                              onChanged: (v) => setModal(() {
+                                final parsed = int.tryParse(v);
+                                calendarYear = _clampCalendarYear(
+                                  parsed ?? now.year,
+                                );
+                              }),
+                            ),
                           ),
-                        ),
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
                         ],
-                        validator: (v) {
-                          final value = (v ?? '').trim();
-                          if (value.isEmpty) return null;
-                          final year = int.tryParse(value);
-                          if (year == null) return 'Enter a valid year.';
-                          if (year < _minCalendarYear ||
-                              year > _maxCalendarYear) {
-                            return 'Year must be between $_minCalendarYear and $_maxCalendarYear.';
-                          }
-                          return null;
-                        },
-                        onChanged: (v) => setModal(() {
-                          final parsed = int.tryParse(v);
-                          calendarYear = _clampCalendarYear(parsed ?? now.year);
-                        }),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         key: ValueKey('holiday-date-$date'),
                         initialValue: date,
-                        decoration: _inputDecoration('Date (YYYY-MM-DD) *'),
+                        decoration: _inputDecoration('Date (YYYY-MM-DD) *')
+                            .copyWith(
+                              suffixIcon: const Icon(
+                                Icons.calendar_today_outlined,
+                                size: 20,
+                              ),
+                              helperText: dayLabel(),
+                            ),
                         readOnly: true,
                         validator: (v) {
                           final value = (v ?? '').trim();
@@ -799,24 +894,8 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                             });
                           },
                         ),
-                        onChanged: (v) {
-                          setModal(() {
-                            date = v.trim();
-                            final parsed = DateTime.tryParse(date);
-                            if (parsed != null) calendarYear = parsed.year;
-                          });
-                        },
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Day: ${dayLabel()}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: mutedText,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         initialValue: holidayName,
                         decoration: _inputDecoration('Holiday Name *'),
@@ -825,15 +904,15 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                             : null,
                         onChanged: (v) => holidayName = v,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         initialValue: description,
-                        minLines: 2,
-                        maxLines: 4,
+                        minLines: 3,
+                        maxLines: 5,
                         decoration: _inputDecoration('Description / Notes'),
                         onChanged: (v) => description = v,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 20),
                       _buildColorPickerField(
                         label: 'Display Color',
                         color: color,
@@ -841,165 +920,190 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                           color = v.trim();
                         }),
                       ),
-                      const SizedBox(height: 10),
-                      SwitchListTile(
-                        value: visibleToAll,
-                        onChanged: (v) => setModal(() => visibleToAll = v),
-                        title: const Text('Visible to all'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      SwitchListTile(
-                        value: googleSyncEnabled,
-                        onChanged: (v) => setModal(() => googleSyncEnabled = v),
-                        title: const Text('Google Sync'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      SwitchListTile(
-                        value: isActive,
-                        onChanged: (v) => setModal(() => isActive = v),
-                        title: const Text('Active'),
-                        contentPadding: EdgeInsets.zero,
+                      const SizedBox(height: 24),
+                      Text(
+                        'Settings',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: mutedText,
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      if (entry != null) ...[
-                        Row(
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: isDark
+                                ? const Color(0xFF334155)
+                                : const Color(0xFFE2E8F0),
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
                           children: [
-                            if (entry.syncStatus == 'synced')
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () async {
-                                    Navigator.of(context).pop();
-                                    await _toggleSync(entry, false);
-                                  },
-                                  icon: const Icon(Icons.link_off, size: 16),
-                                  label: const Text('Unsync'),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: secondaryAction,
-                                    side: BorderSide(color: borderColor),
-                                  ),
+                            SwitchListTile(
+                              value: visibleToAll,
+                              onChanged: (v) =>
+                                  setModal(() => visibleToAll = v),
+                              title: const Text(
+                                'Visible to all',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            if (entry.syncStatus == 'synced')
-                              const SizedBox(width: 8),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () async {
-                                  Navigator.of(context).pop();
-                                  await _deleteEntry(entry);
-                                },
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  size: 16,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 2,
+                              ),
+                            ),
+                            Divider(
+                              height: 1,
+                              color: isDark
+                                  ? const Color(0xFF334155)
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                            SwitchListTile(
+                              value: googleSyncEnabled,
+                              onChanged: (v) =>
+                                  setModal(() => googleSyncEnabled = v),
+                              title: const Text(
+                                'Google Sync',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                                label: const Text('Delete'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFFDC2626),
-                                  side: BorderSide(
-                                    color: isDark
-                                        ? const Color(0xFF7F1D1D)
-                                        : const Color(0xFFFECACA),
-                                  ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 2,
+                              ),
+                            ),
+                            Divider(
+                              height: 1,
+                              color: isDark
+                                  ? const Color(0xFF334155)
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                            SwitchListTile(
+                              value: isActive,
+                              onChanged: (v) => setModal(() => isActive = v),
+                              title: const Text(
+                                'Active',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                 ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 2,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                      ],
+                      ),
+                      const SizedBox(height: 32),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          if (entry == null)
-                            OutlinedButton(
-                              onPressed: () => setModal(() {
-                                academicYear = currentAcademicYear;
-                                calendarYear = now.year;
-                                date = '';
-                                holidayName = '';
-                                description = '';
-                                color = '#f59e0b';
-                                visibleToAll = true;
-                                googleSyncEnabled = false;
-                                isActive = true;
-                              }),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: secondaryAction,
-                                side: BorderSide(color: borderColor),
-                              ),
-                              child: const Text('Reset'),
-                            )
-                          else
-                            const SizedBox.shrink(),
-                          Row(
-                            children: [
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                child: const Text('Cancel'),
-                              ),
-                              const SizedBox(width: 8),
-                              FilledButton(
-                                onPressed: () async {
-                                  if (!formKey.currentState!.validate()) return;
-                                  final payload = {
-                                    if (entry == null) 'entry_type': 'holiday',
-                                    'academic_year': academicYear,
-                                    'calendar_year': calendarYear,
-                                    'date': date,
-                                    'holiday_name': holidayName.trim(),
-                                    'description': description.trim().isEmpty
-                                        ? null
-                                        : description.trim(),
-                                    'color': _normalizeHexColor(
-                                      color,
-                                      fallback: '#f59e0b',
-                                    ),
-                                    'visible_to_all': visibleToAll,
-                                    'google_sync_enabled': googleSyncEnabled,
-                                    'is_active': isActive,
-                                  };
-
-                                  try {
-                                    Map<String, dynamic>? mutation;
-                                    if (entry == null) {
-                                      mutation = await _api
-                                          .post<Map<String, dynamic>>(
-                                            '/institution-calendar',
-                                            data: payload,
-                                          );
-                                    } else {
-                                      mutation = await _api
-                                          .patch<Map<String, dynamic>>(
-                                            '/institution-calendar/${entry.id}',
-                                            data: payload,
-                                          );
-                                    }
-
-                                    final message =
-                                        await _buildHolidaySaveMessage(
-                                          isUpdate: entry != null,
-                                          googleSyncEnabled: googleSyncEnabled,
-                                          mutation: mutation,
-                                        );
-                                    if (!mounted) return;
-                                    Navigator.of(context).pop(message);
-                                  } catch (e) {
-                                    if (!mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Save failed: ${_extractError(e)}',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                },
-                                child: Text(
-                                  entry == null
-                                      ? 'Add Holiday'
-                                      : 'Save Changes',
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? const Color(0xFF334155)
+                                      : const Color(0xFFE2E8F0),
                                 ),
                               ),
-                            ],
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            flex: 2,
+                            child: FilledButton(
+                              onPressed: () async {
+                                if (!formKey.currentState!.validate()) return;
+                                final payload = {
+                                  if (entry == null) 'entry_type': 'holiday',
+                                  'academic_year': academicYear,
+                                  'calendar_year': calendarYear,
+                                  'date': date,
+                                  'holiday_name': holidayName.trim(),
+                                  'description': description.trim().isEmpty
+                                      ? null
+                                      : description.trim(),
+                                  'color': _normalizeHexColor(
+                                    color,
+                                    fallback: '#f59e0b',
+                                  ),
+                                  'visible_to_all': visibleToAll,
+                                  'google_sync_enabled': googleSyncEnabled,
+                                  'is_active': isActive,
+                                };
+
+                                try {
+                                  Map<String, dynamic>? mutation;
+                                  if (entry == null) {
+                                    mutation = await _api
+                                        .post<Map<String, dynamic>>(
+                                          '/institution-calendar',
+                                          data: payload,
+                                        );
+                                  } else {
+                                    mutation = await _api
+                                        .patch<Map<String, dynamic>>(
+                                          '/institution-calendar/${entry.id}',
+                                          data: payload,
+                                        );
+                                  }
+
+                                  final message =
+                                      await _buildHolidaySaveMessage(
+                                        isUpdate: entry != null,
+                                        googleSyncEnabled: googleSyncEnabled,
+                                        mutation: mutation,
+                                      );
+                                  if (!context.mounted) return;
+                                  Navigator.of(context).pop(message);
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Save failed: ${_extractError(e)}',
+                                      ),
+                                      backgroundColor: Colors.red.shade600,
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              },
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                entry == null ? 'Add Holiday' : 'Save Changes',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
@@ -1015,9 +1119,12 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
 
     if (savedMessage != null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(savedMessage)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(savedMessage),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       await _loadEntries();
     }
   }
@@ -1028,12 +1135,9 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final modalSurface = isDark ? theme.colorScheme.surface : Colors.white;
-    final secondaryAction = isDark
-        ? const Color(0xFFCBD5E1)
-        : const Color(0xFF475569);
-    final borderColor = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0);
+    final mutedText = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
 
     String academicYear = entry?.academicYear.isNotEmpty == true
         ? entry!.academicYear
@@ -1065,62 +1169,83 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
       isScrollControlled: true,
       backgroundColor: modalSurface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModal) {
             return Padding(
               padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                left: 24,
+                right: 24,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
               ),
               child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
                 child: Form(
                   key: formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      _buildDragHandle(),
                       Row(
                         children: [
-                          const Icon(
-                            Icons.book_outlined,
-                            color: Color(0xFF2563EB),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(
+                              Icons.school,
+                              color: Color(0xFF2563EB),
+                              size: 20,
+                            ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 12),
                           Text(
                             entry == null
                                 ? 'Add Academic Entry'
                                 : 'Edit Academic Entry',
                             style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.5,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 18),
-                      _buildLabeledDropdown(
-                        label: 'Academic Year *',
-                        value: academicYear,
-                        options: _yearOptions
-                            .where((e) => e != 'All Years')
-                            .toList(),
-                        onChanged: (v) =>
-                            setModal(() => academicYear = v ?? academicYear),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildLabeledDropdown(
+                              label: 'Academic Year *',
+                              value: academicYear,
+                              options: _yearOptions
+                                  .where((e) => e != 'All Years')
+                                  .toList(),
+                              onChanged: (v) => setModal(
+                                () => academicYear = v ?? academicYear,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildLabeledDropdown(
+                              label: 'Semester Type *',
+                              value: semesterType,
+                              options: _semesterTypes,
+                              onChanged: (v) => setModal(
+                                () => semesterType = v ?? semesterType,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      _buildLabeledDropdown(
-                        label: 'Semester Type *',
-                        value: semesterType,
-                        options: _semesterTypes,
-                        onChanged: (v) =>
-                            setModal(() => semesterType = v ?? semesterType),
-                      ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       _buildLabeledDropdown(
                         label: 'Semester',
                         value: semester.isEmpty ? 'None' : semester,
@@ -1129,7 +1254,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                           () => semester = (v == 'None') ? '' : (v ?? semester),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         initialValue: title,
                         decoration: _inputDecoration('Academic Event Title *'),
@@ -1138,7 +1263,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                             : null,
                         onChanged: (v) => title = v,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       _buildLabeledDropdown(
                         label: 'Event Category *',
                         value: category,
@@ -1146,84 +1271,112 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                         onChanged: (v) =>
                             setModal(() => category = v ?? category),
                       ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        key: ValueKey('academic-start-$startDate'),
-                        initialValue: startDate,
-                        decoration: _inputDecoration(
-                          'Start Date (YYYY-MM-DD) *',
-                        ),
-                        readOnly: true,
-                        validator: (v) {
-                          final value = (v ?? '').trim();
-                          if (value.isEmpty) return 'Start date is required.';
-                          return DateTime.tryParse(value) == null
-                              ? 'Use format YYYY-MM-DD.'
-                              : null;
-                        },
-                        onTap: () => _pickHolidayDate(
-                          context: context,
-                          current: startDate,
-                          onPicked: (v) {
-                            setModal(() {
-                              startDate = v;
-                              final parsedStart = DateTime.tryParse(startDate);
-                              final parsedEnd = DateTime.tryParse(endDate);
-                              if (parsedStart != null &&
-                                  parsedEnd != null &&
-                                  parsedEnd.isBefore(parsedStart)) {
-                                endDate = startDate;
-                              }
-                            });
-                          },
-                        ),
-                        onChanged: (v) => startDate = v.trim(),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              key: ValueKey('academic-start-$startDate'),
+                              initialValue: startDate,
+                              decoration: _inputDecoration('Start Date *')
+                                  .copyWith(
+                                    suffixIcon: const Icon(
+                                      Icons.calendar_today_outlined,
+                                      size: 18,
+                                    ),
+                                  ),
+                              readOnly: true,
+                              validator: (v) {
+                                final value = (v ?? '').trim();
+                                if (value.isEmpty) return 'Required';
+                                return DateTime.tryParse(value) == null
+                                    ? 'Invalid'
+                                    : null;
+                              },
+                              onTap: () => _pickHolidayDate(
+                                context: context,
+                                current: startDate,
+                                onPicked: (v) {
+                                  setModal(() {
+                                    startDate = v;
+                                    final parsedStart = DateTime.tryParse(
+                                      startDate,
+                                    );
+                                    final parsedEnd = DateTime.tryParse(
+                                      endDate,
+                                    );
+                                    if (parsedStart != null &&
+                                        parsedEnd != null &&
+                                        parsedEnd.isBefore(parsedStart)) {
+                                      endDate = startDate;
+                                    }
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 8.0),
+                            child: Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 16,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          Expanded(
+                            child: TextFormField(
+                              key: ValueKey('academic-end-$endDate'),
+                              initialValue: endDate,
+                              decoration: _inputDecoration('End Date').copyWith(
+                                suffixIcon: const Icon(
+                                  Icons.calendar_today_outlined,
+                                  size: 18,
+                                ),
+                              ),
+                              readOnly: true,
+                              validator: (v) {
+                                final value = (v ?? '').trim();
+                                if (value.isEmpty) return null;
+                                final parsed = DateTime.tryParse(value);
+                                if (parsed == null) return 'Invalid';
+                                final start = DateTime.tryParse(startDate);
+                                if (start != null && parsed.isBefore(start)) {
+                                  return 'Before start';
+                                }
+                                return null;
+                              },
+                              onTap: () => _pickHolidayDate(
+                                context: context,
+                                current: endDate.isEmpty ? startDate : endDate,
+                                onPicked: (v) {
+                                  setModal(() {
+                                    final parsedPicked = DateTime.tryParse(v);
+                                    final parsedStart = DateTime.tryParse(
+                                      startDate,
+                                    );
+                                    if (parsedPicked != null &&
+                                        parsedStart != null &&
+                                        parsedPicked.isBefore(parsedStart)) {
+                                      endDate = startDate;
+                                    } else {
+                                      endDate = v;
+                                    }
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        key: ValueKey('academic-end-$endDate'),
-                        initialValue: endDate,
-                        decoration: _inputDecoration('End Date (YYYY-MM-DD)'),
-                        readOnly: true,
-                        validator: (v) {
-                          final value = (v ?? '').trim();
-                          if (value.isEmpty) return null;
-                          final parsed = DateTime.tryParse(value);
-                          if (parsed == null) return 'Use format YYYY-MM-DD.';
-                          final start = DateTime.tryParse(startDate);
-                          if (start != null && parsed.isBefore(start)) {
-                            return 'End date cannot be before start date.';
-                          }
-                          return null;
-                        },
-                        onTap: () => _pickHolidayDate(
-                          context: context,
-                          current: endDate.isEmpty ? startDate : endDate,
-                          onPicked: (v) {
-                            setModal(() {
-                              final parsedPicked = DateTime.tryParse(v);
-                              final parsedStart = DateTime.tryParse(startDate);
-                              if (parsedPicked != null &&
-                                  parsedStart != null &&
-                                  parsedPicked.isBefore(parsedStart)) {
-                                endDate = startDate;
-                              } else {
-                                endDate = v;
-                              }
-                            });
-                          },
-                        ),
-                        onChanged: (v) => endDate = v.trim(),
-                      ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       TextFormField(
                         initialValue: description,
-                        minLines: 2,
-                        maxLines: 4,
+                        minLines: 3,
+                        maxLines: 5,
                         decoration: _inputDecoration('Description / Notes'),
                         onChanged: (v) => description = v,
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 20),
                       _buildColorPickerField(
                         label: 'Display Color',
                         color: color,
@@ -1231,148 +1384,218 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                           color = v.trim();
                         }),
                       ),
-                      const SizedBox(height: 10),
-                      SwitchListTile(
-                        value: allDay,
-                        onChanged: (v) => setModal(() => allDay = v),
-                        title: const Text('All Day'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      SwitchListTile(
-                        value: visibleToAll,
-                        onChanged: (v) => setModal(() => visibleToAll = v),
-                        title: const Text('Visible to all'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      SwitchListTile(
-                        value: googleSyncEnabled,
-                        onChanged: (v) => setModal(() => googleSyncEnabled = v),
-                        title: const Text('Google Sync'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      SwitchListTile(
-                        value: isActive,
-                        onChanged: (v) => setModal(() => isActive = v),
-                        title: const Text('Active'),
-                        contentPadding: EdgeInsets.zero,
+                      const SizedBox(height: 24),
+                      Text(
+                        'Settings',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: mutedText,
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      if (entry != null) ...[
-                        Row(
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: isDark
+                                ? const Color(0xFF334155)
+                                : const Color(0xFFE2E8F0),
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
                           children: [
-                            if (entry.syncStatus == 'synced')
-                              Expanded(
-                                child: OutlinedButton.icon(
-                                  onPressed: () async {
-                                    Navigator.of(context).pop();
-                                    await _toggleSync(entry, false);
-                                  },
-                                  icon: const Icon(Icons.link_off, size: 16),
-                                  label: const Text('Unsync'),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: secondaryAction,
-                                    side: BorderSide(color: borderColor),
-                                  ),
+                            SwitchListTile(
+                              value: allDay,
+                              onChanged: (v) => setModal(() => allDay = v),
+                              title: const Text(
+                                'All Day Event',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            if (entry.syncStatus == 'synced')
-                              const SizedBox(width: 8),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () async {
-                                  Navigator.of(context).pop();
-                                  await _deleteEntry(entry);
-                                },
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  size: 16,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 2,
+                              ),
+                            ),
+                            Divider(
+                              height: 1,
+                              color: isDark
+                                  ? const Color(0xFF334155)
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                            SwitchListTile(
+                              value: visibleToAll,
+                              onChanged: (v) =>
+                                  setModal(() => visibleToAll = v),
+                              title: const Text(
+                                'Visible to all',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                                label: const Text('Delete'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFFDC2626),
-                                  side: BorderSide(
-                                    color: isDark
-                                        ? const Color(0xFF7F1D1D)
-                                        : const Color(0xFFFECACA),
-                                  ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 2,
+                              ),
+                            ),
+                            Divider(
+                              height: 1,
+                              color: isDark
+                                  ? const Color(0xFF334155)
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                            SwitchListTile(
+                              value: googleSyncEnabled,
+                              onChanged: (v) =>
+                                  setModal(() => googleSyncEnabled = v),
+                              title: const Text(
+                                'Google Sync',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
                                 ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 2,
+                              ),
+                            ),
+                            Divider(
+                              height: 1,
+                              color: isDark
+                                  ? const Color(0xFF334155)
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                            SwitchListTile(
+                              value: isActive,
+                              onChanged: (v) => setModal(() => isActive = v),
+                              title: const Text(
+                                'Active',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 2,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 10),
-                      ],
+                      ),
+                      const SizedBox(height: 32),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Cancel'),
-                          ),
-                          const SizedBox(width: 8),
-                          FilledButton(
-                            onPressed: () async {
-                              if (!formKey.currentState!.validate()) return;
-                              final payload = {
-                                if (entry == null) 'entry_type': 'academic',
-                                'academic_year': academicYear,
-                                'semester_type': semesterType,
-                                'semester': semester.isEmpty ? null : semester,
-                                'title': title.trim(),
-                                'category': category,
-                                'start_date': startDate,
-                                'end_date': endDate.isEmpty
-                                    ? startDate
-                                    : endDate,
-                                'all_day': allDay,
-                                'description': description.trim().isEmpty
-                                    ? null
-                                    : description.trim(),
-                                'color': _normalizeHexColor(
-                                  color,
-                                  fallback: '#2563eb',
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
                                 ),
-                                'visible_to_all': visibleToAll,
-                                'google_sync_enabled': googleSyncEnabled,
-                                'is_active': isActive,
-                              };
-
-                              try {
-                                Map<String, dynamic>? mutation;
-                                if (entry == null) {
-                                  mutation = await _api
-                                      .post<Map<String, dynamic>>(
-                                        '/institution-calendar',
-                                        data: payload,
-                                      );
-                                } else {
-                                  mutation = await _api
-                                      .patch<Map<String, dynamic>>(
-                                        '/institution-calendar/${entry.id}',
-                                        data: payload,
-                                      );
-                                }
-
-                                final message = await _buildAcademicSaveMessage(
-                                  isUpdate: entry != null,
-                                  googleSyncEnabled: googleSyncEnabled,
-                                  mutation: mutation,
-                                );
-                                if (!mounted) return;
-                                Navigator.of(context).pop(message);
-                              } catch (e) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Save failed: ${_extractError(e)}',
-                                    ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                side: BorderSide(
+                                  color: isDark
+                                      ? const Color(0xFF334155)
+                                      : const Color(0xFFE2E8F0),
+                                ),
+                              ),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            flex: 2,
+                            child: FilledButton(
+                              onPressed: () async {
+                                if (!formKey.currentState!.validate()) return;
+                                final payload = {
+                                  if (entry == null) 'entry_type': 'academic',
+                                  'academic_year': academicYear,
+                                  'semester_type': semesterType,
+                                  'semester': semester.isEmpty
+                                      ? null
+                                      : semester,
+                                  'title': title.trim(),
+                                  'category': category,
+                                  'start_date': startDate,
+                                  'end_date': endDate.isEmpty
+                                      ? startDate
+                                      : endDate,
+                                  'all_day': allDay,
+                                  'description': description.trim().isEmpty
+                                      ? null
+                                      : description.trim(),
+                                  'color': _normalizeHexColor(
+                                    color,
+                                    fallback: '#2563eb',
                                   ),
-                                );
-                              }
-                            },
-                            child: Text(
-                              entry == null ? 'Add Entry' : 'Save Changes',
+                                  'visible_to_all': visibleToAll,
+                                  'google_sync_enabled': googleSyncEnabled,
+                                  'is_active': isActive,
+                                };
+
+                                try {
+                                  Map<String, dynamic>? mutation;
+                                  if (entry == null) {
+                                    mutation = await _api
+                                        .post<Map<String, dynamic>>(
+                                          '/institution-calendar',
+                                          data: payload,
+                                        );
+                                  } else {
+                                    mutation = await _api
+                                        .patch<Map<String, dynamic>>(
+                                          '/institution-calendar/${entry.id}',
+                                          data: payload,
+                                        );
+                                  }
+
+                                  final message =
+                                      await _buildAcademicSaveMessage(
+                                        isUpdate: entry != null,
+                                        googleSyncEnabled: googleSyncEnabled,
+                                        mutation: mutation,
+                                      );
+                                  if (!context.mounted) return;
+                                  Navigator.of(context).pop(message);
+                                } catch (e) {
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Save failed: ${_extractError(e)}',
+                                      ),
+                                      backgroundColor: Colors.red.shade600,
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                              },
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: Text(
+                                entry == null ? 'Add Entry' : 'Save Changes',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -1389,9 +1612,12 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
 
     if (savedMessage != null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(savedMessage)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(savedMessage),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       await _loadEntries();
     }
   }
@@ -1403,24 +1629,30 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
         ? const Color(0xFF94A3B8)
         : const Color(0xFF64748B);
     final fillColor = isDark
-        ? theme.colorScheme.surfaceContainerHighest
-        : const Color(0xFFF8FAFC);
-    final borderColor = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0);
+        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
+        : const Color(0xFFF1F5F9); // slate-100
 
     return InputDecoration(
       labelText: label,
-      labelStyle: TextStyle(color: labelColor),
+      labelStyle: TextStyle(color: labelColor, fontSize: 14),
       filled: true,
       fillColor: fillColor,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: borderColor),
+        borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: borderColor),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: theme.colorScheme.error, width: 1),
       ),
     );
   }
@@ -1435,11 +1667,11 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final textColor = theme.colorScheme.onSurface;
     final panelColor = isDark
-        ? theme.colorScheme.surfaceContainerHighest
-        : const Color(0xFFF8FAFC);
-    final borderColor = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0);
+        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5)
+        : const Color(0xFFF1F5F9);
+    final labelColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
 
     final safeValue = options.contains(value)
         ? value
@@ -1451,23 +1683,32 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: textColor,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: labelColor,
           ),
         ),
         const SizedBox(height: 6),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
             color: panelColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderColor),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: safeValue.isEmpty ? null : safeValue,
               isExpanded: true,
+              icon: Icon(Icons.keyboard_arrow_down, color: labelColor),
+              style: TextStyle(
+                color: textColor,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+              dropdownColor: isDark
+                  ? theme.colorScheme.surfaceContainerHighest
+                  : Colors.white,
+              borderRadius: BorderRadius.circular(12),
               items: options
                   .map(
                     (item) => DropdownMenuItem<String>(
@@ -1484,19 +1725,20 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     );
   }
 
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
     final heading = isDark
         ? Colors.white
-        : const Color(0xFF1E293B); // slate-800
+        : const Color(0xFF0F172A); // slate-900
     final subheading = isDark
         ? const Color(0xFF94A3B8) // slate-400
         : const Color(0xFF64748B); // slate-500
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: _isLoading && _entries.isEmpty
             ? const Center(
@@ -1506,7 +1748,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                 physics: const BouncingScrollPhysics(),
                 slivers: [
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                     sliver: SliverToBoxAdapter(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1514,46 +1756,57 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                           Text(
                             'Calendar Updates',
                             style: TextStyle(
-                              fontSize: 30, // matches 3xl
-                              fontWeight: FontWeight.w900,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
                               color: heading,
                               letterSpacing: -0.5,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Text(
-                            'Manage institution holidays and academic calendar entries visible on the shared calendar.',
+                            'Manage institution holidays and academic calendar events visible across the organization.',
                             style: TextStyle(
                               color: subheading,
-                              fontSize: 14,
+                              fontSize: 15,
                               fontWeight: FontWeight.w500,
                               height: 1.4,
                             ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 24),
                           _buildActions(),
-                          const SizedBox(height: 12),
-                          _buildFilterCard(),
+                          const SizedBox(height: 24),
+                          _buildSearchAndFilters(),
                         ],
                       ),
                     ),
                   ),
                   SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
                     sliver: _error != null
                         ? SliverToBoxAdapter(
                             child: Center(
                               child: Column(
                                 children: [
-                                  Text(
-                                    _error!,
-                                    style: const TextStyle(color: Colors.red),
-                                    textAlign: TextAlign.center,
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      _error!,
+                                      style: TextStyle(
+                                        color: Colors.red.shade700,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  ElevatedButton(
+                                  const SizedBox(height: 12),
+                                  FilledButton.icon(
                                     onPressed: _loadEntries,
-                                    child: const Text('Retry'),
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text('Retry'),
                                   ),
                                 ],
                               ),
@@ -1568,19 +1821,33 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                                 ),
                                 child: Column(
                                   children: [
-                                    Icon(
-                                      Icons.calendar_today_rounded,
-                                      size: 48,
-                                      color: subheading.withValues(alpha: 0.5),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      'No entries match the active filters.',
-                                      style: TextStyle(
-                                        color: subheading,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
+                                    Container(
+                                      padding: const EdgeInsets.all(24),
+                                      decoration: BoxDecoration(
+                                        color: isDark
+                                            ? const Color(0xFF1E293B)
+                                            : const Color(0xFFF1F5F9),
+                                        shape: BoxShape.circle,
                                       ),
+                                      child: Icon(
+                                        Icons.event_busy_rounded,
+                                        size: 48,
+                                        color: subheading.withValues(alpha: 0.5),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    Text(
+                                      'No entries match your filters',
+                                      style: TextStyle(
+                                        color: heading,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Try adjusting your search or clearing filters.',
+                                      style: TextStyle(color: subheading),
                                     ),
                                   ],
                                 ),
@@ -1588,13 +1855,14 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                             ),
                           )
                         : SliverGrid(
-                            gridDelegate:
-                                SliverGridDelegateWithMaxCrossAxisExtent(
-                                  maxCrossAxisExtent: 400,
-                                  mainAxisSpacing: 6,
-                                  crossAxisSpacing: 8,
-                                  mainAxisExtent: _canManage ? 220 : 172,
-                                ),
+                            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 400,
+                              mainAxisSpacing: 16,
+                              crossAxisSpacing: 16,
+                              mainAxisExtent: _canManage
+                                  ? 200
+                                  : 148, // Adjusted for cleaner layout and to prevent vertical overflow
+                            ),
                             delegate: SliverChildBuilderDelegate((
                               context,
                               index,
@@ -1619,68 +1887,9 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                             }, childCount: _filtered.length),
                           ),
                   ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 60)),
+                  const SliverToBoxAdapter(child: SizedBox(height: 80)),
                 ],
               ),
-      ),
-    );
-  }
-
-  Widget _buildFilterCard() {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final bgSurface = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final topBarBg = isDark
-        ? const Color(0xFF0F172A).withValues(alpha: 0.5)
-        : const Color(0xFFF8FAFC); // slate-50
-    final borderCol = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFF1F5F9); // slate-100
-
-    final headingColor = isDark ? Colors.white : const Color(0xFF1E293B);
-    return Container(
-      decoration: BoxDecoration(
-        color: bgSurface,
-        borderRadius: BorderRadius.circular(12), // flatter corners
-        border: Border.all(color: borderCol),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            decoration: BoxDecoration(
-              color: topBarBg,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
-              ),
-              border: Border(bottom: BorderSide(color: borderCol)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Manage Current Entries',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: headingColor,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildSearchAndFilters(),
-              ],
-            ),
-          ),
-          // Additional space for children visually if needed
-        ],
       ),
     );
   }
@@ -1692,11 +1901,8 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
         ? const Color(0xFF64748B) // slate-500
         : const Color(0xFF94A3B8); // slate-400
     final fieldBg = isDark
-        ? theme.colorScheme.surfaceContainerHighest
-        : Colors.white;
-    final borderColor = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0);
+        ? const Color(0xFF1E293B)
+        : const Color(0xFFF1F5F9); // slate-100
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1705,83 +1911,76 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
         Container(
           decoration: BoxDecoration(
             color: fieldBg,
-            borderRadius: BorderRadius.circular(9999),
-            border: Border.all(color: borderColor),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(16),
           ),
           child: TextField(
             decoration: InputDecoration(
-              hintText: 'Search events, holidays...',
+              hintText: 'Search events, holidays, categories...',
               hintStyle: TextStyle(
                 color: hintColor,
-                fontSize: 14,
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
-              prefixIcon: Icon(Icons.search, color: hintColor, size: 18),
+              prefixIcon: Icon(Icons.search, color: hintColor, size: 22),
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
+                horizontal: 20,
+                vertical: 16,
               ),
             ),
             onChanged: (v) => setState(() => _search = v),
           ),
         ),
-        const SizedBox(height: 12),
-        // Horizontal Scrollable Pills
+        const SizedBox(height: 16),
+        // Horizontal Scrollable Filter Chips
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
           child: Row(
             children: [
-              // Filters label pill
-              Container(
-                margin: const EdgeInsets.only(right: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF334155)
-                      : const Color(0xFFF8FAFC),
-                  border: Border.all(
-                    color: isDark
-                        ? const Color(0xFF475569)
-                        : const Color(0xFFE2E8F0),
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.filter_list,
-                      size: 12,
-                      color: isDark
-                          ? const Color(0xFFE2E8F0)
-                          : const Color(0xFF64748B),
+              // Clear Button (Only show if a filter is active)
+              if (_typeFilter != _EntryTypeFilter.all ||
+                  _yearFilter != 'All Years' ||
+                  _semesterFilter != 'All Semesters' ||
+                  _categoryFilter != 'All Categories' ||
+                  _syncFilter != _SyncFilter.all ||
+                  _activeFilter != _ActiveFilter.all)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8.0),
+                  child: ActionChip(
+                    avatar: Icon(
+                      Icons.close,
+                      size: 16,
+                      color: theme.colorScheme.error,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'FILTERS',
+                    label: Text(
+                      'Clear',
                       style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1.0,
-                        color: isDark
-                            ? const Color(0xFFE2E8F0)
-                            : const Color(0xFF475569),
+                        color: theme.colorScheme.error,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
+                    backgroundColor: theme.colorScheme.error.withValues(alpha: 0.1),
+                    side: BorderSide.none,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _search = '';
+                        _typeFilter = _EntryTypeFilter.all;
+                        _yearFilter = 'All Years';
+                        _semesterFilter = 'All Semesters';
+                        _categoryFilter = 'All Categories';
+                        _syncFilter = _SyncFilter.all;
+                        _activeFilter = _ActiveFilter.all;
+                      });
+                      _loadEntries();
+                    },
+                  ),
                 ),
-              ),
 
-              _buildFilterPill(
+              _buildFilterChip(
                 label: 'Type',
                 value: switch (_typeFilter) {
                   _EntryTypeFilter.all => 'All',
@@ -1804,7 +2003,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
               ),
               const SizedBox(width: 8),
 
-              _buildFilterPill(
+              _buildFilterChip(
                 label: 'Year',
                 value: _yearFilter == 'All Years' ? 'All' : _yearFilter,
                 options: [
@@ -1818,8 +2017,8 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
               ),
               const SizedBox(width: 8),
 
-              _buildFilterPill(
-                label: 'Sem',
+              _buildFilterChip(
+                label: 'Semester',
                 value: _semesterFilter == 'All Semesters'
                     ? 'All'
                     : _semesterFilter,
@@ -1836,8 +2035,8 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
               ),
               const SizedBox(width: 8),
 
-              _buildFilterPill(
-                label: 'Cat',
+              _buildFilterChip(
+                label: 'Category',
                 value: _categoryFilter == 'All Categories'
                     ? 'All'
                     : _categoryFilter,
@@ -1855,7 +2054,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
               ),
               const SizedBox(width: 8),
 
-              _buildFilterPill(
+              _buildFilterChip(
                 label: 'Sync',
                 value: switch (_syncFilter) {
                   _SyncFilter.all => 'All',
@@ -1889,7 +2088,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
               ),
               const SizedBox(width: 8),
 
-              _buildFilterPill(
+              _buildFilterChip(
                 label: 'Status',
                 value: switch (_activeFilter) {
                   _ActiveFilter.all => 'All',
@@ -1909,51 +2108,6 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                   });
                 },
               ),
-              const SizedBox(width: 6),
-
-              // Clear Button
-              InkWell(
-                onTap: () {
-                  setState(() {
-                    _search = '';
-                    _typeFilter = _EntryTypeFilter.all;
-                    _yearFilter = 'All Years';
-                    _semesterFilter = 'All Semesters';
-                    _categoryFilter = 'All Categories';
-                    _syncFilter = _SyncFilter.all;
-                    _activeFilter = _ActiveFilter.all;
-                  });
-                  _loadEntries();
-                },
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF7F1D1D).withValues(alpha: 0.3)
-                        : const Color(0xFFFEF2F2),
-                    border: Border.all(
-                      color: isDark
-                          ? const Color(0xFF991B1B)
-                          : const Color(0xFFFECACA),
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    'Clear',
-                    style: TextStyle(
-                      fontSize: 10, // matching compact sizes
-                      fontWeight: FontWeight.w800,
-                      color: isDark
-                          ? const Color(0xFFFCA5A5)
-                          : const Color(0xFFEF4444),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -1961,7 +2115,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     );
   }
 
-  Widget _buildFilterPill({
+  Widget _buildFilterChip({
     required String label,
     required String value,
     required List<String> options,
@@ -1969,40 +2123,39 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final pillBg = isDark ? theme.colorScheme.surface : Colors.white;
-    final pillBorder = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0);
-    final textColor = isDark ? Colors.white : const Color(0xFF334155);
+
+    final isSelected = value != 'All';
+    final chipBg = isSelected
+        ? theme.colorScheme.primary.withValues(alpha: 0.1)
+        : (isDark ? const Color(0xFF1E293B) : Colors.white);
+
+    final textColor = isSelected
+        ? theme.colorScheme.primary
+        : (isDark ? Colors.white : const Color(0xFF334155));
+
+    final borderColor = isSelected
+        ? theme.colorScheme.primary.withValues(alpha: 0.3)
+        : (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0));
 
     return Container(
-      height: 30,
-      padding: const EdgeInsets.only(left: 8, right: 6),
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: pillBg,
-        border: Border.all(color: pillBorder),
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.01),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        color: chipBg,
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
-          icon: Icon(
-            Icons.keyboard_arrow_down,
-            size: 14,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-          ),
+          icon: Icon(Icons.keyboard_arrow_down, size: 16, color: textColor),
           alignment: Alignment.centerRight,
           isDense: true,
+          dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
           style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
             color: textColor,
           ),
           onChanged: onChanged,
@@ -2012,25 +2165,28 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Text(
-                    '$label: ',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.normal,
-                      color: isDark
-                          ? const Color(0xFF94A3B8)
-                          : const Color(0xFF64748B),
+                  if (!isSelected)
+                    Text(
+                      '$label: ',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.normal,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
                     ),
-                  ),
                   Text(
                     val,
                     style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                       color: textColor,
                     ),
                   ),
-                  const SizedBox(width: 4), // extra buffer spacing before icon
+                  const SizedBox(width: 4),
                 ],
               );
             }).toList();
@@ -2047,123 +2203,105 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final neutralBg = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final neutralFg = isDark
-        ? const Color(0xFFE2E8F0)
-        : const Color(0xFF334155); // slate-700
-    final neutralBorder = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0); // slate-200
-
     final holidayBg = isDark
-        ? const Color(0xFF3F2A12)
-        : const Color(0xFFFFFBEB); // amber-50
+        ? const Color(0xFFD97706).withValues(alpha: 0.15)
+        : const Color(0xFFFEF3C7);
     final holidayFg = isDark
         ? const Color(0xFFFCD34D)
-        : const Color(0xFFD97706); // amber-600
-    final holidayBorder = isDark
-        ? const Color(0xFF92400E)
-        : const Color(0xFFFDE68A); // amber-200
+        : const Color(0xFFD97706);
 
     final academicBg = isDark
-        ? const Color(0xFF132C4D)
-        : const Color(0xFFEFF6FF); // blue-50
+        ? const Color(0xFF2563EB).withValues(alpha: 0.15)
+        : const Color(0xFFDBEAFE);
     final academicFg = isDark
         ? const Color(0xFF93C5FD)
-        : const Color(0xFF2563EB); // blue-600
-    final academicBorder = isDark
-        ? const Color(0xFF1D4ED8)
-        : const Color(0xFFBFDBFE); // blue-200
+        : const Color(0xFF2563EB);
+
+    final iconColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
 
     return Row(
       children: [
         if (_canManage) ...[
           Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _openHolidaySheet(),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text('Add Holiday', overflow: TextOverflow.ellipsis),
-              style:
-                  ElevatedButton.styleFrom(
-                    elevation: 0,
-                    backgroundColor: holidayBg,
-                    foregroundColor: holidayFg,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: holidayBorder),
+            child: InkWell(
+              onTap: () => _openHolidaySheet(),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: holidayBg,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_circle, color: holidayFg, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Add Holiday',
+                      style: TextStyle(
+                        color: holidayFg,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 10,
-                    ),
-                    textStyle: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ).copyWith(
-                    shadowColor: WidgetStateProperty.all(
-                      Colors.black.withValues(alpha: 0.05),
-                    ),
-                    elevation: WidgetStateProperty.all(2),
-                  ),
+                  ],
+                ),
+              ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
           Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _openAcademicSheet(),
-              icon: const Icon(Icons.add, size: 16),
-              label: const Text(
-                'Add Academic Entry',
-                overflow: TextOverflow.ellipsis,
+            child: InkWell(
+              onTap: () => _openAcademicSheet(),
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: academicBg,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_circle, color: academicFg, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Academic Entry',
+                      style: TextStyle(
+                        color: academicFg,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              style:
-                  ElevatedButton.styleFrom(
-                    elevation: 0,
-                    backgroundColor: academicBg,
-                    foregroundColor: academicFg,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: academicBorder),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 10,
-                    ),
-                    textStyle: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ).copyWith(
-                    shadowColor: WidgetStateProperty.all(
-                      Colors.black.withValues(alpha: 0.05),
-                    ),
-                    elevation: WidgetStateProperty.all(2),
-                  ),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
         ],
-        ElevatedButton(
-          onPressed: _loadEntries,
-          style:
-              ElevatedButton.styleFrom(
-                elevation: 0,
-                backgroundColor: neutralBg,
-                foregroundColor: neutralFg,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: neutralBorder),
-                ),
-                padding: const EdgeInsets.all(10),
-                minimumSize: const Size(40, 40),
-              ).copyWith(
-                shadowColor: WidgetStateProperty.all(
-                  Colors.black.withValues(alpha: 0.05),
-                ),
-                elevation: WidgetStateProperty.all(2),
-              ),
-          child: const Icon(Icons.sync, size: 18),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: IconButton(
+            onPressed: _loadEntries,
+            icon: Icon(Icons.refresh_rounded, color: iconColor),
+            tooltip: 'Refresh',
+          ),
         ),
       ],
     );
@@ -2189,27 +2327,22 @@ class _EntryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
     final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
-    final borderColor = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0); // slate-200
-    final titleColor = isDark
-        ? Colors.white
-        : const Color(0xFF1E293B); // slate-800
+    final titleColor = isDark ? Colors.white : const Color(0xFF0F172A);
     final bodyColor = isDark
         ? const Color(0xFF94A3B8)
-        : const Color(0xFF64748B); // slate-500
-    final detailsBg = isDark
-        ? const Color(0xFF0F172A).withValues(alpha: 0.5)
-        : const Color(0xFFF8FAFC); // slate-50
-    final detailsBorder = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFF1F5F9); // slate-100
-    final mutedLabel = isDark
+        : const Color(0xFF475569);
+    final mutedIcon = isDark
         ? const Color(0xFF64748B)
-        : const Color(0xFF94A3B8); // slate-400
-    final activeBg = isDark ? const Color(0xFF064E3B) : const Color(0xFFECFDF5);
-    final syncBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9);
+        : const Color(0xFF94A3B8);
+
+    final activeBg = isDark
+        ? const Color(0xFF064E3B).withValues(alpha: 0.4)
+        : const Color(0xFFD1FAE5);
+    final activeFg = isDark ? const Color(0xFF34D399) : const Color(0xFF059669);
+
+    final syncBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9);
 
     Color stripeColor() {
       final raw = entry.color;
@@ -2239,242 +2372,256 @@ class _EntryCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: cardBg,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
+          // Left Accent Stripe
           Positioned(
             top: 0,
+            bottom: 0,
             left: 0,
-            right: 0,
-            height: 6,
+            width: 4,
             child: ColoredBox(color: stripeColor()),
           ),
           Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.only(
+              left: 20,
+              right: 16,
+              top: 16,
+              bottom: 12,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Top Row: Badges
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 3,
+                        horizontal: 8,
+                        vertical: 4,
                       ),
                       decoration: BoxDecoration(
                         color: entry.entryType == 'holiday'
-                            ? const Color(0xFFFFFBEB)
-                            : const Color(0xFFEFF6FF),
-                        border: Border.all(
-                          color: entry.entryType == 'holiday'
-                              ? const Color(0xFFFEF3C7)
-                              : const Color(0xFFDBEAFE),
-                        ),
-                        borderRadius: BorderRadius.circular(9999),
+                            ? const Color(0xFFF59E0B).withValues(alpha: 0.1)
+                            : const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         entry.entryType.toUpperCase(),
                         style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
                           color: entry.entryType == 'holiday'
                               ? const Color(0xFFD97706)
                               : const Color(0xFF2563EB),
                         ),
                       ),
                     ),
-                    Row(
-                      children: [
-                        if (entry.isActive)
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          if (entry.isActive)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: activeBg,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'ACTIVE',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: activeFg,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
                           Container(
-                            margin: const EdgeInsets.only(right: 6),
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
+                              horizontal: 6,
+                              vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: activeBg,
-                              borderRadius: BorderRadius.circular(8),
+                              color: syncBg,
+                              borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Text(
-                              'ACTIVE',
+                            child: Text(
+                              syncLabel(),
                               style: TextStyle(
-                                fontSize: 8,
+                                fontSize: 9,
                                 fontWeight: FontWeight.bold,
-                                color: Color(0xFF059669),
-                                letterSpacing: 1.2,
+                                color: bodyColor,
+                                letterSpacing: 0.5,
                               ),
                             ),
                           ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: syncBg,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            syncLabel(),
-                            style: TextStyle(
-                              fontSize: 8,
-                              fontWeight: FontWeight.bold,
-                              color: bodyColor,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                // Title
                 Text(
                   entry.title,
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
                     color: titleColor,
-                    height: 1.25,
+                    height: 1.2,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 12),
+
+                // Icon Details Row
+                Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today_rounded,
+                      size: 14,
+                      color: mutedIcon,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        entry.dateLabel,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: bodyColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  entry.description.isEmpty
-                      ? 'No description provided.'
-                      : entry.description,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: entry.description.isEmpty ? mutedLabel : bodyColor,
-                    height: 1.3,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Icon(
+                      entry.entryType == 'holiday'
+                          ? Icons.beach_access_rounded
+                          : Icons.category_rounded,
+                      size: 14,
+                      color: mutedIcon,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        entry.category.isNotEmpty
+                            ? entry.category
+                            : (entry.entryType == 'holiday'
+                                  ? 'Holiday'
+                                  : 'N/A'),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: bodyColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: detailsBg,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: detailsBorder),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 5,
-                        child: _buildPropColumn(
-                          'ACAD. YEAR',
-                          entry.academicYear,
-                          labelColor: mutedLabel,
-                          valueColor: titleColor,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 5,
-                        child: _buildPropColumn(
-                          'SEM/CAT',
-                          entry.category.isNotEmpty
-                              ? entry.category
-                              : (entry.entryType == 'holiday'
-                                    ? 'Holiday'
-                                    : 'N/A'),
-                          labelColor: mutedLabel,
-                          valueColor: titleColor,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        flex: 6,
-                        child: _buildPropColumn(
-                          'DATE',
-                          entry.dateLabel,
-                          labelColor: mutedLabel,
-                          valueColor: titleColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+
                 if (canManage) ...[
                   const Spacer(),
+                  // Bottom Actions
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Expanded(
-                        child: OutlinedButton(
+                      Flexible(
+                        child: TextButton.icon(
                           onPressed: onSyncToggle,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF2563EB),
-                            backgroundColor: Colors.white,
-                            side: BorderSide(
-                              color: isDark
-                                  ? const Color(0xFF1D4ED8)
-                                  : const Color(0xFFBFDBFE),
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 0),
-                            minimumSize: const Size(0, 32),
-                            textStyle: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
-                            ),
+                          icon: Icon(
+                            entry.syncStatus == 'synced'
+                                ? Icons.cloud_off
+                                : Icons.cloud_upload_outlined,
+                            size: 16,
                           ),
-                          child: Text(
+                          label: Text(
                             entry.syncStatus == 'synced' ? 'Unsync' : 'Sync',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          style: TextButton.styleFrom(
+                            foregroundColor: isDark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            visualDensity: VisualDensity.compact,
+                            textStyle: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      OutlinedButton(
-                        onPressed: onEdit,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF475569),
-                          backgroundColor: Colors.white,
-                          side: BorderSide(color: borderColor),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                      const SizedBox(width: 4),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF1E293B)
+                              : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: IconButton(
+                          onPressed: onEdit,
+                          icon: const Icon(Icons.edit_rounded, size: 16),
+                          color: const Color(0xFF3B82F6),
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
                           ),
                           padding: EdgeInsets.zero,
-                          minimumSize: const Size(32, 32),
+                          tooltip: 'Edit',
                         ),
-                        child: const Icon(Icons.edit_outlined, size: 14),
                       ),
-                      const SizedBox(width: 6),
-                      OutlinedButton(
-                        onPressed: onDelete,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFEF4444),
-                          backgroundColor: Color(0xFFFEF2F2),
-                          side: const BorderSide(color: Color(0xFFFCA5A5)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                      const SizedBox(width: 8),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: IconButton(
+                          onPressed: onDelete,
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            size: 16,
+                          ),
+                          color: Colors.red.shade600,
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
                           ),
                           padding: EdgeInsets.zero,
-                          minimumSize: const Size(32, 32),
+                          tooltip: 'Delete',
                         ),
-                        child: const Icon(Icons.delete_outline, size: 14),
                       ),
                     ],
                   ),
@@ -2484,42 +2631,6 @@ class _EntryCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildPropColumn(
-    String label,
-    String value, {
-    required Color labelColor,
-    required Color valueColor,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w900,
-            color: labelColor,
-            letterSpacing: 0.5,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: valueColor,
-            height: 1.2,
-          ),
-        ),
-      ],
     );
   }
 }

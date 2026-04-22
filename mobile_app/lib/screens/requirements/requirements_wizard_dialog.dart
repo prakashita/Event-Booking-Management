@@ -8,12 +8,14 @@ class RequirementsWizardDialog extends StatefulWidget {
   final Event event;
   final VoidCallback onSuccess;
   final String requesterEmail;
+  final List<String>? departments;
 
   const RequirementsWizardDialog({
     super.key,
     required this.event,
     required this.onSuccess,
     this.requesterEmail = '',
+    this.departments,
   });
 
   @override
@@ -24,24 +26,20 @@ class RequirementsWizardDialog extends StatefulWidget {
 class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
   final _api = ApiService();
 
-  // Departments in order
-  final List<String> _departments = [
+  static const List<String> _allDepartments = [
     'facility',
     'it',
     'marketing',
     'transport',
   ];
 
+  late final List<String> _departments;
+
   int _currentStep = 0;
   String _phase = 'edit'; // 'edit' or 'review'
 
   // Track skipped departments
-  final Map<String, bool> _skipped = {
-    'facility': false,
-    'it': false,
-    'marketing': false,
-    'transport': false,
-  };
+  late final Map<String, bool> _skipped;
 
   // Form data
   final Map<String, dynamic> _facilityForm = {
@@ -98,6 +96,20 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
   bool get _hasAnySelected => _departments.any((d) => !_skipped[d]!);
 
   int get _totalSteps => _departments.length;
+
+  @override
+  void initState() {
+    super.initState();
+    final incoming = widget.departments
+        ?.map((dept) => dept.trim().toLowerCase())
+        .where((dept) => _allDepartments.contains(dept))
+        .toSet()
+        .toList();
+    _departments = incoming == null || incoming.isEmpty
+        ? List<String>.from(_allDepartments)
+        : _allDepartments.where(incoming.contains).toList();
+    _skipped = {for (final dept in _departments) dept: false};
+  }
 
   String _trimmed(dynamic value) => value?.toString().trim() ?? '';
 
@@ -404,6 +416,33 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     }
   }
 
+  Widget _buildStepHint() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.blue[200]!),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, size: 16, color: Colors.blue[700]),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Step ${_currentStep + 1} of $_totalSteps. Use Next to continue, Prev to go back, or Skip to exclude this department.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.blue[700],
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFacilityStep() {
     return SingleChildScrollView(
       child: Padding(
@@ -411,11 +450,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Step ${_currentStep + 1} of $_totalSteps',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
+            _buildStepHint(),
+            const SizedBox(height: 16),
             Text(
               'FACILITY MANAGER REQUEST',
               style: GoogleFonts.poppins(
@@ -487,11 +523,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Step ${_currentStep + 1} of $_totalSteps',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
+            _buildStepHint(),
+            const SizedBox(height: 16),
             Text(
               'IT SUPPORT REQUEST',
               style: GoogleFonts.poppins(
@@ -527,19 +560,19 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
               'Event mode:',
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
-            RadioListTile(
-              value: 'online',
-              groupValue: _itForm['event_mode'],
-              onChanged: (v) => setState(() => _itForm['event_mode'] = v),
-              title: const Text('Online'),
-              contentPadding: EdgeInsets.zero,
-            ),
-            RadioListTile(
-              value: 'offline',
-              groupValue: _itForm['event_mode'],
-              onChanged: (v) => setState(() => _itForm['event_mode'] = v),
-              title: const Text('Offline'),
-              contentPadding: EdgeInsets.zero,
+            const SizedBox(height: 8),
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment<String>(value: 'online', label: Text('Online')),
+                ButtonSegment<String>(value: 'offline', label: Text('Offline')),
+              ],
+              selected: {
+                (_itForm['event_mode'] ?? 'offline').toString(),
+              },
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) {
+                setState(() => _itForm['event_mode'] = selection.first);
+              },
             ),
             const SizedBox(height: 12),
             Text(
@@ -584,11 +617,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Step ${_currentStep + 1} of $_totalSteps',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
+            _buildStepHint(),
+            const SizedBox(height: 16),
             Text(
               'MARKETING REQUEST',
               style: GoogleFonts.poppins(
@@ -719,11 +749,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Step ${_currentStep + 1} of $_totalSteps',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 8),
+            _buildStepHint(),
+            const SizedBox(height: 16),
             Text(
               'TRANSPORT REQUEST',
               style: GoogleFonts.poppins(
@@ -917,9 +944,29 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
               if (_skipped[dept]!) {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    '${dept.toUpperCase()}: Skipped',
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _getDeptReviewLabel(dept),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Skipped — this request will not be sent.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               }
@@ -929,11 +976,34 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
               );
             }),
             if (!_hasAnySelected)
-              const Padding(
-                padding: EdgeInsets.only(top: 16),
-                child: Text(
-                  'All departments were skipped.',
-                  style: TextStyle(color: Colors.red, fontSize: 12),
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.red[700],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'All departments were skipped. Close or go back to include at least one request.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.red[700],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
           ],
@@ -942,75 +1012,144 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     );
   }
 
-  Widget _buildReviewItem(String dept) {
-    final title = dept == 'facility'
-        ? 'Facility'
-        : dept == 'it'
-        ? 'IT'
-        : dept == 'marketing'
-        ? 'Marketing'
-        : 'Transport';
+  String _getDeptReviewLabel(String dept) {
+    switch (dept) {
+      case 'facility':
+        return 'Facility manager';
+      case 'it':
+        return 'IT';
+      case 'marketing':
+        return 'Marketing';
+      case 'transport':
+        return 'Transport';
+      default:
+        return dept;
+    }
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 4),
-        if (dept == 'facility') ...[
-          Text(
-            'To: ${_facilityForm['to'].isEmpty ? '(default)' : _facilityForm['to']}',
-            style: const TextStyle(fontSize: 12),
-          ),
-          Text(
-            'Venue: ${_facilityForm['venue_required'] ? 'Yes' : 'No'}',
-            style: const TextStyle(fontSize: 12),
-          ),
-          Text(
-            'Refreshments: ${_facilityForm['refreshments'] ? 'Yes' : 'No'}',
-            style: const TextStyle(fontSize: 12),
-          ),
-        ] else if (dept == 'it') ...[
-          Text(
-            'To: ${_itForm['to'].isEmpty ? '(default)' : _itForm['to']}',
-            style: const TextStyle(fontSize: 12),
-          ),
-          Text(
-            'Mode: ${_itForm['event_mode']}',
-            style: const TextStyle(fontSize: 12),
-          ),
-          Text(
-            'PA System: ${_itForm['pa_system'] ? 'Yes' : 'No'}',
-            style: const TextStyle(fontSize: 12),
-          ),
-          Text(
-            'Projection: ${_itForm['projection'] ? 'Yes' : 'No'}',
-            style: const TextStyle(fontSize: 12),
-          ),
-        ] else if (dept == 'marketing') ...[
-          Text(
-            'To: ${_marketingForm['to'].isEmpty ? '(default)' : _marketingForm['to']}',
-            style: const TextStyle(fontSize: 12),
-          ),
-          ..._selectedMarketingLines().map(
-            (line) => Text(line, style: const TextStyle(fontSize: 12)),
-          ),
-        ] else if (dept == 'transport') ...[
-          Text(
-            'To: ${_transportForm['to'].isEmpty ? '(default)' : _transportForm['to']}',
-            style: const TextStyle(fontSize: 12),
-          ),
-          Text(
-            'Guest cab: ${_transportForm['include_guest_cab'] ? 'Yes' : 'No'}',
-            style: const TextStyle(fontSize: 12),
-          ),
-          Text(
-            'Students: ${_transportForm['include_students'] ? 'Yes' : 'No'}',
-            style: const TextStyle(fontSize: 12),
-          ),
+  Widget _buildReviewItem(String dept) {
+    final title = _getDeptReviewLabel(dept);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          if (dept == 'facility') ...[
+            _buildReviewLine(
+              'To',
+              _facilityForm['to'].isEmpty
+                  ? '(default desk)'
+                  : _facilityForm['to'],
+            ),
+            _buildReviewLine(
+              'Venue setup',
+              _facilityForm['venue_required'] ? 'Yes' : 'No',
+            ),
+            _buildReviewLine(
+              'Refreshments',
+              _facilityForm['refreshments'] ? 'Yes' : 'No',
+            ),
+            if (_hasNotes(_facilityForm['other_notes']))
+              _buildReviewLine(
+                'Notes',
+                _facilityForm['other_notes'].toString().trim(),
+              ),
+          ] else if (dept == 'it') ...[
+            _buildReviewLine(
+              'To',
+              _itForm['to'].isEmpty ? '(default desk)' : _itForm['to'],
+            ),
+            _buildReviewLine(
+              'Mode',
+              _itForm['event_mode'] == 'online' ? 'Online' : 'Offline',
+            ),
+            _buildReviewLine('PA system', _itForm['pa_system'] ? 'Yes' : 'No'),
+            _buildReviewLine(
+              'Projection',
+              _itForm['projection'] ? 'Yes' : 'No',
+            ),
+            if (_hasNotes(_itForm['other_notes']))
+              _buildReviewLine(
+                'Notes',
+                _itForm['other_notes'].toString().trim(),
+              ),
+          ] else if (dept == 'marketing') ...[
+            _buildReviewLine(
+              'To',
+              _marketingForm['to'].isEmpty
+                  ? '(default desk)'
+                  : _marketingForm['to'],
+            ),
+            ..._selectedMarketingLines().map(
+              (line) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(line, style: const TextStyle(fontSize: 12)),
+              ),
+            ),
+            if (_hasNotes(_marketingForm['other_notes']))
+              _buildReviewLine(
+                'Notes',
+                _marketingForm['other_notes'].toString().trim(),
+              ),
+          ] else if (dept == 'transport') ...[
+            _buildReviewLine(
+              'To',
+              _transportForm['to'].isEmpty
+                  ? '(default desk)'
+                  : _transportForm['to'],
+            ),
+            _buildReviewLine(
+              'Guest cab',
+              _transportForm['include_guest_cab'] ? 'Yes' : 'No',
+            ),
+            _buildReviewLine(
+              'Students',
+              _transportForm['include_students'] ? 'Yes' : 'No',
+            ),
+            if (_transportForm['include_guest_cab'])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  'Guest: ${_transportForm['guest_pickup_location'] ?? '—'} → ${_transportForm['guest_dropoff_location'] ?? '—'} (${_transportForm['guest_pickup_date'] ?? '—'} ${_transportForm['guest_pickup_time'] ?? ''})',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            if (_transportForm['include_students'])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  'Students: ${_transportForm['student_count'] ?? '—'} via ${_transportForm['student_transport_kind'] ?? '—'} on ${_transportForm['student_date'] ?? '—'} ${_transportForm['student_time'] ?? ''} @ ${_transportForm['student_pickup_point'] ?? '—'}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            if (_hasNotes(_transportForm['other_notes']))
+              _buildReviewLine(
+                'Notes',
+                _transportForm['other_notes'].toString().trim(),
+              ),
+          ],
         ],
-        const Divider(),
-      ],
+      ),
     );
+  }
+
+  Widget _buildReviewLine(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text('$label: $value', style: const TextStyle(fontSize: 12)),
+    );
+  }
+
+  bool _hasNotes(dynamic notes) {
+    final trimmed = notes?.toString().trim();
+    return trimmed != null && trimmed.isNotEmpty;
   }
 
   List<String> _selectedMarketingLines() {
@@ -1075,6 +1214,39 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
 
   @override
   Widget build(BuildContext context) {
+    if (_departments.isEmpty) {
+      return Dialog(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Send Requirements',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'All department requests are already active. No new requirement can be sent right now.',
+              ),
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       child: SizedBox(

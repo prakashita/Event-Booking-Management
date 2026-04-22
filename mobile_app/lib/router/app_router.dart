@@ -7,6 +7,7 @@ import '../screens/auth/approval_gate_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/events/events_screen.dart';
 import '../screens/events/create_event_screen.dart';
+import '../screens/events/approval_details_screen.dart';
 import '../screens/events/event_details_screen.dart';
 import '../screens/approvals/approvals_screen.dart';
 import '../screens/requirements/requirements_screen.dart';
@@ -21,12 +22,13 @@ import '../screens/admin/user_approvals_screen.dart';
 import '../screens/reports/event_reports_screen.dart';
 import '../screens/home_screen.dart';
 
-final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
-
 class AppRouter {
-  static GoRouter createRouter(AuthProvider authProvider) {
+  static GoRouter createRouter(
+    AuthProvider authProvider, {
+    required GlobalKey<NavigatorState> navigatorKey,
+  }) {
     return GoRouter(
-      navigatorKey: rootNavigatorKey,
+      navigatorKey: navigatorKey,
       refreshListenable: authProvider,
       initialLocation: '/dashboard',
       redirect: (context, state) {
@@ -108,6 +110,12 @@ class AppRouter {
               path: '/events/:id',
               builder: (_, state) =>
                   EventDetailsScreen(eventId: state.pathParameters['id']!),
+            ),
+            GoRoute(
+              path: '/approval-details/:id',
+              builder: (_, state) => ApprovalDetailsScreen(
+                approvalId: state.pathParameters['id']!,
+              ),
             ),
             GoRoute(
               path: '/approvals',

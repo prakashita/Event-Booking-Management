@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
 import '../../models/models.dart';
@@ -287,10 +289,10 @@ class _RequirementsScreenState extends State<RequirementsScreen>
     return (locked: false, hint: '');
   }
 
-  Future<void> _uploadMarketingDeliverablesBatch({
+  Future<String?> _uploadMarketingDeliverablesBatch({
     required String requestId,
     required Map<String, bool> naByType,
-    required Map<String, String?> filePathByType,
+    required Map<String, MultipartFile?> filesByType,
   }) async {
     try {
       final payload = <String, dynamic>{};
@@ -299,28 +301,22 @@ class _RequirementsScreenState extends State<RequirementsScreen>
           payload['na_${entry.key}'] = '1';
         }
       }
-      for (final entry in filePathByType.entries) {
-        final path = entry.value;
-        if (path != null && path.trim().isNotEmpty) {
-          payload['file_${entry.key}'] = await MultipartFile.fromFile(path);
+      for (final entry in filesByType.entries) {
+        final file = entry.value;
+        if (file != null) {
+          payload['file_${entry.key}'] = file;
         }
       }
 
       if (payload.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Choose at least one file or mark an item as N/A.'),
-          ),
-        );
-        return;
+        return 'Choose at least one file or mark an item as N/A.';
       }
 
       await _api.postMultipart<Map<String, dynamic>>(
         '/marketing/requests/$requestId/deliverables/batch',
         FormData.fromMap(payload),
       );
-      if (!mounted) return;
+      if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Marketing deliverables submitted.'),
@@ -328,11 +324,44 @@ class _RequirementsScreenState extends State<RequirementsScreen>
         ),
       );
       await _loadInbox();
+      return null;
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
-      );
+      return _extractApiErrorMessage(e);
+    }
+  }
+
+  String _extractApiErrorMessage(Object error) {
+    if (error is DioException) {
+      final data = error.response?.data;
+      if (data is Map<String, dynamic>) {
+        final detail = data['detail']?.toString().trim();
+        if (detail != null && detail.isNotEmpty) return detail;
+      } else if (data is String && data.trim().isNotEmpty) {
+        return data.trim();
+      }
+      final message = error.message?.trim();
+      if (message != null && message.isNotEmpty) return message;
+    }
+    final text = error.toString().trim();
+    if (text.startsWith('Exception: ')) {
+      return text.substring('Exception: '.length).trim();
+    }
+    return text.isEmpty ? 'Something went wrong.' : text;
+  }
+
+  Future<void> _connectGoogle() async {
+    final res = await _api.get<Map<String, dynamic>>('/calendar/connect-url');
+    final url = res['url']?.toString().trim() ?? '';
+    if (url.isEmpty) {
+      throw Exception('Failed to obtain Google connect URL.');
+    }
+    final uri = Uri.parse(url);
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) {
+      final fallback = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      if (!fallback) {
+        throw Exception('Could not open the Google consent page.');
+      }
     }
   }
 
@@ -360,7 +389,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
       for (final opt in enabledOptions)
         opt['type']!: existingByType[opt['type']]?.isNa ?? false,
     };
-    final filePathByType = <String, String?>{
+    final filesByType = <String, MultipartFile?>{
       for (final opt in enabledOptions) opt['type']!: null,
     };
     final fileNameByType = <String, String>{
@@ -369,6 +398,8 @@ class _RequirementsScreenState extends State<RequirementsScreen>
             (existingByType[opt['type']]?.link ?? '').isNotEmpty)
           opt['type']!: existingByType[opt['type']]!.link!,
     };
+    var submitStatus = 'idle';
+    var submitError = '';
 
     await showDialog(
       context: context,
@@ -379,7 +410,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
             final lock = _marketingDeliverableRowLock(type, request);
             if (lock.locked) return false;
             return naByType[type] == true ||
-                (filePathByType[type]?.trim().isNotEmpty == true);
+                filesByType[type] != null;
           });
 
           return AlertDialog(
@@ -437,10 +468,48 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                                           : () async {
                                               final pick = await FilePicker
                                                   .platform
-                                                  .pickFiles();
+                                                  .pickFiles(
+                                                    withData: kIsWeb,
+                                                    withReadStream: !kIsWeb,
+                                                  );
                                               final file = pick?.files.first;
-                                              if (file?.path == null) {
-                                                if (!context.mounted) return;
+                                              if (file == null) {
+                                                if (!mounted) return;
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Unable to read selected file.',
+                                                    ),
+                                                  ),
+                                                );
+                                                return;
+                                              }
+                                              MultipartFile? multipart;
+                                              if (file.path != null &&
+                                                  file.path!.trim().isNotEmpty) {
+                                                multipart =
+                                                    await MultipartFile.fromFile(
+                                                      file.path!,
+                                                      filename: file.name,
+                                                    );
+                                              } else if (file.bytes != null) {
+                                                multipart =
+                                                    MultipartFile.fromBytes(
+                                                      file.bytes!,
+                                                      filename: file.name,
+                                                    );
+                                              } else if (file.readStream != null) {
+                                                multipart =
+                                                    MultipartFile.fromStream(
+                                                  () => file.readStream!,
+                                                  file.size,
+                                                  filename: file.name,
+                                                );
+                                              }
+                                              if (multipart == null) {
+                                                if (!mounted) return;
                                                 ScaffoldMessenger.of(
                                                   context,
                                                 ).showSnackBar(
@@ -453,8 +522,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                                                 return;
                                               }
                                               setLocal(() {
-                                                filePathByType[type] =
-                                                    file!.path!;
+                                                filesByType[type] = multipart;
                                                 fileNameByType[type] =
                                                     file.name;
                                                 naByType[type] = false;
@@ -481,7 +549,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                                                   naByType[type] =
                                                       value == true;
                                                   if (value == true) {
-                                                    filePathByType[type] = null;
+                                                    filesByType[type] = null;
                                                     fileNameByType[type] =
                                                         'N/A';
                                                   } else {
@@ -506,6 +574,38 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                       },
                     ),
                   ],
+                  if (submitStatus == 'error') ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            submitError,
+                            style: const TextStyle(
+                              color: AppColors.error,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        if (submitError == 'Google not connected') ...[
+                          const SizedBox(width: 8),
+                          OutlinedButton(
+                            onPressed: () async {
+                              try {
+                                await _connectGoogle();
+                              } catch (e) {
+                                if (!ctx.mounted) return;
+                                setLocal(() {
+                                  submitError = _extractApiErrorMessage(e);
+                                });
+                              }
+                            },
+                            child: const Text('Connect Google'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -515,17 +615,31 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
-                onPressed: !hasSelection
+                onPressed: submitStatus == 'loading' || !hasSelection
                     ? null
                     : () async {
-                        Navigator.of(ctx).pop();
-                        await _uploadMarketingDeliverablesBatch(
+                        setLocal(() {
+                          submitStatus = 'loading';
+                          submitError = '';
+                        });
+                        final error = await _uploadMarketingDeliverablesBatch(
                           requestId: request.id,
                           naByType: naByType,
-                          filePathByType: filePathByType,
+                          filesByType: filesByType,
                         );
+                        if (!ctx.mounted) return;
+                        if (error == null) {
+                          Navigator.of(ctx).pop();
+                          return;
+                        }
+                        setLocal(() {
+                          submitStatus = 'error';
+                          submitError = error;
+                        });
                       },
-                child: const Text('Submit'),
+                child: Text(
+                  submitStatus == 'loading' ? 'Saving...' : 'Save',
+                ),
               ),
             ],
           );

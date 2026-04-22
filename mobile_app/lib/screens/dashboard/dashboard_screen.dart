@@ -586,7 +586,8 @@ class _DashboardEventCard extends StatelessWidget {
                     child: Image.network(
                       imageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _eventPlaceholder(isDark),
+                      errorBuilder: (context, error, stackTrace) =>
+                          _eventPlaceholder(isDark),
                     ),
                   ),
                   Positioned.fill(

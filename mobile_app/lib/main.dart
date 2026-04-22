@@ -14,6 +14,9 @@ import 'services/api_service.dart';
 // For development: use your FastAPI server URL
 // For production: use your deployed server URL
 const String _apiBaseOverride = String.fromEnvironment('API_BASE_URL');
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>(
+  debugLabel: 'root_navigator',
+);
 
 String get kApiBaseUrl {
   if (_apiBaseOverride.trim().isNotEmpty) {
@@ -48,10 +51,15 @@ void main() {
           create: (context) => NotificationProvider(
             context.read<AuthProvider>(),
             ApiService(),
+            appNavigatorKey,
           ),
           update: (_, authProvider, notificationProvider) {
             if (notificationProvider == null) {
-              return NotificationProvider(authProvider, ApiService());
+              return NotificationProvider(
+                authProvider,
+                ApiService(),
+                appNavigatorKey,
+              );
             }
             notificationProvider.updateAuthProvider(authProvider);
             return notificationProvider;
@@ -83,7 +91,10 @@ class _EventBookingAppState extends State<EventBookingApp> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _router ??= AppRouter.createRouter(context.read<AuthProvider>());
+    _router ??= AppRouter.createRouter(
+      context.read<AuthProvider>(),
+      navigatorKey: appNavigatorKey,
+    );
   }
 
   @override

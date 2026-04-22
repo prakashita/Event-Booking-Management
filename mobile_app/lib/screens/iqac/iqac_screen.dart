@@ -159,13 +159,15 @@ class _IQACScreenState extends State<IQACScreen> {
         await out.writeAsBytes(bytes, flush: true);
 
         final openResult = await OpenFile.open(out.path);
-        if (openResult.type != ResultType.done && mounted) {
+        if (openResult.type != ResultType.done) {
+          if (!context.mounted) return;
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(SnackBar(content: Text(openResult.message)));
           return;
         }
-        if (download && mounted) {
+        if (download) {
+          if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('File downloaded to temporary storage.'),
@@ -173,7 +175,7 @@ class _IQACScreenState extends State<IQACScreen> {
           );
         }
       } catch (e) {
-        if (!mounted) return;
+        if (!context.mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -183,8 +185,9 @@ class _IQACScreenState extends State<IQACScreen> {
     Future<void> uploadFile(StateSetter setModalState) async {
       if (selectedSubFolder == null ||
           selectedItem == null ||
-          pickedFile?.path == null)
+          pickedFile?.path == null) {
         return;
+      }
       setModalState(() {
         uploading = true;
         uploadError = null;
@@ -228,7 +231,7 @@ class _IQACScreenState extends State<IQACScreen> {
         });
         await _loadData();
       } catch (e) {
-        if (!mounted) return;
+        if (!context.mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -1004,7 +1007,7 @@ class _IQACScreenState extends State<IQACScreen> {
                 )
               : ListView.separated(
                   itemCount: files.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  separatorBuilder: (_, index) => const SizedBox(height: 8),
                   itemBuilder: (_, i) {
                     final f = files[i];
                     return Container(

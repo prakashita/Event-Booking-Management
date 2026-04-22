@@ -156,7 +156,7 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                                 transitionDuration: const Duration(
                                   milliseconds: 180,
                                 ),
-                                pageBuilder: (_, __, ___) =>
+                                pageBuilder: (context, animation, secondary) =>
                                     const SettingsScreen(),
                                 transitionBuilder:
                                     (

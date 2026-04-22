@@ -57,8 +57,6 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
       backgroundColor: AppColors.primary,
       body: Stack(
@@ -233,10 +231,10 @@ class _LoginScreenState extends State<LoginScreen>
                                   )
                                 else ...[
                                   // Google G logo
-                                  Container(
+                                  const SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child: const _GoogleIcon(),
+                                    child: _GoogleIcon(),
                                   ),
                                   const SizedBox(width: 12),
                                   const Text(

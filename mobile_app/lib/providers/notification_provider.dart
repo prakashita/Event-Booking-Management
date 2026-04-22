@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../services/api_service.dart';
 import '../services/notification_service.dart';
@@ -9,12 +9,17 @@ import 'auth_provider.dart';
 class NotificationProvider extends ChangeNotifier {
   AuthProvider _authProvider;
   final ApiService _api;
+  final GlobalKey<NavigatorState> _navigatorKey;
 
   late NotificationService _notificationService;
   bool _isInitialized = false;
 
-  NotificationProvider(this._authProvider, this._api) {
-    _notificationService = NotificationService(_api, _authProvider);
+  NotificationProvider(this._authProvider, this._api, this._navigatorKey) {
+    _notificationService = NotificationService(
+      _api,
+      _authProvider,
+      _navigatorKey,
+    );
     _notificationService.addListener(_onNotificationServiceChanged);
   }
 
