@@ -7,10 +7,12 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../screens/chat/chat_list_screen.dart';
+import '../../screens/chat/chat_screen.dart';
 import '../../services/api_service.dart';
+import '../../services/notification_service.dart';
 import '../../widgets/common/side_nav_bar.dart';
 import '../../widgets/dashboard/profile_dropdown.dart';
 
@@ -26,7 +28,10 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
   final ValueNotifier<bool> _chatFabVisible = ValueNotifier<bool>(true);
   Offset? _fabPos;
-  final _api = ApiService();
+  bool? _lastChatUiOpen;
+  OverlayEntry? _notificationBanner;
+  Timer? _notificationBannerTimer;
+  NotificationProvider? _notificationProvider;
 
   @override
   void initState() {
@@ -40,9 +45,49 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initializeNotifications() async {
     if (!mounted) return;
-    final notificationProvider =
-        Provider.of<NotificationProvider>(context, listen: false);
+    final notificationProvider = Provider.of<NotificationProvider>(
+      context,
+      listen: false,
+    );
+    _notificationProvider ??= notificationProvider;
+    _notificationProvider?.removePopupListener(_handlePopupNotification);
+    _notificationProvider?.addPopupListener(_handlePopupNotification);
     await notificationProvider.initialize();
+  }
+
+  void _handlePopupNotification(NotificationPopupEvent event) {
+    if (!mounted) return;
+    _showInAppNotificationBanner(event);
+  }
+
+  void _showInAppNotificationBanner(NotificationPopupEvent event) {
+    _notificationBannerTimer?.cancel();
+    _notificationBanner?.remove();
+
+    final overlay = Overlay.of(context, rootOverlay: true);
+
+    _notificationBanner = OverlayEntry(
+      builder: (context) => _NotificationPopupBanner(
+        event: event,
+        onTap: () {
+          _dismissNotificationBanner();
+          GoRouter.of(context).go(event.route);
+        },
+        onDismiss: _dismissNotificationBanner,
+      ),
+    );
+
+    overlay.insert(_notificationBanner!);
+    _notificationBannerTimer = Timer(const Duration(seconds: 4), () {
+      _dismissNotificationBanner();
+    });
+  }
+
+  void _dismissNotificationBanner() {
+    _notificationBannerTimer?.cancel();
+    _notificationBannerTimer = null;
+    _notificationBanner?.remove();
+    _notificationBanner = null;
   }
 
   Future<void> _openNotificationsPanel() async {
@@ -50,8 +95,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final notificationProvider =
-        Provider.of<NotificationProvider>(context, listen: false);
+    final notificationProvider = Provider.of<NotificationProvider>(
+      context,
+      listen: false,
+    );
+
+    // Ensure notification service is initialized and refresh unread count
+    await notificationProvider.initialize();
+    if (!mounted) return;
+    await notificationProvider.refreshUnreadCount();
+    if (!mounted) return;
+
     final totalUnread = notificationProvider.totalUnread;
 
     await showModalBottomSheet<void>(
@@ -401,6 +455,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _dismissNotificationBanner();
+    _notificationProvider?.removePopupListener(_handlePopupNotification);
+    _notificationBannerTimer?.cancel();
     _chatFabVisible.dispose();
     super.dispose();
   }
@@ -410,6 +467,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
     final currentRoute = GoRouterState.of(context).matchedLocation;
+    final isChatChild =
+        widget.child is ChatListScreen || widget.child is ChatScreen;
+    final isChatRoute =
+        isChatChild ||
+        currentRoute == '/chat' ||
+        currentRoute.startsWith('/chat/');
+    if (_lastChatUiOpen != isChatRoute) {
+      _lastChatUiOpen = isChatRoute;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<NotificationProvider>().setChatUiOpen(isChatRoute);
+      });
+    }
     final isTopRoute = ModalRoute.of(context)?.isCurrent ?? true;
     final isDesktop = MediaQuery.of(context).size.width >= 768;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
@@ -528,8 +598,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFDC2626),
-                                          borderRadius:
-                                              BorderRadius.circular(999),
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
                                         ),
                                         child: Text(
                                           totalUnread > 99
@@ -581,9 +652,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ValueListenableBuilder<bool>(
                             valueListenable: _chatFabVisible,
                             builder: (context, visible, _) {
-                              final isChatRoute =
-                                  currentRoute == '/chat' ||
-                                  currentRoute.startsWith('/chat/');
                               final showFab =
                                   isTopRoute && visible && !isChatRoute;
 
@@ -637,21 +705,68 @@ class _HomeScreenState extends State<HomeScreen> {
                                       _fabPos = Offset(newX, newY);
                                     });
                                   },
-                                  child: FloatingActionButton(
-                                    key: const ValueKey<String>(
-                                      'chat_fab_visible',
-                                    ),
-                                    onPressed: () {
-                                      context.push('/chat');
+                                  child: Consumer<NotificationProvider>(
+                                    builder: (context, notificationProvider, _) {
+                                      final totalUnread =
+                                          notificationProvider.totalUnread;
+                                      return Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          FloatingActionButton(
+                                            key: const ValueKey<String>(
+                                              'chat_fab_visible',
+                                            ),
+                                            onPressed: () {
+                                              context.push('/chat');
+                                            },
+                                            backgroundColor: const Color(0xFF2563EB),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(16),
+                                            ),
+                                            child: const Icon(
+                                              LucideIcons.messageSquare,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          if (totalUnread > 0)
+                                            Positioned(
+                                              right: -2,
+                                              top: -2,
+                                              child: Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 5,
+                                                  vertical: 1,
+                                                ),
+                                                constraints: const BoxConstraints(
+                                                  minWidth: 18,
+                                                  minHeight: 16,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFFDC2626),
+                                                  borderRadius: BorderRadius.circular(
+                                                    999,
+                                                  ),
+                                                  border: Border.all(
+                                                    color: Colors.white,
+                                                    width: 1.5,
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  totalUnread > 99
+                                                      ? '99+'
+                                                      : '$totalUnread',
+                                                  textAlign: TextAlign.center,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      );
                                     },
-                                    backgroundColor: const Color(0xFF2563EB),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: const Icon(
-                                      LucideIcons.messageSquare,
-                                      color: Colors.white,
-                                    ),
                                   ),
                                 ),
                               );
@@ -708,5 +823,148 @@ class DashboardSearchScope extends InheritedWidget {
   @override
   bool updateShouldNotify(DashboardSearchScope oldWidget) {
     return oldWidget.searchQuery != searchQuery;
+  }
+}
+
+class _NotificationPopupBanner extends StatefulWidget {
+  final NotificationPopupEvent event;
+  final VoidCallback onTap;
+  final VoidCallback onDismiss;
+
+  const _NotificationPopupBanner({
+    required this.event,
+    required this.onTap,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_NotificationPopupBanner> createState() =>
+      _NotificationPopupBannerState();
+}
+
+class _NotificationPopupBannerState extends State<_NotificationPopupBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _slide = Tween<Offset>(
+      begin: const Offset(0, -0.15),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final topPadding = MediaQuery.of(context).padding.top;
+
+    return Positioned(
+      top: topPadding + 10,
+      left: 12,
+      right: 12,
+      child: Material(
+        color: Colors.transparent,
+        child: SlideTransition(
+          position: _slide,
+          child: SafeArea(
+            bottom: false,
+            child: Dismissible(
+              key: ValueKey('${widget.event.title}-${widget.event.body}'),
+              direction: DismissDirection.up,
+              onDismissed: (_) => widget.onDismiss(),
+              child: InkWell(
+                onTap: widget.onTap,
+                borderRadius: BorderRadius.circular(24),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.14),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: theme.colorScheme.outline.withValues(alpha: 0.14),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDBEAFE),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.message_rounded,
+                          color: Color(0xFF1D4ED8),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              widget.event.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: theme.colorScheme.onSurface,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              widget.event.body,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontSize: 13,
+                                height: 1.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: widget.onDismiss,
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

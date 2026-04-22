@@ -1,7 +1,13 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
 
@@ -12,23 +18,61 @@ class ChatListScreen extends StatefulWidget {
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
+class _ChatListScreenState extends State<ChatListScreen>
+    with WidgetsBindingObserver {
   final _api = ApiService();
   final _searchCtrl = TextEditingController();
+  static const Duration _autoRefreshInterval = Duration(seconds: 5);
 
   List<ChatConversation> _conversations = [];
   List<User> _users = [];
   bool _isLoading = true;
   bool _isLoadingUsers = false;
   String? _error;
+  WebSocketChannel? _ws;
+  bool _isConnectingWs = false;
+  String _currentUserId = '';
+  Timer? _autoRefreshTimer;
+  Timer? _reconnectTimer;
 
   String _activeTab = 'Chats';
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _currentUserId = context.read<AuthProvider>().user?.id ?? '';
     _loadConversations();
     _loadUsers();
+    _connectWs();
+    _startAutoRefresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoRefreshTimer?.cancel();
+    _reconnectTimer?.cancel();
+    _ws?.sink.close();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshConversationList();
+      _loadUsers();
+      _reconnectWs();
+      _startAutoRefresh();
+      return;
+    }
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _autoRefreshTimer?.cancel();
+    }
   }
 
   Future<void> _loadConversations() async {
@@ -71,6 +115,293 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
   }
 
+  /// Connect to WebSocket for real-time conversation updates
+  void _connectWs() {
+    if (_isConnectingWs) return;
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final token = authProvider.token;
+    if (token == null) return;
+
+    final wsBaseUrl = _api.wsBaseUrl;
+    if (wsBaseUrl == null) return;
+
+    try {
+      _isConnectingWs = true;
+      final url = Uri.parse('$wsBaseUrl/api/v1/chat/ws?token=$token');
+      _ws = WebSocketChannel.connect(url);
+      _isConnectingWs = false;
+      _refreshConversationList();
+
+      _ws?.stream.listen(
+        (message) {
+          try {
+            final data = jsonDecode(message);
+            _handleWsEvent(data is Map<String, dynamic> ? data : {});
+          } catch (e) {
+            // Ignore malformed messages
+            if (kDebugMode) {
+              print('Error processing WebSocket message: $e');
+            }
+          }
+        },
+        onError: (error) {
+          _isConnectingWs = false;
+          if (kDebugMode) {
+            print('WebSocket error: $error');
+          }
+          _scheduleReconnect();
+        },
+        onDone: () {
+          _isConnectingWs = false;
+          if (kDebugMode) {
+            print('WebSocket closed');
+          }
+          _scheduleReconnect();
+        },
+      );
+    } catch (e) {
+      _isConnectingWs = false;
+      if (kDebugMode) {
+        print('Failed to connect WebSocket: $e');
+      }
+    }
+  }
+
+  void _startAutoRefresh() {
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = Timer.periodic(_autoRefreshInterval, (_) {
+      if (!mounted) return;
+      _refreshConversationList();
+    });
+  }
+
+  void _scheduleReconnect() {
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        _reconnectWs();
+      }
+    });
+  }
+
+  void _reconnectWs() {
+    _reconnectTimer?.cancel();
+    _ws?.sink.close();
+    _ws = null;
+    _connectWs();
+  }
+
+  void _handleWsEvent(Map<String, dynamic> event) {
+    final type = event['type']?.toString();
+    if (type == null) return;
+
+    if (type == 'presence') {
+      _handlePresenceUpdate(event);
+      return;
+    }
+
+    if (type == 'message' || type == 'new_message') {
+      _handleIncomingConversationMessage(event);
+      return;
+    }
+
+    if (type == 'read' || type == 'read_conversation') {
+      _refreshConversationList();
+      return;
+    }
+
+    if (type == 'message_deleted') {
+      _handleConversationMessageDeleted(event);
+      return;
+    }
+
+    if (type == 'message_edited') {
+      _handleConversationMessageEdited(event);
+      return;
+    }
+
+    if (type == 'conversation_cleared') {
+      final conversationId = event['conversation_id']?.toString();
+      if (conversationId == null || !mounted) return;
+      setState(() {
+        _conversations = _conversations
+            .map(
+              (conversation) => conversation.id == conversationId
+                  ? conversation.copyWith(
+                      clearLastMessage: true,
+                      clearLastMessageAt: true,
+                      unreadCount: 0,
+                    )
+                  : conversation,
+            )
+            .toList();
+      });
+      return;
+    }
+
+    if (type == 'conversation_deleted') {
+      final conversationId = event['conversation_id']?.toString();
+      if (conversationId == null || !mounted) return;
+      setState(() {
+        _conversations = _conversations
+            .where((conversation) => conversation.id != conversationId)
+            .toList();
+      });
+    }
+  }
+
+  void _handleIncomingConversationMessage(Map<String, dynamic> event) {
+    final message = _extractPayload(event);
+    final conversationId = message['conversation_id']?.toString();
+    if (conversationId == null || !mounted) return;
+
+    final senderId = message['sender_id']?.toString();
+    final isIncoming = senderId != null && senderId != _currentUserId;
+    final preview = _buildConversationPreview(message);
+    final createdAt = _parseDateTime(message['created_at']?.toString());
+
+    final index = _conversations.indexWhere(
+      (conversation) => conversation.id == conversationId,
+    );
+    if (index == -1) {
+      _refreshConversationList();
+      return;
+    }
+
+    setState(() {
+      final existing = _conversations[index];
+      final updated = existing.copyWith(
+        lastMessage: preview,
+        lastMessageAt: createdAt ?? existing.lastMessageAt ?? DateTime.now(),
+        unreadCount: isIncoming ? existing.unreadCount + 1 : existing.unreadCount,
+      );
+
+      _conversations = List<ChatConversation>.from(_conversations)
+        ..removeAt(index)
+        ..insert(0, updated);
+    });
+  }
+
+  void _handleConversationMessageDeleted(Map<String, dynamic> event) {
+    final conversationId = event['conversation_id']?.toString();
+    if (conversationId == null || !mounted) return;
+
+    setState(() {
+      _conversations = _conversations.map((conversation) {
+        if (conversation.id != conversationId) {
+          return conversation;
+        }
+
+        final replacement = event['message'];
+        if (replacement is Map<String, dynamic>) {
+          return conversation.copyWith(
+            lastMessage: _buildConversationPreview(replacement),
+            lastMessageAt:
+                _parseDateTime(replacement['created_at']?.toString()) ??
+                conversation.lastMessageAt,
+          );
+        }
+
+        return conversation.copyWith(lastMessage: 'This message was deleted');
+      }).toList();
+    });
+  }
+
+  void _handleConversationMessageEdited(Map<String, dynamic> event) {
+    final message = event['message'];
+    if (message is! Map<String, dynamic> || !mounted) return;
+
+    final conversationId = message['conversation_id']?.toString();
+    if (conversationId == null) return;
+
+    setState(() {
+      _conversations = _conversations.map((conversation) {
+        if (conversation.id != conversationId) {
+          return conversation;
+        }
+
+        return conversation.copyWith(
+          lastMessage: _buildConversationPreview(message),
+          lastMessageAt:
+              _parseDateTime(message['created_at']?.toString()) ??
+              conversation.lastMessageAt,
+        );
+      }).toList();
+    });
+  }
+
+  void _handlePresenceUpdate(Map<String, dynamic> event) {
+    final userId = event['user_id']?.toString();
+    if (userId == null || !mounted) return;
+
+    final online = event['online'] == true;
+
+    setState(() {
+      _conversations = _conversations.map((conversation) {
+        if (conversation.kind != 'direct') {
+          return conversation;
+        }
+
+        final matchesOtherUser = conversation.participants.any(
+          (participantId) =>
+              participantId == userId && participantId != _currentUserId,
+        );
+
+        if (!matchesOtherUser) {
+          return conversation;
+        }
+
+        return conversation.copyWith(otherUserOnline: online);
+      }).toList();
+    });
+  }
+
+  Map<String, dynamic> _extractPayload(Map<String, dynamic> event) {
+    final message = event['message'];
+    if (message is Map<String, dynamic>) return message;
+    final payload = event['payload'];
+    if (payload is Map<String, dynamic>) return payload;
+    return event;
+  }
+
+  String _buildConversationPreview(Map<String, dynamic> message) {
+    final content = (message['content'] ?? message['text'] ?? '').toString().trim();
+    if (content.isNotEmpty) {
+      return content.length > 120 ? '${content.substring(0, 120)}...' : content;
+    }
+
+    final attachments = message['attachments'];
+    if (attachments is List && attachments.isNotEmpty) {
+      return 'Sent an attachment';
+    }
+
+    return 'New message';
+  }
+
+  DateTime? _parseDateTime(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw)?.toLocal();
+  }
+
+  /// Refresh conversation list from API
+  Future<void> _refreshConversationList() async {
+    try {
+      final data = await _api.get<dynamic>('/chat/conversations/me');
+      final items = _extractItems(data);
+      if (mounted) {
+        setState(() {
+          _conversations = items
+              .whereType<Map<String, dynamic>>()
+              .map(ChatConversation.fromJson)
+              .toList();
+        });
+      }
+    } catch (e) {
+      // Ignore errors in background refresh
+    }
+  }
+
   List<dynamic> _extractItems(dynamic data) {
     if (data is List) return data;
     if (data is Map<String, dynamic>) {
@@ -95,6 +426,47 @@ class _ChatListScreenState extends State<ChatListScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to create chat: $e')));
+    }
+  }
+
+  Future<void> _handleConversationAction(
+    ChatConversation conversation,
+    String action,
+  ) async {
+    try {
+      if (action == 'clear') {
+        await _api.post<dynamic>('/chat/conversations/${conversation.id}/clear');
+        if (!mounted) return;
+        setState(() {
+          _conversations = _conversations.map((item) {
+            if (item.id != conversation.id) return item;
+            return item.copyWith(
+              clearLastMessage: true,
+              clearLastMessageAt: true,
+              unreadCount: 0,
+            );
+          }).toList();
+        });
+        return;
+      }
+
+      if (action == 'purge') {
+        await _api.post<dynamic>('/chat/conversations/${conversation.id}/purge');
+      } else if (action == 'hide') {
+        await _api.delete<dynamic>('/chat/conversation/${conversation.id}');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _conversations = _conversations
+            .where((item) => item.id != conversation.id)
+            .toList();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update chat: $e')),
+      );
     }
   }
 
@@ -314,13 +686,14 @@ class _ChatListScreenState extends State<ChatListScreen> {
             .toList();
       }
       if (_isLoadingUsers && filteredUsers.isEmpty) return _buildLoading();
-      if (filteredUsers.isEmpty)
+      if (filteredUsers.isEmpty) {
         return const Center(
           child: Text(
             'No users found',
             style: TextStyle(color: Color(0xFF94A3B8)),
           ),
         );
+      }
 
       return ListView.builder(
         padding: const EdgeInsets.all(8),
@@ -390,6 +763,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                   ? _formatTime(conv.lastMessageAt!)
                   : null,
               unreadCount: conv.unreadCount,
+              onActionSelected: (value) => _handleConversationAction(conv, value),
               onTap: () => context.push('/chat/${conv.id}'),
             );
           }),
@@ -399,7 +773,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
     // Default Chats (Event Group and Direct)
     final eventChats = targetConversations
-      .where((c) => c.kind == 'event' || c.kind == 'event_group')
+        .where((c) => c.kind == 'event' || c.kind == 'event_group')
         .toList();
     final directChats = targetConversations
         .where((c) => c.kind == 'direct')
@@ -439,6 +813,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     ? _formatTime(conv.lastMessageAt!)
                     : null,
                 unreadCount: conv.unreadCount,
+                onActionSelected: (value) => _handleConversationAction(conv, value),
                 onTap: () => context.push('/chat/${conv.id}'),
               );
             }),
@@ -461,6 +836,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                     ? _formatTime(conv.lastMessageAt!)
                     : null,
                 unreadCount: conv.unreadCount,
+                onActionSelected: (value) => _handleConversationAction(conv, value),
                 onTap: () => context.push('/chat/${conv.id}'),
               );
             }),
@@ -495,6 +871,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     required Color avatarFg,
     bool isOnline = false,
     int unreadCount = 0,
+    ValueChanged<String>? onActionSelected,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -639,6 +1016,15 @@ class _ChatListScreenState extends State<ChatListScreen> {
                 ],
               ),
             ),
+            if (onActionSelected != null)
+              PopupMenuButton<String>(
+                onSelected: onActionSelected,
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'clear', child: Text('Clear messages')),
+                  PopupMenuItem(value: 'hide', child: Text('Hide chat')),
+                  PopupMenuItem(value: 'purge', child: Text('Delete thread')),
+                ],
+              ),
           ],
         ),
       ),

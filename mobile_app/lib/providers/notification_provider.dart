@@ -7,7 +7,7 @@ import 'auth_provider.dart';
 /// Provider for managing real-time notifications via WebSocket.
 /// Automatically initializes and manages the notification service lifecycle.
 class NotificationProvider extends ChangeNotifier {
-  final AuthProvider _authProvider;
+  AuthProvider _authProvider;
   final ApiService _api;
 
   late NotificationService _notificationService;
@@ -26,6 +26,7 @@ class NotificationProvider extends ChangeNotifier {
   /// Call this after auth is ready (e.g., after login).
   Future<void> initialize() async {
     if (_isInitialized) return;
+    if (!_authProvider.isAuthenticated) return;
     _isInitialized = true;
     await _notificationService.initialize();
   }
@@ -36,9 +37,46 @@ class NotificationProvider extends ChangeNotifier {
     await _notificationService.initialize();
   }
 
+  void updateAuthProvider(AuthProvider authProvider) {
+    final wasAuthenticated = _authProvider.isAuthenticated;
+    _authProvider = authProvider;
+    _notificationService.updateAuthProvider(authProvider);
+
+    if (!wasAuthenticated && authProvider.isAuthenticated && !_isInitialized) {
+      initialize();
+    }
+
+    if (!authProvider.isAuthenticated) {
+      _isInitialized = false;
+    }
+  }
+
   /// Manually refresh unread count.
   Future<void> refreshUnreadCount() async {
     await _notificationService.refreshUnreadCount();
+  }
+
+  void addPopupListener(Function(NotificationPopupEvent) callback) {
+    _notificationService.addPopupListener(callback);
+  }
+
+  void removePopupListener(Function(NotificationPopupEvent) callback) {
+    _notificationService.removePopupListener(callback);
+  }
+
+  /// Set the currently active chat conversation (to suppress notifications)
+  void setActiveChatConversation(String? conversationId) {
+    _notificationService.setActiveChatConversation(conversationId);
+  }
+
+  void clearActiveChatConversationIfMatches(String conversationId) {
+    _notificationService.clearActiveChatConversationIfMatches(conversationId);
+  }
+
+  /// Track whether the chat UI is visible, mirroring the website messenger
+  /// panel state used for notification suppression.
+  void setChatUiOpen(bool isOpen) {
+    _notificationService.setChatUiOpen(isOpen);
   }
 
   void _onNotificationServiceChanged() {

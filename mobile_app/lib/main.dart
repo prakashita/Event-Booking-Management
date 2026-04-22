@@ -44,13 +44,18 @@ void main() {
           create: (_) => AuthProvider()..init(kApiBaseUrl),
         ),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ProxyProvider<AuthProvider, NotificationProvider>(
-          create: (_) => NotificationProvider(
-            AuthProvider(),
+        ChangeNotifierProxyProvider<AuthProvider, NotificationProvider>(
+          create: (context) => NotificationProvider(
+            context.read<AuthProvider>(),
             ApiService(),
           ),
-          update: (_, authProvider, notificationProvider) =>
-              notificationProvider ?? NotificationProvider(authProvider, ApiService()),
+          update: (_, authProvider, notificationProvider) {
+            if (notificationProvider == null) {
+              return NotificationProvider(authProvider, ApiService());
+            }
+            notificationProvider.updateAuthProvider(authProvider);
+            return notificationProvider;
+          },
         ),
       ],
       child: const EventBookingApp(),
