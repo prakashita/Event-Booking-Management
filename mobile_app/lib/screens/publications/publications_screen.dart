@@ -211,7 +211,7 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
         : AppColors.border;
 
     final typeDropdown = DropdownButtonFormField<String>(
-      value: _typeFilter,
+      initialValue: _typeFilter,
       isExpanded: true,
       decoration: _filterInputDecoration('All types', fieldFill, fieldBorder),
       items: [
@@ -229,7 +229,7 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
     );
 
     final sortDropdown = DropdownButtonFormField<String>(
-      value: _sort,
+      initialValue: _sort,
       isExpanded: true,
       decoration: _filterInputDecoration('Sort by', fieldFill, fieldBorder),
       items: const [

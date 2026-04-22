@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
 import 'package:intl/intl.dart';
+import '../requirements/requirements_wizard_dialog.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -30,6 +36,7 @@ class _EventsScreenState extends State<EventsScreen>
   final Map<String, List<Event>> _eventsByTab = {};
   final Map<String, bool> _loading = {};
   final Map<String, String?> _errors = {};
+  final Set<String> _inviteSentEventIds = <String>{};
   bool _isRefreshing = false;
 
   @override
@@ -83,6 +90,104 @@ class _EventsScreenState extends State<EventsScreen>
     return all.where((e) => (e.status).toLowerCase() == status).toList();
   }
 
+  bool _isApprovalItem(Event event) => event.id.startsWith('approval-');
+
+  bool _hasStarted(Event event) => !event.startTime.isAfter(DateTime.now());
+
+  bool _canInvite(Event event) {
+    if (_isApprovalItem(event)) return false;
+    final status = event.status.trim().toLowerCase();
+    if (status != 'upcoming') return false;
+    if (_hasStarted(event)) return false;
+    if (_inviteSentEventIds.contains(event.id)) return false;
+    return true;
+  }
+
+  bool _canUploadReport(Event event) {
+    if (_isApprovalItem(event)) return false;
+    return event.status.trim().toLowerCase() == 'completed';
+  }
+
+  bool _canCloseEvent(Event event) {
+    if (_isApprovalItem(event)) return false;
+    final status = event.status.trim().toLowerCase();
+    return status == 'completed' &&
+        (event.reportFileId?.trim().isNotEmpty ?? false);
+  }
+
+  bool _canViewReport(Event event) {
+    return (event.reportWebViewLink?.trim().isNotEmpty ?? false) ||
+        (event.reportFileId?.trim().isNotEmpty ?? false);
+  }
+
+  bool _canViewAttendance(Event event) {
+    return (event.attendanceWebViewLink?.trim().isNotEmpty ?? false) ||
+        (event.attendanceFileId?.trim().isNotEmpty ?? false);
+  }
+
+  String _expectedReportFilename(Event event) {
+    final sanitized = event.title
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '_')
+        .trim();
+    final eventName = sanitized.isEmpty ? 'Event' : sanitized;
+    final datePart = DateFormat('yyyy-MM-dd').format(event.startTime);
+    return '${eventName}_${datePart}_Report.pdf';
+  }
+
+  String _extractError(
+    Object error, {
+    String fallback = 'Something went wrong.',
+  }) {
+    final text = error.toString().trim();
+    if (text.startsWith('Exception: ')) {
+      return text.substring('Exception: '.length).trim();
+    }
+    return text.isEmpty ? fallback : text;
+  }
+
+  void _showMessage(
+    String text, {
+    bool isError = false,
+    bool isSuccess = false,
+  }) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: isError
+            ? Colors.red
+            : isSuccess
+            ? const Color(0xFF16A34A)
+            : null,
+      ),
+    );
+  }
+
+  Future<void> _refreshCurrentTab() async {
+    _eventsByTab.clear();
+    await _loadEventsForTab(_tabController.index, force: true);
+  }
+
+  Future<void> _openExternalLink(String url, {String? fallbackFileId}) async {
+    var target = url.trim();
+    if (target.isEmpty &&
+        fallbackFileId != null &&
+        fallbackFileId.trim().isNotEmpty) {
+      target =
+          'https://drive.google.com/file/d/${Uri.encodeComponent(fallbackFileId.trim())}/view';
+    }
+    final uri = Uri.tryParse(target);
+    if (uri == null) {
+      _showMessage('Link unavailable.', isError: true);
+      return;
+    }
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok) {
+      _showMessage('Could not open link.', isError: true);
+    }
+  }
+
   Future<void> _loadEventsForTab(int idx, {bool force = false}) async {
     final key = _tabs[idx];
     if (_eventsByTab.containsKey(key) && !force) return;
@@ -99,10 +204,22 @@ class _EventsScreenState extends State<EventsScreen>
       final approvalData = await _api.get<Map<String, dynamic>>(
         '/approvals/me',
       );
+      final inviteData = await _api.get<List<dynamic>>('/invites/me');
 
       final events = (eventData['items'] as List? ?? [])
           .map((e) => Event.fromJson(e))
           .toList();
+
+      final sentInviteIds = inviteData
+          .whereType<Map<String, dynamic>>()
+          .where(
+            (invite) =>
+                (invite['status'] ?? 'sent').toString().trim().toLowerCase() ==
+                'sent',
+          )
+          .map((invite) => (invite['event_id'] ?? '').toString().trim())
+          .where((id) => id.isNotEmpty)
+          .toSet();
 
       final approvals = (approvalData['items'] as List? ?? [])
           .whereType<Map<String, dynamic>>()
@@ -123,6 +240,7 @@ class _EventsScreenState extends State<EventsScreen>
             return Event(
               id: 'approval-${a['id'] ?? ''}',
               title: (a['event_name'] ?? '').toString(),
+              facilitator: a['facilitator']?.toString(),
               description: a['description']?.toString(),
               venueName: (a['venue_name'] ?? '').toString(),
               startTime: start,
@@ -133,10 +251,17 @@ class _EventsScreenState extends State<EventsScreen>
                 (a['created_at'] ?? '').toString(),
               )?.toLocal(),
               reportFileId: null,
+              reportFileName: null,
+              reportWebViewLink: null,
+              attendanceFileId: null,
+              attendanceFileName: null,
+              attendanceWebViewLink: null,
               audienceCount: null,
               notes: null,
               pipelineStage: a['pipeline_stage']?.toString(),
               approvalRequestId: (a['id'] ?? '').toString(),
+              inviteStatus: null,
+              googleEventLink: null,
             );
           })
           .toList();
@@ -150,6 +275,9 @@ class _EventsScreenState extends State<EventsScreen>
           return b.startTime.compareTo(a.startTime);
         });
       setState(() {
+        _inviteSentEventIds
+          ..clear()
+          ..addAll(sentInviteIds);
         _eventsByTab[key] = _filterEventsForTab(allEvents, idx);
         _loading[key] = false;
       });
@@ -206,9 +334,422 @@ class _EventsScreenState extends State<EventsScreen>
     }
   }
 
+  Future<void> _sendInvite(Event event) async {
+    final toCtrl = TextEditingController();
+    final subjectCtrl = TextEditingController(
+      text: '${event.title} Invitation',
+    );
+    final bodyCtrl = TextEditingController(
+      text:
+          'You are invited to ${event.title} on ${DateFormat('MMM d, yyyy').format(event.startTime)} at ${event.venueName}.',
+    );
+    var submitting = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Send Invite'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: toCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'To',
+                    hintText: 'recipient@campus.edu',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: subjectCtrl,
+                  decoration: const InputDecoration(labelText: 'Subject'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: bodyCtrl,
+                  minLines: 4,
+                  maxLines: 8,
+                  decoration: const InputDecoration(labelText: 'Description'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      final toEmail = toCtrl.text.trim();
+                      if (toEmail.isEmpty) {
+                        _showMessage(
+                          'Recipient email is required.',
+                          isError: true,
+                        );
+                        return;
+                      }
+                      setLocal(() => submitting = true);
+                      try {
+                        await _api.post<Map<String, dynamic>>(
+                          '/invites',
+                          data: {
+                            'event_id': event.id,
+                            'to_email': toEmail,
+                            'subject': subjectCtrl.text.trim(),
+                            'body': bodyCtrl.text.trim(),
+                          },
+                        );
+                        if (!mounted) return;
+                        Navigator.of(context, rootNavigator: true).pop();
+                        setState(() => _inviteSentEventIds.add(event.id));
+                        _showMessage('Invite sent.', isSuccess: true);
+                      } catch (e) {
+                        setLocal(() => submitting = false);
+                        _showMessage(
+                          _extractError(e, fallback: 'Unable to send invite.'),
+                          isError: true,
+                        );
+                      }
+                    },
+              child: Text(submitting ? 'Sending...' : 'Send Invite'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    toCtrl.dispose();
+    subjectCtrl.dispose();
+    bodyCtrl.dispose();
+  }
+
+  Future<void> _uploadReport(Event event) async {
+    String? reportPath;
+    String? reportName;
+    String? attendancePath;
+    String? attendanceName;
+    var attendanceNotApplicable = false;
+    var submitting = false;
+    final expectedName = _expectedReportFilename(event);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(
+            (event.reportFileId?.trim().isNotEmpty ?? false)
+                ? 'Replace Report'
+                : 'Upload Report',
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'The report will be uploaded as:',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  expectedName,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: const ['pdf'],
+                          );
+                          final picked = result?.files.single;
+                          if (picked?.path == null) return;
+                          setLocal(() {
+                            reportPath = picked!.path!;
+                            reportName = picked.name;
+                          });
+                        },
+                  icon: const Icon(Icons.upload_file_outlined),
+                  label: Text(
+                    reportName == null ? 'Choose report PDF' : reportName!,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                CheckboxListTile(
+                  value: attendanceNotApplicable,
+                  onChanged: submitting
+                      ? null
+                      : (value) {
+                          setLocal(() {
+                            attendanceNotApplicable = value ?? false;
+                            if (attendanceNotApplicable) {
+                              attendancePath = null;
+                              attendanceName = null;
+                            }
+                          });
+                        },
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Attendance not applicable'),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  attendanceNotApplicable
+                      ? 'Existing attendance will be removed when you submit.'
+                      : 'Upload a PDF, Word, or Excel file unless not applicable.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: submitting || attendanceNotApplicable
+                      ? null
+                      : () async {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: const [
+                              'pdf',
+                              'doc',
+                              'docx',
+                              'xls',
+                              'xlsx',
+                            ],
+                          );
+                          final picked = result?.files.single;
+                          if (picked?.path == null) return;
+                          setLocal(() {
+                            attendancePath = picked!.path!;
+                            attendanceName = picked.name;
+                          });
+                        },
+                  icon: const Icon(Icons.attach_file),
+                  label: Text(
+                    attendanceName == null
+                        ? ((event.attendanceFileName?.trim().isNotEmpty ??
+                                  false)
+                              ? 'Replace attendance file'
+                              : 'Choose attendance file')
+                        : attendanceName!,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      final hasExistingAttendance =
+                          event.attendanceFileId?.trim().isNotEmpty ?? false;
+                      if (reportPath == null) {
+                        _showMessage(
+                          'Choose a report PDF first.',
+                          isError: true,
+                        );
+                        return;
+                      }
+                      if (!attendanceNotApplicable &&
+                          attendancePath == null &&
+                          !hasExistingAttendance) {
+                        _showMessage(
+                          'Upload an attendance file or mark it as not applicable.',
+                          isError: true,
+                        );
+                        return;
+                      }
+                      setLocal(() => submitting = true);
+                      try {
+                        final payload = <String, dynamic>{
+                          'file': await MultipartFile.fromFile(
+                            reportPath!,
+                            filename: expectedName,
+                          ),
+                        };
+                        if (attendanceNotApplicable) {
+                          payload['attendance_not_applicable'] = '1';
+                        } else if (attendancePath != null) {
+                          payload['attendance_file'] =
+                              await MultipartFile.fromFile(
+                                attendancePath!,
+                                filename: attendanceName,
+                              );
+                        }
+                        await _api.postMultipart<Map<String, dynamic>>(
+                          '/events/${event.id}/report',
+                          FormData.fromMap(payload),
+                        );
+                        if (!mounted) return;
+                        Navigator.of(context, rootNavigator: true).pop();
+                        await _refreshCurrentTab();
+                        _showMessage('Report uploaded.', isSuccess: true);
+                      } catch (e) {
+                        setLocal(() => submitting = false);
+                        _showMessage(
+                          _extractError(
+                            e,
+                            fallback: 'Unable to upload report.',
+                          ),
+                          isError: true,
+                        );
+                      }
+                    },
+              child: Text(submitting ? 'Uploading...' : 'Upload'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _closeEvent(Event event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Close Event'),
+        content: const Text(
+          'This matches the website behavior and marks the completed event as closed. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await _api.patch<Map<String, dynamic>>(
+        '/events/${event.id}/status',
+        data: {'status': 'closed'},
+      );
+      await _refreshCurrentTab();
+      _showMessage('Event closed.', isSuccess: true);
+    } catch (e) {
+      _showMessage(
+        _extractError(e, fallback: 'Unable to close event.'),
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _openRequirementsWizard(Event event) async {
+    try {
+      final details = await _api.get<Map<String, dynamic>>(
+        '/events/${event.id}/details',
+      );
+      final approval =
+          (details['approval'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      final eventData =
+          (details['event'] as Map?)?.cast<String, dynamic>() ??
+          <String, dynamic>{};
+      final approvalStatus = (approval['status'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+      final eventStatus = (eventData['status'] ?? event.status)
+          .toString()
+          .trim()
+          .toLowerCase();
+      final facility = (details['facility_requests'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>();
+      final it = (details['it_requests'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>();
+      final marketing = (details['marketing_requests'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>();
+      final transport = (details['transport_requests'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>();
+
+      String aggregate(Iterable<Map<String, dynamic>> items) {
+        if (items.isEmpty) return 'none';
+        final statuses = items
+            .map(
+              (item) => (item['status'] ?? '')
+                  .toString()
+                  .trim()
+                  .toLowerCase()
+                  .replaceAll('accepted', 'approved'),
+            )
+            .toList();
+        if (statuses.any((status) => status == 'rejected')) return 'rejected';
+        if (statuses.any((status) => status == 'clarification_requested')) {
+          return 'clarification_requested';
+        }
+        if (statuses.any((status) => status == 'pending')) return 'pending';
+        if (statuses.every((status) => status == 'approved')) return 'approved';
+        return 'pending';
+      }
+
+      final departmentStatuses = <String, String>{
+        'facility': aggregate(facility),
+        'it': aggregate(it),
+        'marketing': aggregate(marketing),
+        'transport': aggregate(transport),
+      };
+      final sendableDepartments = departmentStatuses.entries
+          .where(
+            (entry) =>
+                entry.value == 'none' || entry.value == 'rejected',
+          )
+          .map((entry) => entry.key)
+          .toList();
+      final canSend =
+          approvalStatus == 'approved' &&
+          !_hasStarted(event) &&
+          eventStatus != 'completed' &&
+          eventStatus != 'closed' &&
+          sendableDepartments.isNotEmpty;
+
+      if (!canSend) {
+        _showMessage(
+          'Requirements are not available for this event right now.',
+          isError: true,
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => RequirementsWizardDialog(
+          event: event,
+          departments: sendableDepartments,
+          requesterEmail: context.read<AuthProvider>().user?.email ?? '',
+          onSuccess: () async {
+            Navigator.of(ctx).pop();
+            await _refreshCurrentTab();
+            _showMessage('Requirements sent.', isSuccess: true);
+          },
+        ),
+      );
+    } catch (e) {
+      _showMessage(
+        _extractError(e, fallback: 'Unable to open requirements.'),
+        isError: true,
+      );
+    }
+  }
+
   Future<void> _handleRefresh() async {
     setState(() => _isRefreshing = true);
-    await _loadEventsForTab(_tabController.index, force: true);
+    await _refreshCurrentTab();
     if (mounted) setState(() => _isRefreshing = false);
   }
 
@@ -469,12 +1010,46 @@ class _EventsScreenState extends State<EventsScreen>
             child: ListView.separated(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
               itemCount: events.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 20),
+              separatorBuilder: (context, index) => const SizedBox(height: 20),
               itemBuilder: (ctx, i) => _EventCard(
                 event: events[i],
-                onTap: () => context.go('/events/${events[i].id}'),
+                onTap: () {
+                  final event = events[i];
+                  final approvalId = (event.approvalRequestId ?? '')
+                      .trim()
+                      .replaceFirst('approval-', '');
+                  if (event.id.startsWith('approval-') &&
+                      approvalId.isNotEmpty) {
+                    context.go('/approval-details/$approvalId');
+                    return;
+                  }
+                  context.go('/events/${event.id}');
+                },
                 approvalForwardLabel: _approvalForwardLabel(events[i]),
                 onApprovalForward: () => _forwardApproval(events[i]),
+                canInvite: _canInvite(events[i]),
+                canUploadReport: _canUploadReport(events[i]),
+                canCloseEvent: _canCloseEvent(events[i]),
+                canViewReport: _canViewReport(events[i]),
+                canViewAttendance: _canViewAttendance(events[i]),
+                canSendRequirements:
+                    !_isApprovalItem(events[i]) &&
+                    !_hasStarted(events[i]) &&
+                    events[i].status.toLowerCase() != 'closed' &&
+                    events[i].status.toLowerCase() != 'completed',
+                inviteSent: _inviteSentEventIds.contains(events[i].id),
+                onSendInvite: () => _sendInvite(events[i]),
+                onUploadReport: () => _uploadReport(events[i]),
+                onCloseEvent: () => _closeEvent(events[i]),
+                onViewReport: () => _openExternalLink(
+                  events[i].reportWebViewLink ?? '',
+                  fallbackFileId: events[i].reportFileId,
+                ),
+                onViewAttendance: () => _openExternalLink(
+                  events[i].attendanceWebViewLink ?? '',
+                  fallbackFileId: events[i].attendanceFileId,
+                ),
+                onSendRequirements: () => _openRequirementsWizard(events[i]),
               ),
             ),
           );
@@ -580,12 +1155,38 @@ class _EventCard extends StatelessWidget {
   final VoidCallback onTap;
   final String approvalForwardLabel;
   final VoidCallback? onApprovalForward;
+  final bool canInvite;
+  final bool canUploadReport;
+  final bool canCloseEvent;
+  final bool canViewReport;
+  final bool canViewAttendance;
+  final bool canSendRequirements;
+  final bool inviteSent;
+  final VoidCallback? onSendInvite;
+  final VoidCallback? onUploadReport;
+  final VoidCallback? onCloseEvent;
+  final VoidCallback? onViewReport;
+  final VoidCallback? onViewAttendance;
+  final VoidCallback? onSendRequirements;
 
   const _EventCard({
     required this.event,
     required this.onTap,
     this.approvalForwardLabel = '',
     this.onApprovalForward,
+    this.canInvite = false,
+    this.canUploadReport = false,
+    this.canCloseEvent = false,
+    this.canViewReport = false,
+    this.canViewAttendance = false,
+    this.canSendRequirements = false,
+    this.inviteSent = false,
+    this.onSendInvite,
+    this.onUploadReport,
+    this.onCloseEvent,
+    this.onViewReport,
+    this.onViewAttendance,
+    this.onSendRequirements,
   });
 
   @override
@@ -623,6 +1224,58 @@ class _EventCard extends StatelessWidget {
     final statusBorderColor = _getStatusBorderColor(event.status);
     final pipelineText = _approvalPipelineText(event);
     final showForwardAction = approvalForwardLabel.trim().isNotEmpty;
+    final actions = <Widget>[
+      if (canCloseEvent && onCloseEvent != null)
+        _ActionChip(
+          label: 'Close Event',
+          icon: Icons.task_alt_outlined,
+          color: const Color(0xFFDC2626),
+          onTap: onCloseEvent!,
+        ),
+      if (inviteSent)
+        const _ActionChip(
+          label: 'Invite Sent',
+          icon: Icons.check_circle_outline,
+          color: Color(0xFF16A34A),
+        ),
+      if (canInvite && onSendInvite != null)
+        _ActionChip(
+          label: 'Send Invite',
+          icon: Icons.mail_outline,
+          color: const Color(0xFF7C3AED),
+          onTap: onSendInvite!,
+        ),
+      if (canUploadReport && onUploadReport != null)
+        _ActionChip(
+          label: (event.reportFileId?.trim().isNotEmpty ?? false)
+              ? 'Replace Report'
+              : 'Upload Report',
+          icon: Icons.upload_file_outlined,
+          color: const Color(0xFF0F766E),
+          onTap: onUploadReport!,
+        ),
+      if (canSendRequirements && onSendRequirements != null)
+        _ActionChip(
+          label: 'Send Requirements',
+          icon: Icons.send_outlined,
+          color: const Color(0xFF2563EB),
+          onTap: onSendRequirements!,
+        ),
+      if (canViewReport && onViewReport != null)
+        _ActionChip(
+          label: 'View Report',
+          icon: Icons.description_outlined,
+          color: const Color(0xFF4F46E5),
+          onTap: onViewReport!,
+        ),
+      if (canViewAttendance && onViewAttendance != null)
+        _ActionChip(
+          label: 'Attendance',
+          icon: Icons.groups_2_outlined,
+          color: const Color(0xFF9333EA),
+          onTap: onViewAttendance!,
+        ),
+    ];
 
     return InkWell(
       onTap: onTap,
@@ -797,6 +1450,10 @@ class _EventCard extends StatelessWidget {
               ),
               const SizedBox(height: 12),
             ],
+            if (actions.isNotEmpty) ...[
+              Wrap(spacing: 10, runSpacing: 10, children: actions),
+              const SizedBox(height: 16),
+            ],
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14), // py-3.5
@@ -900,5 +1557,54 @@ class _EventCard extends StatelessWidget {
       default:
         return const Color(0xFFF1F5F9); // slate-100
     }
+  }
+}
+
+class _ActionChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
+
+  const _ActionChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: disabled ? 0.08 : 0.12),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: color.withValues(alpha: disabled ? 0.12 : 0.28),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: color,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

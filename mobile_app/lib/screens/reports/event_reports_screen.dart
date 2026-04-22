@@ -68,11 +68,12 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
         _error = _extractError(e);
       });
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _refreshing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _refreshing = false;
+        });
+      }
     }
   }
 
@@ -563,7 +564,7 @@ class _ReportsGrid extends StatelessWidget {
             itemCount: items.length,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            separatorBuilder: (_, index) => const SizedBox(height: 10),
             itemBuilder: (context, index) => buildCard(index),
           );
         }

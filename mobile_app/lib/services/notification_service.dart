@@ -9,7 +9,6 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../models/models.dart';
 import '../providers/auth_provider.dart';
-import '../router/app_router.dart';
 import 'api_service.dart';
 import 'notification_parity.dart';
 
@@ -30,6 +29,7 @@ class NotificationPopupEvent {
 /// Also shows local notifications for new messages when appropriate.
 class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
   final ApiService _api;
+  final GlobalKey<NavigatorState> _navigatorKey;
   AuthProvider _authProvider;
 
   WebSocketChannel? _channel;
@@ -56,7 +56,7 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
   final List<Function(int)> _unreadCountListeners = [];
   final List<Function(NotificationPopupEvent)> _popupListeners = [];
 
-  NotificationService(this._api, this._authProvider);
+  NotificationService(this._api, this._authProvider, this._navigatorKey);
 
   bool get isConnected => _isConnected;
   int get totalUnread => _totalUnread;
@@ -377,7 +377,7 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
 
   void _flushPendingLaunchRoute() {
     final route = _pendingLaunchRoute;
-    final context = rootNavigatorKey.currentContext;
+    final context = _navigatorKey.currentContext;
     if (route == null || route.isEmpty || context == null) {
       if (route != null && route.isNotEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -387,8 +387,12 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    _pendingLaunchRoute = null;
-    GoRouter.of(context).go(route);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final currentContext = _navigatorKey.currentContext;
+      if (currentContext == null) return;
+      _pendingLaunchRoute = null;
+      GoRouter.of(currentContext).go(route);
+    });
   }
 
   Map<String, dynamic>? _extractInlineMessageData(Map<String, dynamic> data) {
