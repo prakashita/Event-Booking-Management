@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { SimpleIcon } from "./icons";
 import { Modal } from "./ui";
+import IqacTemplateDownloadCard from "./IqacTemplateDownloadCard";
 import api from "../services/api";
 
 const SUBFOLDERS_VISIBLE = 3; // show first N, then "... +M more sub-folders"
@@ -235,6 +236,8 @@ export default function IqacDataPage({ canDeleteIqacFiles = false }) {
           <p className="iqac-subtitle">Manage IQAC criteria folders and sub-folders (IQAC Committee Only)</p>
         </div>
       </header>
+
+      <IqacTemplateDownloadCard />
 
       {loading ? (
         <div className="iqac-loading">

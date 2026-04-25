@@ -45,6 +45,38 @@ def resolve_iqac_uploads_dir() -> str:
 IQAC_UPLOADS_DIR = resolve_iqac_uploads_dir()
 
 
+def _repo_root() -> str:
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+def _resolve_template_file_path(filename: str) -> str | None:
+    """Find a bundled IQAC template file without exposing it as a public static asset."""
+    env_dir = os.getenv("IQAC_TEMPLATES_DIR")
+    candidates = []
+    if env_dir:
+        candidates.append(os.path.join(os.path.abspath(env_dir), filename))
+    root = _repo_root()
+    candidates.extend([
+        os.path.join(root, "Server", "templates", "iqac", filename),
+        os.path.join(root, "Client", "src", filename),
+    ])
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+IQAC_TEMPLATE_DEFINITIONS = (
+    {
+        "id": "all-templates",
+        "name": "IQAC Data Templates",
+        "file_name": "IQAC Data Templates.docx",
+        "type": "DOCX",
+        "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    },
+)
+
+
 # NAAC IQAC 7-criteria structure: criterion title → sub-criteria (1.1, 1.2, …) → items (1.1.1, 1.1.2, …)
 CRITERION_ORDER = (
     "Curricular Aspects",
@@ -222,6 +254,44 @@ async def get_file_counts(current_user: User = Depends(require_iqac)):
             counts[c][s] = {}
         counts[c][s][i] = counts[c][s].get(i, 0) + 1
     return counts
+
+
+@router.get("/templates")
+async def list_templates(current_user: User = Depends(require_iqac)):
+    """List predefined IQAC template documents available to authenticated IQAC users."""
+    result = []
+    for item in IQAC_TEMPLATE_DEFINITIONS:
+        path = _resolve_template_file_path(item["file_name"])
+        if not path:
+            continue
+        result.append({
+            "id": item["id"],
+            "name": item["name"],
+            "fileName": item["file_name"],
+            "type": item["type"],
+            "size": os.path.getsize(path),
+            "downloadUrl": f"/iqac/templates/{item['id']}/download",
+        })
+    return result
+
+
+@router.get("/templates/{template_id}/download")
+async def download_template(
+    template_id: str,
+    current_user: User = Depends(require_iqac),
+):
+    """Stream a predefined IQAC template document for authenticated users."""
+    template = next((item for item in IQAC_TEMPLATE_DEFINITIONS if item["id"] == template_id), None)
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    path = _resolve_template_file_path(template["file_name"])
+    if not path:
+        raise HTTPException(status_code=404, detail="Template file not found")
+    return FileResponse(
+        path,
+        media_type=template["content_type"],
+        filename=template["file_name"],
+    )
 
 
 def _safe_segment(name: str) -> str:
