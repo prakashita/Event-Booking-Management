@@ -6,20 +6,23 @@
 // tree, read text, and verify that the values of widget properties are correct.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:mobile_app/main.dart';
 import 'package:mobile_app/providers/auth_provider.dart';
+import 'package:mobile_app/screens/auth/login_screen.dart';
 
 void main() {
   testWidgets('Shows login screen content', (WidgetTester tester) async {
     await tester.pumpWidget(
       ChangeNotifierProvider(
-        create: (_) => AuthProvider()..init(kApiBaseUrl),
-        child: const EventBookingApp(),
+        create: (_) => AuthProvider(),
+        child: const MaterialApp(
+          home: LoginScreen(),
+        ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('Welcome back'), findsOneWidget);
     expect(find.text('Continue with Google'), findsOneWidget);

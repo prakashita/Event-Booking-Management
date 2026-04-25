@@ -9,6 +9,8 @@ import 'providers/notification_provider.dart';
 import 'providers/theme_provider.dart';
 import 'router/app_router.dart';
 import 'services/api_service.dart';
+import 'services/push_notification_bootstrap.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 // Configure API base URL here
 // For development: use your FastAPI server URL
@@ -31,8 +33,10 @@ String get kApiBaseUrl {
   return 'http://localhost:8000';
 }
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await PushNotificationBootstrap.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   // Set preferred orientations
   SystemChrome.setPreferredOrientations([
@@ -133,12 +137,20 @@ class _EventBookingAppState extends State<EventBookingApp> {
                     ? const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFF0F172A), Color(0xFF162032), Color(0xFF1E293B)],
+                        colors: [
+                          Color(0xFF0F172A),
+                          Color(0xFF162032),
+                          Color(0xFF1E293B),
+                        ],
                       )
                     : const LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [Color(0xFFF8FAFC), Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+                        colors: [
+                          Color(0xFFF8FAFC),
+                          Color(0xFFEEF2FF),
+                          Color(0xFFE0E7FF),
+                        ],
                       ),
               ),
               child: child ?? const SizedBox.shrink(),

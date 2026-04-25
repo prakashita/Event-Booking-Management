@@ -47,7 +47,12 @@ class AppRouter {
             roleKey == 'vice_chancellor' ||
             roleKey == 'deputy_registrar' ||
             roleKey == 'finance_team';
-        final canAccessApprovals = isRegistrarDashboard;
+        final canAccessApprovals =
+            isRegistrarDashboard ||
+            roleKey == 'facility_manager' ||
+            roleKey == 'marketing' ||
+            roleKey == 'it' ||
+            roleKey == 'transport';
         final canAccessRequirements =
             roleKey == 'facility_manager' ||
             roleKey == 'marketing' ||

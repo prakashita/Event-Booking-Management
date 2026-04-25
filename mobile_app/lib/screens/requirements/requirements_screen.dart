@@ -126,7 +126,9 @@ class _RequirementsScreenState extends State<RequirementsScreen>
 
   bool _canTakeAction(String status) {
     final normalized = status.trim().toLowerCase();
-    return normalized == 'pending' || normalized == 'clarification_requested';
+    return normalized == 'pending' ||
+        normalized == 'clarification' ||
+        normalized == 'clarification_requested';
   }
 
   bool _eventHasStarted(dynamic item) {
@@ -706,7 +708,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                     DropdownMenuItem(value: 'rejected', child: Text('Reject')),
                     DropdownMenuItem(
                       value: 'clarification_requested',
-                      child: Text('Need clarification'),
+                      child: Text('Clarification'),
                     ),
                   ],
                   onChanged: (value) {
@@ -990,7 +992,8 @@ class _RequestCard extends StatelessWidget {
         ? const Color(0xFFDCFCE7)
         : normalizedStatus == 'rejected'
         ? const Color(0xFFFEE2E2)
-        : normalizedStatus == 'clarification_requested'
+        : normalizedStatus == 'clarification' ||
+              normalizedStatus == 'clarification_requested'
         ? const Color(0xFFFEE2E2)
         : const Color(0xFFE2E8F0);
     final badgeFg = normalizedStatus == 'pending'
@@ -999,7 +1002,8 @@ class _RequestCard extends StatelessWidget {
         ? const Color(0xFF166534)
         : normalizedStatus == 'rejected'
         ? const Color(0xFF991B1B)
-        : normalizedStatus == 'clarification_requested'
+        : normalizedStatus == 'clarification' ||
+              normalizedStatus == 'clarification_requested'
         ? const Color(0xFF9F1239)
         : const Color(0xFF334155);
 
@@ -1035,7 +1039,10 @@ class _RequestCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  normalizedStatus.replaceAll('_', ' ').toUpperCase(),
+                  (normalizedStatus == 'clarification' ||
+                          normalizedStatus == 'clarification_requested')
+                      ? 'CLARIFICATION'
+                      : normalizedStatus.replaceAll('_', ' ').toUpperCase(),
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,

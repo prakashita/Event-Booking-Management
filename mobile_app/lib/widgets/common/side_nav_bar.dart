@@ -46,7 +46,12 @@ class SideNavBar extends StatelessWidget {
     final isIt = roleKey == 'it';
     final isTransport = roleKey == 'transport';
 
-    final canAccessApprovals = isRegistrarDashboard;
+    final canAccessApprovals =
+        isRegistrarDashboard ||
+        isFacilityManager ||
+        isMarketing ||
+        isIt ||
+        isTransport;
     final canAccessRequirements =
         isFacilityManager || isMarketing || isIt || isTransport;
     final canAccessEventReports = isAdmin || isRegistrarDashboard;

@@ -189,7 +189,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     if (value is Map<String, dynamic>) return Map<String, dynamic>.from(value);
     if (value is Map) {
       return Map<String, dynamic>.fromEntries(
-        value.entries.map((entry) => MapEntry(entry.key.toString(), entry.value)),
+        value.entries.map(
+          (entry) => MapEntry(entry.key.toString(), entry.value),
+        ),
       );
     }
     return <String, dynamic>{};
@@ -217,6 +219,34 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     if (s.contains('transport')) return 'transport';
     if (s.contains('iqac')) return 'iqac';
     return null;
+  }
+
+  List<String> _fallbackRequirementLinesForDepartment(String departmentKey) {
+    return _stringList(
+      _approval['requirements'],
+    ).where((line) => _classifyRequirementLine(line) == departmentKey).toList();
+  }
+
+  String _transportTypeLabel(String value) {
+    switch (value.trim().toLowerCase()) {
+      case 'guest_cab':
+        return 'Guest cab';
+      case 'students_off_campus':
+        return 'Student transport';
+      case 'both':
+        return 'Guest cab and student transport';
+      default:
+        return '';
+    }
+  }
+
+  String _normalizeThreadDepartmentKey(String value) {
+    switch (value.trim().toLowerCase()) {
+      case 'facility_manager':
+        return 'facility';
+      default:
+        return value.trim().toLowerCase();
+    }
   }
 
   String _s(dynamic value, {String fallback = '—'}) {
@@ -263,8 +293,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         .toList();
 
     if (statuses.any((status) => status == 'rejected')) return 'rejected';
-    if (statuses.any((status) => status == 'clarification_requested')) {
-      return 'clarification_requested';
+    if (statuses.any(
+      (status) => status == 'clarification' || status == 'clarification_requested',
+    )) {
+      return 'clarification';
     }
     if (statuses.any((status) => status == 'pending')) return 'pending';
     if (statuses.every((status) => status == 'approved')) return 'approved';
@@ -296,7 +328,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
     if (pipelineStage == 'finance') return 'Finance Team review';
     if (pipelineStage == 'after_finance') {
-      return 'Requester action: send to Registrar';
+      return 'Requester action: send to final approver';
     }
 
     final requestedTo = _s(
@@ -318,6 +350,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   String get _currentRoleKey =>
       (context.read<AuthProvider>().user?.roleKey ?? '').trim().toLowerCase();
 
+  String get _currentUserEmail =>
+      (context.read<AuthProvider>().user?.email ?? '').trim().toLowerCase();
+
   bool get _isRequester {
     final requesterId = _s(_approval['requester_id'], fallback: '');
     final eventOwner = _s(_event['created_by'], fallback: '');
@@ -326,9 +361,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   bool get _isApprovalActionable {
+    if (_approval['is_actionable'] == false) return false;
     final status = _s(_approval['status'], fallback: '').toLowerCase();
+    final pipelineStage = _s(
+      _approval['pipeline_stage'],
+      fallback: '',
+    ).toLowerCase();
+    final requestedTo = _s(
+      _approval['requested_to'],
+      fallback: '',
+    ).trim().toLowerCase();
     return _approvalRequestId.isNotEmpty &&
-        (status == 'pending' || status == 'clarification_requested');
+        (status == 'pending' ||
+            status == 'clarification' ||
+            status == 'clarification_requested') &&
+        pipelineStage != 'after_deputy' &&
+        pipelineStage != 'after_finance' &&
+        pipelineStage != 'complete' &&
+        (requestedTo.isEmpty || requestedTo == _currentUserEmail);
   }
 
   bool get _isApprovalStageReviewer {
@@ -339,7 +389,29 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   bool get _showApprovalActions =>
-      _isApprovalActionable && _isApprovalStageReviewer && !_isRequester;
+      _isApprovalActionable &&
+      _isApprovalStageReviewer &&
+      !_isRequester &&
+      _isCurrentApprovalReviewer;
+
+  bool get _isCurrentApprovalReviewer {
+    final pipelineStage = _s(
+      _approval['pipeline_stage'],
+      fallback: '',
+    ).toLowerCase();
+
+    switch (_currentRoleKey) {
+      case 'deputy_registrar':
+        return pipelineStage == 'deputy';
+      case 'finance_team':
+        return pipelineStage == 'finance';
+      case 'registrar':
+      case 'vice_chancellor':
+        return pipelineStage == 'registrar' || pipelineStage.isEmpty;
+      default:
+        return false;
+    }
+  }
 
   bool get _showDiscussionSection => _approvalRequestId.isNotEmpty;
 
@@ -381,48 +453,42 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
   }
 
-  List<ApprovalThreadInfo> get _deptRequestThreads => _mapList(
-    'dept_request_threads',
-  ).map(ApprovalThreadInfo.fromJson).toList();
-
   String _workflowStageLabel() {
     final pipelineStage = _s(
       _approval['pipeline_stage'],
       fallback: '',
     ).toLowerCase();
     final approvalStatus = _s(_approval['status'], fallback: '').toLowerCase();
-    if (pipelineStage == 'deputy') return 'Deputy Registrar review';
-    if (pipelineStage == 'after_deputy') return 'Waiting for requester';
-    if (pipelineStage == 'finance') return 'Finance Team review';
-    if (pipelineStage == 'after_finance') return 'Waiting for requester';
-    if (approvalStatus == 'approved') {
-      final reviewRole = _buildReviewRole(_approval, _event);
-      return reviewRole.contains('Vice Chancellor')
-          ? 'Vice Chancellor approved'
-          : 'Registrar approved';
+    final currentStageLabel = _s(
+      _approval['current_stage_label'],
+      fallback: '',
+    );
+    if (currentStageLabel.isNotEmpty) return currentStageLabel;
+    if (approvalStatus == 'approved' &&
+        (pipelineStage == 'complete' ||
+            _s(_approval['event_id'], fallback: '').isNotEmpty)) {
+      return 'Completed';
     }
     if (approvalStatus == 'rejected') return 'Rejected';
-    if (approvalStatus == 'clarification_requested') {
-      return 'Clarification requested';
+    if (approvalStatus == 'clarification' ||
+        approvalStatus == 'clarification_requested') {
+      if (pipelineStage == 'deputy') return 'Deputy Registrar - Clarification';
+      if (pipelineStage == 'finance') return 'Finance - Clarification';
+      if (pipelineStage == 'registrar') return 'Registrar - Clarification';
+      return 'Clarification';
     }
-    return _buildReviewRole(_approval, _event);
-  }
-
-  String _requesterActionLabel() {
-    final pipelineStage = _s(
-      _approval['pipeline_stage'],
-      fallback: '',
-    ).toLowerCase();
+    if (pipelineStage == 'deputy') return 'Awaiting Deputy Registrar';
     if (pipelineStage == 'after_deputy') {
-      return 'Send this request to Finance from My Events.';
+      return 'Deputy Approved - Forward to Finance';
     }
+    if (pipelineStage == 'finance') return 'Awaiting Finance';
     if (pipelineStage == 'after_finance') {
-      return 'Send this request to Registrar from My Events.';
+      return 'Finance Approved - Forward to Registrar';
     }
-    if (_canSendRequirements) {
-      return 'Final approval is complete. You can now send department requirements.';
-    }
-    return 'No requester action pending.';
+    if (pipelineStage == 'registrar') return 'Awaiting Registrar / VC';
+    if (pipelineStage == 'complete') return 'Completed';
+    if (approvalStatus == 'pending') return 'Awaiting Approval';
+    return 'Pending';
   }
 
   bool _threadIsLocked(ApprovalThreadInfo thread) {
@@ -435,16 +501,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     return thread.participants.any(
       (participant) => participant.id.trim() == _currentUserId,
     );
-  }
-
-  ApprovalThreadInfo? _threadForRequestId(String requestId) {
-    if (requestId.trim().isEmpty) return null;
-    for (final thread in _deptRequestThreads) {
-      if ((thread.relatedRequestId ?? '').trim() == requestId.trim()) {
-        return thread;
-      }
-    }
-    return null;
   }
 
   String _threadStatusLabel(String status) {
@@ -483,7 +539,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       case _ApprovalDecisionAction.reject:
         return 'Reject';
       case _ApprovalDecisionAction.clarify:
-        return 'Need clarification';
+        return 'Clarification';
     }
   }
 
@@ -540,33 +596,72 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text(title),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            title,
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          ),
           content: TextField(
             controller: controller,
             minLines: 3,
             maxLines: 6,
             decoration: InputDecoration(
               hintText: hint,
-              border: const OutlineInputBorder(),
+              hintStyle: GoogleFonts.inter(color: _muted),
+              filled: true,
+              fillColor: _panel,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: Color(0xFF2563EB),
+                  width: 1.5,
+                ),
+              ),
               helperText: requiredComment
                   ? 'Comment is required for this action.'
                   : 'Comment is optional.',
+              helperStyle: GoogleFonts.inter(color: _muted, fontSize: 12),
             ),
+            style: GoogleFonts.inter(),
+          ),
+          actionsPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 16,
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(null),
+              style: TextButton.styleFrom(
+                foregroundColor: _muted,
+                textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
               child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () =>
                   Navigator.of(dialogContext).pop(controller.text.trim()),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
               child: const Text('Continue'),
             ),
           ],
         );
       },
     );
+    // Give the dialog exit animation time to finish before disposing the
+    // controller. The overlay can still reference it briefly after pop.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
     controller.dispose();
     return result;
   }
@@ -582,19 +677,43 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text('${_decisionLabel(action)} Event'),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            '${_decisionLabel(action)} Event',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          ),
           content: Text(
             isApprove
                 ? 'Do you want to approve "${_s(_approval['event_name'], fallback: _s(_event['name'], fallback: 'this event'))}"?'
                 : 'Do you want to ${_decisionLabel(action).toLowerCase()} "${_s(_approval['event_name'], fallback: _s(_event['name'], fallback: 'this event'))}"?',
+            style: GoogleFonts.inter(color: _onSurface, fontSize: 15),
+          ),
+          actionsPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 16,
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
+              style: TextButton.styleFrom(
+                foregroundColor: _muted,
+                textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
               child: const Text('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: isApprove
+                    ? const Color(0xFF16A34A)
+                    : const Color(0xFFDC2626),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+              ),
               child: Text(_decisionLabel(action)),
             ),
           ],
@@ -603,6 +722,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
 
     if (confirmed != true || !mounted) return;
+
+    // Avoid opening a second dialog while the confirmation route is still
+    // finishing its exit animation.
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    if (!mounted) return;
 
     final comment = await _promptDecisionComment(
       title: isApprove
@@ -622,12 +746,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             isReject
                 ? 'Comment is required when rejecting a request.'
                 : 'Comment is required when requesting clarification.',
+            style: GoogleFonts.inter(),
           ),
           backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
       return;
     }
+
+    // Let the comment dialog's overlay entries unmount before we trigger
+    // network work and a full screen rebuild.
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
 
     setState(() {
       _decisionSubmitting = true;
@@ -666,18 +798,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(message, style: GoogleFonts.inter()),
           backgroundColor: isApprove
               ? const Color(0xFF16A34A)
               : const Color(0xFF475569),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_extractApiErrorMessage(e)),
+          content: Text(_extractApiErrorMessage(e), style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
     } finally {
@@ -722,10 +858,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 : decision == 'rejected'
                 ? 'Request rejected.'
                 : 'Clarification requested.',
+            style: GoogleFonts.inter(),
           ),
           backgroundColor: decision == 'approved'
               ? const Color(0xFF16A34A)
               : const Color(0xFF475569),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
       await _fetchDetails();
@@ -733,8 +872,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_extractApiErrorMessage(e)),
+          content: Text(_extractApiErrorMessage(e), style: GoogleFonts.inter()),
           backgroundColor: const Color(0xFFDC2626),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
     }
@@ -742,84 +883,178 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
   Future<void> _openDepartmentDecisionDialog(
     String key,
-    Map<String, dynamic> request,
-  ) async {
+    Map<String, dynamic> request, {
+    String initialDecision = 'approved',
+  }) async {
     final requestId = _s(request['id'], fallback: '');
     if (requestId.isEmpty || !_canDepartmentTakeAction(request)) return;
 
-    String selected = 'approved';
+    String selected = initialDecision;
     final commentCtrl = TextEditingController();
-    await showDialog(
+    final result = await showDialog<Map<String, String>>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: Text('Update ${key.toUpperCase()} request'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: selected,
-                  decoration: const InputDecoration(
-                    labelText: 'Decision',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'approved', child: Text('Approve')),
-                    DropdownMenuItem(value: 'rejected', child: Text('Reject')),
-                    DropdownMenuItem(
-                      value: 'clarification_requested',
-                      child: Text('Need clarification'),
+        builder: (ctx, setLocal) {
+          final screenWidth = MediaQuery.of(ctx).size.width;
+          final dialogWidth = screenWidth < 420 ? screenWidth - 32 : 388.0;
+
+          return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+            contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+            title: Text(
+              'Update ${key.toUpperCase()} request',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
+                fontSize: 18,
+              ),
+            ),
+            content: SizedBox(
+              width: dialogWidth,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: selected,
+                      decoration: InputDecoration(
+                        labelText: 'Decision',
+                        labelStyle: GoogleFonts.inter(color: _muted),
+                        filled: true,
+                        fillColor: _panel,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 18,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      items: [
+                        DropdownMenuItem(
+                          value: 'approved',
+                          child: Text('Approve', style: GoogleFonts.inter()),
+                        ),
+                        DropdownMenuItem(
+                          value: 'rejected',
+                          child: Text('Reject', style: GoogleFonts.inter()),
+                        ),
+                        DropdownMenuItem(
+                          value: 'clarification_requested',
+                          child: Text(
+                            'Clarification',
+                            style: GoogleFonts.inter(),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        setLocal(() => selected = value ?? 'approved');
+                      },
                     ),
-                  ],
-                  onChanged: (value) {
-                    setLocal(() => selected = value ?? 'approved');
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: commentCtrl,
-                  minLines: 3,
-                  maxLines: 5,
-                  decoration: InputDecoration(
-                    labelText: selected == 'approved'
-                        ? 'Comment (optional)'
-                        : 'Comment (required)',
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final comment = commentCtrl.text.trim();
-                if (selected != 'approved' && comment.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Comment is required for reject/clarification.',
+                    const SizedBox(height: 18),
+                    TextField(
+                      controller: commentCtrl,
+                      minLines: 4,
+                      maxLines: 6,
+                      style: GoogleFonts.inter(),
+                      decoration: InputDecoration(
+                        labelText: selected == 'approved'
+                            ? 'Comment (optional)'
+                            : 'Comment (required)',
+                        labelStyle: GoogleFonts.inter(color: _muted),
+                        alignLabelWithHint: true,
+                        filled: true,
+                        fillColor: _panel,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 18,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
                       ),
                     ),
-                  );
-                  return;
-                }
-                Navigator.of(ctx).pop();
-                await _decideDepartmentRequest(key, requestId, selected, comment);
-              },
-              child: const Text('Submit'),
+                  ],
+                ),
+              ),
             ),
-          ],
-        ),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: TextButton.styleFrom(
+                  foregroundColor: _muted,
+                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                ),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final comment = commentCtrl.text.trim();
+                  if (selected != 'approved' && comment.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Comment is required for reject/clarification.',
+                          style: GoogleFonts.inter(),
+                        ),
+                        backgroundColor: const Color(0xFFDC2626),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.of(
+                    ctx,
+                  ).pop({'decision': selected, 'comment': comment});
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                ),
+                child: const Text('Submit'),
+              ),
+            ],
+          );
+        },
       ),
     );
-    commentCtrl.dispose();
+    // Do NOT dispose commentCtrl here — the dialog exit animation may still
+    // reference it.  It will be garbage-collected once this scope ends.
+    if (result == null) return;
+    // Wait for the dialog route's exit animation to finish and the overlay
+    // entries to be fully removed before triggering
+    // _decideDepartmentRequest → _fetchDetails → setState.
+    // Without this delay the overlay entries from the closing dialog cause
+    // Duplicate GlobalKey errors and "TextEditingController used after
+    // being disposed" exceptions.
+    await Future.delayed(const Duration(milliseconds: 350));
+    if (!mounted) return;
+    await _decideDepartmentRequest(
+      key,
+      requestId,
+      result['decision'] ?? 'approved',
+      result['comment'] ?? '',
+    );
   }
 
   Future<String?> _uploadMarketingDeliverablesBatch({
@@ -847,9 +1082,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       );
       if (!mounted) return null;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Marketing deliverables submitted.'),
-          backgroundColor: Color(0xFF16A34A),
+        SnackBar(
+          content: Text(
+            'Marketing deliverables submitted.',
+            style: GoogleFonts.inter(),
+          ),
+          backgroundColor: const Color(0xFF16A34A),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
       await _fetchDetails();
@@ -870,10 +1110,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
     if (enabledOptions.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
             'This request only includes during-event marketing. No file uploads are required.',
+            style: GoogleFonts.inter(),
           ),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
       return;
@@ -910,12 +1153,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             final type = opt['type']!;
             final lock = _marketingDeliverableRowLock(type, request);
             if (lock.locked) return false;
-            return naByType[type] == true ||
-                filesByType[type] != null;
+            return naByType[type] == true || filesByType[type] != null;
           });
 
           return AlertDialog(
-            title: const Text('Upload Marketing Deliverables'),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Text(
+              'Upload Marketing Deliverables',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -925,60 +1173,66 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     Builder(
                       builder: (_) {
                         final type = opt['type']!;
-                        final lock = _marketingDeliverableRowLock(type, request);
+                        final lock = _marketingDeliverableRowLock(
+                          type,
+                          request,
+                        );
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(10),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            border: Border.all(color: _border),
-                            borderRadius: BorderRadius.circular(8),
+                            color: _panel,
+                            border: Border.all(
+                              color: _border.withValues(alpha: 0.5),
+                            ),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 opt['label']!,
-                                style: TextStyle(
+                                style: GoogleFonts.inter(
                                   fontWeight: FontWeight.w600,
                                   color: _onSurface,
+                                  fontSize: 15,
                                 ),
                               ),
                               if (lock.locked) ...[
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 6),
                                 Text(
                                   lock.hint,
-                                  style: TextStyle(
+                                  style: GoogleFonts.inter(
                                     fontSize: 12,
                                     color: _muted,
                                   ),
                                 ),
                               ] else ...[
-                                const SizedBox(height: 8),
+                                const SizedBox(height: 12),
                                 Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
+                                  spacing: 10,
+                                  runSpacing: 10,
                                   children: [
                                     OutlinedButton.icon(
                                       onPressed: naByType[type] == true
                                           ? null
                                           : () async {
-                                              final result =
-                                                  await FilePicker.platform
-                                                      .pickFiles(
-                                                        withData: kIsWeb,
-                                                        withReadStream: !kIsWeb,
-                                                        type: FileType.custom,
-                                                        allowedExtensions: [
-                                                          'pdf',
-                                                          'png',
-                                                          'jpg',
-                                                          'jpeg',
-                                                          'webp',
-                                                        ],
-                                                      );
-                                              final picked = result
-                                                  ?.files
-                                                  .single;
+                                              final result = await FilePicker
+                                                  .platform
+                                                  .pickFiles(
+                                                    withData: kIsWeb,
+                                                    withReadStream: !kIsWeb,
+                                                    type: FileType.custom,
+                                                    allowedExtensions: [
+                                                      'pdf',
+                                                      'png',
+                                                      'jpg',
+                                                      'jpeg',
+                                                      'webp',
+                                                    ],
+                                                  );
+                                              final picked =
+                                                  result?.files.single;
                                               if (picked == null) return;
                                               MultipartFile? multipart;
                                               if (picked.path != null &&
@@ -1000,19 +1254,21 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                                   null) {
                                                 multipart =
                                                     MultipartFile.fromStream(
-                                                  () => picked.readStream!,
-                                                  picked.size,
-                                                  filename: picked.name,
-                                                );
+                                                      () => picked.readStream!,
+                                                      picked.size,
+                                                      filename: picked.name,
+                                                    );
                                               }
                                               if (multipart == null) {
                                                 if (!ctx.mounted) return;
                                                 ScaffoldMessenger.of(
                                                   ctx,
                                                 ).showSnackBar(
-                                                  const SnackBar(
+                                                  SnackBar(
                                                     content: Text(
                                                       'Unable to read selected file.',
+                                                      style:
+                                                          GoogleFonts.inter(),
                                                     ),
                                                   ),
                                                 );
@@ -1024,16 +1280,47 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                                     picked.name;
                                               });
                                             },
-                                      icon: const Icon(Icons.upload_file),
+                                      icon: const Icon(
+                                        LucideIcons.uploadCloud,
+                                        size: 18,
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        foregroundColor: const Color(
+                                          0xFF2563EB,
+                                        ),
+                                        side: BorderSide(
+                                          color: naByType[type] == true
+                                              ? _border
+                                              : const Color(0xFF2563EB),
+                                        ),
+                                      ),
                                       label: Text(
                                         fileNameByType[type]?.isNotEmpty == true
                                             ? 'Replace file'
                                             : 'Choose file',
+                                        style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
                                     FilterChip(
-                                      label: const Text('Mark N/A'),
+                                      label: Text(
+                                        'Mark N/A',
+                                        style: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                       selected: naByType[type] == true,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      selectedColor: const Color(0xFFF1F5F9),
+                                      checkmarkColor: _muted,
                                       onSelected: (value) {
                                         setLocal(() {
                                           naByType[type] = value;
@@ -1045,14 +1332,41 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                     ),
                                   ],
                                 ),
-                                if ((fileNameByType[type] ?? '').isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    fileNameByType[type]!,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: _muted,
-                                      fontWeight: FontWeight.w600,
+                                if ((fileNameByType[type] ?? '')
+                                    .isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: _surface,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: _border),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          LucideIcons.fileText,
+                                          size: 14,
+                                          color: _muted,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            fileNameByType[type]!,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 13,
+                                              color: _onSurface,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -1070,15 +1384,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         Expanded(
                           child: Text(
                             submitError,
-                            style: const TextStyle(
-                              color: Color(0xFFDC2626),
-                              fontSize: 12,
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFFDC2626),
+                              fontSize: 13,
                             ),
                           ),
                         ),
                         if (submitError == 'Google not connected') ...[
-                          const SizedBox(width: 8),
-                          OutlinedButton(
+                          const SizedBox(width: 12),
+                          FilledButton.tonal(
                             onPressed: () async {
                               try {
                                 await _connectGoogle();
@@ -1089,6 +1403,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                 });
                               }
                             },
+                            style: FilledButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
                             child: const Text('Connect Google'),
                           ),
                         ],
@@ -1098,12 +1417,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 ],
               ),
             ),
+            actionsPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 16,
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(ctx).pop(),
+                style: TextButton.styleFrom(
+                  foregroundColor: _muted,
+                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                ),
                 child: const Text('Cancel'),
               ),
-              ElevatedButton(
+              FilledButton(
                 onPressed: submitStatus == 'loading' || !hasSelection
                     ? null
                     : () async {
@@ -1126,52 +1453,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           submitError = error;
                         });
                       },
-                child: Text(
-                  submitStatus == 'loading' ? 'Saving...' : 'Save',
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
                 ),
+                child: Text(submitStatus == 'loading' ? 'Saving...' : 'Save'),
               ),
             ],
           );
         },
       ),
     );
-  }
-
-  Future<void> _startDiscussion() async {
-    final approvalRequestId = _approvalRequestId;
-    if (approvalRequestId.isEmpty || _newDiscussionDepartment.isEmpty) return;
-
-    setState(() {
-      _creatingDiscussion = true;
-      _discussionError = null;
-    });
-    try {
-      await _api.post<Map<String, dynamic>>(
-        '/approvals/$approvalRequestId/threads/ensure',
-        data: {
-          'department': _newDiscussionDepartment,
-          if (_newDiscussionMessageCtrl.text.trim().isNotEmpty)
-            'message': _newDiscussionMessageCtrl.text.trim(),
-        },
-      );
-      _newDiscussionMessageCtrl.clear();
-      setState(() {
-        _newDiscussionOpen = false;
-        _newDiscussionDepartment = '';
-      });
-      await _fetchDetails();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _discussionError = e.toString();
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _creatingDiscussion = false;
-        });
-      }
-    }
   }
 
   Future<void> _submitThreadReply(ApprovalThreadInfo thread) async {
@@ -1213,15 +1508,54 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
   }
 
+  Future<void> _startDiscussion() async {
+    final approvalRequestId = _approvalRequestId;
+    if (approvalRequestId.isEmpty || _newDiscussionDepartment.isEmpty) return;
+
+    setState(() {
+      _creatingDiscussion = true;
+      _discussionError = null;
+    });
+    try {
+      await _api.post<Map<String, dynamic>>(
+        '/approvals/$approvalRequestId/threads/ensure',
+        data: {
+          'department': _newDiscussionDepartment,
+          if (_newDiscussionMessageCtrl.text.trim().isNotEmpty)
+            'message': _newDiscussionMessageCtrl.text.trim(),
+        },
+      );
+      _newDiscussionMessageCtrl.clear();
+      setState(() {
+        _newDiscussionOpen = false;
+        _newDiscussionDepartment = '';
+      });
+      await _fetchDetails();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _discussionError = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _creatingDiscussion = false;
+        });
+      }
+    }
+  }
+
   Future<void> _openExternalLink(String? rawUrl) async {
     if (rawUrl == null || rawUrl.trim().isEmpty) return;
     final uri = Uri.tryParse(rawUrl.trim());
     if (uri == null) return;
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Could not open link')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not open link', style: GoogleFonts.inter()),
+        ),
+      );
     }
   }
 
@@ -1230,7 +1564,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       context.pop();
       return;
     }
-    context.go('/events');
+    context.go(_isApprovalOnlyEntry ? '/approvals' : '/events');
   }
 
   String _formatBudget(dynamic budgetValue) {
@@ -1259,7 +1593,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         '$cleanDate ${cleanTime.isEmpty ? '00:00' : cleanTime}',
       );
       if (dt != null) {
-        return DateFormat('yyyy-MM-dd · h:mm a').format(dt);
+        return DateFormat('MMM d, yyyy · h:mm a').format(dt);
       }
     } catch (_) {
       // Keep fallback rendering when parsing fails.
@@ -1295,8 +1629,63 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
   bool _canDepartmentTakeAction(Map<String, dynamic> request) {
     final status = _s(request['status'], fallback: '').toLowerCase();
-    return (status == 'pending' || status == 'clarification_requested') &&
+    return (status == 'pending' ||
+            status == 'clarification' ||
+            status == 'clarification_requested') &&
         !_requestHasStarted(request);
+  }
+
+  /// Whether the current user can take action on the department request
+  /// linked to this discussion thread.
+  bool _canTakeActionOnThread(ApprovalThreadInfo thread) {
+    final deptKey = _normalizeThreadDepartmentKey(thread.department);
+    if (!_isDepartmentInboxRole) return false;
+    if (_viewerDepartmentKey != deptKey) return false;
+    final requestId = thread.relatedRequestId;
+    if (requestId == null || requestId.isEmpty) return false;
+    final request = _findDepartmentRequest(deptKey, requestId);
+    if (request == null) return false;
+    return _canDepartmentTakeAction(request);
+  }
+
+  /// Look up a department request map by department key and request ID.
+  Map<String, dynamic>? _findDepartmentRequest(
+    String deptKey,
+    String requestId,
+  ) {
+    final listKey = deptKey == 'facility'
+        ? 'facility_requests'
+        : deptKey == 'it'
+        ? 'it_requests'
+        : deptKey == 'marketing'
+        ? 'marketing_requests'
+        : deptKey == 'transport'
+        ? 'transport_requests'
+        : null;
+    if (listKey == null) return null;
+    final requests = _mapList(listKey);
+    try {
+      return requests.firstWhere((r) => _s(r['id'], fallback: '') == requestId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Open the department decision dialog from a discussion thread.
+  void _openTakeActionFromThread(
+    ApprovalThreadInfo thread, {
+    String? initialDecision,
+  }) {
+    final deptKey = _normalizeThreadDepartmentKey(thread.department);
+    final requestId = thread.relatedRequestId;
+    if (requestId == null || requestId.isEmpty) return;
+    final request = _findDepartmentRequest(deptKey, requestId);
+    if (request == null) return;
+    _openDepartmentDecisionDialog(
+      deptKey,
+      request,
+      initialDecision: initialDecision ?? 'approved',
+    );
   }
 
   Map<String, dynamic> _normalizeMarketingRequirementsFromMap(
@@ -1428,44 +1817,43 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _pageBg,
+      appBar: AppBar(
+        backgroundColor: _surface,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: Text(
+          _isApprovalOnlyEntry ? 'Approval Details' : 'Event Details',
+          style: GoogleFonts.poppins(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: _onSurface,
+            letterSpacing: -0.5,
+          ),
+        ),
+        centerTitle: false,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: IconButton(
+              onPressed: _closeDetails,
+              icon: Icon(LucideIcons.x, size: 24, color: _muted),
+              style: IconButton.styleFrom(
+                backgroundColor: _panel,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(color: _border.withValues(alpha: 0.5), height: 1),
+        ),
+      ),
       body: SafeArea(
         child: Column(
           children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              decoration: BoxDecoration(
-                color: _surface,
-                border: Border(bottom: BorderSide(color: _border)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _isApprovalOnlyEntry ? 'Approval details' : 'Event details',
-                    style: GoogleFonts.poppins(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: _onSurface,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  InkWell(
-                    onTap: _closeDetails,
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: _panel,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Icon(LucideIcons.x, size: 20, color: _muted),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
             // Scrollable Content
             Expanded(
               child: _isLoading
@@ -1473,32 +1861,48 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   : _error != null
                   ? Center(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
-                              LucideIcons.alertCircle,
-                              color: Color(0xFFDC2626),
-                              size: 28,
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEE2E2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                LucideIcons.alertCircle,
+                                color: Color(0xFFDC2626),
+                                size: 32,
+                              ),
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 16),
                             Text(
                               _error ?? 'Failed to load event details',
                               textAlign: TextAlign.center,
-                              style: const TextStyle(color: Color(0xFFB91C1C)),
+                              style: GoogleFonts.inter(
+                                color: _onSurface,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                            const SizedBox(height: 12),
-                            ElevatedButton.icon(
+                            const SizedBox(height: 24),
+                            FilledButton.icon(
                               onPressed: _fetchDetails,
                               icon: const Icon(LucideIcons.refreshCw, size: 16),
-                              label: const Text('Retry'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1A73E8),
-                                foregroundColor: Colors.white,
-                                textStyle: GoogleFonts.roboto(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
+                              label: const Text('Try Again'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF2563EB),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                textStyle: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 12,
                                 ),
                               ),
                             ),
@@ -1507,125 +1911,139 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       ),
                     )
                   : SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 24,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           _buildEventOverview(),
                           const SizedBox(height: 24),
                           _isApprovalOnlyEntry
-                              ? _buildApprovalWorkflow()
+                              ? _buildApprovalContext()
                               : _buildEventWorkflow(),
                           if (_showDiscussionSection) ...[
                             const SizedBox(height: 24),
                             _buildDiscussion(),
                           ],
-                          if (_isApprovalOnlyEntry) ...[
-                            const SizedBox(height: 24),
-                            _buildApprovalContext(),
-                          ],
                           const SizedBox(height: 24),
                           _buildRequirements(),
-                          const SizedBox(height: 24),
-                          _buildNotesAndDescription(),
+                          if (_isApprovalOnlyEntry) ...[
+                            const SizedBox(height: 24),
+                            _buildNotesAndDescription(),
+                          ],
+                          const SizedBox(height: 40), // Bottom padding
                         ],
                       ),
                     ),
             ),
 
-            // Footer
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              decoration: BoxDecoration(
-                color: _surface,
-                border: Border(top: BorderSide(color: _border)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  OutlinedButton(
-                    onPressed: _closeDetails,
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: _isDark
-                          ? Theme.of(
-                              context,
-                            ).colorScheme.surfaceContainerHighest
-                          : Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      side: BorderSide(
-                        color: _isDark
-                            ? const Color(0xFF475569)
-                            : const Color(0xFFDADCE0),
-                      ),
-                    ),
-                    child: Text(
-                      'Close',
-                      style: GoogleFonts.roboto(
-                        color: _muted,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+            // Footer Actions
+            if (!_isLoading && _error == null)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: _surface,
+                  border: Border(
+                    top: BorderSide(color: _border.withValues(alpha: 0.5)),
                   ),
-                  if (!_isApprovalOnlyEntry && _canSendRequirements)
-                    ElevatedButton(
-                      onPressed: () {
-                        final sendableDepartments =
-                            _sendableRequirementDepartments;
-                        if (sendableDepartments.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'All requirement requests are already active.',
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-                        final event = Event.fromJson(
-                          _detailsData?['event'] ?? {},
-                        );
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (ctx) => RequirementsWizardDialog(
-                            event: event,
-                            departments: sendableDepartments,
-                            requesterEmail: _s(
-                              _approval['requester_email'],
-                              fallback: '',
-                            ),
-                            onSuccess: () {
-                              _fetchDetails();
-                              setState(() {});
-                            },
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        foregroundColor: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: _isDark ? 0.2 : 0.05,
+                      ),
+                      blurRadius: 10,
+                      offset: const Offset(0, -4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    OutlinedButton(
+                      onPressed: _closeDetails,
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: _panel,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 24,
-                          vertical: 12,
+                          vertical: 14,
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        side: BorderSide(color: _border),
                       ),
                       child: Text(
-                        'Send Requirements',
-                        style: GoogleFonts.roboto(fontWeight: FontWeight.w500),
+                        'Close',
+                        style: GoogleFonts.inter(
+                          color: _onSurface,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                ],
+                    if (!_isApprovalOnlyEntry && _canSendRequirements)
+                      FilledButton.icon(
+                        onPressed: () {
+                          final sendableDepartments =
+                              _sendableRequirementDepartments;
+                          if (sendableDepartments.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'All requirement requests are already active.',
+                                  style: GoogleFonts.inter(),
+                                ),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                          final event = Event.fromJson(
+                            _detailsData?['event'] ?? {},
+                          );
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (ctx) => RequirementsWizardDialog(
+                              event: event,
+                              departments: sendableDepartments,
+                              requesterEmail: _s(
+                                _approval['requester_email'],
+                                fallback: '',
+                              ),
+                              onSuccess: () {
+                                _fetchDetails();
+                                setState(() {});
+                              },
+                            ),
+                          );
+                        },
+                        icon: const Icon(LucideIcons.send, size: 16),
+                        label: const Text('Send Requirements'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 14,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          textStyle: GoogleFonts.inter(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -1647,13 +2065,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       ),
       decoration: BoxDecoration(
         color: _surface,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _border.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: _isDark ? 0.24 : 0.03),
-            offset: Offset(0, 2),
-            blurRadius: 4,
+            color: Colors.black.withValues(alpha: _isDark ? 0.2 : 0.04),
+            offset: const Offset(0, 4),
+            blurRadius: 16,
           ),
         ],
       ),
@@ -1662,14 +2080,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, color: const Color(0xFF2563EB), size: 20),
-              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: const Color(0xFF2563EB), size: 18),
+              ),
+              const SizedBox(width: 14),
               Text(
                 title,
                 style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: _onSurface,
+                  letterSpacing: -0.3,
                 ),
               ),
             ],
@@ -1683,12 +2109,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
   Widget _buildLabelValue(IconData? icon, String label, Widget valueWidget) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 20),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 18, color: _muted),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Icon(icon, size: 18, color: _muted),
+            ),
             const SizedBox(width: 16),
           ],
           Expanded(
@@ -1697,14 +2126,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               children: [
                 Text(
                   label.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
                     color: _muted,
-                    letterSpacing: 1.5,
+                    letterSpacing: 0.8,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 valueWidget,
               ],
             ),
@@ -1749,7 +2178,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
     return _buildCard(
       icon: LucideIcons.fileText,
-      title: 'Event overview',
+      title: 'Event Overview',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1761,10 +2190,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 event['name'],
                 fallback: _s(approval['event_name'], fallback: 'Untitled'),
               ),
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF1E293B),
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: _onSurface,
               ),
             ),
           ),
@@ -1774,10 +2203,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               'Requester',
               Text(
                 _s(approval['requester_email'], fallback: 'Unknown'),
-                style: const TextStyle(
+                style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: Color(0xFF2563EB),
+                  color: const Color(0xFF2563EB),
                   decoration: TextDecoration.underline,
                 ),
               ),
@@ -1787,10 +2216,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             'Facilitator',
             Text(
               _s(event['facilitator'], fallback: _s(approval['facilitator'])),
-              style: const TextStyle(
+              style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF1E293B),
+                color: _onSurface,
               ),
             ),
           ),
@@ -1799,10 +2228,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             'Venue',
             Text(
               _s(event['venue_name'], fallback: _s(approval['venue_name'])),
-              style: const TextStyle(
+              style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF1E293B),
+                color: _onSurface,
               ),
             ),
           ),
@@ -1813,10 +2242,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               _buildAudience(event).trim().toLowerCase() == 'unknown'
                   ? _s(approval['intendedAudience'], fallback: 'Unknown')
                   : _buildAudience(event),
-              style: const TextStyle(
+              style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF1E293B),
+                color: _onSurface,
               ),
             ),
           ),
@@ -1827,13 +2256,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               children: [
                 Text(
                   _formatBudget(budgetValue),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF1E293B),
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: _onSurface,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerLeft,
@@ -1841,33 +2270,56 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       onTap: budgetOpenLink.isEmpty
                           ? null
                           : () => _openExternalLink(budgetOpenLink),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFBFDBFE)),
-                        ),
-                        child: Text(
-                          hasBudgetFile
-                              ? (budgetFileName.isEmpty
-                                    ? 'Budget breakdown (PDF)'
-                                    : budgetFileName)
-                              : 'No budget file',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          softWrap: false,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                          color: hasBudgetFile
+                              ? const Color(0xFFEFF6FF)
+                              : _panel,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
                             color: hasBudgetFile
-                                ? const Color(0xFF2563EB)
-                                : const Color(0xFF64748B),
+                                ? const Color(0xFFBFDBFE)
+                                : _border,
                           ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              hasBudgetFile
+                                  ? LucideIcons.fileText
+                                  : LucideIcons.fileMinus,
+                              size: 14,
+                              color: hasBudgetFile
+                                  ? const Color(0xFF2563EB)
+                                  : _muted,
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                hasBudgetFile
+                                    ? (budgetFileName.isEmpty
+                                          ? 'Budget breakdown (PDF)'
+                                          : budgetFileName)
+                                    : 'No budget file',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                softWrap: false,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: hasBudgetFile
+                                      ? const Color(0xFF2563EB)
+                                      : _muted,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -1880,7 +2332,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             LucideIcons.disc,
             'Status',
             showCombinedStatus
-                ? Row(
+                ? Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -1888,93 +2343,129 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFDF0D5),
-                          borderRadius: BorderRadius.circular(20),
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          approvalStatus.toUpperCase().replaceAll('_', ' '),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFFB47B1E),
-                            letterSpacing: 1.0,
+                          _displayStatusLabel(approvalStatus).toUpperCase(),
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFFD97706),
+                            letterSpacing: 0.5,
                           ),
                         ),
                       ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Text(
-                          '· Event:',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF94A3B8),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '· Event:',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _muted,
+                            ),
                           ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFDF0D5),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          status.toUpperCase().replaceAll('_', ' '),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFFB47B1E),
-                            letterSpacing: 1.0,
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              status.toUpperCase().replaceAll('_', ' '),
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF4B5563),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ],
                   )
                 : Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 4,
+                      vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFDF0D5),
-                      borderRadius: BorderRadius.circular(20),
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
                       status.toUpperCase().replaceAll('_', ' '),
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        color: Color(0xFFB47B1E),
-                        letterSpacing: 1.0,
+                      style: GoogleFonts.inter(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFD97706),
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ),
           ),
           _buildLabelValue(
-            LucideIcons.calendar,
-            'Start',
-            Text(
-              _formatDateTime(event['start_date'], event['start_time']),
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF1E293B),
-              ),
-            ),
-          ),
-          _buildLabelValue(
-            LucideIcons.calendar,
-            'End',
-            Text(
-              _formatDateTime(event['end_date'], event['end_time']),
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF1E293B),
-              ),
+            LucideIcons.calendarDays,
+            'Duration',
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatDateTime(event['start_date'], event['start_time']),
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: _onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  width: 2,
+                  height: 12,
+                  margin: const EdgeInsets.only(left: 3, top: 4, bottom: 4),
+                  color: _border,
+                ),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEF4444),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatDateTime(event['end_date'], event['end_time']),
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: _onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           _buildLabelValue(
@@ -1983,12 +2474,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             Text(
               _s(
                 event['description'],
-                fallback: _s(approval['description'], fallback: 'No description'),
+                fallback: _s(
+                  approval['description'],
+                  fallback: 'No description provided.',
+                ),
               ),
-              style: const TextStyle(
+              style: GoogleFonts.inter(
                 fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFF1E293B),
+                fontWeight: FontWeight.w400,
+                color: _onSurface,
+                height: 1.5,
               ),
             ),
           ),
@@ -2002,40 +2497,62 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final status = _s(approval['status'], fallback: 'Pending');
     final statusValue = status.toLowerCase().replaceAll('_', ' ');
     final discussionStatus = _s(approval['discussion_status'], fallback: '');
+    final pipelineStage = _s(
+      approval['pipeline_stage'],
+      fallback: '',
+    ).toLowerCase();
+    final deputyDone = _s(
+      approval['deputy_decided_by'],
+      fallback: '',
+    ).isNotEmpty;
+    final financeDone = _s(
+      approval['finance_decided_by'],
+      fallback: '',
+    ).isNotEmpty;
+    final registrarDone =
+        status.toLowerCase() == 'approved' &&
+        (pipelineStage == 'complete' || pipelineStage.isEmpty);
+    final deputyActive =
+        !deputyDone &&
+        (pipelineStage == 'deputy' || pipelineStage == 'after_deputy');
+    final financeActive =
+        !financeDone &&
+        (pipelineStage == 'finance' || pipelineStage == 'after_finance');
+    final registrarActive = !registrarDone && pipelineStage == 'registrar';
 
     return _buildCard(
       icon: LucideIcons.shieldCheck,
-      title: 'Approval context',
+      title: 'Approval Context',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Status + Stage: side-by-side prominent row (matching website)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: _panel,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _border),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _border.withValues(alpha: 0.5)),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Current status',
-                        style: TextStyle(
+                        'CURRENT STATUS',
+                        style: GoogleFonts.inter(
                           fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                           color: _muted,
-                          letterSpacing: 0.4,
+                          letterSpacing: 0.8,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
+                          horizontal: 14,
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
@@ -2045,47 +2562,52 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               ? const Color(0xFFFEE2E2)
                               : statusValue.contains('clarification')
                               ? const Color(0xFFE0E7FF)
-                              : const Color(0xFFFDF0D5),
+                              : const Color(0xFFFEF3C7),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
-                          status,
-                          style: TextStyle(
+                          _displayStatusLabel(status),
+                          style: GoogleFonts.inter(
                             fontSize: 12,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: statusValue.contains('approved')
                                 ? const Color(0xFF166534)
                                 : statusValue.contains('reject')
-                                ? const Color(0xFFB91C1C)
+                                ? const Color(0xFF991B1B)
                                 : statusValue.contains('clarification')
-                                ? const Color(0xFF4338CA)
-                                : const Color(0xFFB47B1E),
+                                ? const Color(0xFF3730A3)
+                                : const Color(0xFFB45309),
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
+                Container(
+                  width: 1,
+                  height: 50,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  color: _border,
+                ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Stage',
-                        style: TextStyle(
+                        'PIPELINE STAGE',
+                        style: GoogleFonts.inter(
                           fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w600,
                           color: _muted,
-                          letterSpacing: 0.4,
+                          letterSpacing: 0.8,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Text(
                         _workflowStageLabel(),
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                           color: _onSurface,
                         ),
                       ),
@@ -2097,18 +2619,65 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ),
           const SizedBox(height: 20),
 
-          // Discussion status banner (matching website)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: _surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _border.withValues(alpha: 0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildApprovalFlowNode(
+                  label: 'Deputy Registrar',
+                  subtitle: deputyDone
+                      ? _s(approval['deputy_decided_by'], fallback: '')
+                      : deputyActive
+                      ? 'Awaiting Review'
+                      : 'Not started',
+                  isDone: deputyDone,
+                  isActive: deputyActive,
+                  showConnector: true,
+                ),
+                _buildApprovalFlowNode(
+                  label: 'Finance Team',
+                  subtitle: financeDone
+                      ? _s(approval['finance_decided_by'], fallback: '')
+                      : financeActive
+                      ? 'Awaiting Review'
+                      : 'Not started',
+                  isDone: financeDone,
+                  isActive: financeActive,
+                  showConnector: true,
+                ),
+                _buildApprovalFlowNode(
+                  label: 'Registrar / VC',
+                  subtitle: registrarDone
+                      ? _s(approval['decided_by'], fallback: 'Approved')
+                      : registrarActive
+                      ? 'Awaiting Final Review'
+                      : 'Not started',
+                  isDone: registrarDone,
+                  isActive: registrarActive,
+                  showConnector: false,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
           if (discussionStatus.isNotEmpty &&
               (statusValue.contains('clarification') ||
                   discussionStatus.contains('waiting'))) ...[
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: discussionStatus.contains('waiting_for_faculty')
                     ? const Color(0xFFFFF7ED)
                     : const Color(0xFFEEF2FF),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: discussionStatus.contains('waiting_for_faculty')
                       ? const Color(0xFFFED7AA)
@@ -2116,12 +2685,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 ),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
                     discussionStatus.contains('waiting_for_faculty')
                         ? LucideIcons.alertCircle
                         : LucideIcons.info,
-                    size: 18,
+                    size: 20,
                     color: discussionStatus.contains('waiting_for_faculty')
                         ? const Color(0xFFC2410C)
                         : const Color(0xFF4338CA),
@@ -2131,17 +2701,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     child: Text(
                       discussionStatus.contains('waiting_for_faculty')
                           ? (_isRequester
-                                ? 'The reviewer has requested clarification. Please review and reply.'
+                                ? 'The reviewer has requested clarification. Please review and reply in the discussion section.'
                                 : 'Waiting for the faculty to respond to your clarification request.')
                           : (_isRequester
-                                ? 'Your reply has been sent. Waiting for the reviewer.'
+                                ? 'Your reply has been sent. Waiting for the reviewer to take action.'
                                 : 'The faculty has replied. Please review their response.'),
-                      style: TextStyle(
+                      style: GoogleFonts.inter(
                         fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w500,
                         color: discussionStatus.contains('waiting_for_faculty')
-                            ? const Color(0xFFC2410C)
-                            : const Color(0xFF4338CA),
+                            ? const Color(0xFF9A3412)
+                            : const Color(0xFF3730A3),
                         height: 1.4,
                       ),
                     ),
@@ -2152,45 +2722,43 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             const SizedBox(height: 20),
           ],
 
-          // Requested To field
           _buildLabelValue(
             null,
             'Requested To',
             Text(
               _s(approval['requested_to'], fallback: 'None'),
-              style: const TextStyle(
+              style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Color(0xFF2563EB),
+                color: const Color(0xFF2563EB),
                 decoration: TextDecoration.underline,
               ),
             ),
           ),
 
-          // Final decision by with role label (matching website)
           if (approval['decided_by'] != null &&
               approval['decided_by'].toString().trim().isNotEmpty)
             _buildLabelValue(
               null,
-              'Final decision by',
+              'Final Decision By',
               Row(
                 children: [
                   Text(
                     _s(approval['decided_by'], fallback: ''),
-                    style: const TextStyle(
+                    style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFF1E293B),
+                      color: _onSurface,
                     ),
                   ),
                   if (_getApprovedByRoleLabel(approval).isNotEmpty) ...[
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Text(
-                      ' (${_getApprovedByRoleLabel(approval)})',
-                      style: const TextStyle(
+                      '• ${_getApprovedByRoleLabel(approval)}',
+                      style: GoogleFonts.inter(
                         fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                        color: _muted,
                       ),
                     ),
                   ],
@@ -2198,71 +2766,74 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               ),
             ),
 
-          // Requester action label
-          _buildLabelValue(
-            null,
-            'Requester Action',
-            Text(
-              _requesterActionLabel(),
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF475569),
-              ),
-            ),
-          ),
-
-          // Approval action buttons
           if (_showApprovalActions) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Take action',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: _muted,
-                letterSpacing: 0.4,
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _panel,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _border),
               ),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _buildDecisionButton(
-                  label: 'Approve',
-                  background: const Color(0xFFDCFCE7),
-                  foreground: const Color(0xFF166534),
-                  border: const Color(0xFF86EFAC),
-                  onTap: () =>
-                      _handleApprovalDecision(_ApprovalDecisionAction.approve),
-                ),
-                _buildDecisionButton(
-                  label: 'Need clarification',
-                  background: const Color(0xFFE0E7FF),
-                  foreground: const Color(0xFF4338CA),
-                  border: const Color(0xFFC7D2FE),
-                  onTap: () =>
-                      _handleApprovalDecision(_ApprovalDecisionAction.clarify),
-                ),
-                _buildDecisionButton(
-                  label: 'Reject',
-                  background: const Color(0xFFFEE2E2),
-                  foreground: const Color(0xFFB91C1C),
-                  border: const Color(0xFFFECACA),
-                  onTap: () =>
-                      _handleApprovalDecision(_ApprovalDecisionAction.reject),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Approve can include an optional message. Reject and clarification require a comment, matching the website workflow.',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: _muted,
-                height: 1.4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'YOUR ACTION REQUIRED',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: _muted,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      _buildDecisionButton(
+                        label: 'Approve',
+                        icon: LucideIcons.checkCircle,
+                        background: const Color(0xFF16A34A),
+                        foreground: Colors.white,
+                        onTap: () => _handleApprovalDecision(
+                          _ApprovalDecisionAction.approve,
+                        ),
+                      ),
+                      _buildDecisionButton(
+                        label: 'Clarification',
+                        icon: LucideIcons.messageCircle,
+                        background: _surface,
+                        foreground: const Color(0xFF4338CA),
+                        border: const Color(0xFFC7D2FE),
+                        onTap: () => _handleApprovalDecision(
+                          _ApprovalDecisionAction.clarify,
+                        ),
+                      ),
+                      _buildDecisionButton(
+                        label: 'Reject',
+                        icon: LucideIcons.xCircle,
+                        background: _surface,
+                        foreground: const Color(0xFFDC2626),
+                        border: const Color(0xFFFECACA),
+                        onTap: () => _handleApprovalDecision(
+                          _ApprovalDecisionAction.reject,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Approve can include an optional message. Reject and clarification require a comment to maintain workflow clarity.',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _muted,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -2271,81 +2842,96 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
-  Widget _buildApprovalWorkflow() {
-    final approval = _approval;
-    final pipelineStage = _s(
-      approval['pipeline_stage'],
-      fallback: '',
-    ).toLowerCase();
-    final currentStageLabel = _s(
-      approval['current_stage_label'],
-      fallback: _workflowStageLabel(),
-    );
+  Widget _buildApprovalFlowNode({
+    required String label,
+    required String subtitle,
+    required bool isDone,
+    required bool isActive,
+    required bool showConnector,
+  }) {
+    final borderColor = isDone
+        ? const Color(0xFF10B981)
+        : isActive
+        ? const Color(0xFF8B5CF6)
+        : _border;
+    final subtitleColor = isDone
+        ? const Color(0xFF059669)
+        : isActive
+        ? const Color(0xFF6D28D9)
+        : _muted;
 
-    return _buildCard(
-      icon: LucideIcons.gitBranch,
-      title: 'Approval flow',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Deputy Registrar → Finance Team → Registrar / VC',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: _muted,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: isDone ? const Color(0xFF10B981) : Colors.transparent,
+                shape: BoxShape.circle,
+                border: Border.all(color: borderColor, width: 2),
+              ),
+              child: isDone
+                  ? const Icon(LucideIcons.check, size: 14, color: Colors.white)
+                  : isActive
+                  ? Center(
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF8B5CF6),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+            if (showConnector)
+              Container(
+                width: 2,
+                height: 32,
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDone ? const Color(0xFF6EE7B7) : _border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _onSurface,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontStyle: isDone ? FontStyle.normal : FontStyle.italic,
+                    fontWeight: FontWeight.w500,
+                    color: subtitleColor,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Current stage: $currentStageLabel',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: _onSurface,
-            ),
-          ),
-          const SizedBox(height: 18),
-
-          // Pipeline stage timeline: deputy → finance → registrar (matching website)
-          _buildPipelineStep(
-            label: 'Deputy Registrar',
-            decidedBy: _s(approval['deputy_decided_by'], fallback: ''),
-            isDone:
-                approval['deputy_decided_by'] != null &&
-                approval['deputy_decided_by'].toString().trim().isNotEmpty,
-            isActive:
-                approval['deputy_decided_by'] == null &&
-                (pipelineStage == 'deputy' || pipelineStage == 'after_deputy'),
-            isLast: false,
-          ),
-          _buildPipelineConnector(),
-          _buildPipelineStep(
-            label: 'Finance',
-            decidedBy: _s(approval['finance_decided_by'], fallback: ''),
-            isDone:
-                approval['finance_decided_by'] != null &&
-                approval['finance_decided_by'].toString().trim().isNotEmpty,
-            isActive:
-                approval['finance_decided_by'] == null &&
-                (pipelineStage == 'finance' ||
-                    pipelineStage == 'after_finance'),
-            isLast: false,
-          ),
-          _buildPipelineConnector(),
-          _buildPipelineStep(
-            label: 'Registrar / VC',
-            decidedBy: _s(approval['decided_by'], fallback: ''),
-            isDone:
-                approval['status'] == 'approved' &&
-                (pipelineStage == 'complete' || pipelineStage.isEmpty),
-            isActive:
-                approval['status'] != 'approved' &&
-                pipelineStage == 'registrar',
-            isLast: true,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -2355,11 +2941,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final facility = _mapList('facility_requests');
     final it = _mapList('it_requests');
     final marketing = _mapList('marketing_requests');
+    final transport = _mapList('transport_requests');
     final eventStatus = _s(event['status'], fallback: '').toLowerCase();
     final approvalStatus = _s(approval['status'], fallback: '').toLowerCase();
 
-    final registrarStep = (
-      label: 'Registrar',
+    final finalApprovalStep = (
+      label: 'Final Approval',
       status: approvalStatus.isEmpty ? 'none' : approvalStatus,
       assignee: _s(
         approval['requested_to'] ?? approval['decided_by'],
@@ -2424,6 +3011,25 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             return nextDt.isAfter(latestDt) ? value : latest;
           }),
     );
+    final transportStep = (
+      label: 'Transport',
+      status: _aggregateRequirementStatus(transport),
+      assignee: transport
+          .map((req) => _s(req['requested_to'], fallback: ''))
+          .where((value) => value.isNotEmpty)
+          .toSet()
+          .join(', '),
+      updatedAt: transport
+          .map((req) => _s(req['decided_at'], fallback: ''))
+          .where((value) => value.isNotEmpty)
+          .fold<String>('', (latest, value) {
+            if (latest.isEmpty) return value;
+            final latestDt = DateTime.tryParse(latest);
+            final nextDt = DateTime.tryParse(value);
+            if (latestDt == null || nextDt == null) return value;
+            return nextDt.isAfter(latestDt) ? value : latest;
+          }),
+    );
     final iqacHasReport =
         _s(event['report_web_view_link'], fallback: '').isNotEmpty ||
         _s(event['report_file_id'], fallback: '').isNotEmpty;
@@ -2439,29 +3045,46 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
 
     final steps = [
-      registrarStep,
+      finalApprovalStep,
       facilityStep,
       itStep,
       marketingStep,
+      transportStep,
       iqacStep,
     ];
 
     return _buildCard(
       icon: LucideIcons.gitBranch,
-      title: 'Approval flow',
+      title: 'Approval Flow',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Registrar through IQAC. Multiple requests for one team are aggregated into a single status.',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: _muted,
-              height: 1.4,
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _panel,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(LucideIcons.info, size: 20, color: _muted),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Final approval comes first, followed by Facility, IT, Marketing, and Transport requests. IQAC is satisfied once the event report is uploaded.',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: _muted,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 24),
           ...steps.asMap().entries.map((entry) {
             final index = entry.key;
             final step = entry.value;
@@ -2492,199 +3115,110 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final normalized = status.trim().toLowerCase();
     final isDone = normalized == 'approved' || normalized == 'accepted';
     final isPending = normalized == 'pending';
-    final isClarification = normalized == 'clarification_requested';
+    final isClarification =
+        normalized == 'clarification' ||
+        normalized == 'clarification_requested';
     final showBadge = normalized.isNotEmpty && normalized != 'none';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 18,
-          height: 18,
+          width: 24,
+          height: 24,
           decoration: BoxDecoration(
             color: isDone
-                ? const Color(0xFFDCFCE7)
+                ? const Color(0xFF10B981)
                 : isPending || isClarification
-                ? const Color(0xFFFEF3C7)
+                ? const Color(0xFFF59E0B)
                 : _panel,
             shape: BoxShape.circle,
             border: Border.all(
               color: isDone
-                  ? const Color(0xFF16A34A)
+                  ? const Color(0xFF10B981)
                   : isPending || isClarification
-                  ? const Color(0xFFB45309)
+                  ? const Color(0xFFF59E0B)
                   : _border,
               width: 2,
             ),
           ),
           child: Center(
             child: isDone
-                ? Icon(
-                    LucideIcons.check,
-                    size: 10,
-                    color: const Color(0xFF16A34A),
-                  )
+                ? const Icon(LucideIcons.check, size: 14, color: Colors.white)
                 : null,
           ),
         ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: _onSurface,
-                      ),
-                    ),
-                  ),
-                  if (showBadge)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colors['bg'] as Color,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        normalized.replaceAll('_', ' ').toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                          color: colors['fg'] as Color,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              if (assignee.isNotEmpty)
-                Text(
-                  assignee,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _muted,
-                  ),
-                )
-              else if (normalized == 'none')
-                Text(
-                  'No record yet',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _muted,
-                  ),
-                ),
-              if (updatedAt.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  _formatDateTime(updatedAt, ''),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _muted,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPipelineStep({
-    required String label,
-    required String decidedBy,
-    required bool isDone,
-    required bool isActive,
-    required bool isLast,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Pipeline dot with checkmark (matching website)
-        Container(
-          width: 18,
-          height: 18,
-          decoration: BoxDecoration(
-            color: isDone
-                ? const Color(0xFFDCFCE7)
-                : isActive
-                ? const Color(0xFFFEF3C7)
-                : _panel,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isDone
-                  ? const Color(0xFF16A34A)
-                  : isActive
-                  ? const Color(0xFFB45309)
-                  : _border,
-              width: 2,
-            ),
-          ),
-          child: Center(
-            child: isDone
-                ? Icon(
-                    LucideIcons.check,
-                    size: 10,
-                    color: const Color(0xFF16A34A),
-                  )
-                : null,
-          ),
-        ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 16),
         Expanded(
           child: Padding(
-            padding: EdgeInsets.only(bottom: isLast ? 0 : 8),
+            padding: const EdgeInsets.only(top: 2),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: _onSurface,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: _onSurface,
+                        ),
+                      ),
+                    ),
+                    if (showBadge)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colors['bg'] as Color,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          normalized.replaceAll('_', ' ').toUpperCase(),
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: colors['fg'] as Color,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                if (decidedBy.isNotEmpty)
+                const SizedBox(height: 6),
+                if (assignee.isNotEmpty)
                   Text(
-                    decidedBy,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    assignee,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
                       color: _muted,
                     ),
                   )
-                else if (isActive)
+                else if (normalized == 'none')
                   Text(
-                    'Awaiting',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFFB45309),
-                    ),
-                  )
-                else
-                  Text(
-                    'Not started',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    'No record yet',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontStyle: FontStyle.italic,
                       color: _muted,
                     ),
                   ),
+                if (updatedAt.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatDateTime(updatedAt, ''),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _muted,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -2698,7 +3232,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Container(width: 2, height: 24, color: _border),
+          Container(
+            width: 2,
+            height: 24,
+            margin: const EdgeInsets.only(left: 11),
+            decoration: BoxDecoration(
+              color: _border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           const SizedBox(width: 14),
         ],
       ),
@@ -2707,28 +3249,39 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
   Widget _buildDecisionButton({
     required String label,
+    required IconData icon,
     required Color background,
     required Color foreground,
-    required Color border,
+    Color? border,
     required VoidCallback onTap,
   }) {
     return InkWell(
       onTap: _decisionSubmitting ? null : onTap,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: border),
-        ),
-        child: Text(
-          _decisionSubmitting ? 'Working...' : label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            color: foreground,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: border ?? Colors.transparent,
+            width: border != null ? 1 : 0,
           ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: foreground),
+            const SizedBox(width: 8),
+            Text(
+              _decisionSubmitting ? 'Working...' : label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: foreground,
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -2736,7 +3289,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
   Widget _buildDiscussion() {
     final approvalThreads = _approvalThreads;
-    final deptThreads = _deptRequestThreads;
     final actionLogs = _mapList('workflow_action_logs');
     final existingDepartments = approvalThreads
         .map((thread) => thread.department.trim().toLowerCase())
@@ -2750,12 +3302,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       children: [
         Row(
           children: [
-            Icon(
-              LucideIcons.messageCircle,
-              color: const Color(0xFF2563EB),
-              size: 22,
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                LucideIcons.messageSquare,
+                color: Color(0xFF2563EB),
+                size: 18,
+              ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2766,86 +3325,59 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: _onSurface,
+                      letterSpacing: -0.3,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
-                    'Department conversations and clarification threads.',
-                    style: TextStyle(fontSize: 13, color: _muted, height: 1.4),
+                    'Approval clarification threads and comments.',
+                    style: GoogleFonts.inter(fontSize: 13, color: _muted),
                   ),
                 ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        if (approvalThreads.isEmpty &&
-            deptThreads.isEmpty &&
-            actionLogs.isEmpty)
+        const SizedBox(height: 20),
+        if (approvalThreads.isEmpty && actionLogs.isEmpty)
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: _panel,
+              color: _surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _border),
+              border: Border.all(color: _border.withValues(alpha: 0.5)),
             ),
             child: Row(
               children: [
-                Icon(LucideIcons.info, size: 18, color: _muted),
-                const SizedBox(width: 12),
+                Icon(LucideIcons.info, size: 20, color: _muted),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Text(
-                    _isRequester
-                        ? 'No department discussions yet. Start a conversation with a department from here, like on the web workflow.'
-                        : 'No department discussions yet. A discussion will appear here when a department or approver sends a message.',
-                    style: TextStyle(fontSize: 14, color: _muted, height: 1.5),
+                    'No approval discussion threads yet.',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: _muted,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
             ),
           )
-        else if (approvalThreads.isEmpty &&
-            deptThreads.isEmpty &&
-            actionLogs.isNotEmpty)
+        else if (approvalThreads.isEmpty && actionLogs.isNotEmpty)
           _buildActionHistory(actionLogs)
         else
           ...approvalThreads.map(
             (thread) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: 16),
               child: _buildThreadPanel(thread, showRequestStatus: false),
             ),
           ),
-        if (deptThreads.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              'Department request discussions',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: const Color(0xFF64748B),
-                letterSpacing: 0.4,
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...deptThreads.map(
-            (thread) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildThreadPanel(thread, showRequestStatus: true),
-            ),
-          ),
-        ],
         if (_discussionError != null &&
             _discussionError!.trim().isNotEmpty) ...[
           const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: const Color(0xFFFEE2E2),
               borderRadius: BorderRadius.circular(12),
@@ -2853,18 +3385,18 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             ),
             child: Row(
               children: [
-                Icon(
+                const Icon(
                   LucideIcons.alertCircle,
-                  size: 16,
-                  color: const Color(0xFFDC2626),
+                  size: 18,
+                  color: Color(0xFFDC2626),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     _discussionError!,
-                    style: const TextStyle(
+                    style: GoogleFonts.inter(
                       fontSize: 13,
-                      color: Color(0xFFB91C1C),
+                      color: const Color(0xFF991B1B),
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -2873,9 +3405,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             ),
           ),
         ],
-        const SizedBox(height: 16),
-        if (_isRequester && _approvalRequestId.isNotEmpty)
+        if (_isRequester && _approvalRequestId.isNotEmpty) ...[
+          const SizedBox(height: 16),
           _buildNewDiscussionPanel(availableDepartments),
+        ],
       ],
     );
   }
@@ -2886,10 +3419,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     if (options.isEmpty) {
       return Text(
         'You already have active discussion threads for all supported departments.',
-        style: TextStyle(
-          fontSize: 12,
+        style: GoogleFonts.inter(
+          fontSize: 13,
           color: _muted,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w500,
         ),
       );
     }
@@ -2903,41 +3436,45 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           });
         },
         icon: const Icon(LucideIcons.plus, size: 16),
-        label: const Text('Start new discussion'),
+        label: const Text('Start New Discussion'),
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF8B5CF6),
-          side: const BorderSide(
-            color: Color(0xFF8B5CF6),
-            width: 1,
-            style: BorderStyle.solid,
-          ),
+          foregroundColor: const Color(0xFF4F46E5),
+          side: const BorderSide(color: Color(0xFF4F46E5)),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
         ),
       );
     }
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _border),
+        border: Border.all(color: _border.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: _isDark ? 0.2 : 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Start a discussion with',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
               color: _onSurface,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             initialValue: _newDiscussionDepartment.isEmpty
                 ? null
@@ -2946,13 +3483,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 .map(
                   (option) => DropdownMenuItem<String>(
                     value: option.value,
-                    child: Text(option.label),
+                    child: Text(option.label, style: GoogleFonts.inter()),
                   ),
                 )
                 .toList(),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Department',
-              border: OutlineInputBorder(),
+              labelStyle: GoogleFonts.inter(color: _muted),
+              filled: true,
+              fillColor: _panel,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
             ),
             onChanged: (value) {
               setState(() {
@@ -2960,18 +3503,26 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               });
             },
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           TextField(
             controller: _newDiscussionMessageCtrl,
-            minLines: 2,
-            maxLines: 4,
-            decoration: const InputDecoration(
+            minLines: 3,
+            maxLines: 5,
+            style: GoogleFonts.inter(),
+            decoration: InputDecoration(
               labelText: 'Opening message (optional)',
-              border: OutlineInputBorder(),
+              labelStyle: GoogleFonts.inter(color: _muted),
+              filled: true,
+              fillColor: _panel,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
           Row(
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
               TextButton(
                 onPressed: _creatingDiscussion
@@ -2983,16 +3534,31 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           _newDiscussionDepartment = '';
                         });
                       },
+                style: TextButton.styleFrom(
+                  foregroundColor: _muted,
+                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                ),
                 child: const Text('Cancel'),
               ),
               const SizedBox(width: 12),
-              ElevatedButton(
+              FilledButton(
                 onPressed:
                     _creatingDiscussion || _newDiscussionDepartment.isEmpty
                     ? null
                     : _startDiscussion,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
+                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                ),
                 child: Text(
-                  _creatingDiscussion ? 'Creating...' : 'Start discussion',
+                  _creatingDiscussion ? 'Creating...' : 'Start Discussion',
                 ),
               ),
             ],
@@ -3024,37 +3590,44 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final t = actionType.toLowerCase();
     if (t == 'approve') return 'Approved';
     if (t == 'reject') return 'Rejected';
-    if (t == 'clarification') return 'Need clarification';
+    if (t == 'clarification') return 'Clarification';
     if (t == 'reply' || t == 'discussion_reply') return 'Reply';
     return actionType;
   }
 
   Widget _buildActionHistory(List<dynamic> actionLogs) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _panel,
+        color: _surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _border),
+        border: Border.all(color: _border.withValues(alpha: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: _isDark ? 0.2 : 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(LucideIcons.history, size: 18, color: _muted),
-              const SizedBox(width: 8),
+              Icon(LucideIcons.history, size: 20, color: _muted),
+              const SizedBox(width: 12),
               Text(
-                'Action history',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+                'Action History',
+                style: GoogleFonts.inter(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
                   color: _onSurface,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
           ...actionLogs.map((log) {
             final role = _formatWorkflowRoleLabel(log['role']?.toString());
             final actionType = _formatWorkflowActionTypeLabel(
@@ -3066,11 +3639,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: _surface,
+                color: _panel,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _border.withValues(alpha: 0.5)),
+                border: Border.all(color: _border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -3079,7 +3652,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
+                          horizontal: 10,
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
@@ -3090,30 +3663,30 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               : actionType.contains('clarification')
                               ? const Color(0xFFE0E7FF)
                               : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(999),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
                           actionType,
-                          style: TextStyle(
+                          style: GoogleFonts.inter(
                             fontSize: 11,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                             color: actionType.contains('Approved')
                                 ? const Color(0xFF166534)
                                 : actionType.contains('Rejected')
-                                ? const Color(0xFFB91C1C)
+                                ? const Color(0xFF991B1B)
                                 : actionType.contains('clarification')
-                                ? const Color(0xFF4338CA)
-                                : const Color(0xFF64748B),
+                                ? const Color(0xFF3730A3)
+                                : const Color(0xFF475569),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           role,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
                             color: _muted,
                           ),
                         ),
@@ -3121,11 +3694,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     ],
                   ),
                   if (actorName.isNotEmpty) ...[
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 10),
                     Text(
                       actorName,
-                      style: TextStyle(
-                        fontSize: 13,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: _onSurface,
                       ),
@@ -3135,23 +3708,23 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     const SizedBox(height: 6),
                     Text(
                       comment,
-                      style: TextStyle(
-                        fontSize: 13,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
                         color: _onSurface,
-                        height: 1.4,
+                        height: 1.5,
                       ),
                     ),
                   ],
                   if (createdAt != null) ...[
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 10),
                     Text(() {
                       try {
                         final dt = DateTime.parse(createdAt);
-                        return DateFormat('yyyy-MM-dd · h:mm a').format(dt);
+                        return DateFormat('MMM d, yyyy · h:mm a').format(dt);
                       } catch (_) {
                         return createdAt;
                       }
-                    }(), style: TextStyle(fontSize: 11, color: _muted)),
+                    }(), style: GoogleFonts.inter(fontSize: 12, color: _muted)),
                   ],
                 ],
               ),
@@ -3169,24 +3742,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final isExpanded = _expandedDiscussionThreads[thread.id] ?? true;
     final canReply =
         _userIsThreadParticipant(thread) && !_threadIsLocked(thread);
+    final canTakeThreadAction =
+        _canTakeActionOnThread(thread) && !_threadIsLocked(thread);
     final replyController = _replyControllerFor(thread.id);
     final replyTarget = _replyTargets[thread.id];
-    final isLocked = _threadIsLocked(thread);
     final statusColor = _threadStatusColor(thread.threadStatus);
 
     return Container(
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isLocked ? _border.withValues(alpha: 0.5) : _border,
-          width: isLocked ? 1 : 1,
-        ),
+        border: Border.all(color: _border.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: _isDark ? 0.24 : 0.03),
-            offset: const Offset(0, 2),
-            blurRadius: 4,
+            color: Colors.black.withValues(alpha: _isDark ? 0.2 : 0.04),
+            offset: const Offset(0, 4),
+            blurRadius: 16,
           ),
         ],
       ),
@@ -3198,91 +3769,85 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 _expandedDiscussionThreads[thread.id] = !isExpanded;
               });
             },
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            borderRadius: BorderRadius.circular(16),
             child: Container(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: _panel,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
-                ),
+                color: isExpanded ? _panel : Colors.transparent,
+                borderRadius: isExpanded
+                    ? const BorderRadius.vertical(top: Radius.circular(16))
+                    : BorderRadius.circular(16),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      thread.departmentLabel,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1D4ED8),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      '${thread.messages.length} message${thread.messages.length == 1 ? '' : 's'}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: _onSurface,
-                      ),
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            thread.departmentLabel,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF1D4ED8),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${thread.messages.length} message${thread.messages.length == 1 ? '' : 's'}',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: _onSurface,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  if (isLocked)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: statusColor['bg'] as Color,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        _threadStatusLabel(thread.threadStatus),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: statusColor['fg'] as Color,
+                  const SizedBox(width: 12),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor['bg'] as Color,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _threadStatusLabel(thread.threadStatus),
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: statusColor['fg'] as Color,
+                          ),
                         ),
                       ),
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
+                      const SizedBox(width: 12),
+                      Icon(
+                        isExpanded
+                            ? LucideIcons.chevronUp
+                            : LucideIcons.chevronDown,
+                        size: 20,
+                        color: _muted,
                       ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDCFCE7),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        _threadStatusLabel(thread.threadStatus),
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF16A34A),
-                        ),
-                      ),
-                    ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    isExpanded
-                        ? LucideIcons.chevronDown
-                        : LucideIcons.chevronRight,
-                    size: 18,
-                    color: _muted,
+                    ],
                   ),
                 ],
               ),
@@ -3290,7 +3855,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ),
           if (isExpanded)
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -3302,19 +3867,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           .map(
                             (participant) => Container(
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
+                                horizontal: 12,
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: _panel,
-                                borderRadius: BorderRadius.circular(999),
+                                color: _pageBg,
+                                borderRadius: BorderRadius.circular(8),
                                 border: Border.all(color: _border),
                               ),
                               child: Text(
                                 '${participant.name}${participant.role.isEmpty ? '' : ' (${participant.role})'}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
                                   color: _muted,
                                 ),
                               ),
@@ -3324,72 +3889,117 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     ),
                   if (showRequestStatus &&
                       (thread.deptRequestStatus ?? '').trim().isNotEmpty) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Text(
                       'Request status: ${thread.deptRequestStatus!.replaceAll('_', ' ')}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         color: _muted,
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   if (thread.messages.isEmpty)
                     Text(
                       'No messages yet.',
-                      style: TextStyle(fontSize: 13, color: _muted),
+                      style: GoogleFonts.inter(fontSize: 14, color: _muted),
                     )
                   else
                     ...thread.messages.map(
                       (message) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.only(bottom: 12),
                         child: _buildThreadMessage(thread, message),
                       ),
                     ),
-                  const SizedBox(height: 6),
-                  TextButton.icon(
-                    onPressed: () => context.push('/chat/${thread.id}'),
-                    icon: const Icon(LucideIcons.externalLink, size: 14),
-                    label: const Text('Open in chat'),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => context.push('/chat/${thread.id}'),
+                        icon: const Icon(LucideIcons.externalLink, size: 14),
+                        label: const Text('Open in Full Chat'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF2563EB),
+                          textStyle: GoogleFonts.inter(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   if (_threadIsLocked(thread))
                     Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        thread.closedAt != null
-                            ? 'This discussion is ${_threadStatusLabel(thread.threadStatus).toLowerCase()} since ${DateFormat('yyyy-MM-dd · h:mm a').format(thread.closedAt!)}.'
-                            : 'This discussion is ${_threadStatusLabel(thread.threadStatus).toLowerCase()}.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _muted,
-                          fontWeight: FontWeight.w600,
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _panel,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          thread.closedAt != null
+                              ? 'This discussion has been ${_threadStatusLabel(thread.threadStatus).toLowerCase()} since ${DateFormat('MMM d, yyyy').format(thread.closedAt!)}.'
+                              : 'This discussion is ${_threadStatusLabel(thread.threadStatus).toLowerCase()}.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: _muted,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ),
                   if (canReply) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Divider(),
+                    ),
                     if (replyTarget != null) ...[
-                      const SizedBox(height: 8),
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: _panel,
+                          color: _pageBg,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _border),
+                          border: Border.all(
+                            color: _border.withValues(alpha: 0.5),
+                          ),
                         ),
                         child: Row(
                           children: [
+                            Container(
+                              width: 3,
+                              height: 30,
+                              color: const Color(0xFF2563EB),
+                              margin: const EdgeInsets.only(right: 12),
+                            ),
                             Expanded(
-                              child: Text(
-                                'Replying to ${replyTarget.senderName}: ${replyTarget.content}',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: _muted,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Replying to ${replyTarget.senderName}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF2563EB),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    replyTarget.content.isEmpty
+                                        ? 'Message'
+                                        : replyTarget.content,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: _muted,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             IconButton(
@@ -3398,35 +4008,228 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                   _replyTargets.remove(thread.id);
                                 });
                               },
-                              icon: const Icon(Icons.close, size: 16),
-                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(LucideIcons.x, size: 16),
+                              style: IconButton.styleFrom(
+                                backgroundColor: _surface,
+                              ),
                             ),
                           ],
                         ),
                       ),
+                      const SizedBox(height: 12),
                     ],
-                    const SizedBox(height: 10),
                     TextField(
                       controller: replyController,
                       minLines: 2,
                       maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: 'Reply to this discussion',
-                        border: OutlineInputBorder(),
+                      style: GoogleFonts.inter(),
+                      decoration: InputDecoration(
+                        hintText: 'Type your reply...',
+                        hintStyle: GoogleFonts.inter(color: _muted),
+                        filled: true,
+                        fillColor: _pageBg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2563EB),
+                            width: 1.5,
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        ElevatedButton(
-                          onPressed: _submittingReplyThreads.contains(thread.id)
-                              ? null
-                              : () => _submitThreadReply(thread),
-                          child: Text(
-                            _submittingReplyThreads.contains(thread.id)
-                                ? 'Posting...'
-                                : 'Post reply',
+                        Flexible(
+                          child: Wrap(
+                            alignment: WrapAlignment.end,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              if (canTakeThreadAction) ...[
+                                OutlinedButton(
+                                  onPressed: () => _openTakeActionFromThread(
+                                    thread,
+                                    initialDecision: 'approved',
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF16A34A),
+                                    side: const BorderSide(
+                                      color: Color(0xFF16A34A),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    textStyle: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  child: const Text('Approve'),
+                                ),
+                                OutlinedButton(
+                                  onPressed: () => _openTakeActionFromThread(
+                                    thread,
+                                    initialDecision: 'rejected',
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFFDC2626),
+                                    side: const BorderSide(
+                                      color: Color(0xFFDC2626),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    textStyle: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  child: const Text('Reject'),
+                                ),
+                                OutlinedButton(
+                                  onPressed: () => _openTakeActionFromThread(
+                                    thread,
+                                    initialDecision: 'clarification_requested',
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFFD97706),
+                                    side: const BorderSide(
+                                      color: Color(0xFFD97706),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    textStyle: GoogleFonts.inter(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  child: const Text('Clarification'),
+                                ),
+                              ],
+                              FilledButton.icon(
+                                onPressed:
+                                    _submittingReplyThreads.contains(thread.id)
+                                    ? null
+                                    : () => _submitThreadReply(thread),
+                                icon: const Icon(LucideIcons.send, size: 14),
+                                label: Text(
+                                  _submittingReplyThreads.contains(thread.id)
+                                      ? 'Posting...'
+                                      : 'Post Reply',
+                                ),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2563EB),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
+                                  textStyle: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (!canReply && canTakeThreadAction) ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton(
+                          onPressed: () => _openTakeActionFromThread(
+                            thread,
+                            initialDecision: 'approved',
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF16A34A),
+                            side: const BorderSide(color: Color(0xFF16A34A)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            textStyle: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          child: const Text('Approve'),
+                        ),
+                        OutlinedButton(
+                          onPressed: () => _openTakeActionFromThread(
+                            thread,
+                            initialDecision: 'rejected',
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFDC2626),
+                            side: const BorderSide(color: Color(0xFFDC2626)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            textStyle: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          child: const Text('Reject'),
+                        ),
+                        OutlinedButton(
+                          onPressed: () => _openTakeActionFromThread(
+                            thread,
+                            initialDecision: 'clarification_requested',
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFD97706),
+                            side: const BorderSide(color: Color(0xFFD97706)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            textStyle: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          child: const Text('Clarification'),
                         ),
                       ],
                     ),
@@ -3447,99 +4250,150 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
     return Align(
       alignment: isOwn ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.72,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isOwn ? const Color(0xFFDBEAFE) : _panel,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _border),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (!isOwn)
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isOwn ? const Color(0xFFEFF6FF) : _pageBg,
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
+              bottomLeft: isOwn
+                  ? const Radius.circular(16)
+                  : const Radius.circular(4),
+              bottomRight: isOwn
+                  ? const Radius.circular(4)
+                  : const Radius.circular(16),
+            ),
+            border: Border.all(
+              color: isOwn ? const Color(0xFFBFDBFE) : _border,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!isOwn)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    message.senderName,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF1E293B),
+                    ),
+                  ),
+                ),
+              if (message.replyToSnapshot != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: _isDark ? 0.05 : 0.6),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isOwn ? const Color(0xFF93C5FD) : _border,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 3,
+                        height: 30,
+                        color: isOwn ? const Color(0xFF3B82F6) : _muted,
+                        margin: const EdgeInsets.only(right: 10),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              message.replyToSnapshot!.senderName,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isOwn ? const Color(0xFF1D4ED8) : _muted,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              message.replyToSnapshot!.contentPreview.isEmpty
+                                  ? 'Message'
+                                  : message.replyToSnapshot!.contentPreview,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: _muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               Text(
-                message.senderName,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                message.content.isEmpty ? '—' : message.content,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  height: 1.5,
                   color: _onSurface,
                 ),
               ),
-            if (message.replyToSnapshot != null) ...[
-              if (!isOwn) const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: _isDark ? 0.05 : 0.7),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      message.replyToSnapshot!.senderName,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: _muted,
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    DateFormat(
+                      'MMM d, yyyy · h:mm a',
+                    ).format(message.createdAt),
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: _muted,
+                    ),
+                  ),
+                  if (_userIsThreadParticipant(thread) &&
+                      !_threadIsLocked(thread))
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _replyTargets[thread.id] = message;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 2,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.reply, size: 12, color: _muted),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Reply',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: _muted,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      message.replyToSnapshot!.contentPreview.isEmpty
-                          ? 'Message'
-                          : message.replyToSnapshot!.contentPreview,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: _muted),
-                    ),
-                  ],
-                ),
+                ],
               ),
-              const SizedBox(height: 8),
-            ] else if (!isOwn)
-              const SizedBox(height: 8),
-            Text(
-              message.content.isEmpty ? '—' : message.content,
-              style: TextStyle(fontSize: 13, height: 1.45, color: _onSurface),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  DateFormat('yyyy-MM-dd · h:mm a').format(message.createdAt),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: _muted,
-                  ),
-                ),
-                if (_userIsThreadParticipant(thread) &&
-                    !_threadIsLocked(thread))
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _replyTargets[thread.id] = message;
-                      });
-                    },
-                    style: TextButton.styleFrom(
-                      minimumSize: Size.zero,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 0,
-                      ),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text('Reply'),
-                  ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -3665,7 +4519,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
     final highlightDept = _viewerDepartmentKey;
     if (highlightDept != null) {
-      final selectedIndex = items.indexWhere((item) => item.key == highlightDept);
+      final selectedIndex = items.indexWhere(
+        (item) => item.key == highlightDept,
+      );
       if (selectedIndex > 0) {
         final selected = items.removeAt(selectedIndex);
         items.insert(0, selected);
@@ -3677,31 +4533,43 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       children: [
         Row(
           children: [
-            Icon(LucideIcons.layers, color: const Color(0xFF2563EB), size: 22),
-            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                LucideIcons.layers,
+                color: Color(0xFF2563EB),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Requirements by department',
+                    'Requirements',
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: _onSurface,
+                      letterSpacing: -0.3,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
-                    'Expand each card for phased requirements. Your department is listed first when applicable.',
-                    style: TextStyle(fontSize: 13, color: _muted, height: 1.4),
+                    'Expand to view department-specific tasks.',
+                    style: GoogleFonts.inter(fontSize: 13, color: _muted),
                   ),
                 ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         ...items.map((item) {
           final isOpen = _expandedDepartments.contains(item.key);
           final source = item.key == 'facility'
@@ -3713,29 +4581,30 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               : item.key == 'transport'
               ? transport
               : const <Map<String, dynamic>>[];
+          final fallbackLines = item.key == 'iqac'
+              ? const <String>[]
+              : _fallbackRequirementLinesForDepartment(item.key);
           final deptIcon = _getDepartmentIcon(item.key);
           final isYourDept = _isYourDepartment(item.key);
           final statusColor = _getRequirementStatusColor(item.status);
 
           return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(bottom: 16),
             child: Container(
               decoration: BoxDecoration(
                 color: _surface,
                 border: Border.all(
                   color: isYourDept
-                      ? const Color(0xFF3B82F6).withValues(alpha: 0.45)
-                      : _border,
+                      ? const Color(0xFF3B82F6)
+                      : _border.withValues(alpha: 0.6),
                   width: isYourDept ? 1.5 : 1,
                 ),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(
-                      alpha: _isDark ? 0.24 : 0.03,
-                    ),
-                    offset: const Offset(0, 2),
-                    blurRadius: 4,
+                    color: Colors.black.withValues(alpha: _isDark ? 0.2 : 0.04),
+                    offset: const Offset(0, 4),
+                    blurRadius: 16,
                   ),
                 ],
               ),
@@ -3752,95 +4621,115 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         }
                       });
                     },
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16),
+                    borderRadius: BorderRadius.vertical(
+                      top: const Radius.circular(16),
+                      bottom: isOpen ? Radius.zero : const Radius.circular(16),
                     ),
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: _panel,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(16),
+                        color: isOpen ? _panel : Colors.transparent,
+                        borderRadius: BorderRadius.vertical(
+                          top: const Radius.circular(16),
+                          bottom: isOpen
+                              ? Radius.zero
+                              : const Radius.circular(16),
                         ),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEFF6FF),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(
-                              deptIcon,
-                              size: 18,
-                              color: const Color(0xFF2563EB),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              item.title,
-                              style: GoogleFonts.poppins(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: _onSurface,
-                              ),
-                            ),
-                          ),
-                          if (isYourDept)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFF3B82F6,
-                                ).withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(999),
-                                border: Border.all(
-                                  color: const Color(
-                                    0xFF3B82F6,
-                                  ).withValues(alpha: 0.3),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEFF6FF),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                              ),
-                              child: Text(
-                                'YOUR RESPONSIBILITY',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
+                                child: Icon(
+                                  deptIcon,
+                                  size: 16,
                                   color: const Color(0xFF2563EB),
-                                  letterSpacing: 0.5,
                                 ),
                               ),
-                            ),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: statusColor['bg'] as Color,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              (item.status.replaceAll('_', ' ')).toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: statusColor['fg'] as Color,
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Text(
+                                  item.title,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: _onSurface,
+                                  ),
+                                ),
                               ),
-                            ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            isOpen
-                                ? LucideIcons.chevronDown
-                                : LucideIcons.chevronRight,
-                            size: 18,
-                            color: _muted,
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    if (isYourDept)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFDBEAFE),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'YOUR DEPT',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w700,
+                                            color: const Color(0xFF1D4ED8),
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: statusColor['bg'] as Color,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        (item.status.replaceAll(
+                                          '_',
+                                          ' ',
+                                        )).toUpperCase(),
+                                        style: GoogleFonts.inter(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: statusColor['fg'] as Color,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Icon(
+                                isOpen
+                                    ? LucideIcons.chevronUp
+                                    : LucideIcons.chevronDown,
+                                size: 20,
+                                color: _muted,
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -3848,9 +4737,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   ),
                   if (isOpen)
                     Container(
-                      padding: const EdgeInsets.all(18),
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         color: _surface,
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(16),
+                        ),
                         border: Border(
                           top: BorderSide(color: _border, width: 1),
                         ),
@@ -3858,90 +4750,39 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (item.count == 0)
+                          if (source.isEmpty)
                             Container(
-                              padding: const EdgeInsets.all(14),
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 color: _panel,
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(color: _border),
                               ),
                               child: item.key == 'iqac'
-                                  ? Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Icon(
-                                              LucideIcons.info,
-                                              size: 16,
-                                              color: _muted,
-                                            ),
-                                            const SizedBox(width: 10),
-                                            Expanded(
-                                              child: Text(
-                                                _s(
-                                                      _event['report_web_view_link'],
-                                                      fallback: '',
-                                                    )
-                                                    .isNotEmpty
-                                                    ? 'Event report submitted.'
-                                                    : 'Report expected after the event is finalized.',
-                                                style: TextStyle(
-                                                  fontSize: 13,
-                                                  color: _muted,
-                                                  height: 1.4,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        if (_s(
-                                              _event['report_web_view_link'],
-                                              fallback: '',
-                                            )
-                                            .isNotEmpty) ...[
-                                          const SizedBox(height: 10),
-                                          InkWell(
-                                            onTap: () => _openExternalLink(
-                                              _s(
-                                                _event['report_web_view_link'],
-                                                fallback: '',
-                                              ),
-                                            ),
-                                            child: Text(
-                                              _s(
-                                                _event['report_file_name'],
-                                                fallback: 'View event report',
-                                              ),
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w700,
-                                                color: Color(0xFF2563EB),
-                                                decoration:
-                                                    TextDecoration.underline,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ],
+                                  ? _buildRequirementPhases(
+                                      item.key,
+                                      const <String, dynamic>{},
+                                    )
+                                  : fallbackLines.isNotEmpty
+                                  ? _buildRequirementPhaseSection(
+                                      'General tasks',
+                                      fallbackLines,
                                     )
                                   : Row(
                                       children: [
                                         Icon(
                                           LucideIcons.info,
-                                          size: 16,
+                                          size: 18,
                                           color: _muted,
                                         ),
-                                        const SizedBox(width: 10),
+                                        const SizedBox(width: 12),
                                         Expanded(
                                           child: Text(
                                             'No requests created yet.',
-                                            style: TextStyle(
-                                              fontSize: 13,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 14,
                                               color: _muted,
-                                              height: 1.4,
+                                              fontWeight: FontWeight.w500,
                                             ),
                                           ),
                                         ),
@@ -3949,15 +4790,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                     ),
                             )
                           else ...[
-                            Text(
-                              '${item.count} request${item.count == 1 ? '' : 's'} linked to this event.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: _muted,
-                              ),
-                            ),
-                            const SizedBox(height: 14),
                             ...source.asMap().entries.map((entry) {
                               final req = entry.value;
                               final index = entry.key;
@@ -3977,9 +4809,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               final decidedAt = rawDecidedAt.isEmpty
                                   ? '—'
                                   : (DateTime.tryParse(rawDecidedAt) != null
-                                        ? DateFormat(
-                                            'yyyy-MM-dd · h:mm a',
-                                          ).format(
+                                        ? DateFormat('MMM d, yyyy').format(
                                             DateTime.parse(
                                               rawDecidedAt,
                                             ).toLocal(),
@@ -4003,10 +4833,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               final uploadFlags = item.key == 'marketing'
                                   ? _marketingDeliverableUploadFlagsFromMap(req)
                                   : const <String, bool>{};
-                              final relevantMarketingOptions = item.key == 'marketing'
+                              final relevantMarketingOptions =
+                                  item.key == 'marketing'
                                   ? _marketingDeliverableOptions
                                         .where(
-                                          (opt) => uploadFlags[opt['key']] == true,
+                                          (opt) =>
+                                              uploadFlags[opt['key']] == true,
                                         )
                                         .toList()
                                   : const <Map<String, String>>[];
@@ -4022,7 +4854,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               final uploadEnabled =
                                   canUploadMarketing &&
                                   unlockedMarketingOptions.isNotEmpty;
-                              final uploadHint = canUploadMarketing &&
+                              final uploadHint =
+                                  canUploadMarketing &&
                                       relevantMarketingOptions.isNotEmpty &&
                                       !uploadEnabled
                                   ? _marketingDeliverableRowLock(
@@ -4030,16 +4863,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                       req,
                                     ).hint
                                   : '';
-                              final deliverables = (req['deliverables'] as List? ?? [])
-                                  .whereType<Map<String, dynamic>>()
-                                  .toList();
+                              final deliverables =
+                                  (req['deliverables'] as List? ?? [])
+                                      .whereType<Map<String, dynamic>>()
+                                      .toList();
                               final requesterAttachments =
                                   (req['requester_attachments'] as List? ?? [])
                                       .whereType<Map<String, dynamic>>()
                                       .toList();
-                              final thread = _threadForRequestId(reqId);
                               final reportLink = item.key == 'iqac'
-                                  ? _s(_event['report_web_view_link'], fallback: '')
+                                  ? _s(
+                                      _event['report_web_view_link'],
+                                      fallback: '',
+                                    )
                                   : '';
                               final reportName = item.key == 'iqac'
                                   ? _s(_event['report_file_name'], fallback: '')
@@ -4047,9 +4883,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
                               return Container(
                                 margin: EdgeInsets.only(
-                                  top: index > 0 ? 14 : 0,
+                                  top: index > 0 ? 20 : 0,
                                 ),
-                                padding: const EdgeInsets.all(14),
+                                padding: const EdgeInsets.all(16),
                                 decoration: BoxDecoration(
                                   color: _panel,
                                   borderRadius: BorderRadius.circular(12),
@@ -4058,265 +4894,187 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
+                                    Wrap(
+                                      spacing: 12,
+                                      runSpacing: 12,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
                                       children: [
                                         Container(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 10,
-                                            vertical: 5,
+                                            vertical: 4,
                                           ),
                                           decoration: BoxDecoration(
                                             color:
                                                 reqStatusColor['bg'] as Color,
                                             borderRadius: BorderRadius.circular(
-                                              999,
+                                              8,
                                             ),
                                           ),
                                           child: Text(
-                                            (reqStatus.replaceAll(
-                                              '_',
-                                              ' ',
-                                            )).toUpperCase(),
-                                            style: TextStyle(
+                                            _formatRequirementStatusText(
+                                              reqStatus,
+                                            ),
+                                            style: GoogleFonts.inter(
                                               fontSize: 11,
-                                              fontWeight: FontWeight.w800,
+                                              fontWeight: FontWeight.w700,
                                               color:
                                                   reqStatusColor['fg'] as Color,
                                             ),
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 10),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: _buildReqPersonInfo(
-                                            'Assigned',
+                                        if (requestedTo != 'Unassigned')
+                                          _buildRequirementMetaChip(
+                                            'ASSIGNED TO',
                                             requestedTo,
                                           ),
-                                        ),
-                                        if (decidedBy != '—') ...[
-                                          const SizedBox(width: 16),
-                                          Expanded(
-                                            child: _buildReqPersonInfo(
-                                              'By',
-                                              decidedBy,
-                                            ),
-                                          ),
-                                        ],
                                       ],
                                     ),
-                                    if (decidedAt != '—') ...[
-                                      const SizedBox(height: 8),
+                                    const SizedBox(height: 12),
+                                    if (decidedBy != '—' || decidedAt != '—')
                                       Text(
-                                        'Updated: $decidedAt',
-                                        style: TextStyle(
+                                        [
+                                          if (decidedBy != '—')
+                                            'Decided by $decidedBy',
+                                          if (decidedAt != '—') decidedAt,
+                                        ].join(' • '),
+                                        style: GoogleFonts.inter(
                                           fontSize: 12,
-                                          fontWeight: FontWeight.w600,
+                                          fontWeight: FontWeight.w500,
                                           color: _muted,
                                         ),
                                       ),
-                                    ],
-                                    if (thread != null) ...[
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'Discussion status: ${_threadStatusLabel(thread.threadStatus)}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: _muted,
-                                        ),
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 12,
                                       ),
-                                    ],
-                                    if (item.key == 'marketing' &&
-                                        requesterAttachments.isNotEmpty) ...[
-                                      const SizedBox(height: 14),
-                                      Text(
-                                        'Requester reference documents',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w800,
-                                          color: _onSurface,
+                                      child: Divider(),
+                                    ),
+                                    _buildRequirementPhases(
+                                      item.key,
+                                      req,
+                                      requesterAttachments:
+                                          requesterAttachments,
+                                      deliverables: deliverables,
+                                      reportLink: reportLink,
+                                      reportName: reportName,
+                                    ),
+                                    if (reqStatus.toLowerCase() ==
+                                            'clarification' ||
+                                        reqStatus.toLowerCase() ==
+                                            'clarification_requested') ...[
+                                      const SizedBox(height: 16),
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFFFBEB),
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                          border: Border.all(
+                                            color: const Color(0xFFFDE68A),
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      ...requesterAttachments.map((attachment) {
-                                        final name = _s(
-                                          attachment['file_name'],
-                                          fallback: 'Document',
-                                        );
-                                        final link = _s(
-                                          attachment['web_view_link'],
-                                          fallback: '',
-                                        );
-                                        return Padding(
-                                          padding: const EdgeInsets.only(bottom: 6),
-                                          child: InkWell(
-                                            onTap: link.isEmpty
-                                                ? null
-                                                : () => _openExternalLink(link),
-                                            child: Text(
-                                              name,
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: link.isEmpty
-                                                    ? _muted
-                                                    : const Color(0xFF2563EB),
-                                                decoration: link.isEmpty
-                                                    ? TextDecoration.none
-                                                    : TextDecoration.underline,
+                                        child: Row(
+                                          children: [
+                                            const Icon(
+                                              LucideIcons.alertTriangle,
+                                              size: 16,
+                                              color: Color(0xFFD97706),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                'Clarification requested. See the Discussion section above to respond.',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: const Color(
+                                                    0xFFB45309,
+                                                  ),
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                        );
-                                      }),
-                                    ],
-                                    if (item.key == 'marketing') ...[
-                                      const SizedBox(height: 14),
-                                      Text(
-                                        'Uploaded deliverables',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w800,
-                                          color: _onSurface,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      if (deliverables.isEmpty)
-                                        Text(
-                                          'No files uploaded yet.',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: _muted,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        )
-                                      else
-                                        ...deliverables.map((deliverable) {
-                                          final type = _s(
-                                            deliverable['deliverable_type'] ??
-                                                deliverable['type'],
-                                            fallback: 'File',
-                                          );
-                                          final name = _s(
-                                            deliverable['file_name'],
-                                            fallback: type,
-                                          );
-                                          final link = _s(
-                                            deliverable['web_view_link'] ??
-                                                deliverable['link'],
-                                            fallback: '',
-                                          );
-                                          final isNa =
-                                              deliverable['is_na'] == true;
-                                          return Padding(
-                                            padding: const EdgeInsets.only(bottom: 6),
-                                            child: isNa
-                                                ? Text(
-                                                    '$type: N/A',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: _muted,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
-                                                  )
-                                                : InkWell(
-                                                    onTap: link.isEmpty
-                                                        ? null
-                                                        : () => _openExternalLink(link),
-                                                    child: Text(
-                                                      name,
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w600,
-                                                        color: link.isEmpty
-                                                            ? _muted
-                                                            : const Color(0xFF2563EB),
-                                                        decoration: link.isEmpty
-                                                            ? TextDecoration.none
-                                                            : TextDecoration.underline,
-                                                      ),
-                                                    ),
-                                                  ),
-                                          );
-                                        }),
-                                    ],
-                                    if (item.key == 'iqac' && reportLink.isNotEmpty) ...[
-                                      const SizedBox(height: 14),
-                                      InkWell(
-                                        onTap: () => _openExternalLink(reportLink),
-                                        child: Text(
-                                          reportName.isEmpty
-                                              ? 'View event report'
-                                              : reportName,
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700,
-                                            color: Color(0xFF2563EB),
-                                            decoration: TextDecoration.underline,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                    if (reqStatus.toLowerCase() ==
-                                        'clarification_requested') ...[
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        'Clarification requested. See the Discussion section above to respond.',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: const Color(0xFFD97706),
+                                          ],
                                         ),
                                       ),
                                     ],
                                     if ((canTakeAction || canUploadMarketing) &&
                                         reqId.isNotEmpty) ...[
-                                      const SizedBox(height: 14),
+                                      const SizedBox(height: 16),
                                       Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
+                                        spacing: 10,
+                                        runSpacing: 10,
                                         children: [
                                           if (canTakeAction)
-                                            ElevatedButton(
+                                            FilledButton.icon(
                                               onPressed: () =>
                                                   _openDepartmentDecisionDialog(
                                                     item.key,
                                                     req,
                                                   ),
-                                              child: const Text('Take action'),
+                                              icon: const Icon(
+                                                LucideIcons.checkSquare,
+                                                size: 16,
+                                              ),
+                                              label: const Text('Take Action'),
+                                              style: FilledButton.styleFrom(
+                                                backgroundColor: const Color(
+                                                  0xFF2563EB,
+                                                ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                textStyle: GoogleFonts.inter(
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
                                             ),
                                           if (canUploadMarketing)
-                                            OutlinedButton(
+                                            OutlinedButton.icon(
                                               onPressed: uploadEnabled
-                                                  ? () => _openMarketingUploadDialog(
-                                                        req,
-                                                      )
+                                                  ? () =>
+                                                        _openMarketingUploadDialog(
+                                                          req,
+                                                        )
                                                   : null,
-                                              child: const Text('Upload'),
+                                              icon: const Icon(
+                                                LucideIcons.uploadCloud,
+                                                size: 16,
+                                              ),
+                                              label: const Text(
+                                                'Upload Assets',
+                                              ),
+                                              style: OutlinedButton.styleFrom(
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                textStyle: GoogleFonts.inter(
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                foregroundColor: const Color(
+                                                  0xFF2563EB,
+                                                ),
+                                                side: const BorderSide(
+                                                  color: Color(0xFF2563EB),
+                                                ),
+                                              ),
                                             ),
-                                          OutlinedButton(
-                                            onPressed: thread == null
-                                                ? null
-                                                : () => context.push(
-                                                      '/chat/${thread.id}',
-                                                    ),
-                                            child: const Text('Open discussion'),
-                                          ),
                                         ],
                                       ),
                                       if (canUploadMarketing &&
                                           !uploadEnabled &&
                                           uploadHint.isNotEmpty) ...[
-                                        const SizedBox(height: 8),
+                                        const SizedBox(height: 10),
                                         Text(
                                           uploadHint,
-                                          style: TextStyle(
-                                            fontSize: 12,
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
                                             color: _muted,
-                                            fontWeight: FontWeight.w600,
+                                            fontWeight: FontWeight.w500,
                                           ),
                                         ),
                                       ],
@@ -4364,41 +5122,417 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     switch (normalized) {
       case 'approved':
       case 'accepted':
-        return {'bg': const Color(0xFFDCFCE7), 'fg': const Color(0xFF16A34A)};
+        return {'bg': const Color(0xFFDCFCE7), 'fg': const Color(0xFF166534)};
       case 'rejected':
       case 'declined':
-        return {'bg': const Color(0xFFFEE2E2), 'fg': const Color(0xFFDC2626)};
+        return {'bg': const Color(0xFFFEE2E2), 'fg': const Color(0xFF991B1B)};
       case 'clarification':
+      case 'clarification_requested':
       case 'clarification_needed':
-        return {'bg': const Color(0xFFFEF3C7), 'fg': const Color(0xFFD97706)};
+        return {'bg': const Color(0xFFFEF3C7), 'fg': const Color(0xFFB45309)};
       case 'pending':
       default:
-        return {'bg': const Color(0xFFF1F5F9), 'fg': const Color(0xFF64748B)};
+        return {'bg': const Color(0xFFF1F5F9), 'fg': const Color(0xFF475569)};
     }
   }
 
-  Widget _buildReqPersonInfo(String label, String value) {
+  String _formatRequirementStatusText(String status) {
+    final value = status.trim();
+    if (value.isEmpty) return 'Pending';
+    final normalized = value.toLowerCase();
+    if (normalized == 'clarification' ||
+        normalized == 'clarification_requested' ||
+        normalized == 'clarification_needed') {
+      return 'Clarification';
+    }
+    return value
+        .split('_')
+        .map(
+          (part) => part.isEmpty
+              ? part
+              : '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+        )
+        .join(' ');
+  }
+
+  String _displayStatusLabel(String status) {
+    final normalized = status.trim().toLowerCase();
+    if (normalized.isEmpty) return 'Pending';
+    if (normalized == 'clarification' ||
+        normalized == 'clarification_requested' ||
+        normalized == 'clarification_needed') {
+      return 'Clarification';
+    }
+    return status.replaceAll('_', ' ');
+  }
+
+  Widget _buildRequirementMetaChip(String label, String value) {
+    return RichText(
+      text: TextSpan(
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          color: _muted,
+          fontWeight: FontWeight.w600,
+        ),
+        children: [
+          TextSpan(text: '$label  '),
+          TextSpan(
+            text: value,
+            style: const TextStyle(
+              color: Color(0xFF2563EB),
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRequirementPhases(
+    String departmentKey,
+    Map<String, dynamic> request, {
+    List<Map<String, dynamic>> requesterAttachments = const [],
+    List<Map<String, dynamic>> deliverables = const [],
+    String reportLink = '',
+    String reportName = '',
+  }) {
+    final preEvent = _buildRequirementPhaseItems(departmentKey, request, 'pre');
+    final duringEvent = _buildRequirementPhaseItems(
+      departmentKey,
+      request,
+      'during',
+    );
+    final postEvent = _buildRequirementPhaseItems(
+      departmentKey,
+      request,
+      'post',
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (preEvent.isNotEmpty)
+          _buildRequirementPhaseSection('Pre-event tasks', preEvent),
+        if (duringEvent.isNotEmpty) ...[
+          if (preEvent.isNotEmpty) const SizedBox(height: 20),
+          _buildRequirementPhaseSection('During-event tasks', duringEvent),
+        ],
+        if (postEvent.isNotEmpty) ...[
+          if (preEvent.isNotEmpty || duringEvent.isNotEmpty)
+            const SizedBox(height: 20),
+          _buildRequirementPhaseSection('Post-event tasks', postEvent),
+        ],
+        if (departmentKey == 'marketing') ...[
+          if (preEvent.isNotEmpty ||
+              duringEvent.isNotEmpty ||
+              postEvent.isNotEmpty)
+            const SizedBox(height: 24),
+          if (requesterAttachments.isNotEmpty)
+            _buildRequirementLinkSection(
+              'Requester Reference Documents',
+              requesterAttachments.map((attachment) {
+                return (
+                  label: _s(attachment['file_name'], fallback: 'Document'),
+                  link: _s(attachment['web_view_link'], fallback: ''),
+                );
+              }).toList(),
+            ),
+          if (requesterAttachments.isNotEmpty) const SizedBox(height: 20),
+          _buildMarketingDeliverablesSection(deliverables),
+        ],
+        if (departmentKey == 'iqac') ...[
+          if (reportLink.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildRequirementLinkSection('Uploaded Deliverables', [
+              (
+                label: reportName.isEmpty ? 'View Event Report' : reportName,
+                link: reportLink,
+              ),
+            ]),
+          ],
+        ],
+      ],
+    );
+  }
+
+  List<String> _buildRequirementPhaseItems(
+    String departmentKey,
+    Map<String, dynamic> request,
+    String phase,
+  ) {
+    switch (departmentKey) {
+      case 'facility':
+        if (phase != 'pre') return const [];
+        final items = <String>[];
+        if (request['venue_required'] == true) {
+          items.add('Hall / venue booking');
+        }
+        if (request['refreshments'] == true) {
+          items.add('Refreshments');
+        }
+        final notes = _s(request['other_notes'], fallback: '');
+        if (notes.isNotEmpty) items.add(notes);
+        if (items.isEmpty) items.add('General facility coordination');
+        return items;
+      case 'it':
+        if (phase != 'pre') return const [];
+        final items = <String>[];
+        final mode = _s(request['event_mode'], fallback: '');
+        if (mode.isNotEmpty) items.add('Event mode: $mode');
+        if (request['pa_system'] == true) items.add('PA system');
+        if (request['projection'] == true) items.add('Projection');
+        final notes = _s(request['other_notes'], fallback: '');
+        if (notes.isNotEmpty) items.add(notes);
+        if (items.isEmpty) items.add('General IT support');
+        return items;
+      case 'marketing':
+        final normalized = _normalizeMarketingRequirementsFromMap(request);
+        final pre = normalized['pre_event'] as Map<String, dynamic>;
+        final during = normalized['during_event'] as Map<String, dynamic>;
+        final post = normalized['post_event'] as Map<String, dynamic>;
+        if (phase == 'pre') {
+          final items = <String>[];
+          if (pre['poster'] == true) items.add('Poster');
+          if (pre['social_media'] == true) items.add('Social media');
+          final notes = _s(request['other_notes'], fallback: '');
+          if (notes.isNotEmpty) items.add(notes);
+          return items;
+        }
+        if (phase == 'during') {
+          final items = <String>[];
+          if (during['photo'] == true) items.add('Photography');
+          if (during['video'] == true) items.add('Video coverage');
+          return items;
+        }
+        if (phase == 'post') {
+          final items = <String>[];
+          if (post['social_media'] == true) items.add('Social media post');
+          if (post['photo_upload'] == true) items.add('Photo upload');
+          if (post['video'] == true) items.add('Video upload');
+          return items;
+        }
+        return const [];
+      case 'transport':
+        if (phase != 'pre') return const [];
+        final items = <String>[];
+        final transportType = _s(
+          request['transport_type'],
+          fallback: '',
+        ).toLowerCase();
+        final hasGuestTransport =
+            transportType == 'guest_cab' ||
+            transportType == 'both' ||
+            _s(request['guest_pickup_location'], fallback: '').isNotEmpty ||
+            _s(request['guest_dropoff_location'], fallback: '').isNotEmpty;
+        final hasStudentTransport =
+            transportType == 'students_off_campus' ||
+            transportType == 'both' ||
+            _s(request['student_count'], fallback: '').isNotEmpty ||
+            _s(request['student_transport_kind'], fallback: '').isNotEmpty;
+
+        final typeLabel = _transportTypeLabel(transportType);
+        if (typeLabel.isNotEmpty) {
+          items.add(typeLabel);
+        }
+        if (hasGuestTransport) {
+          items.add('Guest cab');
+          final pickup = [
+            _s(request['guest_pickup_location'], fallback: ''),
+            _s(request['guest_pickup_date'], fallback: ''),
+            _s(request['guest_pickup_time'], fallback: ''),
+          ].where((part) => part.isNotEmpty).join(' · ');
+          if (pickup.isNotEmpty) {
+            items.add('Guest pickup: $pickup');
+          }
+          final dropoff = [
+            _s(request['guest_dropoff_location'], fallback: ''),
+            _s(request['guest_dropoff_date'], fallback: ''),
+            _s(request['guest_dropoff_time'], fallback: ''),
+          ].where((part) => part.isNotEmpty).join(' · ');
+          if (dropoff.isNotEmpty) {
+            items.add('Guest drop-off: $dropoff');
+          }
+        }
+        if (hasStudentTransport) {
+          final count = _s(request['student_count'], fallback: '');
+          final kind = _s(request['student_transport_kind'], fallback: '');
+          final summary = [
+            'Student transport',
+            if (count.isNotEmpty) '$count passengers',
+            if (kind.isNotEmpty) kind,
+          ].join(' · ');
+          items.add(summary);
+          final studentPickup = [
+            _s(request['student_pickup_point'], fallback: ''),
+            _s(request['student_date'], fallback: ''),
+            _s(request['student_time'], fallback: ''),
+          ].where((part) => part.isNotEmpty).join(' · ');
+          if (studentPickup.isNotEmpty) {
+            items.add('Student pickup: $studentPickup');
+          }
+        }
+        final notes = _s(request['other_notes'], fallback: '');
+        if (notes.isNotEmpty) items.add(notes);
+        if (items.isEmpty) items.add('Transport coordination');
+        return items;
+      case 'iqac':
+        if (phase != 'post') return const [];
+        return [
+          _s(_event['report_web_view_link'], fallback: '').isNotEmpty
+              ? 'Event report uploaded'
+              : 'Event report not uploaded yet',
+        ];
+      default:
+        return const [];
+    }
+  }
+
+  Widget _buildRequirementPhaseSection(String title, List<String> items) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w900,
+          title.toUpperCase(),
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
             color: _muted,
-            letterSpacing: 0.5,
+            letterSpacing: 0.8,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 10),
+        ...items.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Icon(Icons.circle, size: 6, color: _muted),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    item,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: _onSurface,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMarketingDeliverablesSection(
+    List<Map<String, dynamic>> deliverables,
+  ) {
+    final links = deliverables.map((deliverable) {
+      final type = _s(
+        deliverable['deliverable_type'] ?? deliverable['type'],
+        fallback: 'File',
+      );
+      final name = _s(deliverable['file_name'], fallback: type);
+      final link = _s(
+        deliverable['web_view_link'] ?? deliverable['link'],
+        fallback: '',
+      );
+      final isNa = deliverable['is_na'] == true;
+      return (label: isNa ? '$type: N/A' : name, link: isNa ? '' : link);
+    }).toList();
+
+    return _buildRequirementLinkSection(
+      'Uploaded Deliverables',
+      links,
+      emptyText: 'No files uploaded yet.',
+    );
+  }
+
+  Widget _buildRequirementLinkSection(
+    String title,
+    List<({String label, String link})> items, {
+    String emptyText = 'No files uploaded yet.',
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Text(
-          value,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: _onSurface,
+          title.toUpperCase(),
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: _muted,
+            letterSpacing: 0.8,
           ),
         ),
+        const SizedBox(height: 10),
+        if (items.isEmpty)
+          Text(
+            emptyText,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: _muted,
+              fontStyle: FontStyle.italic,
+            ),
+          )
+        else
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: items
+                .map(
+                  (item) => InkWell(
+                    onTap: item.link.isEmpty
+                        ? null
+                        : () => _openExternalLink(item.link),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _pageBg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _border),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            item.link.isEmpty
+                                ? LucideIcons.fileMinus
+                                : LucideIcons.fileText,
+                            size: 14,
+                            color: item.link.isEmpty
+                                ? _muted
+                                : const Color(0xFF2563EB),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            item.label,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: item.link.isEmpty
+                                  ? _muted
+                                  : const Color(0xFF2563EB),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
       ],
     );
   }
@@ -4407,8 +5541,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final event = _event;
     final approval = _approval;
     return _buildCard(
-      icon: LucideIcons.fileText,
-      title: 'Notes and description',
+      icon: LucideIcons.stickyNote,
+      title: 'Notes & Description',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -4417,10 +5551,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             'Other Notes',
             Text(
               _s(event['other_notes'], fallback: _s(approval['other_notes'])),
-              style: TextStyle(
+              style: GoogleFonts.inter(
                 fontSize: 14,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
                 color: _onSurface,
+                height: 1.5,
               ),
             ),
           ),
@@ -4428,10 +5563,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             null,
             'Description',
             Text(
-              _s(event['description'], fallback: 'No description'),
-              style: TextStyle(
+              _s(event['description'], fallback: 'No description provided.'),
+              style: GoogleFonts.inter(
                 fontSize: 14,
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.w400,
                 color: _onSurface,
                 height: 1.5,
               ),
