@@ -257,8 +257,8 @@ export function buildMarketingPhaseGroups(normalizedReq) {
   ];
   if (n.pre_event.poster) phases[0].items.push("Poster");
   if (n.pre_event.social_media) phases[0].items.push("Social Media Post");
-  if (n.during_event.photo) phases[1].items.push("Photoshoot");
-  if (n.during_event.video) phases[1].items.push("Videoshoot");
+  if (n.during_event.photo) phases[1].items.push("Photography");
+  if (n.during_event.video) phases[1].items.push("Videography");
   if (n.post_event.social_media) phases[2].items.push("Social Media Upload");
   if (n.post_event.photo_upload) phases[2].items.push("Photo Upload");
   if (n.post_event.video) phases[2].items.push("Video Upload");
@@ -279,7 +279,7 @@ export function facilityRequestPhaseGroups(req) {
 export function itRequestPhaseGroups(req) {
   const pre = [];
   if (req.event_mode) pre.push(`Event mode: ${req.event_mode}`);
-  if (req.pa_system) pre.push("PA system");
+  if (req.pa_system) pre.push("Audio system");
   if (req.projection) pre.push("Projection / display");
   if (req.other_notes && String(req.other_notes).trim()) {
     pre.push(`Notes: ${String(req.other_notes).trim()}`);
