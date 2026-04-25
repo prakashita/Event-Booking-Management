@@ -26,6 +26,8 @@ class NotificationProvider extends ChangeNotifier {
   bool get isConnected => _notificationService.isConnected;
   int get totalUnread => _notificationService.totalUnread;
   bool get isInitialized => _isInitialized;
+  List<AppNotificationItem> get notifications => _notificationService.notifications;
+  int get unreadNotificationCount => _notificationService.unreadNotificationCount;
 
   /// Initialize the notification service.
   /// Call this after auth is ready (e.g., after login).
@@ -67,6 +69,22 @@ class NotificationProvider extends ChangeNotifier {
 
   void removePopupListener(Function(NotificationPopupEvent) callback) {
     _notificationService.removePopupListener(callback);
+  }
+
+  void markNotificationAsRead(String id) {
+    _notificationService.markNotificationAsRead(id);
+  }
+
+  void markAllNotificationsAsRead() {
+    _notificationService.markAllNotificationsAsRead();
+  }
+
+  void dismissNotification(String id) {
+    _notificationService.dismissNotification(id);
+  }
+
+  void clearNotifications() {
+    _notificationService.clearNotifications();
   }
 
   /// Set the currently active chat conversation (to suppress notifications)

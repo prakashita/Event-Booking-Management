@@ -90,6 +90,10 @@ class AppColors {
         return error;
       case 'pending':
         return warning;
+      case 'clarification':
+      case 'clarification_requested':
+      case 'clarification_needed':
+        return warning;
       case 'accepted':
         return success;
       default:
@@ -112,6 +116,10 @@ class AppColors {
       case 'rejected':
         return errorLight;
       case 'pending':
+        return warningLight;
+      case 'clarification':
+      case 'clarification_requested':
+      case 'clarification_needed':
         return warningLight;
       case 'accepted':
         return successLight;

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -11,17 +12,63 @@ import '../models/models.dart';
 import '../providers/auth_provider.dart';
 import 'api_service.dart';
 import 'notification_parity.dart';
+import 'push_notification_bootstrap.dart';
+import 'push_notification_config.dart';
 
 class NotificationPopupEvent {
+  final String id;
   final String title;
   final String body;
   final String route;
+  final DateTime createdAt;
 
   const NotificationPopupEvent({
+    required this.id,
     required this.title,
     required this.body,
     required this.route,
+    required this.createdAt,
   });
+}
+
+class AppNotificationItem {
+  final String id;
+  final String title;
+  final String body;
+  final String route;
+  final DateTime createdAt;
+  final bool isRead;
+  final String category;
+
+  const AppNotificationItem({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.route,
+    required this.createdAt,
+    required this.isRead,
+    required this.category,
+  });
+
+  AppNotificationItem copyWith({
+    String? id,
+    String? title,
+    String? body,
+    String? route,
+    DateTime? createdAt,
+    bool? isRead,
+    String? category,
+  }) {
+    return AppNotificationItem(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      route: route ?? this.route,
+      createdAt: createdAt ?? this.createdAt,
+      isRead: isRead ?? this.isRead,
+      category: category ?? this.category,
+    );
+  }
 }
 
 /// Real-time notification service using WebSocket.
@@ -41,6 +88,8 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
   static const Duration _reconnectDelay = Duration(seconds: 3);
 
   int _totalUnread = 0;
+  final List<AppNotificationItem> _notifications = <AppNotificationItem>[];
+  static const int _maxStoredNotifications = 50;
   String?
   _activeChatConversationId; // Track which conversation is currently open
   bool _isChatUiOpen = false;
@@ -51,6 +100,13 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
   FlutterLocalNotificationsPlugin? _localNotifications;
   bool _notificationsInitialized = false;
   String? _pendingLaunchRoute;
+  FirebaseMessaging? _firebaseMessaging;
+  bool _firebaseMessagingInitialized = false;
+  StreamSubscription<RemoteMessage>? _firebaseOnMessageSubscription;
+  StreamSubscription<RemoteMessage>? _firebaseOnMessageOpenedSubscription;
+  StreamSubscription<String>? _firebaseTokenRefreshSubscription;
+  String? _registeredPushToken;
+  String? _lastKnownAuthToken;
 
   // Callbacks for listeners
   final List<Function(int)> _unreadCountListeners = [];
@@ -60,11 +116,19 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
 
   bool get isConnected => _isConnected;
   int get totalUnread => _totalUnread;
+  List<AppNotificationItem> get notifications =>
+      List<AppNotificationItem>.unmodifiable(_notifications);
+  int get unreadNotificationCount =>
+      _notifications.where((item) => !item.isRead).length;
 
   void updateAuthProvider(AuthProvider authProvider) {
     _authProvider = authProvider;
 
     if (!_authProvider.isAuthenticated) {
+      final authTokenForUnregister = _lastKnownAuthToken;
+      unawaited(
+        _unregisterPushToken(overrideAuthToken: authTokenForUnregister),
+      );
       _reconnectTimer?.cancel();
       _channel?.sink.close();
       _channel = null;
@@ -72,14 +136,22 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
       _isConnecting = false;
       _reconnectAttempts = 0;
       _totalUnread = 0;
+      _notifications.clear();
       _activeChatConversationId = null;
+      _registeredPushToken = null;
+      _lastKnownAuthToken = null;
       notifyListeners();
       return;
     }
 
+    _lastKnownAuthToken = _authProvider.token;
+
     if (_notificationsInitialized && !_isConnected && !_isConnecting) {
       _refreshUnreadCount();
       _connect();
+    }
+    if (_notificationsInitialized) {
+      unawaited(_initializeFirebaseMessaging());
     }
   }
 
@@ -108,8 +180,10 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
     if (!_authProvider.isAuthenticated || _isConnecting || _isConnected) {
       return;
     }
+    _lastKnownAuthToken = _authProvider.token;
     _registerLifecycleObserver();
     await _initializeLocalNotifications();
+    await _initializeFirebaseMessaging();
     await _refreshUnreadCount();
     await _connect();
   }
@@ -143,11 +217,18 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
       initializationSettings,
       onDidReceiveNotificationResponse: _handleNotificationResponse,
     );
-    await _localNotifications!
+    const chatChannel = AndroidNotificationChannel(
+      'chat_channel',
+      'Chat Messages',
+      description: 'Notifications for new chat messages',
+      importance: Importance.high,
+    );
+    final androidNotifications = _localNotifications!
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestNotificationsPermission();
+        >();
+    await androidNotifications?.createNotificationChannel(chatChannel);
+    await androidNotifications?.requestNotificationsPermission();
     await _localNotifications!
         .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
@@ -164,6 +245,50 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
     if (kDebugMode) {
       print('Local notifications initialized');
     }
+  }
+
+  Future<void> _initializeFirebaseMessaging() async {
+    if (_firebaseMessagingInitialized) {
+      if (_authProvider.isAuthenticated) {
+        await _syncFirebaseTokenRegistration();
+      }
+      return;
+    }
+
+    final initialized = await PushNotificationBootstrap.ensureInitialized();
+    if (!initialized) return;
+
+    _firebaseMessaging = FirebaseMessaging.instance;
+    await _firebaseMessaging!.setAutoInitEnabled(true);
+    await _firebaseMessaging!.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+    await _firebaseMessaging!.setForegroundNotificationPresentationOptions(
+      alert: false,
+      badge: true,
+      sound: true,
+    );
+
+    _firebaseOnMessageSubscription = FirebaseMessaging.onMessage.listen(
+      _handleFirebaseForegroundMessage,
+    );
+    _firebaseOnMessageOpenedSubscription = FirebaseMessaging.onMessageOpenedApp
+        .listen(_handleFirebaseMessageOpen);
+    _firebaseTokenRefreshSubscription = _firebaseMessaging!.onTokenRefresh
+        .listen((token) {
+          unawaited(_registerPushToken(token));
+        });
+
+    final initialMessage = await _firebaseMessaging!.getInitialMessage();
+    if (initialMessage != null) {
+      _handleFirebaseMessageOpen(initialMessage);
+    }
+
+    _firebaseMessagingInitialized = true;
+    await _syncFirebaseTokenRegistration();
   }
 
   /// Connect to WebSocket server.
@@ -296,15 +421,30 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
 
       final conversationId = messageData['conversation_id']?.toString();
       final route = conversationId == null ? '/chat' : '/chat/$conversationId';
+      final notificationId = _buildNotificationId(messageData, conversationId);
+      final createdAt = _extractMessageCreatedAt(messageData);
+      final popupEvent = NotificationPopupEvent(
+        id: notificationId,
+        title: presentation.title,
+        body: presentation.body,
+        route: route,
+        createdAt: createdAt,
+      );
+
+      _storeNotification(
+        AppNotificationItem(
+          id: notificationId,
+          title: presentation.title,
+          body: presentation.body,
+          route: route,
+          createdAt: createdAt,
+          isRead: false,
+          category: 'message',
+        ),
+      );
 
       if (_isAppInForeground) {
-        _notifyPopupListeners(
-          NotificationPopupEvent(
-            title: presentation.title,
-            body: presentation.body,
-            route: route,
-          ),
-        );
+        _notifyPopupListeners(popupEvent);
       }
 
       // Show local notification
@@ -324,6 +464,30 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
         print('Error showing notification: $e');
       }
     }
+  }
+
+  Future<void> _handleFirebaseForegroundMessage(RemoteMessage message) async {
+    final item = _buildNotificationItemFromRemoteMessage(message);
+    if (item == null) return;
+
+    _storeNotification(item);
+    if (_isAppInForeground) {
+      _notifyPopupListeners(
+        NotificationPopupEvent(
+          id: item.id,
+          title: item.title,
+          body: item.body,
+          route: item.route,
+          createdAt: item.createdAt,
+        ),
+      );
+    }
+
+    await _showLocalNotification(
+      title: item.title,
+      body: item.body,
+      conversationId: _extractConversationIdFromRemoteMessage(message),
+    );
   }
 
   /// Show a local notification
@@ -375,6 +539,18 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
     _flushPendingLaunchRoute();
   }
 
+  void _handleFirebaseMessageOpen(RemoteMessage message) {
+    final item = _buildNotificationItemFromRemoteMessage(message);
+    if (item != null) {
+      _storeNotification(item);
+      markNotificationAsRead(item.id);
+    }
+    final route = _extractRouteFromRemoteMessage(message);
+    if (route == null || route.isEmpty) return;
+    _pendingLaunchRoute = route;
+    _flushPendingLaunchRoute();
+  }
+
   void _flushPendingLaunchRoute() {
     final route = _pendingLaunchRoute;
     final context = _navigatorKey.currentContext;
@@ -419,6 +595,134 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
     return inlineMessage.isEmpty ? null : inlineMessage;
   }
 
+  AppNotificationItem? _buildNotificationItemFromRemoteMessage(
+    RemoteMessage message,
+  ) {
+    final route = _extractRouteFromRemoteMessage(message);
+    if (route == null || route.isEmpty) return null;
+
+    final data = message.data;
+    final title =
+        message.notification?.title ??
+        data['title']?.toString() ??
+        data['sender_name']?.toString() ??
+        'New notification';
+    final body =
+        message.notification?.body ??
+        data['body']?.toString() ??
+        'Open the app to view the latest update.';
+    final createdAt =
+        DateTime.tryParse(data['created_at']?.toString() ?? '')?.toLocal() ??
+        DateTime.now();
+    final id =
+        data['notification_id']?.toString() ??
+        'push-${message.messageId ?? createdAt.millisecondsSinceEpoch}';
+    final category = data['type']?.toString().trim().isNotEmpty == true
+        ? data['type']!.toString()
+        : 'message';
+
+    return AppNotificationItem(
+      id: id,
+      title: title,
+      body: body,
+      route: route,
+      createdAt: createdAt,
+      isRead: false,
+      category: category,
+    );
+  }
+
+  String? _extractRouteFromRemoteMessage(RemoteMessage message) {
+    final data = message.data;
+    final route = data['route']?.toString();
+    if (route != null && route.trim().isNotEmpty) {
+      return route.trim();
+    }
+    final conversationId = _extractConversationIdFromRemoteMessage(message);
+    if (conversationId == null || conversationId.isEmpty) {
+      return '/chat';
+    }
+    return '/chat/$conversationId';
+  }
+
+  String? _extractConversationIdFromRemoteMessage(RemoteMessage message) {
+    final data = message.data;
+    return data['conversation_id']?.toString();
+  }
+
+  String _buildNotificationId(
+    Map<String, dynamic> messageData,
+    String? conversationId,
+  ) {
+    final rawId =
+        messageData['id']?.toString() ??
+        messageData['_id']?.toString() ??
+        messageData['message_id']?.toString();
+    if (rawId != null && rawId.trim().isNotEmpty) {
+      return 'message-${rawId.trim()}';
+    }
+    final stamp =
+        messageData['created_at']?.toString() ??
+        DateTime.now().millisecondsSinceEpoch.toString();
+    return 'message-${conversationId ?? 'chat'}-$stamp';
+  }
+
+  DateTime _extractMessageCreatedAt(Map<String, dynamic> messageData) {
+    final raw = messageData['created_at']?.toString() ?? '';
+    return DateTime.tryParse(raw)?.toLocal() ?? DateTime.now();
+  }
+
+  void _storeNotification(AppNotificationItem item) {
+    final existingIndex = _notifications.indexWhere((n) => n.id == item.id);
+    if (existingIndex >= 0) {
+      _notifications[existingIndex] = item;
+    } else {
+      _notifications.insert(0, item);
+      if (_notifications.length > _maxStoredNotifications) {
+        _notifications.removeRange(
+          _maxStoredNotifications,
+          _notifications.length,
+        );
+      }
+    }
+    notifyListeners();
+  }
+
+  void markNotificationAsRead(String id) {
+    final index = _notifications.indexWhere((item) => item.id == id);
+    if (index < 0) return;
+    final current = _notifications[index];
+    if (current.isRead) return;
+    _notifications[index] = current.copyWith(isRead: true);
+    notifyListeners();
+  }
+
+  void markAllNotificationsAsRead() {
+    var changed = false;
+    for (var i = 0; i < _notifications.length; i++) {
+      final item = _notifications[i];
+      if (!item.isRead) {
+        _notifications[i] = item.copyWith(isRead: true);
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
+  void dismissNotification(String id) {
+    final before = _notifications.length;
+    _notifications.removeWhere((item) => item.id == id);
+    if (_notifications.length != before) {
+      notifyListeners();
+    }
+  }
+
+  void clearNotifications() {
+    if (_notifications.isEmpty) return;
+    _notifications.clear();
+    notifyListeners();
+  }
+
   /// Refresh unread count from API.
   Future<void> _refreshUnreadCount() async {
     try {
@@ -443,6 +747,64 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
         print('Error refreshing unread count: $e');
       }
     }
+  }
+
+  Future<void> _syncFirebaseTokenRegistration() async {
+    if (!_authProvider.isAuthenticated || _firebaseMessaging == null) return;
+    try {
+      final token = await _firebaseMessaging!.getToken();
+      if (token == null || token.trim().isEmpty) return;
+      await _registerPushToken(token);
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error syncing Firebase token: $e');
+      }
+    }
+  }
+
+  Future<void> _registerPushToken(String token) async {
+    final normalized = token.trim();
+    if (normalized.isEmpty || !_authProvider.isAuthenticated) return;
+    if (_registeredPushToken == normalized) return;
+
+    try {
+      await _api.post<dynamic>(
+        '/users/me/push-tokens',
+        data: {
+          'token': normalized,
+          'platform': PushNotificationConfig.currentPlatformLabel,
+        },
+      );
+      _registeredPushToken = normalized;
+      _lastKnownAuthToken = _authProvider.token ?? _lastKnownAuthToken;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error registering push token: $e');
+      }
+    }
+  }
+
+  Future<void> _unregisterPushToken({String? overrideAuthToken}) async {
+    final token = _registeredPushToken;
+    if (token == null || token.isEmpty) return;
+
+    try {
+      await _api.delete<dynamic>(
+        '/users/me/push-tokens',
+        data: {'token': token},
+        headers: _authorizationHeaderFor(overrideAuthToken),
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error unregistering push token: $e');
+      }
+    }
+  }
+
+  Map<String, dynamic>? _authorizationHeaderFor(String? token) {
+    final normalized = token?.trim();
+    if (normalized == null || normalized.isEmpty) return null;
+    return {'Authorization': 'Bearer $normalized'};
   }
 
   /// Handle connection errors and schedule reconnection.
@@ -521,6 +883,9 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
     }
     _reconnectTimer?.cancel();
     _channel?.sink.close();
+    await _firebaseOnMessageSubscription?.cancel();
+    await _firebaseOnMessageOpenedSubscription?.cancel();
+    await _firebaseTokenRefreshSubscription?.cancel();
     _isConnected = false;
     _isConnecting = false;
     super.dispose();

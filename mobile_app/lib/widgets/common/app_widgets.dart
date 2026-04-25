@@ -7,6 +7,16 @@ class StatusBadge extends StatelessWidget {
   final String status;
   const StatusBadge(this.status, {super.key});
 
+  String get _label {
+    final normalized = status.trim().toLowerCase();
+    if (normalized == 'clarification' ||
+        normalized == 'clarification_requested' ||
+        normalized == 'clarification_needed') {
+      return 'CLARIFICATION';
+    }
+    return status.trim().toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -16,7 +26,7 @@ class StatusBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(100),
       ),
       child: Text(
-        status.toUpperCase(),
+        _label,
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w700,

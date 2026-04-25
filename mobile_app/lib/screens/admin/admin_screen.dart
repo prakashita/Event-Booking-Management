@@ -1776,7 +1776,8 @@ class _StatusPill extends StatelessWidget {
       fg = const Color(0xFFD97706);
       bg = const Color(0xFFFFFBEB);
       border = const Color(0xFFFDE68A);
-    } else if (normalized == 'clarification_requested') {
+    } else if (normalized == 'clarification' ||
+        normalized == 'clarification_requested') {
       fg = const Color(0xFF7C3AED);
       bg = const Color(0xFFF5F3FF);
       border = const Color(0xFFC4B5FD);
@@ -1795,7 +1796,10 @@ class _StatusPill extends StatelessWidget {
         border: Border.all(color: border),
       ),
       child: Text(
-        status.replaceAll('_', ' ').toUpperCase(),
+        (normalized == 'clarification' ||
+                normalized == 'clarification_requested')
+            ? 'CLARIFICATION'
+            : status.replaceAll('_', ' ').toUpperCase(),
         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: fg),
       ),
     );

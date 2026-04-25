@@ -3,14 +3,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/models.dart';
-import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
 import 'package:intl/intl.dart';
-import '../requirements/requirements_wizard_dialog.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -26,7 +23,7 @@ class _EventsScreenState extends State<EventsScreen>
 
   static const _tabs = [
     'All',
-    'Pending',
+    'Approvals',
     'Upcoming',
     'Ongoing',
     'Completed',
@@ -84,7 +81,9 @@ class _EventsScreenState extends State<EventsScreen>
     if (status == 'pending') {
       return all.where((e) {
         final s = e.status.toLowerCase();
-        return s == 'pending' || s == 'clarification_requested';
+        return s == 'pending' ||
+            s == 'clarification' ||
+            s == 'clarification_requested';
       }).toList();
     }
     return all.where((e) => (e.status).toLowerCase() == status).toList();
@@ -225,7 +224,9 @@ class _EventsScreenState extends State<EventsScreen>
           .whereType<Map<String, dynamic>>()
           .where((a) {
             final status = (a['status'] ?? '').toString().toLowerCase();
-            return status == 'pending' || status == 'clarification_requested';
+            return status == 'pending' ||
+                status == 'clarification' ||
+                status == 'clarification_requested';
           })
           .map((a) {
             final startDate = (a['start_date'] ?? '').toString();
@@ -292,7 +293,7 @@ class _EventsScreenState extends State<EventsScreen>
   String _approvalForwardLabel(Event event) {
     final stage = (event.pipelineStage ?? '').toLowerCase().trim();
     if (stage == 'after_deputy') return 'SEND TO FINANCE DEPARTMENT';
-    if (stage == 'after_finance') return 'SEND TO REGISTRAR';
+    if (stage == 'after_finance') return 'SEND TO FINAL APPROVER';
     return '';
   }
 
@@ -320,7 +321,7 @@ class _EventsScreenState extends State<EventsScreen>
           content: Text(
             toFinance
                 ? 'Sent to Finance for approval.'
-                : 'Sent to Registrar for final approval.',
+                : 'Sent to the final approver for approval.',
           ),
         ),
       );
@@ -348,82 +349,95 @@ class _EventsScreenState extends State<EventsScreen>
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: const Text('Send Invite'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: toCtrl,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'To',
-                    hintText: 'recipient@campus.edu',
+        builder: (ctx, setLocal) {
+          void closeDialog() {
+            FocusScope.of(ctx).unfocus();
+            if (!ctx.mounted) return;
+            Navigator.of(ctx).pop();
+          }
+
+          return AlertDialog(
+            title: const Text('Send Invite'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: toCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'To',
+                      hintText: 'recipient@campus.edu',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: subjectCtrl,
-                  decoration: const InputDecoration(labelText: 'Subject'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: bodyCtrl,
-                  minLines: 4,
-                  maxLines: 8,
-                  decoration: const InputDecoration(labelText: 'Description'),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: subjectCtrl,
+                    decoration: const InputDecoration(labelText: 'Subject'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: bodyCtrl,
+                    minLines: 4,
+                    maxLines: 8,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                  ),
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: submitting ? null : () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: submitting
-                  ? null
-                  : () async {
-                      final toEmail = toCtrl.text.trim();
-                      if (toEmail.isEmpty) {
-                        _showMessage(
-                          'Recipient email is required.',
-                          isError: true,
-                        );
-                        return;
-                      }
-                      setLocal(() => submitting = true);
-                      try {
-                        await _api.post<Map<String, dynamic>>(
-                          '/invites',
-                          data: {
-                            'event_id': event.id,
-                            'to_email': toEmail,
-                            'subject': subjectCtrl.text.trim(),
-                            'body': bodyCtrl.text.trim(),
-                          },
-                        );
-                        if (!mounted) return;
-                        Navigator.of(context, rootNavigator: true).pop();
-                        setState(() => _inviteSentEventIds.add(event.id));
-                        _showMessage('Invite sent.', isSuccess: true);
-                      } catch (e) {
-                        setLocal(() => submitting = false);
-                        _showMessage(
-                          _extractError(e, fallback: 'Unable to send invite.'),
-                          isError: true,
-                        );
-                      }
-                    },
-              child: Text(submitting ? 'Sending...' : 'Send Invite'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: submitting ? null : closeDialog,
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: submitting
+                    ? null
+                    : () async {
+                        final toEmail = toCtrl.text.trim();
+                        if (toEmail.isEmpty) {
+                          _showMessage(
+                            'Recipient email is required.',
+                            isError: true,
+                          );
+                          return;
+                        }
+                        setLocal(() => submitting = true);
+                        try {
+                          await _api.post<Map<String, dynamic>>(
+                            '/invites',
+                            data: {
+                              'event_id': event.id,
+                              'to_email': toEmail,
+                              'subject': subjectCtrl.text.trim(),
+                              'body': bodyCtrl.text.trim(),
+                            },
+                          );
+                          if (!mounted) return;
+                          closeDialog();
+                          if (!mounted) return;
+                          setState(() => _inviteSentEventIds.add(event.id));
+                          _showMessage('Invite sent.', isSuccess: true);
+                        } catch (e) {
+                          setLocal(() => submitting = false);
+                          _showMessage(
+                            _extractError(
+                              e,
+                              fallback: 'Unable to send invite.',
+                            ),
+                            isError: true,
+                          );
+                        }
+                      },
+                child: Text(submitting ? 'Sending...' : 'Send Invite'),
+              ),
+            ],
+          );
+        },
       ),
     );
 
+    await WidgetsBinding.instance.endOfFrame;
     toCtrl.dispose();
     subjectCtrl.dispose();
     bodyCtrl.dispose();
@@ -644,104 +658,6 @@ class _EventsScreenState extends State<EventsScreen>
     } catch (e) {
       _showMessage(
         _extractError(e, fallback: 'Unable to close event.'),
-        isError: true,
-      );
-    }
-  }
-
-  Future<void> _openRequirementsWizard(Event event) async {
-    try {
-      final details = await _api.get<Map<String, dynamic>>(
-        '/events/${event.id}/details',
-      );
-      final approval =
-          (details['approval'] as Map?)?.cast<String, dynamic>() ??
-          <String, dynamic>{};
-      final eventData =
-          (details['event'] as Map?)?.cast<String, dynamic>() ??
-          <String, dynamic>{};
-      final approvalStatus = (approval['status'] ?? '')
-          .toString()
-          .trim()
-          .toLowerCase();
-      final eventStatus = (eventData['status'] ?? event.status)
-          .toString()
-          .trim()
-          .toLowerCase();
-      final facility = (details['facility_requests'] as List? ?? const [])
-          .whereType<Map<String, dynamic>>();
-      final it = (details['it_requests'] as List? ?? const [])
-          .whereType<Map<String, dynamic>>();
-      final marketing = (details['marketing_requests'] as List? ?? const [])
-          .whereType<Map<String, dynamic>>();
-      final transport = (details['transport_requests'] as List? ?? const [])
-          .whereType<Map<String, dynamic>>();
-
-      String aggregate(Iterable<Map<String, dynamic>> items) {
-        if (items.isEmpty) return 'none';
-        final statuses = items
-            .map(
-              (item) => (item['status'] ?? '')
-                  .toString()
-                  .trim()
-                  .toLowerCase()
-                  .replaceAll('accepted', 'approved'),
-            )
-            .toList();
-        if (statuses.any((status) => status == 'rejected')) return 'rejected';
-        if (statuses.any((status) => status == 'clarification_requested')) {
-          return 'clarification_requested';
-        }
-        if (statuses.any((status) => status == 'pending')) return 'pending';
-        if (statuses.every((status) => status == 'approved')) return 'approved';
-        return 'pending';
-      }
-
-      final departmentStatuses = <String, String>{
-        'facility': aggregate(facility),
-        'it': aggregate(it),
-        'marketing': aggregate(marketing),
-        'transport': aggregate(transport),
-      };
-      final sendableDepartments = departmentStatuses.entries
-          .where(
-            (entry) =>
-                entry.value == 'none' || entry.value == 'rejected',
-          )
-          .map((entry) => entry.key)
-          .toList();
-      final canSend =
-          approvalStatus == 'approved' &&
-          !_hasStarted(event) &&
-          eventStatus != 'completed' &&
-          eventStatus != 'closed' &&
-          sendableDepartments.isNotEmpty;
-
-      if (!canSend) {
-        _showMessage(
-          'Requirements are not available for this event right now.',
-          isError: true,
-        );
-        return;
-      }
-
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => RequirementsWizardDialog(
-          event: event,
-          departments: sendableDepartments,
-          requesterEmail: context.read<AuthProvider>().user?.email ?? '',
-          onSuccess: () async {
-            Navigator.of(ctx).pop();
-            await _refreshCurrentTab();
-            _showMessage('Requirements sent.', isSuccess: true);
-          },
-        ),
-      );
-    } catch (e) {
-      _showMessage(
-        _extractError(e, fallback: 'Unable to open requirements.'),
         isError: true,
       );
     }
@@ -999,7 +915,7 @@ class _EventsScreenState extends State<EventsScreen>
             );
           }
           if (events.isEmpty) {
-            return const _MyEventsEmptyState();
+            return _MyEventsEmptyState(tabLabel: key);
           }
 
           return RefreshIndicator(
@@ -1020,10 +936,10 @@ class _EventsScreenState extends State<EventsScreen>
                       .replaceFirst('approval-', '');
                   if (event.id.startsWith('approval-') &&
                       approvalId.isNotEmpty) {
-                    context.go('/approval-details/$approvalId');
+                    context.push('/approval-details/$approvalId');
                     return;
                   }
-                  context.go('/events/${event.id}');
+                  context.push('/events/${event.id}');
                 },
                 approvalForwardLabel: _approvalForwardLabel(events[i]),
                 onApprovalForward: () => _forwardApproval(events[i]),
@@ -1032,11 +948,10 @@ class _EventsScreenState extends State<EventsScreen>
                 canCloseEvent: _canCloseEvent(events[i]),
                 canViewReport: _canViewReport(events[i]),
                 canViewAttendance: _canViewAttendance(events[i]),
-                canSendRequirements:
-                    !_isApprovalItem(events[i]) &&
-                    !_hasStarted(events[i]) &&
-                    events[i].status.toLowerCase() != 'closed' &&
-                    events[i].status.toLowerCase() != 'completed',
+                // Requirement eligibility depends on per-department request
+                // state from the event-details payload, so we only expose the
+                // action from the details screen where that full context exists.
+                canSendRequirements: false,
                 inviteSent: _inviteSentEventIds.contains(events[i].id),
                 onSendInvite: () => _sendInvite(events[i]),
                 onUploadReport: () => _uploadReport(events[i]),
@@ -1049,7 +964,7 @@ class _EventsScreenState extends State<EventsScreen>
                   events[i].attendanceWebViewLink ?? '',
                   fallbackFileId: events[i].attendanceFileId,
                 ),
-                onSendRequirements: () => _openRequirementsWizard(events[i]),
+                onSendRequirements: null,
               ),
             ),
           );
@@ -1074,12 +989,55 @@ class _LoadingList extends StatelessWidget {
 }
 
 class _MyEventsEmptyState extends StatelessWidget {
-  const _MyEventsEmptyState();
+  final String tabLabel;
+
+  const _MyEventsEmptyState({required this.tabLabel});
+
+  ({String title, String subtitle}) _copy() {
+    switch (tabLabel.trim().toLowerCase()) {
+      case 'approvals':
+        return (
+          title: 'No approval requests right now.',
+          subtitle:
+              'New event submissions waiting for Deputy, Finance, or final approval will appear here.',
+        );
+      case 'upcoming':
+        return (
+          title: 'No upcoming events.',
+          subtitle:
+              'Approved events that have not started yet will show up here.',
+        );
+      case 'ongoing':
+        return (
+          title: 'No ongoing events.',
+          subtitle:
+              'Events move here automatically once their start time begins.',
+        );
+      case 'completed':
+        return (
+          title: 'No completed events.',
+          subtitle:
+              'Finished events stay here until the report is uploaded and the event is closed.',
+        );
+      case 'closed':
+        return (
+          title: 'No closed events.',
+          subtitle:
+              'Events appear here after report upload and manual closure.',
+        );
+      default:
+        return (
+          title: 'No events found.',
+          subtitle: 'Create your first event to get started.',
+        );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final copy = _copy();
 
     final iconColor = isDark
         ? const Color(0xFF64748B)
@@ -1125,7 +1083,7 @@ class _MyEventsEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 24), // mb-6 equivalent
             Text(
-              'No events found.',
+              copy.title,
               style: TextStyle(
                 fontSize: 20, // text-xl
                 fontWeight: FontWeight.w800, // font-extrabold
@@ -1135,7 +1093,7 @@ class _MyEventsEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Create your first event to get started.',
+              copy.subtitle,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -1222,6 +1180,7 @@ class _EventCard extends StatelessWidget {
     final statusColor = _getStatusColor(event.status);
     final statusBgColor = _getStatusBgColor(event.status);
     final statusBorderColor = _getStatusBorderColor(event.status);
+    final statusLabel = _statusLabel(event);
     final pipelineText = _approvalPipelineText(event);
     final showForwardAction = approvalForwardLabel.trim().isNotEmpty;
     final actions = <Widget>[
@@ -1324,7 +1283,7 @@ class _EventCard extends StatelessWidget {
                     border: Border.all(color: statusBorderColor),
                   ),
                   child: Text(
-                    event.status.toUpperCase(),
+                    statusLabel,
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.w900,
@@ -1493,7 +1452,9 @@ class _EventCard extends StatelessWidget {
 
     final status = value.status.toLowerCase().trim();
     if (status == 'rejected') return 'Rejected';
-    if (status == 'clarification_requested') return 'Clarification requested';
+    if (status == 'clarification' || status == 'clarification_requested') {
+      return 'Clarification';
+    }
 
     final stage = (value.pipelineStage ?? '').toLowerCase().trim();
     switch (stage) {
@@ -1504,7 +1465,7 @@ class _EventCard extends StatelessWidget {
       case 'finance':
         return 'Awaiting Finance Team';
       case 'after_finance':
-        return 'Finance approved - send to Registrar';
+        return 'Finance approved - send to final approver';
       case 'registrar':
         return 'Awaiting Registrar / Vice Chancellor';
       case 'complete':
@@ -1514,16 +1475,39 @@ class _EventCard extends StatelessWidget {
     }
   }
 
+  String _statusLabel(Event value) {
+    final normalized = value.status.toLowerCase().trim();
+    if (value.id.startsWith('approval-')) {
+      if (normalized == 'pending') return 'PENDING APPROVAL';
+      if (normalized == 'clarification' ||
+          normalized == 'clarification_requested') {
+        return 'CLARIFICATION';
+      }
+    }
+    if (normalized == 'clarification' ||
+        normalized == 'clarification_requested') {
+      return 'CLARIFICATION';
+    }
+    return normalized.toUpperCase().replaceAll('_', ' ');
+  }
+
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'pending':
         return const Color(0xFFD97706); // amber-600
+      case 'clarification':
+      case 'clarification_requested':
+        return const Color(0xFF7C3AED); // violet-600
+      case 'rejected':
+        return const Color(0xFFDC2626); // red-600
       case 'upcoming':
         return const Color(0xFF2563EB); // blue-600
       case 'ongoing':
         return const Color(0xFF4F46E5); // indigo-600
       case 'completed':
         return const Color(0xFF059669); // emerald-600
+      case 'closed':
+        return const Color(0xFF475569); // slate-600
       default:
         return const Color(0xFF475569); // slate-600
     }
@@ -1533,12 +1517,19 @@ class _EventCard extends StatelessWidget {
     switch (status.toLowerCase()) {
       case 'pending':
         return const Color(0xFFFFFBEB); // amber-50
+      case 'clarification':
+      case 'clarification_requested':
+        return const Color(0xFFF5F3FF); // violet-50
+      case 'rejected':
+        return const Color(0xFFFEF2F2); // red-50
       case 'upcoming':
         return const Color(0xFFEFF6FF); // blue-50
       case 'ongoing':
         return const Color(0xFFEEF2FF); // indigo-50
       case 'completed':
         return const Color(0xFFECFDF5); // emerald-50
+      case 'closed':
+        return const Color(0xFFF8FAFC); // slate-50
       default:
         return const Color(0xFFF8FAFC); // slate-50
     }
@@ -1548,12 +1539,19 @@ class _EventCard extends StatelessWidget {
     switch (status.toLowerCase()) {
       case 'pending':
         return const Color(0xFFFEF3C7); // amber-100
+      case 'clarification':
+      case 'clarification_requested':
+        return const Color(0xFFDDD6FE); // violet-200
+      case 'rejected':
+        return const Color(0xFFFECACA); // red-200
       case 'upcoming':
         return const Color(0xFFDBEAFE); // blue-100
       case 'ongoing':
         return const Color(0xFFE0E7FF); // indigo-100
       case 'completed':
         return const Color(0xFFD1FAE5); // emerald-100
+      case 'closed':
+        return const Color(0xFFE2E8F0); // slate-200
       default:
         return const Color(0xFFF1F5F9); // slate-100
     }

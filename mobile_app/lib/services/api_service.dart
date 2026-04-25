@@ -61,7 +61,9 @@ class ApiService {
 
           final isMultipartRequest =
               options.data is FormData ||
-              (options.contentType?.toLowerCase().contains('multipart/form-data') ??
+              (options.contentType?.toLowerCase().contains(
+                    'multipart/form-data',
+                  ) ??
                   false);
 
           if (isMultipartRequest) {
@@ -84,32 +86,56 @@ class ApiService {
   Future<T> get<T>(
     String path, {
     Map<String, dynamic>? params,
+    Map<String, dynamic>? headers,
     T Function(dynamic)? parser,
   }) async {
-    final resp = await _dio.get(path, queryParameters: params);
+    final resp = await _dio.get(
+      path,
+      queryParameters: params,
+      options: headers == null ? null : Options(headers: headers),
+    );
     return parser != null ? parser(resp.data) : resp.data as T;
   }
 
   Future<T> post<T>(
     String path, {
     dynamic data,
+    Map<String, dynamic>? headers,
     T Function(dynamic)? parser,
   }) async {
-    final resp = await _dio.post(path, data: data);
+    final resp = await _dio.post(
+      path,
+      data: data,
+      options: headers == null ? null : Options(headers: headers),
+    );
     return parser != null ? parser(resp.data) : resp.data as T;
   }
 
   Future<T> patch<T>(
     String path, {
     dynamic data,
+    Map<String, dynamic>? headers,
     T Function(dynamic)? parser,
   }) async {
-    final resp = await _dio.patch(path, data: data);
+    final resp = await _dio.patch(
+      path,
+      data: data,
+      options: headers == null ? null : Options(headers: headers),
+    );
     return parser != null ? parser(resp.data) : resp.data as T;
   }
 
-  Future<T> delete<T>(String path, {T Function(dynamic)? parser}) async {
-    final resp = await _dio.delete(path);
+  Future<T> delete<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? headers,
+    T Function(dynamic)? parser,
+  }) async {
+    final resp = await _dio.delete(
+      path,
+      data: data,
+      options: headers == null ? null : Options(headers: headers),
+    );
     return parser != null ? parser(resp.data) : resp.data as T;
   }
 

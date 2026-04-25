@@ -30,7 +30,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Offset? _fabPos;
   bool? _lastChatUiOpen;
   OverlayEntry? _notificationBanner;
-  Timer? _notificationBannerTimer;
+  final List<NotificationPopupEvent> _activePopupEvents =
+      <NotificationPopupEvent>[];
+  final Map<String, Timer> _popupTimers = <String, Timer>{};
   NotificationProvider? _notificationProvider;
 
   @override
@@ -61,33 +63,57 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showInAppNotificationBanner(NotificationPopupEvent event) {
-    _notificationBannerTimer?.cancel();
-    _notificationBanner?.remove();
+    _popupTimers[event.id]?.cancel();
+    _activePopupEvents.removeWhere((item) => item.id == event.id);
+    _activePopupEvents.insert(0, event);
+    if (_activePopupEvents.length > 3) {
+      final removed = _activePopupEvents.removeLast();
+      _popupTimers.remove(removed.id)?.cancel();
+    }
+
+    _popupTimers[event.id] = Timer(const Duration(seconds: 5), () {
+      _dismissPopupById(event.id);
+    });
 
     final overlay = Overlay.of(context, rootOverlay: true);
+    _notificationBanner?.remove();
 
     _notificationBanner = OverlayEntry(
-      builder: (context) => _NotificationPopupBanner(
-        event: event,
-        onTap: () {
-          _dismissNotificationBanner();
-          GoRouter.of(context).go(event.route);
+      builder: (context) => _NotificationPopupStack(
+        events: List<NotificationPopupEvent>.unmodifiable(_activePopupEvents),
+        onOpen: (popup) {
+          _notificationProvider?.markNotificationAsRead(popup.id);
+          _dismissPopupById(popup.id);
+          GoRouter.of(context).go(popup.route);
         },
-        onDismiss: _dismissNotificationBanner,
+        onDismiss: (popup) {
+          _notificationProvider?.markNotificationAsRead(popup.id);
+          _dismissPopupById(popup.id);
+        },
       ),
     );
 
     overlay.insert(_notificationBanner!);
-    _notificationBannerTimer = Timer(const Duration(seconds: 4), () {
-      _dismissNotificationBanner();
-    });
   }
 
   void _dismissNotificationBanner() {
-    _notificationBannerTimer?.cancel();
-    _notificationBannerTimer = null;
+    for (final timer in _popupTimers.values) {
+      timer.cancel();
+    }
+    _popupTimers.clear();
+    _activePopupEvents.clear();
     _notificationBanner?.remove();
     _notificationBanner = null;
+  }
+
+  void _dismissPopupById(String id) {
+    _popupTimers.remove(id)?.cancel();
+    _activePopupEvents.removeWhere((item) => item.id == id);
+    _notificationBanner?.markNeedsBuild();
+    if (_activePopupEvents.isEmpty) {
+      _notificationBanner?.remove();
+      _notificationBanner = null;
+    }
   }
 
   Future<void> _openNotificationsPanel() async {
@@ -115,125 +141,191 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (sheetContext) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Notifications',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                    if (totalUnread > 0)
-                      Text(
-                        '$totalUnread unread',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                if (totalUnread > 0)
-                  InkWell(
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      context.push('/chat');
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? theme.colorScheme.surfaceContainerHigh
-                            : const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDark
-                              ? theme.colorScheme.outline.withValues(
-                                  alpha: 0.35,
-                                )
-                              : const Color(0xFFE2E8F0),
-                        ),
-                      ),
-                      child: Row(
+        return Consumer<NotificationProvider>(
+          builder: (context, provider, _) {
+            final notifications = provider.notifications;
+            final unreadNotifications = provider.unreadNotificationCount;
+            final badgeCount = unreadNotifications > totalUnread
+                ? unreadNotifications
+                : totalUnread;
+
+            return SafeArea(
+              top: false,
+              child: SizedBox(
+                height: MediaQuery.of(sheetContext).size.height * 0.62,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Icon(Icons.message_outlined, size: 18),
+                          Text(
+                            'Notifications',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                          if (badgeCount > 0)
+                            Text(
+                              '$badgeCount unread',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: notifications.isEmpty
+                                  ? null
+                                  : provider.markAllNotificationsAsRead,
+                              child: const Text('Mark All Read'),
+                            ),
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            child: OutlinedButton(
+                              onPressed: notifications.isEmpty
+                                  ? null
+                                  : provider.clearNotifications,
+                              child: const Text('Clear All'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (totalUnread > 0)
+                        InkWell(
+                          onTap: () {
+                            Navigator.of(sheetContext).pop();
+                            context.push('/chat');
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isDark
+                                  ? theme.colorScheme.surfaceContainerHigh
+                                  : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark
+                                    ? theme.colorScheme.outline.withValues(
+                                        alpha: 0.35,
+                                      )
+                                    : const Color(0xFFE2E8F0),
+                              ),
+                            ),
+                            child: Row(
                               children: [
-                                Text(
-                                  'Unread Messages',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: theme.colorScheme.onSurface,
+                                const Icon(Icons.message_outlined, size: 18),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Unread Messages',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: theme.colorScheme.onSurface,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '$totalUnread unread in chats and discussions',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: theme
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '$totalUnread unread in chats and discussions',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: theme.colorScheme.onSurfaceVariant,
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF2563EB),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    totalUnread > 99 ? '99+' : '$totalUnread',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF2563EB),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              totalUnread > 99 ? '99+' : '$totalUnread',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      child: Text(
-                        "You're all caught up",
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
                         ),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: notifications.isEmpty
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 18,
+                                  ),
+                                  child: Text(
+                                    "You're all caught up",
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: theme
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                itemCount: notifications.length,
+                                separatorBuilder: (_, _) =>
+                                    const SizedBox(height: 10),
+                                itemBuilder: (context, index) {
+                                  final item = notifications[index];
+                                  return _NotificationListTile(
+                                    item: item,
+                                    onOpen: () {
+                                      provider.markNotificationAsRead(item.id);
+                                      Navigator.of(sheetContext).pop();
+                                      context.go(item.route);
+                                    },
+                                    onDismiss: () {
+                                      provider.dismissNotification(item.id);
+                                    },
+                                    onMarkRead: () {
+                                      provider.markNotificationAsRead(item.id);
+                                    },
+                                  );
+                                },
+                              ),
                       ),
-                    ),
+                    ],
                   ),
-              ],
-            ),
-          ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -457,7 +549,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _dismissNotificationBanner();
     _notificationProvider?.removePopupListener(_handlePopupNotification);
-    _notificationBannerTimer?.cancel();
+    for (final timer in _popupTimers.values) {
+      timer.cancel();
+    }
+    _popupTimers.clear();
     _chatFabVisible.dispose();
     super.dispose();
   }
@@ -571,7 +666,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           Consumer<NotificationProvider>(
                             builder: (context, notificationProvider, _) {
                               final totalUnread =
-                                  notificationProvider.totalUnread;
+                                  notificationProvider.unreadNotificationCount >
+                                      notificationProvider.totalUnread
+                                  ? notificationProvider.unreadNotificationCount
+                                  : notificationProvider.totalUnread;
                               return Stack(
                                 clipBehavior: Clip.none,
                                 children: [
@@ -826,14 +924,61 @@ class DashboardSearchScope extends InheritedWidget {
   }
 }
 
+class _NotificationPopupStack extends StatelessWidget {
+  final List<NotificationPopupEvent> events;
+  final void Function(NotificationPopupEvent event) onOpen;
+  final void Function(NotificationPopupEvent event) onDismiss;
+
+  const _NotificationPopupStack({
+    required this.events,
+    required this.onOpen,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top;
+
+    return Positioned(
+      top: topPadding + 10,
+      left: 12,
+      right: 12,
+      child: IgnorePointer(
+        ignoring: events.isEmpty,
+        child: Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                for (var i = 0; i < events.length; i++) ...[
+                  if (i > 0) const SizedBox(height: 8),
+                  _NotificationPopupBanner(
+                    event: events[i],
+                    stackIndex: i,
+                    onOpen: () => onOpen(events[i]),
+                    onDismiss: () => onDismiss(events[i]),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _NotificationPopupBanner extends StatefulWidget {
   final NotificationPopupEvent event;
-  final VoidCallback onTap;
+  final int stackIndex;
+  final VoidCallback onOpen;
   final VoidCallback onDismiss;
 
   const _NotificationPopupBanner({
     required this.event,
-    required this.onTap,
+    required this.stackIndex,
+    required this.onOpen,
     required this.onDismiss,
   });
 
@@ -869,65 +1014,67 @@ class _NotificationPopupBannerState extends State<_NotificationPopupBanner>
     super.dispose();
   }
 
+  String _relativeTime(DateTime timestamp) {
+    final diff = DateTime.now().difference(timestamp);
+    if (diff.inSeconds < 60) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final topPadding = MediaQuery.of(context).padding.top;
 
-    return Positioned(
-      top: topPadding + 10,
-      left: 12,
-      right: 12,
-      child: Material(
-        color: Colors.transparent,
-        child: SlideTransition(
-          position: _slide,
-          child: SafeArea(
-            bottom: false,
-            child: Dismissible(
-              key: ValueKey('${widget.event.title}-${widget.event.body}'),
-              direction: DismissDirection.up,
-              onDismissed: (_) => widget.onDismiss(),
-              child: InkWell(
-                onTap: widget.onTap,
-                borderRadius: BorderRadius.circular(24),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+    return Transform.translate(
+      offset: Offset(0, widget.stackIndex * 2),
+      child: SlideTransition(
+        position: _slide,
+        child: Dismissible(
+          key: ValueKey(widget.event.id),
+          direction: DismissDirection.up,
+          onDismissed: (_) => widget.onDismiss(),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.14),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+              border: Border.all(
+                color: theme.colorScheme.outline.withValues(alpha: 0.14),
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.14),
-                        blurRadius: 24,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
-                    border: Border.all(
-                      color: theme.colorScheme.outline.withValues(alpha: 0.14),
-                    ),
+                    color: const Color(0xFFDBEAFE),
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Row(
+                  child: const Icon(
+                    Icons.message_rounded,
+                    color: Color(0xFF1D4ED8),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDBEAFE),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(
-                          Icons.message_rounded,
-                          color: Color(0xFF1D4ED8),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
                               widget.event.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -937,32 +1084,188 @@ class _NotificationPopupBannerState extends State<_NotificationPopupBanner>
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const SizedBox(height: 3),
-                            Text(
-                              widget.event.body,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontSize: 13,
-                                height: 1.3,
-                              ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _relativeTime(widget.event.createdAt),
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
                             ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        widget.event.body,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 13,
+                          height: 1.3,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: widget.onDismiss,
-                        icon: const Icon(Icons.close_rounded, size: 18),
-                        visualDensity: VisualDensity.compact,
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: widget.onOpen,
+                            child: const Text('Open'),
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton(
+                            onPressed: widget.onDismiss,
+                            child: const Text('Dismiss'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: widget.onDismiss,
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationListTile extends StatelessWidget {
+  final AppNotificationItem item;
+  final VoidCallback onOpen;
+  final VoidCallback onDismiss;
+  final VoidCallback onMarkRead;
+
+  const _NotificationListTile({
+    required this.item,
+    required this.onOpen,
+    required this.onDismiss,
+    required this.onMarkRead,
+  });
+
+  String _relativeTime(DateTime timestamp) {
+    final diff = DateTime.now().difference(timestamp);
+    if (diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: item.isRead
+              ? (isDark
+                    ? theme.colorScheme.surfaceContainerLow
+                    : const Color(0xFFF8FAFC))
+              : const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: item.isRead
+                ? theme.colorScheme.outline.withValues(alpha: 0.2)
+                : const Color(0xFFBFDBFE),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: item.isRead
+                    ? const Color(0xFFE2E8F0)
+                    : const Color(0xFFDBEAFE),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.notifications_active_outlined,
+                color: Color(0xFF1D4ED8),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _relativeTime(item.createdAt),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.body,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      TextButton(
+                        onPressed: onOpen,
+                        child: const Text('Open'),
+                      ),
+                      if (!item.isRead)
+                        TextButton(
+                          onPressed: onMarkRead,
+                          child: const Text('Mark Read'),
+                        ),
+                      TextButton(
+                        onPressed: onDismiss,
+                        child: const Text('Remove'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

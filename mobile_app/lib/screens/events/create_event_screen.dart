@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_colors.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
@@ -94,6 +95,83 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       setState(() {
         _budgetPdf = result.files.first;
       });
+    }
+  }
+
+  Future<void> _connectGoogle() async {
+    final res = await _api.get<Map<String, dynamic>>('/calendar/connect-url');
+    final url = res['url']?.toString().trim() ?? '';
+    if (url.isEmpty) {
+      throw Exception('Failed to obtain Google connect URL.');
+    }
+
+    final uri = Uri.parse(url);
+    final opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    if (!opened) {
+      throw Exception('Could not open the Google consent page.');
+    }
+  }
+
+  Future<bool> _ensureGoogleConnectedForBudgetPdf() async {
+    if (_budgetPdf == null) return true;
+
+    try {
+      final status = await _api.get<Map<String, dynamic>>(
+        '/auth/google/status',
+      );
+      final connected = status['connected'] == true;
+      if (connected) return true;
+
+      final missing = List<String>.from(status['missing_scopes'] ?? const []);
+      if (!mounted) return false;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Connect Google'),
+            content: Text(
+              missing.isEmpty
+                  ? 'A Google connection is required before continuing with an event that has a budget PDF.'
+                  : 'A Google connection is required before continuing with an event that has a budget PDF.\n\nMissing scopes: ${missing.join(', ')}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  Navigator.of(dialogContext).pop();
+                  try {
+                    await _connectGoogle();
+                  } catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(e.toString()),
+                        backgroundColor: AppColors.error,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Connect Google'),
+              ),
+            ],
+          );
+        },
+      );
+      return false;
+    } catch (e) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not verify Google connection: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return false;
     }
   }
 
@@ -298,10 +376,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
   }
 
-  void _openApprovalScreen(
+  Future<void> _openApprovalScreen(
     Map<String, dynamic> eventData, {
     required bool overrideConflict,
-  }) {
+  }) async {
+    final googleReady = await _ensureGoogleConnectedForBudgetPdf();
+    if (!mounted || !googleReady) return;
+
     final payload = {...eventData, 'override_conflict': overrideConflict};
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -421,9 +502,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       ),
                       _dialogButton(
                         label: 'Override',
-                        onPressed: () {
+                        onPressed: () async {
                           Navigator.of(ctx).pop();
-                          _openApprovalScreen(
+                          await _openApprovalScreen(
                             eventData,
                             overrideConflict: true,
                           );
