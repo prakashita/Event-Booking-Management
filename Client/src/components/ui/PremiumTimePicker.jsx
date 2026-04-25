@@ -24,16 +24,40 @@ function generateTimeSlots() {
 
 const TIME_SLOTS = generateTimeSlots();
 
-function PremiumTimePicker({ timeParts, onPartChange, required, label }) {
+function parseValueToParts(value) {
+  if (!value) return { hour: "", minute: "", period: "AM" };
+  const [rawHour = "", rawMinute = ""] = String(value).split(":");
+  const h24 = parseInt(rawHour, 10);
+  if (Number.isNaN(h24)) return { hour: "", minute: "", period: "AM" };
+  const period = h24 >= 12 ? "PM" : "AM";
+  const hour12 = h24 % 12 || 12;
+  return {
+    hour: String(hour12),
+    minute: String(rawMinute || "00").padStart(2, "0").slice(0, 2),
+    period
+  };
+}
+
+function slotToValue(slot) {
+  let hour = parseInt(slot.hour, 10);
+  if (slot.period === "AM" && hour === 12) hour = 0;
+  if (slot.period === "PM" && hour !== 12) hour += 12;
+  return `${String(hour).padStart(2, "0")}:${slot.minute}`;
+}
+
+function PremiumTimePicker({ timeParts, onPartChange, value, onChange, required, label }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const ref = useRef(null);
+  const triggerRef = useRef(null);
   const listRef = useRef(null);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 200 });
+  const effectiveParts = value !== undefined ? parseValueToParts(value) : timeParts;
 
   const currentLabel = useMemo(() => {
-    if (!timeParts.hour || !timeParts.minute) return "";
-    return `${timeParts.hour}:${timeParts.minute} ${timeParts.period}`;
-  }, [timeParts.hour, timeParts.minute, timeParts.period]);
+    if (!effectiveParts?.hour || !effectiveParts?.minute) return "";
+    return `${effectiveParts.hour}:${effectiveParts.minute} ${effectiveParts.period}`;
+  }, [effectiveParts?.hour, effectiveParts?.minute, effectiveParts?.period]);
 
   const filtered = useMemo(() => {
     if (!search) return TIME_SLOTS;
@@ -43,11 +67,31 @@ function PremiumTimePicker({ timeParts, onPartChange, required, label }) {
   useEffect(() => {
     if (!open) return;
     setSearch("");
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const dropH = 300;
+      const isMobile = window.innerWidth < 560;
+      if (isMobile) {
+        setDropPos({ top: Math.max(8, window.innerHeight - dropH - 16), left: 8, width: window.innerWidth - 16 });
+      } else {
+        setDropPos({
+          top: spaceBelow >= dropH + 10 ? rect.bottom + 6 : Math.max(8, rect.top - dropH - 6),
+          left: Math.max(8, Math.min(rect.left, window.innerWidth - 212)),
+          width: Math.max(200, rect.width),
+        });
+      }
+    }
     const handler = (e) => {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     };
+    const onScroll = () => setOpen(false);
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("scroll", onScroll, true);
+    };
   }, [open]);
 
   useEffect(() => {
@@ -61,16 +105,22 @@ function PremiumTimePicker({ timeParts, onPartChange, required, label }) {
   }, []);
 
   const selectSlot = (slot) => {
-    onPartChange("hour")({ target: { value: slot.hour } });
-    onPartChange("minute")({ target: { value: slot.minute } });
-    onPartChange("period")({ target: { value: slot.period } });
+    if (onChange) {
+      onChange({ target: { value: slotToValue(slot) } });
+    } else {
+      onPartChange("hour")({ target: { value: slot.hour } });
+      onPartChange("minute")({ target: { value: slot.minute } });
+      onPartChange("period")({ target: { value: slot.period } });
+    }
     setOpen(false);
   };
+  const noop = () => {};
 
   return (
     <div className="ptp-wrapper" ref={ref} onKeyDown={handleKeyDown}>
       {label && <span className="ptp-label">{label}</span>}
       <button
+        ref={triggerRef}
         type="button"
         className={`ptp-trigger ${open ? "ptp-trigger--open" : ""}`}
         onClick={() => setOpen(!open)}
@@ -84,16 +134,21 @@ function PremiumTimePicker({ timeParts, onPartChange, required, label }) {
         <svg className="ptp-chevron" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.293l3.71-4.06a.75.75 0 111.08 1.04l-4.25 4.65a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" /></svg>
       </button>
       {/* Hidden selects for form validation */}
-      <select value={timeParts.hour} required={required} tabIndex={-1} className="ptp-hidden" onChange={onPartChange("hour")} aria-hidden="true">
+      <select value={effectiveParts?.hour || ""} required={required} tabIndex={-1} className="ptp-hidden" onChange={onPartChange ? onPartChange("hour") : noop} aria-hidden="true">
         <option value="">Hour</option>
         {Array.from({ length: 12 }, (_, i) => String(i + 1)).map((h) => <option key={h} value={h}>{h}</option>)}
       </select>
-      <select value={timeParts.minute} required={required} tabIndex={-1} className="ptp-hidden" onChange={onPartChange("minute")} aria-hidden="true">
+      <select value={effectiveParts?.minute || ""} required={required} tabIndex={-1} className="ptp-hidden" onChange={onPartChange ? onPartChange("minute") : noop} aria-hidden="true">
         <option value="">Min</option>
         {Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0")).map((m) => <option key={m} value={m}>{m}</option>)}
       </select>
       {open && (
-        <div className="ptp-dropdown" role="listbox" aria-label="Time picker">
+        <div
+          className="ptp-dropdown"
+          style={{ position: "fixed", top: dropPos.top, left: dropPos.left, width: dropPos.width, zIndex: 99999 }}
+          role="listbox"
+          aria-label="Time picker"
+        >
           <div className="ptp-search-wrap">
             <input
               type="text"
