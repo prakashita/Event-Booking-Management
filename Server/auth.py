@@ -118,13 +118,11 @@ def decode_access_token(token: str) -> dict:
         )
 
 
-def create_oauth_state(user_id: str, redirect_uri: str | None = None) -> str:
+def create_oauth_state(user_id: str) -> str:
     payload = {
         "user_id": user_id,
         "exp": datetime.utcnow() + timedelta(minutes=10)
     }
-    if redirect_uri:
-        payload["redirect_uri"] = redirect_uri
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
