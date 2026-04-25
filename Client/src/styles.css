@@ -1919,6 +1919,16 @@ button.marketing-attachment-remove {
   backdrop-filter: blur(18px) saturate(130%);
 }
 
+/* Closing animation — plays before unmount */
+.req-workflow-overlay--closing {
+  animation: reqOverlayOut 0.28s ease forwards;
+  pointer-events: none;
+}
+
+.req-workflow-panel--closing {
+  animation: reqPanelOut 0.28s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
 .req-workflow-progress {
   height: 3px;
   background: rgba(148, 163, 184, 0.22);
@@ -2803,6 +2813,22 @@ button.marketing-attachment-remove {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+
+@keyframes reqPanelOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.982);
+  }
+}
+
+@keyframes reqOverlayOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
 }
 
 @keyframes reqSectionIn {

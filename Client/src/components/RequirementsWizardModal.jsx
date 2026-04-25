@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   DeptIconFacility,
   DeptIconIt,
@@ -181,14 +181,14 @@ function EventSummaryCard({ pendingEvent, eventForm, user, formatISTTime, active
   );
 }
 
-function WorkflowLayout({ children, footer, activeDept, wizard, total, onClose, pendingEvent, eventForm, user, formatISTTime }) {
+function WorkflowLayout({ children, footer, activeDept, wizard, total, onClose, pendingEvent, eventForm, user, formatISTTime, isClosing }) {
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const progress = wizard.phase === "review" ? 100 : Math.round(((wizard.stepIndex + 1) / Math.max(total, 1)) * 100);
   const currentStep = wizard.phase === "review" ? total : wizard.stepIndex + 1;
 
   return (
-    <div className="approval-overlay req-workflow-overlay" role="dialog" aria-modal="true">
-      <section className="req-workflow-panel" aria-labelledby="requirements-workflow-title">
+    <div className={`approval-overlay req-workflow-overlay${isClosing ? " req-workflow-overlay--closing" : ""}`} role="dialog" aria-modal="true">
+      <section className={`req-workflow-panel${isClosing ? " req-workflow-panel--closing" : ""}`} aria-labelledby="requirements-workflow-title">
         <div className="req-workflow-progress" aria-hidden>
           <span style={{ width: `${progress}%` }} />
         </div>
@@ -393,7 +393,27 @@ export default function RequirementsWizardModal({
   handleItToggle,
   setItForm
 }) {
-  if (!wizard.open) return null;
+  // ── Closing animation state ──────────────────────────────────────────
+  const [isMounted, setIsMounted] = useState(wizard.open);
+  const [isClosing, setIsClosing] = useState(false);
+  const closingTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (wizard.open) {
+      setIsMounted(true);
+      // Small frame delay so the enter animation fires after mount
+      requestAnimationFrame(() => setIsClosing(false));
+    } else if (isMounted) {
+      setIsClosing(true);
+      closingTimerRef.current = setTimeout(() => {
+        setIsMounted(false);
+        setIsClosing(false);
+      }, 300);
+    }
+    return () => clearTimeout(closingTimerRef.current);
+  }, [wizard.open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!isMounted) return null;
 
   const stepKey = wizard.phase === "edit" ? wizard.steps[wizard.stepIndex] : wizard.steps[0];
   const total = wizard.steps.length;
@@ -455,6 +475,7 @@ export default function RequirementsWizardModal({
       user={user}
       formatISTTime={formatISTTime}
       footer={renderFooter()}
+      isClosing={isClosing}
     >
       {wizard.phase === "edit" && stepKey === "facility" ? (
         <>
