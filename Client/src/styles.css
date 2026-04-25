@@ -6799,6 +6799,126 @@ button.marketing-attachment-remove {
   margin: 0;
 }
 
+.iqac-template-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1.15rem 1.25rem;
+  background: linear-gradient(135deg, var(--card) 0%, var(--surface) 100%);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  margin-bottom: 1.5rem;
+}
+
+.iqac-template-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--accent-tint-medium);
+  color: var(--accent-blue);
+  flex-shrink: 0;
+}
+
+.iqac-template-icon svg,
+.iqac-template-primary svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.iqac-template-content {
+  min-width: 0;
+}
+
+.iqac-template-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.iqac-template-heading h3 {
+  margin: 0 0 0.3rem;
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.iqac-template-heading p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.iqac-template-primary {
+  gap: 0.5rem;
+}
+
+.iqac-template-primary:disabled,
+.iqac-template-row .secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.iqac-template-message {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0.75rem 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+}
+
+.iqac-template-message--error {
+  color: #b12c2a;
+  border-color: rgba(177, 44, 42, 0.24);
+  background: rgba(177, 44, 42, 0.08);
+}
+
+.iqac-template-list {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.iqac-template-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.iqac-template-name,
+.iqac-template-meta {
+  display: block;
+}
+
+.iqac-template-name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.iqac-template-meta {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  margin-top: 0.2rem;
+}
+
 .iqac-loading,
 .iqac-error {
   padding: 2rem;
@@ -7197,6 +7317,24 @@ button.marketing-attachment-remove {
 .iqac-file-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .iqac-template-card {
+    grid-template-columns: 1fr;
+  }
+
+  .iqac-template-heading,
+  .iqac-template-row,
+  .iqac-template-message {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .iqac-template-primary,
+  .iqac-template-row .secondary-action {
+    width: 100%;
+  }
 }
 
 /* ===== FLOATING MESSENGER ===== */
@@ -12282,6 +12420,23 @@ button.marketing-attachment-remove {
 /* ── IQAC page ── */
 [data-theme="dark"] .iqac-card-sub-row {
   background: var(--surface);
+}
+
+[data-theme="dark"] .iqac-template-card {
+  background: linear-gradient(135deg, var(--card) 0%, var(--surface) 100%);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .iqac-template-message,
+[data-theme="dark"] .iqac-template-row {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .iqac-template-message--error {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(248, 113, 113, 0.08);
 }
 
 [data-theme="dark"] .iqac-subfolder-btn {
