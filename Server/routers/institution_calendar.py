@@ -9,7 +9,7 @@ import requests
 
 from auth import ensure_google_access_token
 from models import InstitutionCalendarEntry, User
-from routers.deps import require_admin_or_registrar
+from routers.deps import require_admin_only
 from schemas import (
     InstitutionCalendarEntryCreate,
     InstitutionCalendarEntryResponse,
@@ -350,7 +350,7 @@ async def list_institution_calendar_entries(
     academic_year: Optional[str] = Query(None),
     semester: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
-    current_user: User = Depends(require_admin_or_registrar),
+    current_user: User = Depends(require_admin_only),
 ):
     items = await InstitutionCalendarEntry.find(
         _build_entry_query(
@@ -385,7 +385,7 @@ async def list_public_institution_calendar_entries(
 @router.post("", response_model=InstitutionCalendarMutationResponse, status_code=201)
 async def create_institution_calendar_entry(
     payload: InstitutionCalendarEntryCreate,
-    current_user: User = Depends(require_admin_or_registrar),
+    current_user: User = Depends(require_admin_only),
 ):
     now = datetime.utcnow()
     entry_type = payload.entry_type
@@ -448,7 +448,7 @@ async def create_institution_calendar_entry(
 async def update_institution_calendar_entry(
     entry_id: str,
     payload: InstitutionCalendarEntryUpdate,
-    current_user: User = Depends(require_admin_or_registrar),
+    current_user: User = Depends(require_admin_only),
 ):
     entry = await _get_entry_or_404(entry_id)
     _apply_payload_to_entry(entry, payload, entry_type=entry.entry_type, current_user=current_user)
@@ -468,7 +468,7 @@ async def update_institution_calendar_entry(
 @router.delete("/{entry_id}")
 async def delete_institution_calendar_entry(
     entry_id: str,
-    current_user: User = Depends(require_admin_or_registrar),
+    current_user: User = Depends(require_admin_only),
 ):
     entry = await _get_entry_or_404(entry_id)
     await entry.delete()
@@ -478,7 +478,7 @@ async def delete_institution_calendar_entry(
 @router.post("/{entry_id}/sync-google", response_model=InstitutionCalendarMutationResponse)
 async def sync_institution_calendar_entry_google(
     entry_id: str,
-    current_user: User = Depends(require_admin_or_registrar),
+    current_user: User = Depends(require_admin_only),
 ):
     entry = await _get_entry_or_404(entry_id)
     entry.google_sync_enabled = True
@@ -496,7 +496,7 @@ async def sync_institution_calendar_entry_google(
 @router.delete("/{entry_id}/unsync-google", response_model=InstitutionCalendarMutationResponse)
 async def unsync_institution_calendar_entry_google(
     entry_id: str,
-    current_user: User = Depends(require_admin_or_registrar),
+    current_user: User = Depends(require_admin_only),
 ):
     entry = await _get_entry_or_404(entry_id)
     sync_result = await unsync_institution_entry_from_google_calendar(entry, current_user)

@@ -461,18 +461,13 @@ export default function App() {
   const isItRole = normalizedUserRole === "it";
   const isTransportRole = normalizedUserRole === "transport";
   const canAccessAdminConsole = isAdmin;
-  const canAccessCalendarUpdates =
-    isAdmin ||
-    isRegistrar ||
-    isViceChancellor ||
-    isDeputyRegistrar ||
-    isFinanceTeam;
+  const canAccessCalendarUpdates = isAdmin;
   const canAccessUserApprovals = isAdmin;
   const canAccessApprovals = isRegistrarDashboard;
   const canAccessRequirements =
     isFacilityManagerRole || isMarketingRole || isItRole || isTransportRole;
   const canAccessIqac = ROLES_WITH_IQAC_ACCESS.includes(normalizedUserRole);
-  const canShowIqacDataCollection = normalizedUserRole === "iqac";
+  const canShowIqacDataCollection = canAccessIqac;
   const canDeleteIqacFiles = ROLES_WITH_IQAC_DELETE_ACCESS.includes(normalizedUserRole);
   const defaultFacilitator = (user?.name || "").trim();
 

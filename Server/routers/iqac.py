@@ -1,18 +1,21 @@
 """
 IQAC Data Collection API: criteria tree, file list/upload/delete/download.
-Access restricted to users with IQAC (or admin/registrar) role.
+Access restricted to users with IQAC role.
 """
 import os
 import re
 import uuid
-from datetime import datetime, timezone
+from copy import deepcopy
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
+from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 
-from models import IQACFile, User
+from models import IQACFile, IQACSSRHistory, IQACSSRSection, User
 from routers.deps import IQAC_DELETE_ALLOWED_ROLES, require_iqac
+from schemas import IQACSSRHistoryResponse, IQACSSRSectionResponse, IQACSSRSectionUpdate
 
 router = APIRouter(prefix="/iqac", tags=["iqac"])
 
@@ -75,6 +78,165 @@ IQAC_TEMPLATE_DEFINITIONS = (
         "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     },
 )
+
+SSR_SECTION_KEYS = ("executive_summary", "university_profile", "extended_profile", "qif")
+
+
+def _format_ssr_section(
+    section_key: str,
+    doc: IQACSSRSection | None = None,
+    *,
+    no_changes: bool = False,
+    message: str | None = None,
+) -> dict[str, Any]:
+    if not doc:
+        return {
+            "id": None,
+            "section_key": section_key,
+            "data": {},
+            "no_changes": no_changes,
+            "message": message,
+            "created_by": None,
+            "created_by_name": None,
+            "updated_by": None,
+            "updated_by_name": None,
+            "updated_by_email": None,
+            "created_at": None,
+            "updated_at": None,
+        }
+    created_at = doc.created_at
+    updated_at = doc.updated_at
+    if created_at and created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    if updated_at and updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    return {
+        "id": str(doc.id),
+        "section_key": doc.section_key,
+        "data": doc.data or {},
+        "no_changes": no_changes,
+        "message": message,
+        "created_by": doc.created_by,
+        "created_by_name": getattr(doc, "created_by_name", None),
+        "updated_by": doc.updated_by,
+        "updated_by_name": getattr(doc, "updated_by_name", None),
+        "updated_by_email": getattr(doc, "updated_by_email", None),
+        "created_at": created_at.isoformat() if created_at else None,
+        "updated_at": updated_at.isoformat() if updated_at else None,
+    }
+
+
+def _normalize_for_compare(value: Any) -> Any:
+    """Return plain JSON-like data with dictionaries sorted for stable deep comparison."""
+    if isinstance(value, dict):
+        return {key: _normalize_for_compare(value[key]) for key in sorted(value.keys())}
+    if isinstance(value, list):
+        return [_normalize_for_compare(item) for item in value]
+    return value
+
+
+def _has_meaningful_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (int, float, bool)):
+        return bool(value)
+    if isinstance(value, list):
+        return any(_has_meaningful_value(item) for item in value)
+    if isinstance(value, dict):
+        return any(_has_meaningful_value(item) for item in value.values())
+    return True
+
+
+def _diff_value_type(old_value: Any, new_value: Any) -> str:
+    if old_value is None and new_value is not None:
+        return "added"
+    if old_value is not None and new_value is None:
+        return "removed"
+    return "changed"
+
+
+def _compute_field_diffs(old_data: Any, new_data: Any, prefix: str = "") -> dict[str, dict[str, Any]]:
+    """Return field path -> previous/new diff entries for nested dict/list values."""
+    if isinstance(old_data, dict) and isinstance(new_data, dict):
+        diffs: dict[str, dict[str, Any]] = {}
+        all_keys = sorted(set(old_data.keys()) | set(new_data.keys()))
+        for key in all_keys:
+            path = f"{prefix}.{key}" if prefix else str(key)
+            old_value = old_data.get(key)
+            new_value = new_data.get(key)
+            if _normalize_for_compare(old_value) == _normalize_for_compare(new_value):
+                continue
+            if isinstance(old_value, dict) and isinstance(new_value, dict):
+                nested = _compute_field_diffs(old_value, new_value, path)
+                diffs.update(nested or {
+                    path: {
+                        "previous": old_value,
+                        "new": new_value,
+                        "type": _diff_value_type(old_value, new_value),
+                    }
+                })
+            else:
+                diffs[path] = {
+                    "previous": old_value,
+                    "new": new_value,
+                    "type": _diff_value_type(old_value, new_value),
+                }
+        return diffs
+
+    if _normalize_for_compare(old_data) == _normalize_for_compare(new_data):
+        return {}
+    return {
+        prefix or "data": {
+            "previous": old_data,
+            "new": new_data,
+            "type": _diff_value_type(old_data, new_data),
+        }
+    }
+
+
+def _compute_changed_fields(old_data: dict, new_data: dict) -> list[str]:
+    return sorted(_compute_field_diffs(old_data, new_data).keys())
+
+
+def _serialize_ssr_history(history: IQACSSRHistory) -> dict[str, Any]:
+    edited_at = history.edited_at
+    expires_at = history.expires_at
+    if edited_at and edited_at.tzinfo is None:
+        edited_at = edited_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    edited_by_user_id = getattr(history, "edited_by_user_id", None) or getattr(history, "edited_by", None)
+    return {
+        "id": str(history.id),
+        "section_key": history.section_key,
+        "previous_data": history.previous_data or {},
+        "new_data": history.new_data or {},
+        "changed_fields": history.changed_fields or [],
+        "field_diffs": getattr(history, "field_diffs", None) or {},
+        "change_summary": history.change_summary,
+        "edited_by": getattr(history, "edited_by", None) or edited_by_user_id,
+        "edited_by_user_id": edited_by_user_id,
+        "edited_by_name": history.edited_by_name,
+        "edited_by_email": history.edited_by_email,
+        "edited_at": edited_at.isoformat() if edited_at else None,
+        "expires_at": expires_at.isoformat() if expires_at else None,
+    }
+
+
+def _validate_ssr_section_key(section_key: str) -> str:
+    normalized = (section_key or "").strip().lower()
+    if normalized not in SSR_SECTION_KEYS:
+        raise HTTPException(status_code=404, detail="SSR section not found")
+    return normalized
+
+
+async def _purge_expired_ssr_history(now: datetime) -> None:
+    cutoff = now - timedelta(days=5)
+    await IQACSSRHistory.find(
+        {"$or": [{"edited_at": {"$lt": cutoff}}, {"expires_at": {"$lt": now}}]}
+    ).delete()
 
 
 # NAAC IQAC 7-criteria structure: criterion title → sub-criteria (1.1, 1.2, …) → items (1.1.1, 1.1.2, …)
@@ -254,6 +416,226 @@ async def get_file_counts(current_user: User = Depends(require_iqac)):
             counts[c][s] = {}
         counts[c][s][i] = counts[c][s].get(i, 0) + 1
     return counts
+
+
+@router.get("/ssr-sections", response_model=List[IQACSSRSectionResponse])
+async def list_ssr_sections(current_user: User = Depends(require_iqac)):
+    """Return all SSR/NAAC data-entry sections, including empty placeholders."""
+    docs = await IQACSSRSection.find(
+        {"section_key": {"$in": list(SSR_SECTION_KEYS)}}
+    ).to_list()
+    by_key = {doc.section_key: doc for doc in docs}
+    return [_format_ssr_section(section_key, by_key.get(section_key)) for section_key in SSR_SECTION_KEYS]
+
+
+@router.get("/ssr-sections/{section_key}", response_model=IQACSSRSectionResponse)
+async def get_ssr_section(
+    section_key: str,
+    current_user: User = Depends(require_iqac),
+):
+    """Return one SSR/NAAC data-entry section."""
+    normalized = _validate_ssr_section_key(section_key)
+    doc = await IQACSSRSection.find_one(IQACSSRSection.section_key == normalized)
+    return _format_ssr_section(normalized, doc)
+
+
+@router.put("/ssr-sections/{section_key}", response_model=IQACSSRSectionResponse)
+async def upsert_ssr_section(
+    section_key: str,
+    payload: IQACSSRSectionUpdate,
+    current_user: User = Depends(require_iqac),
+):
+    """Create or update one SSR/NAAC data-entry section and record edit history."""
+    normalized = _validate_ssr_section_key(section_key)
+    now = datetime.utcnow()
+    user_id = str(current_user.id)
+    user_name = (current_user.name or "").strip()
+    user_email = (current_user.email or "").strip()
+    new_data = payload.data or {}
+
+    await _purge_expired_ssr_history(now)
+
+    doc = await IQACSSRSection.find_one(IQACSSRSection.section_key == normalized)
+    previous_data = deepcopy(doc.data) if doc and doc.data else {}
+
+    if _normalize_for_compare(previous_data) == _normalize_for_compare(new_data):
+        return _format_ssr_section(
+            normalized,
+            doc,
+            no_changes=True,
+            message="No changes detected",
+        )
+
+    if not doc and not _has_meaningful_value(new_data):
+        return _format_ssr_section(
+            normalized,
+            None,
+            no_changes=True,
+            message="No changes detected",
+        )
+
+    if doc:
+        doc.data = new_data
+        doc.updated_by = user_id
+        doc.updated_by_name = user_name
+        doc.updated_by_email = user_email
+        doc.updated_at = now
+        await doc.save()
+    else:
+        doc = IQACSSRSection(
+            section_key=normalized,
+            data=new_data,
+            created_by=user_id,
+            created_by_name=user_name,
+            updated_by=user_id,
+            updated_by_name=user_name,
+            updated_by_email=user_email,
+            created_at=now,
+            updated_at=now,
+        )
+        await doc.insert()
+
+    field_diffs = _compute_field_diffs(previous_data, new_data)
+    changed_fields = sorted(field_diffs.keys())
+    if not previous_data:
+        change_summary = "First save"
+    elif changed_fields:
+        change_summary = "Modified: " + ", ".join(changed_fields)
+    else:
+        change_summary = "Saved"
+    history_entry = IQACSSRHistory(
+        section_key=normalized,
+        previous_data=previous_data,
+        new_data=new_data,
+        changed_fields=changed_fields,
+        field_diffs=field_diffs,
+        change_summary=change_summary,
+        edited_by=user_id,
+        edited_by_user_id=user_id,
+        edited_by_name=user_name,
+        edited_by_email=user_email,
+        edited_at=now,
+        expires_at=now + timedelta(days=5),
+    )
+    await history_entry.insert()
+
+    return _format_ssr_section(normalized, doc)
+
+
+@router.get("/ssr-sections/{section_key}/history", response_model=List[IQACSSRHistoryResponse])
+async def get_ssr_section_history(
+    section_key: str,
+    current_user: User = Depends(require_iqac),
+):
+    """Return edit history for an SSR section (entries from the last 5 days, newest first)."""
+    normalized = _validate_ssr_section_key(section_key)
+    now = datetime.utcnow()
+    await _purge_expired_ssr_history(now)
+    cutoff = now - timedelta(days=5)
+    docs = await IQACSSRHistory.find(
+        IQACSSRHistory.section_key == normalized,
+        IQACSSRHistory.edited_at >= cutoff,
+    ).sort(-IQACSSRHistory.edited_at).to_list()
+    return [_serialize_ssr_history(history) for history in docs]
+
+
+@router.get("/ssr-sections/{section_key}/history/{history_id}", response_model=IQACSSRHistoryResponse)
+async def get_ssr_section_history_detail(
+    section_key: str,
+    history_id: str,
+    current_user: User = Depends(require_iqac),
+):
+    """Return one SSR history entry with full previous/new data and field diffs."""
+    normalized = _validate_ssr_section_key(section_key)
+    now = datetime.utcnow()
+    await _purge_expired_ssr_history(now)
+    try:
+        oid = PydanticObjectId(history_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="History entry not found")
+    history = await IQACSSRHistory.get(oid)
+    if not history or history.section_key != normalized:
+        raise HTTPException(status_code=404, detail="History entry not found")
+    if history.edited_at and history.edited_at < now - timedelta(days=5):
+        raise HTTPException(status_code=404, detail="History entry not found")
+    return _serialize_ssr_history(history)
+
+
+@router.post("/ssr-sections/{section_key}/restore/{history_id}", response_model=IQACSSRSectionResponse)
+async def restore_ssr_section_history(
+    section_key: str,
+    history_id: str,
+    current_user: User = Depends(require_iqac),
+):
+    """Restore an SSR section to the version that existed before a selected edit."""
+    normalized = _validate_ssr_section_key(section_key)
+    now = datetime.utcnow()
+    await _purge_expired_ssr_history(now)
+    try:
+        oid = PydanticObjectId(history_id)
+    except Exception:
+        raise HTTPException(status_code=404, detail="History entry not found")
+
+    history = await IQACSSRHistory.get(oid)
+    if not history or history.section_key != normalized:
+        raise HTTPException(status_code=404, detail="History entry not found")
+
+    user_id = str(current_user.id)
+    user_name = (current_user.name or "").strip()
+    user_email = (current_user.email or "").strip()
+    restore_data = deepcopy(history.previous_data or {})
+    doc = await IQACSSRSection.find_one(IQACSSRSection.section_key == normalized)
+    previous_data = deepcopy(doc.data) if doc and doc.data else {}
+
+    if _normalize_for_compare(previous_data) == _normalize_for_compare(restore_data):
+        return _format_ssr_section(
+            normalized,
+            doc,
+            no_changes=True,
+            message="No changes detected",
+        )
+
+    if doc:
+        doc.data = restore_data
+        doc.updated_by = user_id
+        doc.updated_by_name = user_name
+        doc.updated_by_email = user_email
+        doc.updated_at = now
+        await doc.save()
+    else:
+        doc = IQACSSRSection(
+            section_key=normalized,
+            data=restore_data,
+            created_by=user_id,
+            created_by_name=user_name,
+            updated_by=user_id,
+            updated_by_name=user_name,
+            updated_by_email=user_email,
+            created_at=now,
+            updated_at=now,
+        )
+        await doc.insert()
+
+    field_diffs = _compute_field_diffs(previous_data, restore_data)
+    changed_fields = sorted(field_diffs.keys())
+    restored_at = history.edited_at.isoformat() if history.edited_at else str(history.id)
+    history_entry = IQACSSRHistory(
+        section_key=normalized,
+        previous_data=previous_data,
+        new_data=restore_data,
+        changed_fields=changed_fields,
+        field_diffs=field_diffs,
+        change_summary=f"Restored version from {restored_at}",
+        edited_by=user_id,
+        edited_by_user_id=user_id,
+        edited_by_name=user_name,
+        edited_by_email=user_email,
+        edited_at=now,
+        expires_at=now + timedelta(days=5),
+    )
+    await history_entry.insert()
+
+    return _format_ssr_section(normalized, doc, message="Version restored")
 
 
 @router.get("/templates")
