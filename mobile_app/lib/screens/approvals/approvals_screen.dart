@@ -64,9 +64,6 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
 
    bool get _canAccess => _isApproverRole;
 
-  String get _currentUserEmail =>
-      (context.read<AuthProvider>().user?.email ?? '').trim().toLowerCase();
-
   String get _departmentLabel {
     if (_isFacilityRole) return 'Facility Manager';
     if (_isMarketingRole) return 'Marketing';
@@ -177,29 +174,6 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
 
   bool _isActionable(ApprovalRequest req) {
     final status = req.status.trim().toLowerCase();
-    final stage = (req.pipelineStage ?? '').trim().toLowerCase();
-    final requestedTo = req.requestedTo.trim().toLowerCase();
-    if (!(status == 'pending' ||
-        status == 'clarification' ||
-        status == 'clarification_requested')) {
-      return false;
-    }
-
-    if (requestedTo.isNotEmpty && requestedTo != _currentUserEmail) {
-      return false;
-    }
-
-    // Only show actions to the reviewer responsible for the current stage.
-    if (_roleKey == 'deputy_registrar') {
-      return stage == 'deputy';
-    }
-    if (_roleKey == 'finance_team') {
-      return stage == 'finance';
-    }
-    if (_roleKey == 'registrar' || _roleKey == 'vice_chancellor') {
-      return stage == 'registrar' || stage == 'final' || stage.isEmpty;
-    }
-
     return status == 'pending' ||
         status == 'clarification' ||
         status == 'clarification_requested';
