@@ -29,6 +29,10 @@ class RequirementsWizardDialog extends StatefulWidget {
 
 class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
   final _api = ApiService();
+  final _facilityToController = TextEditingController();
+  final _itToController = TextEditingController();
+  final _marketingToController = TextEditingController();
+  final _transportToController = TextEditingController();
   static const int _maxMarketingRequesterFiles = 10;
   static const int _maxMarketingRequesterFileMb = 25;
   static const int _maxMarketingRequesterFileBytes =
@@ -100,6 +104,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
   String _status = 'idle'; // 'idle', 'loading', 'error'
   String _errorMessage = '';
   List<PlatformFile> _marketingAttachments = [];
+  bool _routingEmailsLoading = false;
 
   String get _currentDept => _departments[_currentStep];
   bool get _hasAnySelected => _departments.any((d) => !_skipped[d]!);
@@ -118,9 +123,84 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
         ? List<String>.from(_allDepartments)
         : _allDepartments.where(incoming.contains).toList();
     _skipped = {for (final dept in _departments) dept: false};
+    _loadDepartmentRoutingEmails();
+  }
+
+  @override
+  void dispose() {
+    _facilityToController.dispose();
+    _itToController.dispose();
+    _marketingToController.dispose();
+    _transportToController.dispose();
+    super.dispose();
   }
 
   String _trimmed(dynamic value) => value?.toString().trim() ?? '';
+
+  Future<void> _loadDepartmentRoutingEmails() async {
+    if (!mounted) return;
+    setState(() {
+      _routingEmailsLoading = true;
+    });
+
+    try {
+      final results = await Future.wait<dynamic>([
+        _api.get<Map<String, dynamic>>('/auth/facility-manager-email'),
+        _api.get<Map<String, dynamic>>('/auth/it-email'),
+        _api.get<Map<String, dynamic>>('/auth/marketing-email'),
+        _api.get<Map<String, dynamic>>('/auth/transport-email'),
+      ]);
+
+      _applyRoutingEmail(
+        controller: _facilityToController,
+        form: _facilityForm,
+        key: 'to',
+        email: (results[0] as Map<String, dynamic>)['email']?.toString() ?? '',
+      );
+      _applyRoutingEmail(
+        controller: _itToController,
+        form: _itForm,
+        key: 'to',
+        email: (results[1] as Map<String, dynamic>)['email']?.toString() ?? '',
+      );
+      _applyRoutingEmail(
+        controller: _marketingToController,
+        form: _marketingForm,
+        key: 'to',
+        email: (results[2] as Map<String, dynamic>)['email']?.toString() ?? '',
+      );
+      _applyRoutingEmail(
+        controller: _transportToController,
+        form: _transportForm,
+        key: 'to',
+        email: (results[3] as Map<String, dynamic>)['email']?.toString() ?? '',
+      );
+    } catch (_) {
+      // Keep the fields editable and fall back to manual entry if routing
+      // emails are unavailable for this user or environment.
+    } finally {
+      if (mounted) {
+        setState(() {
+          _routingEmailsLoading = false;
+        });
+      }
+    }
+  }
+
+  void _applyRoutingEmail({
+    required TextEditingController controller,
+    required Map<String, dynamic> form,
+    required String key,
+    required String email,
+  }) {
+    final normalized = email.trim();
+    if (normalized.isEmpty) return;
+    if (_trimmed(form[key]).isNotEmpty || controller.text.trim().isNotEmpty) {
+      return;
+    }
+    form[key] = normalized;
+    controller.text = normalized;
+  }
 
   String? _validateTransportForm() {
     final wantsGuest = _transportForm['include_guest_cab'] as bool;
@@ -951,12 +1031,15 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
           ),
           const SizedBox(height: 16),
           TextField(
+            controller: _facilityToController,
             onChanged: (v) => _facilityForm['to'] = v,
             style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration:
                 _buildInputDecoration(
                   'To',
-                  hintText: 'Facility manager email (Optional)',
+                  hintText: _routingEmailsLoading
+                      ? 'Loading facility manager email...'
+                      : 'Facility manager email',
                 ).copyWith(
                   prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
                 ),
@@ -1029,12 +1112,15 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
           ),
           const SizedBox(height: 16),
           TextField(
+            controller: _itToController,
             onChanged: (v) => _itForm['to'] = v,
             style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration:
                 _buildInputDecoration(
                   'To',
-                  hintText: 'IT department email (Optional)',
+                  hintText: _routingEmailsLoading
+                      ? 'Loading IT department email...'
+                      : 'IT department email',
                 ).copyWith(
                   prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
                 ),
@@ -1170,12 +1256,15 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
           _buildEventSummary(),
           const SizedBox(height: 32),
           TextField(
+            controller: _marketingToController,
             onChanged: (v) => _marketingForm['to'] = v,
             style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration:
                 _buildInputDecoration(
                   'To',
-                  hintText: 'Marketing email (Optional)',
+                  hintText: _routingEmailsLoading
+                      ? 'Loading marketing email...'
+                      : 'Marketing email',
                 ).copyWith(
                   prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
                 ),
@@ -1476,12 +1565,15 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
           _buildEventSummary(),
           const SizedBox(height: 32),
           TextField(
+            controller: _transportToController,
             onChanged: (v) => _transportForm['to'] = v,
             style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration:
                 _buildInputDecoration(
                   'To',
-                  hintText: 'Transport coordinator email (Optional)',
+                  hintText: _routingEmailsLoading
+                      ? 'Loading transport coordinator email...'
+                      : 'Transport coordinator email',
                 ).copyWith(
                   prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
                 ),

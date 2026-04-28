@@ -44,6 +44,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
 
   late TabController _tabController;
   late String _roleKey;
+  String _statusFilter = 'all';
+  String _viewModeFilter = 'all';
 
   List<ApprovalRequest> _inbox = [];
   List<dynamic> _departmentInbox = [];
@@ -59,8 +61,6 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
   bool get _isMarketingRole => AppConstants.marketingRoles.contains(_roleKey);
   bool get _isItRole => AppConstants.itRoles.contains(_roleKey);
   bool get _isTransportRole => AppConstants.transportRoles.contains(_roleKey);
-  bool get _isDepartmentRole =>
-      _isFacilityRole || _isMarketingRole || _isItRole || _isTransportRole;
 
    bool get _canAccess => _isApproverRole;
 
@@ -173,6 +173,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
   }
 
   bool _isActionable(ApprovalRequest req) {
+    if (!req.isActionable) return false;
     final status = req.status.trim().toLowerCase();
     return status == 'pending' ||
         status == 'clarification' ||
@@ -361,6 +362,31 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
           (item.description ?? '').toLowerCase().contains(query);
     }).toList();
   }
+
+  List<ApprovalRequest> _applyApprovalFilters(List<ApprovalRequest> source) {
+    final searched = _applyApprovalSearch(source);
+    return searched.where((item) {
+      final normalizedStatus = item.status.trim().toLowerCase();
+      final actionable = _isActionable(item);
+
+      final matchesStatus =
+          _statusFilter == 'all' ||
+          (_statusFilter == 'clarification'
+              ? normalizedStatus == 'clarification' ||
+                    normalizedStatus == 'clarification_requested'
+              : normalizedStatus == _statusFilter);
+
+      final matchesViewMode =
+          _viewModeFilter == 'all' ||
+          (_viewModeFilter == 'actionable' && actionable) ||
+          (_viewModeFilter == 'completed' && !actionable);
+
+      return matchesStatus && matchesViewMode;
+    }).toList();
+  }
+
+  bool get _hasApprovalFiltersActive =>
+      _statusFilter != 'all' || _viewModeFilter != 'all';
 
   List<dynamic> _applyDepartmentSearch(List<dynamic> source) {
     final query = _searchCtrl.text.trim().toLowerCase();
@@ -1174,6 +1200,144 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
                       ),
                     ),
                   ),
+                  if (_isApproverRole) ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 170,
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _statusFilter,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: 'Status',
+                              isDense: true,
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                ),
+                              ),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'all',
+                                child: Text(
+                                  'All statuses',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'pending',
+                                child: Text(
+                                  'Pending',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'clarification',
+                                child: Text(
+                                  'Clarification',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'approved',
+                                child: Text(
+                                  'Approved',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'rejected',
+                                child: Text(
+                                  'Rejected',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() => _statusFilter = value);
+                            },
+                          ),
+                        ),
+                        SizedBox(
+                          width: 170,
+                          child: DropdownButtonFormField<String>(
+                            initialValue: _viewModeFilter,
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: 'View',
+                              isDense: true,
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                ),
+                              ),
+                            ),
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'all',
+                                child: Text(
+                                  'All items',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'actionable',
+                                child: Text(
+                                  'Needs action',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              DropdownMenuItem(
+                                value: 'completed',
+                                child: Text(
+                                  'History',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() => _viewModeFilter = value);
+                            },
+                          ),
+                        ),
+                        if (_hasApprovalFiltersActive)
+                          OutlinedButton(
+                            onPressed: () {
+                              setState(() {
+                                _statusFilter = 'all';
+                                _viewModeFilter = 'all';
+                              });
+                            },
+                            child: const Text('Clear'),
+                          ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   TabBar(
                     controller: _tabController,
@@ -1254,7 +1418,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
     required String emptyMessage,
     required bool showActions,
   }) {
-    final requests = _applyApprovalSearch(source);
+    final requests = _applyApprovalFilters(source);
     if (loading) return _buildLoadingList();
 
     return RefreshIndicator(
@@ -1262,8 +1426,12 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
       child: requests.isEmpty
           ? EmptyState(
               icon: emptyIcon,
-              title: emptyTitle,
-              message: emptyMessage,
+              title: _searchCtrl.text.trim().isNotEmpty || _hasApprovalFiltersActive
+                  ? 'No items match your filters'
+                  : emptyTitle,
+              message: _searchCtrl.text.trim().isNotEmpty || _hasApprovalFiltersActive
+                  ? 'Try adjusting search, status, or view filters.'
+                  : emptyMessage,
             )
           : ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
@@ -1519,6 +1687,11 @@ class _ApprovalCard extends StatelessWidget {
     final tf = DateFormat('h:mm a');
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 430;
+    final isHistorical = !request.isActionable;
+    final stageText =
+        request.currentStageLabel?.trim().isNotEmpty == true
+        ? request.currentStageLabel!.trim()
+        : _pipelineStageLabel(request.pipelineStage);
 
     return ApprovalCardShell(
       padding: EdgeInsets.all(isCompact ? 18 : 22),
@@ -1548,6 +1721,44 @@ class _ApprovalCard extends StatelessWidget {
               StatusBadge(request.status),
             ],
           ),
+          if (isHistorical) ...[
+            SizedBox(height: isCompact ? 8 : 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFECFDF5),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                  ),
+                  child: const Text(
+                    'Reviewed',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF166534),
+                    ),
+                  ),
+                ),
+                if ((request.deputyDecidedBy ?? '').trim().isNotEmpty)
+                  _HistoryChip(
+                    label: 'Deputy',
+                    value: request.deputyDecidedBy!.trim(),
+                  ),
+                if ((request.financeDecidedBy ?? '').trim().isNotEmpty)
+                  _HistoryChip(
+                    label: 'Finance',
+                    value: request.financeDecidedBy!.trim(),
+                  ),
+              ],
+            ),
+          ],
           if (request.description != null &&
               request.description!.isNotEmpty) ...[
             SizedBox(height: isCompact ? 8 : 10),
@@ -1586,7 +1797,7 @@ class _ApprovalCard extends StatelessWidget {
               ],
             ),
           ),
-          if ((request.pipelineStage ?? '').trim().isNotEmpty) ...[
+          if (stageText.isNotEmpty) ...[
             SizedBox(height: isCompact ? 10 : 12),
             ApprovalPanelBox(
               padding: EdgeInsets.symmetric(
@@ -1598,7 +1809,7 @@ class _ApprovalCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
               child: InfoRow(
                 icon: Icons.route_outlined,
-                text: _pipelineStageLabel(request.pipelineStage),
+                text: stageText,
                 iconColor: ApprovalUi.accent,
               ),
             ),
@@ -1655,11 +1866,11 @@ class _ApprovalCard extends StatelessWidget {
                   child: const ApprovalActionButton(label: 'Action'),
                 )
               else
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text(
-                    'No action',
-                    style: TextStyle(
+                    isHistorical ? 'History item' : 'No action',
+                    style: const TextStyle(
                       fontSize: 12,
                       color: ApprovalUi.muted,
                       fontWeight: FontWeight.w700,
@@ -1747,6 +1958,33 @@ class _DecisionSheetOption extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryChip extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _HistoryChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Text(
+        '$label: $value',
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: ApprovalUi.muted,
         ),
       ),
     );

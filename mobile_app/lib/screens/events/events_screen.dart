@@ -203,11 +203,32 @@ class _EventsScreenState extends State<EventsScreen>
       final approvalData = await _api.get<Map<String, dynamic>>(
         '/approvals/me',
       );
+      final facilityData = await _api.get<dynamic>('/facility/requests/me');
+      final marketingData = await _api.get<dynamic>('/marketing/requests/me');
+      final itData = await _api.get<dynamic>('/it/requests/me');
+      final transportData = await _api.get<dynamic>('/transport/requests/me');
       final inviteData = await _api.get<List<dynamic>>('/invites/me');
 
       final events = (eventData['items'] as List? ?? [])
           .map((e) => Event.fromJson(e))
           .toList();
+      final approvalsRaw = _itemsFromPayload(approvalData);
+      final facilityRaw = _itemsFromPayload(facilityData);
+      final marketingRaw = _itemsFromPayload(marketingData);
+      final itRaw = _itemsFromPayload(itData);
+      final transportRaw = _itemsFromPayload(transportData);
+
+      final approvalByEventId = <String, String>{};
+      final facilityByEventId = <String, String>{};
+      final marketingByEventId = <String, String>{};
+      final itByEventId = <String, String>{};
+      final transportByEventId = <String, String>{};
+
+      final approvalByEventKey = <String, String>{};
+      final facilityByEventKey = <String, String>{};
+      final marketingByEventKey = <String, String>{};
+      final itByEventKey = <String, String>{};
+      final transportByEventKey = <String, String>{};
 
       final sentInviteIds = inviteData
           .whereType<Map<String, dynamic>>()
@@ -220,8 +241,39 @@ class _EventsScreenState extends State<EventsScreen>
           .where((id) => id.isNotEmpty)
           .toSet();
 
-      final approvals = (approvalData['items'] as List? ?? [])
-          .whereType<Map<String, dynamic>>()
+      for (final item in approvalsRaw) {
+        final status = (item['status'] ?? '').toString();
+        final eventId = (item['event_id'] ?? '').toString().trim();
+        final eventKey = _buildWorkflowEventKey(item);
+        if (eventId.isNotEmpty) {
+          approvalByEventId[eventId] = status;
+        }
+        if (eventKey.isNotEmpty) {
+          approvalByEventKey[eventKey] = status;
+        }
+      }
+      _indexWorkflowStatuses(
+        facilityRaw,
+        byEventId: facilityByEventId,
+        byEventKey: facilityByEventKey,
+      );
+      _indexWorkflowStatuses(
+        marketingRaw,
+        byEventId: marketingByEventId,
+        byEventKey: marketingByEventKey,
+      );
+      _indexWorkflowStatuses(
+        itRaw,
+        byEventId: itByEventId,
+        byEventKey: itByEventKey,
+      );
+      _indexWorkflowStatuses(
+        transportRaw,
+        byEventId: transportByEventId,
+        byEventKey: transportByEventKey,
+      );
+
+      final approvals = approvalsRaw
           .where((a) {
             final status = (a['status'] ?? '').toString().toLowerCase();
             return status == 'pending' ||
@@ -261,13 +313,56 @@ class _EventsScreenState extends State<EventsScreen>
               notes: null,
               pipelineStage: a['pipeline_stage']?.toString(),
               approvalRequestId: (a['id'] ?? '').toString(),
+              approvalStatus: (a['status'] ?? '').toString(),
+              facilityStatus: null,
+              marketingStatus: null,
+              itStatus: null,
+              transportStatus: null,
               inviteStatus: null,
               googleEventLink: null,
             );
           })
           .toList();
 
-      final allEvents = [...approvals, ...events]
+      final enrichedEvents = events.map((event) {
+        final eventKey = _buildEventKeyFromEvent(event);
+        return Event(
+          id: event.id,
+          title: event.title,
+          facilitator: event.facilitator,
+          description: event.description,
+          imageUrl: event.imageUrl,
+          venueName: event.venueName,
+          startTime: event.startTime,
+          endTime: event.endTime,
+          status: event.status,
+          createdBy: event.createdBy,
+          createdAt: event.createdAt,
+          reportFileId: event.reportFileId,
+          reportFileName: event.reportFileName,
+          reportWebViewLink: event.reportWebViewLink,
+          attendanceFileId: event.attendanceFileId,
+          attendanceFileName: event.attendanceFileName,
+          attendanceWebViewLink: event.attendanceWebViewLink,
+          audienceCount: event.audienceCount,
+          notes: event.notes,
+          pipelineStage: event.pipelineStage,
+          approvalRequestId: event.approvalRequestId,
+          approvalStatus:
+              approvalByEventId[event.id] ?? approvalByEventKey[eventKey],
+          facilityStatus:
+              facilityByEventId[event.id] ?? facilityByEventKey[eventKey],
+          marketingStatus:
+              marketingByEventId[event.id] ?? marketingByEventKey[eventKey],
+          itStatus: itByEventId[event.id] ?? itByEventKey[eventKey],
+          transportStatus:
+              transportByEventId[event.id] ?? transportByEventKey[eventKey],
+          inviteStatus: event.inviteStatus,
+          googleEventLink: event.googleEventLink,
+        );
+      }).toList();
+
+      final allEvents = [...approvals, ...enrichedEvents]
         ..sort((a, b) {
           final aCreated = a.createdAt ?? a.startTime;
           final bCreated = b.createdAt ?? b.startTime;
@@ -288,6 +383,65 @@ class _EventsScreenState extends State<EventsScreen>
         _loading[key] = false;
       });
     }
+  }
+
+  List<Map<String, dynamic>> _itemsFromPayload(dynamic payload) {
+    if (payload is List) {
+      return payload.whereType<Map<String, dynamic>>().toList();
+    }
+    if (payload is Map<String, dynamic>) {
+      final items = payload['items'];
+      if (items is List) {
+        return items.whereType<Map<String, dynamic>>().toList();
+      }
+    }
+    return const <Map<String, dynamic>>[];
+  }
+
+  void _indexWorkflowStatuses(
+    List<Map<String, dynamic>> items, {
+    required Map<String, String> byEventId,
+    required Map<String, String> byEventKey,
+  }) {
+    for (final item in items) {
+      final status = (item['status'] ?? '').toString();
+      final eventId = (item['event_id'] ?? '').toString().trim();
+      final eventKey = _buildWorkflowEventKey(item);
+      if (eventId.isNotEmpty) {
+        byEventId[eventId] = status;
+      }
+      if (eventKey.isNotEmpty) {
+        byEventKey[eventKey] = status;
+      }
+    }
+  }
+
+  String _normalizeTimeString(String? value) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty) return '';
+    final parts = raw.split(':');
+    if (parts.length < 2) return raw;
+    return '${parts[0]}:${parts[1]}';
+  }
+
+  String _buildWorkflowEventKey(Map<String, dynamic> item) {
+    return [
+      (item['event_name'] ?? '').toString().trim(),
+      (item['start_date'] ?? '').toString().trim(),
+      _normalizeTimeString(item['start_time']?.toString()),
+      (item['end_date'] ?? '').toString().trim(),
+      _normalizeTimeString(item['end_time']?.toString()),
+    ].join('|');
+  }
+
+  String _buildEventKeyFromEvent(Event event) {
+    return [
+      event.title.trim(),
+      DateFormat('yyyy-MM-dd').format(event.startTime),
+      DateFormat('HH:mm').format(event.startTime),
+      DateFormat('yyyy-MM-dd').format(event.endTime),
+      DateFormat('HH:mm').format(event.endTime),
+    ].join('|');
   }
 
   String _approvalForwardLabel(Event event) {
@@ -1182,6 +1336,7 @@ class _EventCard extends StatelessWidget {
     final statusBorderColor = _getStatusBorderColor(event.status);
     final statusLabel = _statusLabel(event);
     final pipelineText = _approvalPipelineText(event);
+    final workflowBadges = _workflowBadges(event);
     final showForwardAction = approvalForwardLabel.trim().isNotEmpty;
     final actions = <Widget>[
       if (canCloseEvent && onCloseEvent != null)
@@ -1382,6 +1537,22 @@ class _EventCard extends StatelessWidget {
               ),
               const SizedBox(height: 16),
             ],
+            if (workflowBadges.isNotEmpty) ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: workflowBadges
+                    .map(
+                      (badge) => _WorkflowBadge(
+                        label: badge.$1,
+                        value: badge.$2,
+                        color: badge.$3,
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 16),
+            ],
             if (showForwardAction) ...[
               SizedBox(
                 width: double.infinity,
@@ -1472,6 +1643,53 @@ class _EventCard extends StatelessWidget {
         return 'Final approval completed';
       default:
         return 'Awaiting approval';
+    }
+  }
+
+  List<(String, String, Color)> _workflowBadges(Event value) {
+    if (value.id.startsWith('approval-')) return const [];
+
+    final badges = <(String, String, Color)>[];
+
+    void addBadge(String label, String? status) {
+      final normalized = status?.trim().toLowerCase() ?? '';
+      if (normalized.isEmpty) return;
+      badges.add((
+        label,
+        _formatWorkflowStatus(normalized),
+        _workflowColor(normalized),
+      ));
+    }
+
+    addBadge('Approval', value.approvalStatus);
+    addBadge('Facility', value.facilityStatus);
+    addBadge('Marketing', value.marketingStatus);
+    addBadge('IT', value.itStatus);
+    addBadge('Transport', value.transportStatus);
+    return badges;
+  }
+
+  String _formatWorkflowStatus(String value) {
+    return value
+        .split('_')
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
+  }
+
+  Color _workflowColor(String value) {
+    switch (value) {
+      case 'approved':
+        return const Color(0xFF059669);
+      case 'rejected':
+        return const Color(0xFFDC2626);
+      case 'clarification':
+      case 'clarification_requested':
+        return const Color(0xFF7C3AED);
+      case 'pending':
+        return const Color(0xFFD97706);
+      default:
+        return const Color(0xFF475569);
     }
   }
 
@@ -1599,6 +1817,46 @@ class _ActionChip extends StatelessWidget {
                 color: color,
                 letterSpacing: 0.2,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkflowBadge extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _WorkflowBadge({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
+      ),
+      child: RichText(
+        text: TextSpan(
+          style: DefaultTextStyle.of(context).style.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+          children: [
+            TextSpan(text: '$label: '),
+            TextSpan(
+              text: value,
+              style: const TextStyle(fontWeight: FontWeight.w900),
             ),
           ],
         ),

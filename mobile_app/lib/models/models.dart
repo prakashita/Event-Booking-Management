@@ -204,6 +204,11 @@ class Event {
   final String? notes;
   final String? pipelineStage;
   final String? approvalRequestId;
+  final String? approvalStatus;
+  final String? facilityStatus;
+  final String? marketingStatus;
+  final String? itStatus;
+  final String? transportStatus;
   final String? inviteStatus;
   final String? googleEventLink;
 
@@ -229,6 +234,11 @@ class Event {
     this.notes,
     this.pipelineStage,
     this.approvalRequestId,
+    this.approvalStatus,
+    this.facilityStatus,
+    this.marketingStatus,
+    this.itStatus,
+    this.transportStatus,
     this.inviteStatus,
     this.googleEventLink,
   });
@@ -276,6 +286,11 @@ class Event {
     pipelineStage: json['pipeline_stage']?.toString(),
     approvalRequestId:
         (json['approval_request_id'] ?? json['id'] ?? json['_id'])?.toString(),
+    approvalStatus: json['approval_status']?.toString(),
+    facilityStatus: json['facility_status']?.toString(),
+    marketingStatus: json['marketing_status']?.toString(),
+    itStatus: json['it_status']?.toString(),
+    transportStatus: json['transport_status']?.toString(),
     inviteStatus: json['invite_status']?.toString(),
     googleEventLink: json['google_event_link']?.toString(),
   );
@@ -298,6 +313,14 @@ class ApprovalRequest {
   final String? budgetBreakdownFileId;
   final DateTime createdAt;
   final String? pipelineStage;
+  final String? currentStageLabel;
+  final String? approvedByRole;
+  final bool completed;
+  final String? deputyDecidedBy;
+  final DateTime? deputyDecidedAt;
+  final String? financeDecidedBy;
+  final DateTime? financeDecidedAt;
+  final bool isActionable;
 
   const ApprovalRequest({
     required this.id,
@@ -314,6 +337,14 @@ class ApprovalRequest {
     this.budgetBreakdownFileId,
     required this.createdAt,
     this.pipelineStage,
+    this.currentStageLabel,
+    this.approvedByRole,
+    this.completed = false,
+    this.deputyDecidedBy,
+    this.deputyDecidedAt,
+    this.financeDecidedBy,
+    this.financeDecidedAt,
+    this.isActionable = true,
   });
 
   factory ApprovalRequest.fromJson(Map<String, dynamic> json) =>
@@ -343,6 +374,18 @@ class ApprovalRequest {
         notes: json['other_notes'] ?? json['notes'],
         budgetBreakdownFileId: json['budget_breakdown_file_id']?.toString(),
         pipelineStage: json['pipeline_stage']?.toString(),
+        currentStageLabel: json['current_stage_label']?.toString(),
+        approvedByRole: json['approved_by_role']?.toString(),
+        completed: json['completed'] == true,
+        deputyDecidedBy: json['deputy_decided_by']?.toString(),
+        deputyDecidedAt: DateTime.tryParse(
+          (json['deputy_decided_at'] ?? '').toString(),
+        )?.toLocal(),
+        financeDecidedBy: json['finance_decided_by']?.toString(),
+        financeDecidedAt: DateTime.tryParse(
+          (json['finance_decided_at'] ?? '').toString(),
+        )?.toLocal(),
+        isActionable: json['is_actionable'] != false,
         createdAt:
             DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
             DateTime.now(),
