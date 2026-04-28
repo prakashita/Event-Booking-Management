@@ -23,12 +23,14 @@ class ApprovalCardShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      clipBehavior: Clip.antiAlias,
       padding: padding,
       decoration: BoxDecoration(
         color: backgroundColor ?? ApprovalUi.surface,
         borderRadius: borderRadius ?? BorderRadius.circular(24),
         border: Border.all(color: borderColor ?? ApprovalUi.border),
-        boxShadow: boxShadow ??
+        boxShadow:
+            boxShadow ??
             const [
               BoxShadow(
                 color: Color(0x0A0F172A),
@@ -123,8 +125,8 @@ class ApprovalActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: padding ??
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding:
+          padding ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: ApprovalUi.accent,
         borderRadius: borderRadius ?? BorderRadius.circular(12),

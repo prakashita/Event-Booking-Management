@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
@@ -72,9 +76,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   bool _newDiscussionOpen = false;
   bool _creatingDiscussion = false;
   String _newDiscussionDepartment = '';
-  String? _discussionError;
+   String? _discussionError;
+   bool _expandedActionHistory = false;
 
-  bool get _isApprovalOnlyEntry =>
+   bool get _isApprovalOnlyEntry =>
       widget.viewMode == EventDetailsViewMode.approval ||
       widget.eventId.startsWith('approval-');
 
@@ -371,6 +376,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       _approval['requested_to'],
       fallback: '',
     ).trim().toLowerCase();
+    final deputyDone = _s(_approval['deputy_decided_by'], fallback: '').isNotEmpty;
+    final financeDone = _s(
+      _approval['finance_decided_by'],
+      fallback: '',
+    ).isNotEmpty;
     return _approvalRequestId.isNotEmpty &&
         (status == 'pending' ||
             status == 'clarification' ||
@@ -378,6 +388,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         pipelineStage != 'after_deputy' &&
         pipelineStage != 'after_finance' &&
         pipelineStage != 'complete' &&
+        !(pipelineStage == 'deputy' && deputyDone) &&
+        !(pipelineStage == 'finance' && financeDone) &&
         (requestedTo.isEmpty || requestedTo == _currentUserEmail);
   }
 
@@ -399,12 +411,17 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       _approval['pipeline_stage'],
       fallback: '',
     ).toLowerCase();
+    final deputyDone = _s(_approval['deputy_decided_by'], fallback: '').isNotEmpty;
+    final financeDone = _s(
+      _approval['finance_decided_by'],
+      fallback: '',
+    ).isNotEmpty;
 
     switch (_currentRoleKey) {
       case 'deputy_registrar':
-        return pipelineStage == 'deputy';
+        return pipelineStage == 'deputy' && !deputyDone;
       case 'finance_team':
-        return pipelineStage == 'finance';
+        return pipelineStage == 'finance' && !financeDone;
       case 'registrar':
       case 'vice_chancellor':
         return pipelineStage == 'registrar' || pipelineStage.isEmpty;
@@ -987,57 +1004,55 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 ),
               ),
             ),
-            actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                style: TextButton.styleFrom(
-                  foregroundColor: _muted,
-                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                ),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final comment = commentCtrl.text.trim();
-                  if (selected != 'approved' && comment.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Comment is required for reject/clarification.',
-                          style: GoogleFonts.inter(),
-                        ),
-                        backgroundColor: const Color(0xFFDC2626),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    );
-                    return;
-                  }
-                  Navigator.of(
-                    ctx,
-                  ).pop({'decision': selected, 'comment': comment});
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
-                  ),
-                ),
-                child: const Text('Submit'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+               actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+               actions: [
+                 TextButton(
+                   onPressed: () => Navigator.of(ctx).pop(),
+                   style: TextButton.styleFrom(
+                     foregroundColor: _muted,
+                     textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                   ),
+                   child: const Text('Cancel'),
+                 ),
+                 FilledButton(
+                   onPressed: () {
+                     final comment = commentCtrl.text.trim();
+                     if (selected != 'approved' && comment.isEmpty) {
+                       ScaffoldMessenger.of(context).showSnackBar(
+                         SnackBar(
+                           content: Text(
+                             'Comment is required for reject/clarification.',
+                             style: GoogleFonts.inter(),
+                           ),
+                           backgroundColor: const Color(0xFFDC2626),
+                           behavior: SnackBarBehavior.floating,
+                           shape: RoundedRectangleBorder(
+                             borderRadius: BorderRadius.circular(8),
+                           ),
+                         ),
+                       );
+                       return;
+                     }
+                     Navigator.of(ctx).pop({'decision': selected, 'comment': comment});
+                   },
+                   style: FilledButton.styleFrom(
+                     backgroundColor: const Color(0xFF2563EB),
+                     shape: RoundedRectangleBorder(
+                       borderRadius: BorderRadius.circular(12),
+                     ),
+                     textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                     padding: const EdgeInsets.symmetric(
+                       horizontal: 18,
+                       vertical: 12,
+                     ),
+                   ),
+                   child: const Text('Submit'),
+                 ),
+               ],
+             );
+         },
+       ),
+     );
     // Do NOT dispose commentCtrl here — the dialog exit animation may still
     // reference it.  It will be garbage-collected once this scope ends.
     if (result == null) return;
@@ -1559,6 +1574,611 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     }
   }
 
+  bool get _hasUploadedReport {
+    return _s(_event['report_web_view_link'], fallback: '').isNotEmpty ||
+        _s(_event['report_file_id'], fallback: '').isNotEmpty;
+  }
+
+  bool get _hasAttendanceFile {
+    return _s(_event['attendance_web_view_link'], fallback: '').isNotEmpty ||
+        _s(_event['attendance_file_id'], fallback: '').isNotEmpty;
+  }
+
+  bool get _canUploadReportFromDetails {
+    if (_isApprovalOnlyEntry) return false;
+    final status = _s(_event['status'], fallback: '').toLowerCase();
+    return status == 'completed';
+  }
+
+  String _expectedReportFilenameFromDetails() {
+    final rawName = _s(_event['name'], fallback: 'Event');
+    final sanitized = rawName
+        .replaceAll(RegExp(r'[^\w\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '_')
+        .trim();
+    final eventName = sanitized.isEmpty ? 'Event' : sanitized;
+
+    DateTime baseDate = DateTime.now();
+    final startDate = _s(_event['start_date'], fallback: '');
+    final startTime = _s(_event['start_time'], fallback: '');
+    final parsed = DateTime.tryParse(
+      '$startDate ${startTime.isEmpty ? '00:00' : startTime}',
+    );
+    if (parsed != null) {
+      baseDate = parsed;
+    }
+    final datePart = DateFormat('yyyy-MM-dd').format(baseDate);
+    return '${eventName}_${datePart}_Report.pdf';
+  }
+
+  String _reportCoverDetailsLine() {
+    final title = _s(_event['name'], fallback: 'Event');
+    final date = _s(_event['start_date'], fallback: '');
+    final venue = _s(_event['venue_name'], fallback: '');
+    final facilitator = _s(_event['facilitator'], fallback: '');
+
+    return [
+      title,
+      if (date.isNotEmpty) date,
+      if (venue.isNotEmpty) venue,
+      if (facilitator.isNotEmpty) facilitator,
+    ].join(' · ');
+  }
+
+  Future<List<int>> _buildGeneratedReportPdf({
+    required String coverDetails,
+    required String executiveSummary,
+    required String programAgenda,
+    required String outcomesLearnings,
+    required String followUp,
+    required String appendix,
+    required List<PlatformFile> appendixPhotos,
+  }) async {
+    final doc = pw.Document();
+
+    final photoWidgets = <pw.Widget>[];
+    for (final photo in appendixPhotos) {
+      final path = photo.path;
+      if (path == null || path.trim().isEmpty) continue;
+      try {
+        final bytes = await File(path).readAsBytes();
+        if (bytes.isEmpty) continue;
+        final image = pw.MemoryImage(bytes);
+        photoWidgets.add(
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 10),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  photo.name,
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    color: PdfColors.blueGrey700,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 6),
+                pw.Container(
+                  height: 180,
+                  width: double.infinity,
+                  alignment: pw.Alignment.center,
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey300, width: 0.8),
+                    borderRadius: pw.BorderRadius.circular(6),
+                  ),
+                  child: pw.Image(image, fit: pw.BoxFit.contain),
+                ),
+              ],
+            ),
+          ),
+        );
+      } catch (_) {
+        // Skip invalid image files gracefully.
+      }
+    }
+
+    pw.Widget section(String title, String value, {bool requiredField = false}) {
+      return pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 14),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(
+              requiredField ? '$title (Required)' : title,
+              style: pw.TextStyle(
+                fontSize: 11,
+                color: PdfColors.blueGrey700,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 6),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.grey100,
+                borderRadius: pw.BorderRadius.circular(6),
+                border: pw.Border.all(color: PdfColors.grey300, width: 0.7),
+              ),
+              child: pw.Text(
+                value.trim().isEmpty ? '—' : value.trim(),
+                style: const pw.TextStyle(fontSize: 11, lineSpacing: 2),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(28),
+        build: (_) => [
+          pw.Text(
+            'Submit Event Report',
+            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'Generated on ${DateFormat('MMM d, yyyy h:mm a').format(DateTime.now())}',
+            style: pw.TextStyle(fontSize: 10, color: PdfColors.blueGrey700),
+          ),
+          pw.SizedBox(height: 16),
+          section('Event (Cover Details)', coverDetails),
+          section('Executive Summary', executiveSummary, requiredField: true),
+          section('Program / Agenda', programAgenda, requiredField: true),
+          section('Outcomes and Learnings', outcomesLearnings, requiredField: true),
+          section('Follow-up', followUp),
+          section('Appendix', appendix),
+          if (photoWidgets.isNotEmpty) ...[
+            pw.Text(
+              'Appendix Photos',
+              style: pw.TextStyle(
+                fontSize: 11,
+                color: PdfColors.blueGrey700,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            ...photoWidgets,
+          ],
+        ],
+      ),
+    );
+
+    return doc.save();
+  }
+
+  Future<void> _viewAttendanceFileFromDetails() async {
+    final attendanceLink = _s(_event['attendance_web_view_link'], fallback: '');
+    if (attendanceLink.isNotEmpty) {
+      await _openExternalLink(attendanceLink);
+      return;
+    }
+    final attendanceFileId = _s(_event['attendance_file_id'], fallback: '');
+    if (attendanceFileId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Attendance file link unavailable.', style: GoogleFonts.inter()),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    await _openExternalLink('https://drive.google.com/file/d/$attendanceFileId/view');
+  }
+
+  Future<void> _uploadReportFromDetails() async {
+    final executiveSummaryCtrl = TextEditingController();
+    final programAgendaCtrl = TextEditingController();
+    final outcomesLearningsCtrl = TextEditingController();
+    final followUpCtrl = TextEditingController();
+    final appendixCtrl = TextEditingController();
+
+    String? attendancePath;
+    String? attendanceName;
+    List<PlatformFile> appendixPhotos = <PlatformFile>[];
+    var attendanceNotApplicable = false;
+    var submitting = false;
+    final expectedName = _expectedReportFilenameFromDetails();
+    final coverDetails = _reportCoverDetailsLine();
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(_hasUploadedReport ? 'Submit Event Report (Replace)' : 'Submit Event Report'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'EVENT (COVER DETAILS)',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _muted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  coverDetails,
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: _onSurface,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'EXECUTIVE SUMMARY (REQUIRED)',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _muted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: executiveSummaryCtrl,
+                  minLines: 3,
+                  maxLines: 6,
+                  style: GoogleFonts.inter(),
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. Brief overview, goal, and main outcome',
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Text(
+                  'ATTENDANCE',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _muted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  value: attendanceNotApplicable,
+                  onChanged: submitting
+                      ? null
+                      : (value) {
+                          setLocal(() {
+                            attendanceNotApplicable = value ?? false;
+                            if (attendanceNotApplicable) {
+                              attendancePath = null;
+                              attendanceName = null;
+                            }
+                          });
+                        },
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('NOT APPLICABLE'),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  attendanceNotApplicable
+                      ? 'Existing attendance will be removed when you submit.'
+                      : 'Upload a PDF, Word, or Excel file (max 10 MB), unless not applicable.',
+                  style: Theme.of(ctx).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: submitting || attendanceNotApplicable
+                      ? null
+                      : () async {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: const [
+                              'pdf',
+                              'doc',
+                              'docx',
+                              'xls',
+                              'xlsx',
+                            ],
+                          );
+                          final picked = result?.files.single;
+                          if (picked?.path == null) return;
+                          setLocal(() {
+                            attendancePath = picked!.path!;
+                            attendanceName = picked.name;
+                          });
+                        },
+                  icon: const Icon(Icons.attach_file),
+                  label: Text(
+                    attendanceName == null
+                        ? (_s(_event['attendance_file_name'], fallback: '').isNotEmpty
+                              ? 'Replace attendance file'
+                              : 'Choose attendance file')
+                        : attendanceName!,
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+                Text(
+                  'PROGRAM / AGENDA (REQUIRED)',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _muted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: programAgendaCtrl,
+                  minLines: 3,
+                  maxLines: 6,
+                  style: GoogleFonts.inter(),
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. Sessions or activities with times',
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                Text(
+                  'OUTCOMES AND LEARNINGS (REQUIRED)',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _muted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: outcomesLearningsCtrl,
+                  minLines: 3,
+                  maxLines: 6,
+                  style: GoogleFonts.inter(),
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. Key takeaways and feedback highlights',
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                Text(
+                  'FOLLOW-UP (OPTIONAL)',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _muted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: followUpCtrl,
+                  minLines: 2,
+                  maxLines: 4,
+                  style: GoogleFonts.inter(),
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. Action items or next steps',
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+                Text(
+                  'APPENDIX (OPTIONAL)',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _muted,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: appendixCtrl,
+                  minLines: 2,
+                  maxLines: 4,
+                  style: GoogleFonts.inter(),
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. Any additional notes, photos summary, supporting material',
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.image,
+                            allowMultiple: true,
+                          );
+                          final files = (result?.files ?? const <PlatformFile>[])
+                              .where((f) => f.path != null && f.path!.isNotEmpty)
+                              .toList();
+                          setLocal(() {
+                            appendixPhotos = files;
+                          });
+                        },
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: Text(
+                    appendixPhotos.isEmpty
+                        ? 'Choose Files'
+                        : '${appendixPhotos.length} photo(s) selected',
+                  ),
+                ),
+                if (appendixPhotos.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    appendixPhotos.take(3).map((p) => p.name).join(', '),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: _muted,
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: _panel,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _border),
+                  ),
+                  child: RichText(
+                    text: TextSpan(
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: _muted,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      children: [
+                        const TextSpan(text: 'Report will be saved as PDF: '),
+                        TextSpan(
+                          text: expectedName,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: _onSurface,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      final executiveSummary = executiveSummaryCtrl.text.trim();
+                      final programAgenda = programAgendaCtrl.text.trim();
+                      final outcomesLearnings = outcomesLearningsCtrl.text.trim();
+
+                      if (executiveSummary.isEmpty ||
+                          programAgenda.isEmpty ||
+                          outcomesLearnings.isEmpty) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Please fill Executive Summary, Program / Agenda, and Outcomes and Learnings.',
+                              style: GoogleFonts.inter(),
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                        return;
+                      }
+
+                      final hasExistingAttendance = _hasAttendanceFile;
+                      if (!attendanceNotApplicable &&
+                          attendancePath == null &&
+                          !hasExistingAttendance) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Upload an attendance file or mark it as not applicable.',
+                              style: GoogleFonts.inter(),
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                        return;
+                      }
+
+                      setLocal(() => submitting = true);
+                      try {
+                        final pdfBytes = await _buildGeneratedReportPdf(
+                          coverDetails: coverDetails,
+                          executiveSummary: executiveSummary,
+                          programAgenda: programAgenda,
+                          outcomesLearnings: outcomesLearnings,
+                          followUp: followUpCtrl.text,
+                          appendix: appendixCtrl.text,
+                          appendixPhotos: appendixPhotos,
+                        );
+
+                        final payload = <String, dynamic>{
+                          'file': MultipartFile.fromBytes(
+                            pdfBytes,
+                            filename: expectedName,
+                          ),
+                        };
+                        if (attendanceNotApplicable) {
+                          payload['attendance_not_applicable'] = '1';
+                        } else if (attendancePath != null) {
+                          payload['attendance_file'] = await MultipartFile.fromFile(
+                            attendancePath!,
+                            filename: attendanceName,
+                          );
+                        }
+
+                        await _api.postMultipart<Map<String, dynamic>>(
+                          '/events/${widget.eventId}/report',
+                          FormData.fromMap(payload),
+                        );
+                        if (!ctx.mounted) return;
+                        Navigator.of(ctx).pop();
+                        await _fetchDetails();
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Report uploaded successfully.',
+                              style: GoogleFonts.inter(),
+                            ),
+                            backgroundColor: const Color(0xFF16A34A),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        );
+                      } catch (e) {
+                        setLocal(() => submitting = false);
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              _extractApiErrorMessage(e),
+                              style: GoogleFonts.inter(),
+                            ),
+                            backgroundColor: const Color(0xFFDC2626),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+              child: Text(
+                submitting ? 'Generating...' : 'Generate PDF & Upload',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    executiveSummaryCtrl.dispose();
+    programAgendaCtrl.dispose();
+    outcomesLearningsCtrl.dispose();
+    followUpCtrl.dispose();
+    appendixCtrl.dispose();
+  }
+
   void _closeDetails() {
     if (context.canPop()) {
       context.pop();
@@ -1735,38 +2355,68 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     };
   }
 
-  ({bool locked, String hint}) _marketingDeliverableRowLock(
-    String type,
-    Map<String, dynamic> request,
-  ) {
-    final started = _requestHasStarted(request);
-    final ended = _requestHasEnded(request);
-    if (type == 'poster' || type == 'linkedin') {
-      return started
-          ? (
-              locked: true,
-              hint: 'Pre-event social posts: upload before the event starts.',
-            )
-          : (locked: false, hint: '');
-    }
-    if (type == 'recording') {
-      return !ended
-          ? (
-              locked: true,
-              hint: 'Post-event video: upload after the event has ended.',
-            )
-          : (locked: false, hint: '');
-    }
-    if (type == 'photography') {
-      return !ended
-          ? (
-              locked: true,
-              hint: 'Post-event photo: upload after the event has ended.',
-            )
-          : (locked: false, hint: '');
-    }
-    return (locked: false, hint: '');
-  }
+   ({bool locked, String hint}) _marketingDeliverableRowLock(
+     String type,
+     Map<String, dynamic> request,
+   ) {
+     final started = _requestHasStarted(request);
+     final ended = _requestHasEnded(request);
+     
+     if (type == 'poster') {
+       return started
+           ? (
+               locked: true,
+               hint: 'Upload before the event starts.',
+             )
+           : (locked: false, hint: '');
+     }
+     if (type == 'linkedin') {
+       final normalized = _normalizeMarketingRequirementsFromMap(request);
+       final preSocial = normalized['pre_event']['social_media'] as bool? ?? false;
+       final postSocial = normalized['post_event']['social_media'] as bool? ?? false;
+       
+       if (preSocial && !postSocial) {
+         return started
+             ? (
+                 locked: true,
+                 hint: 'Pre-event social posts: upload before the event starts.',
+               )
+             : (locked: false, hint: '');
+       }
+       if (postSocial && !preSocial) {
+         return !ended
+             ? (
+                 locked: true,
+                 hint: 'Post-event social posts: upload after the event has ended.',
+               )
+             : (locked: false, hint: '');
+       }
+       // Both pre and post
+       return (started && !ended)
+           ? (
+               locked: true,
+               hint: 'Upload before the event starts or after it ends (not during).',
+             )
+           : (locked: false, hint: '');
+     }
+     if (type == 'recording') {
+       return !ended
+           ? (
+               locked: true,
+               hint: 'Post-event video: upload after the event has ended.',
+             )
+           : (locked: false, hint: '');
+     }
+     if (type == 'photography') {
+       return !ended
+           ? (
+               locked: true,
+               hint: 'Post-event photo: upload after the event has ended.',
+             )
+           : (locked: false, hint: '');
+     }
+     return (locked: false, hint: '');
+   }
 
   bool _canSendRequirementForStatus(String status) {
     final normalized = status.trim().toLowerCase();
@@ -2935,25 +3585,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
-  Widget _buildEventWorkflow() {
-    final approval = _approval;
-    final event = _event;
-    final facility = _mapList('facility_requests');
-    final it = _mapList('it_requests');
-    final marketing = _mapList('marketing_requests');
-    final transport = _mapList('transport_requests');
-    final eventStatus = _s(event['status'], fallback: '').toLowerCase();
-    final approvalStatus = _s(approval['status'], fallback: '').toLowerCase();
+   Widget _buildEventWorkflow() {
+     final approval = _approval;
+     final event = _event;
+     final facility = _mapList('facility_requests');
+     final it = _mapList('it_requests');
+     final marketing = _mapList('marketing_requests');
+     final eventStatus = _s(event['status'], fallback: '').toLowerCase();
+     final approvalStatus = _s(approval['status'], fallback: '').toLowerCase();
 
-    final finalApprovalStep = (
-      label: 'Final Approval',
-      status: approvalStatus.isEmpty ? 'none' : approvalStatus,
-      assignee: _s(
-        approval['requested_to'] ?? approval['decided_by'],
-        fallback: '',
-      ),
-      updatedAt: _s(approval['decided_at'], fallback: ''),
-    );
+     final finalApprovalStep = (
+       label: 'Registrar',
+       status: approvalStatus.isEmpty ? 'none' : approvalStatus,
+       assignee: _s(
+         approval['requested_to'] ?? approval['decided_by'],
+         fallback: '',
+       ),
+       updatedAt: _s(approval['decided_at'], fallback: ''),
+     );
     final facilityStep = (
       label: 'Facility',
       status: _aggregateRequirementStatus(facility),
@@ -3011,26 +3660,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             return nextDt.isAfter(latestDt) ? value : latest;
           }),
     );
-    final transportStep = (
-      label: 'Transport',
-      status: _aggregateRequirementStatus(transport),
-      assignee: transport
-          .map((req) => _s(req['requested_to'], fallback: ''))
-          .where((value) => value.isNotEmpty)
-          .toSet()
-          .join(', '),
-      updatedAt: transport
-          .map((req) => _s(req['decided_at'], fallback: ''))
-          .where((value) => value.isNotEmpty)
-          .fold<String>('', (latest, value) {
-            if (latest.isEmpty) return value;
-            final latestDt = DateTime.tryParse(latest);
-            final nextDt = DateTime.tryParse(value);
-            if (latestDt == null || nextDt == null) return value;
-            return nextDt.isAfter(latestDt) ? value : latest;
-          }),
-    );
-    final iqacHasReport =
+     final iqacHasReport =
         _s(event['report_web_view_link'], fallback: '').isNotEmpty ||
         _s(event['report_file_id'], fallback: '').isNotEmpty;
     final iqacStep = (
@@ -3044,14 +3674,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       updatedAt: _s(event['report_uploaded_at'], fallback: ''),
     );
 
-    final steps = [
-      finalApprovalStep,
-      facilityStep,
-      itStep,
-      marketingStep,
-      transportStep,
-      iqacStep,
-    ];
+     final steps = [
+       finalApprovalStep,
+       facilityStep,
+       itStep,
+       marketingStep,
+       iqacStep,
+     ];
 
     return _buildCard(
       icon: LucideIcons.gitBranch,
@@ -3065,24 +3694,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               color: _panel,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(LucideIcons.info, size: 20, color: _muted),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Final approval comes first, followed by Facility, IT, Marketing, and Transport requests. IQAC is satisfied once the event report is uploaded.',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: _muted,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+             child: Row(
+               crossAxisAlignment: CrossAxisAlignment.start,
+               children: [
+                 Icon(LucideIcons.info, size: 20, color: _muted),
+                 const SizedBox(width: 12),
+                 Expanded(
+                   child: Text(
+                     'Registrar through IQAC. Multiple requests for one team are aggregated into a single status.',
+                     style: GoogleFonts.inter(
+                       fontSize: 13,
+                       fontWeight: FontWeight.w500,
+                       color: _muted,
+                       height: 1.5,
+                     ),
+                   ),
+                 ),
+               ],
+             ),
           ),
           const SizedBox(height: 24),
           ...steps.asMap().entries.map((entry) {
@@ -3208,17 +3837,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       color: _muted,
                     ),
                   ),
-                if (updatedAt.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatDateTime(updatedAt, ''),
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: _muted,
-                    ),
-                  ),
-                ],
+                 if (updatedAt.isNotEmpty) ...[
+                   const SizedBox(height: 4),
+                   Text(
+                     () {
+                       try {
+                         final dt = DateTime.parse(updatedAt);
+                         return DateFormat('MMM d, yyyy · h:mm a').format(dt);
+                       } catch (_) {
+                         return updatedAt;
+                       }
+                     }(),
+                     style: GoogleFonts.inter(
+                       fontSize: 12,
+                       fontWeight: FontWeight.w500,
+                       color: _muted,
+                     ),
+                   ),
+                 ],
               ],
             ),
           ),
@@ -3339,40 +3975,44 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ],
         ),
         const SizedBox(height: 20),
-        if (approvalThreads.isEmpty && actionLogs.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: _surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _border.withValues(alpha: 0.5)),
-            ),
-            child: Row(
-              children: [
-                Icon(LucideIcons.info, size: 20, color: _muted),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    'No approval discussion threads yet.',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: _muted,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else if (approvalThreads.isEmpty && actionLogs.isNotEmpty)
-          _buildActionHistory(actionLogs)
-        else
-          ...approvalThreads.map(
-            (thread) => Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _buildThreadPanel(thread, showRequestStatus: false),
-            ),
-          ),
+         if (approvalThreads.isEmpty && actionLogs.isEmpty)
+           Container(
+             padding: const EdgeInsets.all(20),
+             decoration: BoxDecoration(
+               color: _surface,
+               borderRadius: BorderRadius.circular(16),
+               border: Border.all(color: _border.withValues(alpha: 0.5)),
+             ),
+             child: Row(
+               children: [
+                 Icon(LucideIcons.info, size: 20, color: _muted),
+                 const SizedBox(width: 14),
+                 Expanded(
+                   child: Text(
+                     'No approval discussion threads yet.',
+                     style: GoogleFonts.inter(
+                       fontSize: 14,
+                       color: _muted,
+                       fontWeight: FontWeight.w500,
+                     ),
+                   ),
+                 ),
+               ],
+             ),
+           )
+         else ...[
+           if (approvalThreads.isNotEmpty)
+             ...approvalThreads.map(
+               (thread) => Padding(
+                 padding: const EdgeInsets.only(bottom: 16),
+                 child: _buildThreadPanel(thread, showRequestStatus: false),
+               ),
+             ),
+           if (actionLogs.isNotEmpty) ...[
+             const SizedBox(height: 16),
+             _buildActionHistory(actionLogs),
+           ],
+         ],
         if (_discussionError != null &&
             _discussionError!.trim().isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -3596,142 +4236,180 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Widget _buildActionHistory(List<dynamic> actionLogs) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _border.withValues(alpha: 0.5)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: _isDark ? 0.2 : 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(LucideIcons.history, size: 20, color: _muted),
-              const SizedBox(width: 12),
-              Text(
-                'Action History',
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: _onSurface,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () {
+            setState(() {
+              _expandedActionHistory = !_expandedActionHistory;
+            });
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _border.withValues(alpha: 0.5)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: _isDark ? 0.2 : 0.04),
+                  blurRadius: 16,
+                  offset: const Offset(0, 4),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          ...actionLogs.map((log) {
-            final role = _formatWorkflowRoleLabel(log['role']?.toString());
-            final actionType = _formatWorkflowActionTypeLabel(
-              log['action_type']?.toString(),
-            );
-            final comment = log['comment']?.toString() ?? '';
-            final createdAt = log['created_at']?.toString();
-            final actorName = log['actor_name']?.toString() ?? '';
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _panel,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: actionType.contains('Approved')
-                              ? const Color(0xFFDCFCE7)
-                              : actionType.contains('Rejected')
-                              ? const Color(0xFFFEE2E2)
-                              : actionType.contains('clarification')
-                              ? const Color(0xFFE0E7FF)
-                              : const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          actionType,
-                          style: GoogleFonts.inter(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: actionType.contains('Approved')
-                                ? const Color(0xFF166534)
-                                : actionType.contains('Rejected')
-                                ? const Color(0xFF991B1B)
-                                : actionType.contains('clarification')
-                                ? const Color(0xFF3730A3)
-                                : const Color(0xFF475569),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          role,
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: _muted,
-                          ),
-                        ),
-                      ),
-                    ],
+              ],
+            ),
+            child: Row(
+              children: [
+                Icon(LucideIcons.history, size: 20, color: _muted),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Action History',
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: _onSurface,
+                    ),
                   ),
-                  if (actorName.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      actorName,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: _onSurface,
-                      ),
-                    ),
-                  ],
-                  if (comment.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      comment,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: _onSurface,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                  if (createdAt != null) ...[
-                    const SizedBox(height: 10),
-                    Text(() {
-                      try {
-                        final dt = DateTime.parse(createdAt);
-                        return DateFormat('MMM d, yyyy · h:mm a').format(dt);
-                      } catch (_) {
-                        return createdAt;
-                      }
-                    }(), style: GoogleFonts.inter(fontSize: 12, color: _muted)),
-                  ],
-                ],
+                ),
+                Icon(
+                  _expandedActionHistory
+                      ? LucideIcons.chevronUp
+                      : LucideIcons.chevronDown,
+                  size: 20,
+                  color: _muted,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_expandedActionHistory)
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _surface,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
               ),
-            );
-          }),
-        ],
-      ),
+              border: Border(
+                left: BorderSide(color: _border.withValues(alpha: 0.5)),
+                right: BorderSide(color: _border.withValues(alpha: 0.5)),
+                bottom: BorderSide(color: _border.withValues(alpha: 0.5)),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 12),
+                ...actionLogs.map((log) {
+                  final role = _formatWorkflowRoleLabel(log['role']?.toString());
+                  final actionType = _formatWorkflowActionTypeLabel(
+                    log['action_type']?.toString(),
+                  );
+                  final comment = log['comment']?.toString() ?? '';
+                  final createdAt = log['created_at']?.toString();
+                  final actorName = log['actor_name']?.toString() ?? '';
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: _panel,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _border),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: actionType.contains('Approved')
+                                    ? const Color(0xFFDCFCE7)
+                                    : actionType.contains('Rejected')
+                                    ? const Color(0xFFFEE2E2)
+                                    : actionType.contains('clarification')
+                                    ? const Color(0xFFE0E7FF)
+                                    : const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                actionType,
+                                style: GoogleFonts.inter(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: actionType.contains('Approved')
+                                      ? const Color(0xFF166534)
+                                      : actionType.contains('Rejected')
+                                      ? const Color(0xFF991B1B)
+                                      : actionType.contains('clarification')
+                                      ? const Color(0xFF3730A3)
+                                      : const Color(0xFF475569),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                role,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: _muted,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (actorName.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            actorName,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _onSurface,
+                            ),
+                          ),
+                        ],
+                        if (comment.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            comment,
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: _onSurface,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                        if (createdAt != null) ...[
+                          const SizedBox(height: 10),
+                          Text(() {
+                            try {
+                              final dt = DateTime.parse(createdAt);
+                              return DateFormat('MMM d, yyyy · h:mm a').format(dt);
+                            } catch (_) {
+                              return createdAt;
+                            }
+                          }(), style: GoogleFonts.inter(fontSize: 12, color: _muted)),
+                        ],
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -5208,20 +5886,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       'post',
     );
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (preEvent.isNotEmpty)
-          _buildRequirementPhaseSection('Pre-event tasks', preEvent),
-        if (duringEvent.isNotEmpty) ...[
-          if (preEvent.isNotEmpty) const SizedBox(height: 20),
-          _buildRequirementPhaseSection('During-event tasks', duringEvent),
-        ],
-        if (postEvent.isNotEmpty) ...[
-          if (preEvent.isNotEmpty || duringEvent.isNotEmpty)
-            const SizedBox(height: 20),
-          _buildRequirementPhaseSection('Post-event tasks', postEvent),
-        ],
+     return Column(
+       crossAxisAlignment: CrossAxisAlignment.start,
+       children: [
+         if (preEvent.isNotEmpty)
+           _buildRequirementPhaseSection('Pre-Event', preEvent),
+         if (duringEvent.isNotEmpty) ...[
+           if (preEvent.isNotEmpty) const SizedBox(height: 20),
+           _buildRequirementPhaseSection('During Event', duringEvent),
+         ],
+         if (postEvent.isNotEmpty) ...[
+           if (preEvent.isNotEmpty || duringEvent.isNotEmpty)
+             const SizedBox(height: 20),
+           _buildRequirementPhaseSection('Post-Event', postEvent),
+         ],
         if (departmentKey == 'marketing') ...[
           if (preEvent.isNotEmpty ||
               duringEvent.isNotEmpty ||
@@ -5241,6 +5919,104 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           _buildMarketingDeliverablesSection(deliverables),
         ],
         if (departmentKey == 'iqac') ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _panel,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _hasUploadedReport
+                      ? 'Report uploaded'
+                      : (_canUploadReportFromDetails
+                            ? 'Upload event report'
+                            : 'Report upload available after completion'),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: _onSurface,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    if (_canUploadReportFromDetails)
+                      FilledButton.icon(
+                        onPressed: _uploadReportFromDetails,
+                        icon: const Icon(LucideIcons.uploadCloud, size: 16),
+                        label: Text(
+                          _hasUploadedReport ? 'Replace Report' : 'Upload Report',
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    if (_hasUploadedReport)
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          final reportLink = _s(_event['report_web_view_link'], fallback: '');
+                          final reportFileId = _s(_event['report_file_id'], fallback: '');
+                          final openLink = reportLink.isNotEmpty
+                              ? reportLink
+                              : (reportFileId.isNotEmpty
+                                    ? 'https://drive.google.com/file/d/$reportFileId/view'
+                                    : '');
+                          if (openLink.isNotEmpty) {
+                            _openExternalLink(openLink);
+                          }
+                        },
+                        icon: const Icon(LucideIcons.eye, size: 16),
+                        label: const Text('View Report'),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          foregroundColor: const Color(0xFF2563EB),
+                          side: const BorderSide(color: Color(0xFF2563EB)),
+                          textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    if (_hasAttendanceFile)
+                      OutlinedButton.icon(
+                        onPressed: _viewAttendanceFileFromDetails,
+                        icon: const Icon(LucideIcons.fileCheck, size: 16),
+                        label: const Text('View Attendance'),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          foregroundColor: const Color(0xFF0F766E),
+                          side: const BorderSide(color: Color(0xFF0F766E)),
+                          textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                  ],
+                ),
+                if (!_canUploadReportFromDetails && !_hasUploadedReport) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Mark the event as completed to enable report upload.',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _muted,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
           if (reportLink.isNotEmpty) ...[
             const SizedBox(height: 16),
             _buildRequirementLinkSection('Uploaded Deliverables', [
@@ -5261,120 +6037,120 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     String phase,
   ) {
     switch (departmentKey) {
-      case 'facility':
-        if (phase != 'pre') return const [];
-        final items = <String>[];
-        if (request['venue_required'] == true) {
-          items.add('Hall / venue booking');
-        }
-        if (request['refreshments'] == true) {
-          items.add('Refreshments');
-        }
-        final notes = _s(request['other_notes'], fallback: '');
-        if (notes.isNotEmpty) items.add(notes);
-        if (items.isEmpty) items.add('General facility coordination');
-        return items;
-      case 'it':
-        if (phase != 'pre') return const [];
-        final items = <String>[];
-        final mode = _s(request['event_mode'], fallback: '');
-        if (mode.isNotEmpty) items.add('Event mode: $mode');
-        if (request['pa_system'] == true) items.add('PA system');
-        if (request['projection'] == true) items.add('Projection');
-        final notes = _s(request['other_notes'], fallback: '');
-        if (notes.isNotEmpty) items.add(notes);
-        if (items.isEmpty) items.add('General IT support');
-        return items;
-      case 'marketing':
-        final normalized = _normalizeMarketingRequirementsFromMap(request);
-        final pre = normalized['pre_event'] as Map<String, dynamic>;
-        final during = normalized['during_event'] as Map<String, dynamic>;
-        final post = normalized['post_event'] as Map<String, dynamic>;
-        if (phase == 'pre') {
-          final items = <String>[];
-          if (pre['poster'] == true) items.add('Poster');
-          if (pre['social_media'] == true) items.add('Social media');
-          final notes = _s(request['other_notes'], fallback: '');
-          if (notes.isNotEmpty) items.add(notes);
-          return items;
-        }
-        if (phase == 'during') {
-          final items = <String>[];
-          if (during['photo'] == true) items.add('Photography');
-          if (during['video'] == true) items.add('Video coverage');
-          return items;
-        }
-        if (phase == 'post') {
-          final items = <String>[];
-          if (post['social_media'] == true) items.add('Social media post');
-          if (post['photo_upload'] == true) items.add('Photo upload');
-          if (post['video'] == true) items.add('Video upload');
-          return items;
-        }
+       case 'facility':
+         if (phase != 'pre') return const [];
+         final items = <String>[];
+         if (request['venue_required'] == true) {
+           items.add('Hall / venue booking');
+         }
+         if (request['refreshments'] == true) {
+           items.add('Refreshments');
+         }
+         final notes = _s(request['other_notes'], fallback: '');
+         if (notes.isNotEmpty) items.add('Notes: $notes');
+         if (items.isEmpty) items.add('General facility coordination');
+         return items;
+       case 'it':
+         if (phase != 'pre') return const [];
+         final items = <String>[];
+         final mode = _s(request['event_mode'], fallback: '');
+         if (mode.isNotEmpty) items.add('Event mode: $mode');
+         if (request['pa_system'] == true) items.add('PA system');
+         if (request['projection'] == true) items.add('Projection / display');
+         final notes = _s(request['other_notes'], fallback: '');
+         if (notes.isNotEmpty) items.add('Notes: $notes');
+         if (items.isEmpty) items.add('General IT support');
+         return items;
+       case 'marketing':
+         final normalized = _normalizeMarketingRequirementsFromMap(request);
+         final pre = normalized['pre_event'] as Map<String, dynamic>;
+         final during = normalized['during_event'] as Map<String, dynamic>;
+         final post = normalized['post_event'] as Map<String, dynamic>;
+         if (phase == 'pre') {
+           final items = <String>[];
+           if (pre['poster'] == true) items.add('Poster');
+           if (pre['social_media'] == true) items.add('Social Media Post');
+           final notes = _s(request['other_notes'], fallback: '');
+           if (notes.isNotEmpty) items.add(notes);
+           return items;
+         }
+         if (phase == 'during') {
+           final items = <String>[];
+           if (during['photo'] == true) items.add('Photoshoot');
+           if (during['video'] == true) items.add('Videoshoot');
+           return items;
+         }
+         if (phase == 'post') {
+           final items = <String>[];
+           if (post['social_media'] == true) items.add('Social Media Upload');
+           if (post['photo_upload'] == true) items.add('Photo Upload');
+           if (post['video'] == true) items.add('Video Upload');
+           return items;
+         }
         return const [];
-      case 'transport':
-        if (phase != 'pre') return const [];
-        final items = <String>[];
-        final transportType = _s(
-          request['transport_type'],
-          fallback: '',
-        ).toLowerCase();
-        final hasGuestTransport =
-            transportType == 'guest_cab' ||
-            transportType == 'both' ||
-            _s(request['guest_pickup_location'], fallback: '').isNotEmpty ||
-            _s(request['guest_dropoff_location'], fallback: '').isNotEmpty;
-        final hasStudentTransport =
-            transportType == 'students_off_campus' ||
-            transportType == 'both' ||
-            _s(request['student_count'], fallback: '').isNotEmpty ||
-            _s(request['student_transport_kind'], fallback: '').isNotEmpty;
+       case 'transport':
+         if (phase != 'pre') return const [];
+         final items = <String>[];
+         final transportType = _s(
+           request['transport_type'],
+           fallback: '',
+         ).toLowerCase();
+         final hasGuestTransport =
+             transportType == 'guest_cab' ||
+             transportType == 'both' ||
+             _s(request['guest_pickup_location'], fallback: '').isNotEmpty ||
+             _s(request['guest_dropoff_location'], fallback: '').isNotEmpty;
+         final hasStudentTransport =
+             transportType == 'students_off_campus' ||
+             transportType == 'both' ||
+             _s(request['student_count'], fallback: '').isNotEmpty ||
+             _s(request['student_transport_kind'], fallback: '').isNotEmpty;
 
-        final typeLabel = _transportTypeLabel(transportType);
-        if (typeLabel.isNotEmpty) {
-          items.add(typeLabel);
-        }
-        if (hasGuestTransport) {
-          items.add('Guest cab');
-          final pickup = [
-            _s(request['guest_pickup_location'], fallback: ''),
-            _s(request['guest_pickup_date'], fallback: ''),
-            _s(request['guest_pickup_time'], fallback: ''),
-          ].where((part) => part.isNotEmpty).join(' · ');
-          if (pickup.isNotEmpty) {
-            items.add('Guest pickup: $pickup');
-          }
-          final dropoff = [
-            _s(request['guest_dropoff_location'], fallback: ''),
-            _s(request['guest_dropoff_date'], fallback: ''),
-            _s(request['guest_dropoff_time'], fallback: ''),
-          ].where((part) => part.isNotEmpty).join(' · ');
-          if (dropoff.isNotEmpty) {
-            items.add('Guest drop-off: $dropoff');
-          }
-        }
-        if (hasStudentTransport) {
-          final count = _s(request['student_count'], fallback: '');
-          final kind = _s(request['student_transport_kind'], fallback: '');
-          final summary = [
-            'Student transport',
-            if (count.isNotEmpty) '$count passengers',
-            if (kind.isNotEmpty) kind,
-          ].join(' · ');
-          items.add(summary);
-          final studentPickup = [
-            _s(request['student_pickup_point'], fallback: ''),
-            _s(request['student_date'], fallback: ''),
-            _s(request['student_time'], fallback: ''),
-          ].where((part) => part.isNotEmpty).join(' · ');
-          if (studentPickup.isNotEmpty) {
-            items.add('Student pickup: $studentPickup');
-          }
-        }
-        final notes = _s(request['other_notes'], fallback: '');
-        if (notes.isNotEmpty) items.add(notes);
-        if (items.isEmpty) items.add('Transport coordination');
-        return items;
+         final typeLabel = _transportTypeLabel(transportType);
+         if (typeLabel.isNotEmpty) {
+           items.add(typeLabel);
+         }
+         if (hasGuestTransport) {
+           items.add('Guest cab');
+           final pickup = [
+             _s(request['guest_pickup_location'], fallback: ''),
+             _s(request['guest_pickup_date'], fallback: ''),
+             _s(request['guest_pickup_time'], fallback: ''),
+           ].where((part) => part.isNotEmpty).join(' · ');
+           if (pickup.isNotEmpty) {
+             items.add('Guest pickup: $pickup');
+           }
+           final dropoff = [
+             _s(request['guest_dropoff_location'], fallback: ''),
+             _s(request['guest_dropoff_date'], fallback: ''),
+             _s(request['guest_dropoff_time'], fallback: ''),
+           ].where((part) => part.isNotEmpty).join(' · ');
+           if (dropoff.isNotEmpty) {
+             items.add('Guest drop-off: $dropoff');
+           }
+         }
+         if (hasStudentTransport) {
+           final count = _s(request['student_count'], fallback: '');
+           final kind = _s(request['student_transport_kind'], fallback: '');
+           final summary = [
+             'Student transport',
+             if (count.isNotEmpty) '$count passengers',
+             if (kind.isNotEmpty) kind,
+           ].join(' · ');
+           items.add(summary);
+           final studentPickup = [
+             _s(request['student_pickup_point'], fallback: ''),
+             _s(request['student_date'], fallback: ''),
+             _s(request['student_time'], fallback: ''),
+           ].where((part) => part.isNotEmpty).join(' · ');
+           if (studentPickup.isNotEmpty) {
+             items.add('Student pickup: $studentPickup');
+           }
+         }
+         final notes = _s(request['other_notes'], fallback: '');
+         if (notes.isNotEmpty) items.add('Notes: $notes');
+         if (items.isEmpty) items.add('Transport coordination');
+         return items;
       case 'iqac':
         if (phase != 'post') return const [];
         return [

@@ -55,11 +55,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return role.trim().toLowerCase();
   }
 
-  bool get _isApproverRole =>
-      _roleKey == 'registrar' ||
-      _roleKey == 'vice_chancellor' ||
-      _roleKey == 'deputy_registrar' ||
-      _roleKey == 'finance_team';
+   bool get _isApproverRole =>
+       _roleKey == 'registrar' ||
+       _roleKey == 'vice_chancellor' ||
+       _roleKey == 'deputy_registrar' ||
+       _roleKey == 'finance_team';
+
+   bool get _isDepartmentRole =>
+       _roleKey == 'facility_manager' ||
+       _roleKey == 'marketing' ||
+       _roleKey == 'it' ||
+       _roleKey == 'transport';
 
   bool get _isWorkflowDashboard =>
       _isApproverRole ||
@@ -802,40 +808,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _workflowTitle,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Role-based inbox',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              FilledButton.tonal(
-                onPressed: () => context.go('/approvals'),
-                style: FilledButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text('Inbox'),
-              ),
+               Expanded(
+                 child: Column(
+                   crossAxisAlignment: CrossAxisAlignment.start,
+                   children: [
+                     Text(
+                       _workflowTitle,
+                       style: TextStyle(
+                         fontSize: 18,
+                         fontWeight: FontWeight.w800,
+                         color: theme.colorScheme.onSurface,
+                       ),
+                     ),
+                     const SizedBox(height: 2),
+                     Text(
+                       _isApproverRole
+                           ? 'Review and manage incoming requests'
+                           : 'Role-based inbox',
+                       style: TextStyle(
+                         fontSize: 13,
+                         color: theme.colorScheme.onSurfaceVariant,
+                       ),
+                     ),
+                   ],
+                 ),
+               ),
+               if (_isApproverRole)
+                 FilledButton.tonal(
+                   onPressed: () => context.go('/approvals'),
+                   style: FilledButton.styleFrom(
+                     visualDensity: VisualDensity.compact,
+                     padding: const EdgeInsets.symmetric(horizontal: 16),
+                     shape: RoundedRectangleBorder(
+                       borderRadius: BorderRadius.circular(12),
+                     ),
+                   ),
+                   child: const Text('Inbox'),
+                 ),
             ],
           ),
         ),

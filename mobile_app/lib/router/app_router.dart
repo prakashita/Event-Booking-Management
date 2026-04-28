@@ -42,17 +42,12 @@ class AppRouter {
         final currentPath = state.matchedLocation;
 
         final isAdmin = roleKey == 'admin';
-        final isRegistrarDashboard =
-            roleKey == 'registrar' ||
-            roleKey == 'vice_chancellor' ||
-            roleKey == 'deputy_registrar' ||
-            roleKey == 'finance_team';
-        final canAccessApprovals =
-            isRegistrarDashboard ||
-            roleKey == 'facility_manager' ||
-            roleKey == 'marketing' ||
-            roleKey == 'it' ||
-            roleKey == 'transport';
+         final isRegistrarDashboard =
+             roleKey == 'registrar' ||
+             roleKey == 'vice_chancellor' ||
+             roleKey == 'deputy_registrar' ||
+             roleKey == 'finance_team';
+         final canAccessApprovals = isRegistrarDashboard;
         final canAccessRequirements =
             roleKey == 'facility_manager' ||
             roleKey == 'marketing' ||

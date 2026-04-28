@@ -62,7 +62,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
   bool get _isDepartmentRole =>
       _isFacilityRole || _isMarketingRole || _isItRole || _isTransportRole;
 
-  bool get _canAccess => _isApproverRole || _isDepartmentRole;
+   bool get _canAccess => _isApproverRole;
+
+  String get _currentUserEmail =>
+      (context.read<AuthProvider>().user?.email ?? '').trim().toLowerCase();
 
   String get _departmentLabel {
     if (_isFacilityRole) return 'Facility Manager';
@@ -174,6 +177,29 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
 
   bool _isActionable(ApprovalRequest req) {
     final status = req.status.trim().toLowerCase();
+    final stage = (req.pipelineStage ?? '').trim().toLowerCase();
+    final requestedTo = req.requestedTo.trim().toLowerCase();
+    if (!(status == 'pending' ||
+        status == 'clarification' ||
+        status == 'clarification_requested')) {
+      return false;
+    }
+
+    if (requestedTo.isNotEmpty && requestedTo != _currentUserEmail) {
+      return false;
+    }
+
+    // Only show actions to the reviewer responsible for the current stage.
+    if (_roleKey == 'deputy_registrar') {
+      return stage == 'deputy';
+    }
+    if (_roleKey == 'finance_team') {
+      return stage == 'finance';
+    }
+    if (_roleKey == 'registrar' || _roleKey == 'vice_chancellor') {
+      return stage == 'registrar' || stage == 'final' || stage.isEmpty;
+    }
+
     return status == 'pending' ||
         status == 'clarification' ||
         status == 'clarification_requested';
@@ -1059,7 +1085,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
     }
     if (item is ITRequest) {
       return 'Mode: ${item.mode.toUpperCase()}'
-          '${item.paSystem ? ' · PA System' : ''}'
+          '${item.paSystem ? ' · Audio System' : ''}'
           '${item.projection ? ' · Projection' : ''}';
     }
     if (item is MarketingRequest) {
@@ -1456,9 +1482,9 @@ class _ApprovalCard extends StatelessWidget {
                         foreground: const Color(0xFF166534),
                         background: const Color(0xFFECFDF5),
                         border: const Color(0xFFA7F3D0),
-                        onTap: () => Navigator.of(sheetContext).pop(
-                          _DecisionAction.approve,
-                        ),
+                        onTap: () => Navigator.of(
+                          sheetContext,
+                        ).pop(_DecisionAction.approve),
                       ),
                       const SizedBox(height: 12),
                       _DecisionSheetOption(
@@ -1468,9 +1494,9 @@ class _ApprovalCard extends StatelessWidget {
                         foreground: const Color(0xFFB45309),
                         background: const Color(0xFFFFFBEB),
                         border: const Color(0xFFFDE68A),
-                        onTap: () => Navigator.of(sheetContext).pop(
-                          _DecisionAction.clarify,
-                        ),
+                        onTap: () => Navigator.of(
+                          sheetContext,
+                        ).pop(_DecisionAction.clarify),
                       ),
                       const SizedBox(height: 12),
                       _DecisionSheetOption(
@@ -1480,9 +1506,9 @@ class _ApprovalCard extends StatelessWidget {
                         foreground: const Color(0xFFB91C1C),
                         background: const Color(0xFFFEF2F2),
                         border: const Color(0xFFFECACA),
-                        onTap: () => Navigator.of(sheetContext).pop(
-                          _DecisionAction.reject,
-                        ),
+                        onTap: () => Navigator.of(
+                          sheetContext,
+                        ).pop(_DecisionAction.reject),
                       ),
                       const SizedBox(height: 14),
                       SizedBox(
@@ -1658,13 +1684,13 @@ class _ApprovalCard extends StatelessWidget {
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text(
-                  'No action',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: ApprovalUi.muted,
-                    fontWeight: FontWeight.w700,
+                    'No action',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: ApprovalUi.muted,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
                 ),
             ],
           ),
@@ -1702,12 +1728,12 @@ class _DecisionSheetOption extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Ink(
           width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: border),
-      ),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: border),
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1822,21 +1848,21 @@ class _DepartmentApprovalCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 InfoRow(icon: Icons.person_outline, text: 'By: $requestedBy'),
-          if ((schedule ?? '').trim().isNotEmpty) ...[
-                const SizedBox(height: 6),
-                InfoRow(icon: Icons.schedule, text: schedule!),
-          ],
-          if (details.trim().isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(
-                  details,
-                  style: TextStyle(
-                    fontSize: isCompact ? 12.5 : 13,
-                    color: ApprovalUi.muted,
-                    height: 1.4,
+                if ((schedule ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  InfoRow(icon: Icons.schedule, text: schedule!),
+                ],
+                if (details.trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    details,
+                    style: TextStyle(
+                      fontSize: isCompact ? 12.5 : 13,
+                      color: ApprovalUi.muted,
+                      height: 1.4,
+                    ),
                   ),
-                ),
-          ],
+                ],
               ],
             ),
           ),
@@ -1892,11 +1918,11 @@ class _DepartmentApprovalCard extends StatelessWidget {
                   child: Text(
                     'No action',
                     style: TextStyle(
-                    fontSize: 12,
-                    color: ApprovalUi.muted,
-                    fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: ApprovalUi.muted,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
                 ),
             ],
           ),

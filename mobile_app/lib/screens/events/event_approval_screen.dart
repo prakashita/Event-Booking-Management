@@ -667,7 +667,6 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                   horizontal: isCompact ? 8 : 16,
                   vertical: isCompact ? 12 : 24,
                 ),
-                clipBehavior: Clip.antiAlias,
                 child: ApprovalCardShell(
                   padding: EdgeInsets.zero,
                   backgroundColor: _cardBg,

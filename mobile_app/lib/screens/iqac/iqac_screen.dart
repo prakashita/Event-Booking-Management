@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -25,8 +26,11 @@ class _IQACScreenState extends State<IQACScreen> {
 
   List<_IqacCriterion> _criteria = [];
   Map<String, dynamic> _counts = {};
+  List<IqacTemplate> _templates = [];
   bool _loading = true;
+  bool _templatesLoading = true;
   String? _error;
+  String? _templatesError;
 
   bool get _canAccess {
     final role = (context.read<AuthProvider>().user?.roleKey ?? '')
@@ -40,8 +44,10 @@ class _IQACScreenState extends State<IQACScreen> {
     super.initState();
     if (_canAccess) {
       _loadData();
+      _loadTemplates();
     } else {
       _loading = false;
+      _templatesLoading = false;
     }
   }
 
@@ -69,6 +75,29 @@ class _IQACScreenState extends State<IQACScreen> {
       setState(() {
         _error = e.toString();
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadTemplates() async {
+    setState(() {
+      _templatesLoading = true;
+      _templatesError = null;
+    });
+    try {
+      final templatesResp = await _api.get<dynamic>('/iqac/templates');
+      final templatesRaw = templatesResp is List ? templatesResp : <dynamic>[];
+      setState(() {
+        _templates = templatesRaw
+            .whereType<Map>()
+            .map((e) => IqacTemplate.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+        _templatesLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _templatesError = e.toString();
+        _templatesLoading = false;
       });
     }
   }
@@ -488,10 +517,48 @@ class _IQACScreenState extends State<IQACScreen> {
                         borderColor: Color(0xFFC5CAE9),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'IQAC Criteria Structure',
+                   ),
+                   const SizedBox(height: 16),
+                   if (!_templatesLoading) ...[
+                     if (_templatesError != null) ...[
+                       Container(
+                         width: double.infinity,
+                         padding: const EdgeInsets.all(16),
+                         decoration: BoxDecoration(
+                           color: Theme.of(context).colorScheme.errorContainer,
+                           borderRadius: BorderRadius.circular(12),
+                         ),
+                         child: Text(
+                           'Error loading templates: $_templatesError',
+                           style: GoogleFonts.inter(color: Theme.of(context).colorScheme.error),
+                         ),
+                       ),
+                     ] else if (_templates.isNotEmpty) ...[
+                       _buildIqacTemplateDownloadCard(),
+                       const SizedBox(height: 16),
+                     ] else ...[
+                       Container(
+                         width: double.infinity,
+                         padding: const EdgeInsets.all(16),
+                         decoration: BoxDecoration(
+                           color: Theme.of(context).colorScheme.secondaryContainer,
+                           borderRadius: BorderRadius.circular(12),
+                         ),
+                         child: const Text(
+                           'No IQAC templates available',
+                           textAlign: TextAlign.center,
+                           style: TextStyle(fontSize: 14, color: Colors.grey),
+                         ),
+                       ),
+                       const SizedBox(height: 16),
+                     ]
+                   ] else ...[
+                     const SizedBox(height: 8),
+                     Center(child: CircularProgressIndicator()),
+                     const SizedBox(height: 8),
+                   ],
+                   Text(
+                     'IQAC Criteria Structure',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
@@ -1117,6 +1184,150 @@ class _IQACScreenState extends State<IQACScreen> {
     );
   }
 
+  Widget _buildIqacTemplateDownloadCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.description_outlined,
+                size: 20,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'IQAC Data Templates',
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '${_templates.length} template documents available',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: _templates.map((template) {
+              return _buildIqacTemplateCard(template);
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIqacTemplateCard(IqacTemplate template) {
+    return InkWell(
+      onTap: () => _downloadIqacTemplate(template),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.insert_drive_file,
+              size: 20,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    template.name,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${template.type} · ${_formatBytes(template.size)}',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.download_outlined,
+              size: 18,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+   Future<void> _downloadIqacTemplate(IqacTemplate template) async {
+     try {
+       final bytes = await _api.getBytes(template.downloadUrl);
+       final tempDir = await getTemporaryDirectory();
+       final safeName = '${DateTime.now().millisecondsSinceEpoch}_${template.name}';
+       final file = File('${tempDir.path}/$safeName');
+       await file.writeAsBytes(bytes, flush: true);
+
+       if (!mounted) return;
+
+       final result = await OpenFile.open(file.path);
+       if (result.type != ResultType.done) {
+         if (!mounted) return;
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(
+             content: Text('Error opening file: ${result.message}'),
+             backgroundColor: Theme.of(context).colorScheme.error,
+           ),
+         );
+         return;
+       }
+
+       if (!mounted) return;
+       ScaffoldMessenger.of(context).showSnackBar(
+         SnackBar(
+           content: Text('Template downloaded successfully'),
+           backgroundColor: Theme.of(context).colorScheme.primary,
+         ),
+       );
+     } catch (e) {
+       if (!mounted) return;
+       ScaffoldMessenger.of(context).showSnackBar(
+         SnackBar(
+           content: Text('Error downloading template: ${e.toString()}'),
+           backgroundColor: Theme.of(context).colorScheme.error,
+         ),
+       );
+     }
+   }
+
   String _formatBytes(int n) {
     if (n < 1024) return '$n B';
     if (n < 1024 * 1024) return '${(n / 1024).toStringAsFixed(1)} KB';
@@ -1269,6 +1480,32 @@ class _IqacFileDoc {
           ? json['size'] as int
           : int.tryParse('${json['size']}') ?? 0,
       uploadedAt: DateTime.tryParse((json['uploadedAt'] ?? '').toString()),
+    );
+  }
+}
+
+class IqacTemplate {
+  final int id;
+  final String name;
+  final String type;
+  final String downloadUrl;
+  final int size;
+  
+  const IqacTemplate({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.downloadUrl,
+    required this.size,
+  });
+  
+  factory IqacTemplate.fromJson(Map<String, dynamic> json) {
+    return IqacTemplate(
+      id: json['id'] is int ? json['id'] as int : int.tryParse('${json['id']}') ?? 0,
+      name: (json['name'] ?? '').toString(),
+      type: (json['type'] ?? '').toString(),
+      downloadUrl: (json['download_url'] ?? json['downloadUrl'] ?? '').toString(),
+      size: json['size'] is int ? json['size'] as int : int.tryParse('${json['size']}') ?? 0,
     );
   }
 }

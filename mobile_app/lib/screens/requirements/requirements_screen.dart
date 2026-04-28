@@ -411,8 +411,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
             final type = opt['type']!;
             final lock = _marketingDeliverableRowLock(type, request);
             if (lock.locked) return false;
-            return naByType[type] == true ||
-                filesByType[type] != null;
+            return naByType[type] == true || filesByType[type] != null;
           });
 
           return AlertDialog(
@@ -490,7 +489,9 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                                               }
                                               MultipartFile? multipart;
                                               if (file.path != null &&
-                                                  file.path!.trim().isNotEmpty) {
+                                                  file.path!
+                                                      .trim()
+                                                      .isNotEmpty) {
                                                 multipart =
                                                     await MultipartFile.fromFile(
                                                       file.path!,
@@ -502,13 +503,14 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                                                       file.bytes!,
                                                       filename: file.name,
                                                     );
-                                              } else if (file.readStream != null) {
+                                              } else if (file.readStream !=
+                                                  null) {
                                                 multipart =
                                                     MultipartFile.fromStream(
-                                                  () => file.readStream!,
-                                                  file.size,
-                                                  filename: file.name,
-                                                );
+                                                      () => file.readStream!,
+                                                      file.size,
+                                                      filename: file.name,
+                                                    );
                                               }
                                               if (multipart == null) {
                                                 if (!mounted) return;
@@ -639,9 +641,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                           submitError = error;
                         });
                       },
-                child: Text(
-                  submitStatus == 'loading' ? 'Saving...' : 'Save',
-                ),
+                child: Text(submitStatus == 'loading' ? 'Saving...' : 'Save'),
               ),
             ],
           );
@@ -970,7 +970,7 @@ class _RequestCard extends StatelessWidget {
       status = r.status;
       requestedBy = r.requestedBy;
       details =
-          'Mode: ${r.mode.toUpperCase()}${r.paSystem ? ' · PA System' : ''}${r.projection ? ' · Projection' : ''}';
+          'Mode: ${r.mode.toUpperCase()}${r.paSystem ? ' · Audio System' : ''}${r.projection ? ' · Projection' : ''}';
     } else if (item is MarketingRequest) {
       final r = item as MarketingRequest;
       title = r.eventTitle;

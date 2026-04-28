@@ -969,7 +969,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         _loadingVenues
                             ? const Center(child: CircularProgressIndicator())
                             : DropdownButtonFormField<String>(
-                                initialValue: _selectedVenueName,
+                                value: _selectedVenueName,
                                 decoration: _inputDecoration('Select a Venue'),
                                 icon: const Icon(
                                   LucideIcons.chevronDown,

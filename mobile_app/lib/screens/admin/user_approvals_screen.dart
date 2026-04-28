@@ -159,10 +159,22 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
             return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               title: const Text('Approve User'),
               content: DropdownButtonFormField<String>(
                 initialValue: selected,
-                decoration: const InputDecoration(labelText: 'Assigned Role'),
+                decoration: InputDecoration(
+                  labelText: 'Assigned Role',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
                 items: roles
                     .map(
                       (r) => DropdownMenuItem<String>(
@@ -184,6 +196,11 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
+                  style: FilledButton.styleFrom(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                   onPressed: () async {
                     Navigator.of(ctx).pop();
                     final userId = (user['id'] ?? '').toString();
@@ -210,13 +227,20 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: const Text('Reject User'),
           content: TextField(
             controller: reasonCtrl,
             maxLines: 3,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Reason (optional)',
               hintText: 'Optionally provide a rejection reason',
+              alignLabelWithHint: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
           actions: [
@@ -225,6 +249,12 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                backgroundColor: const Color(0xFFDC2626),
+              ),
               onPressed: () async {
                 Navigator.of(ctx).pop();
                 final userId = (user['id'] ?? '').toString();
@@ -259,87 +289,188 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
           onRefresh: () => _loadAll(forceRefresh: true),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 96),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'User Approvals',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: theme.colorScheme.onSurface,
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: isDark
+                          ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+                          : [const Color(0xFFFFFFFF), const Color(0xFFF8FAFC)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF4F46E5).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.how_to_reg_rounded,
+                              color: Color(0xFF4F46E5),
+                              size: 20,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'ACCESS CONTROL',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.2,
+                              color: Color(0xFF4F46E5),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'User Approvals',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                          color: theme.colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Review and approve pending registration requests.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          _CountChip(
+                            label: 'Pending',
+                            value: _pending.length,
+                            fg: const Color(0xFFD97706),
+                            bg: const Color(0xFFFFFBEB),
+                            border: const Color(0xFFFDE68A),
+                          ),
+                          const SizedBox(width: 8),
+                          _CountChip(
+                            label: 'Rejected',
+                            value: _rejected.length,
+                            fg: const Color(0xFFB91C1C),
+                            bg: const Color(0xFFFEE2E2),
+                            border: const Color(0xFFFCA5A5),
+                          ),
+                          const Spacer(),
+                          OutlinedButton.icon(
+                            onPressed: _refreshing
+                                ? null
+                                : () => _loadAll(forceRefresh: true),
+                            style: OutlinedButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                            ),
+                            icon: _refreshing
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.refresh_rounded, size: 18),
+                            label: const Text(
+                              'Refresh',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Review and approve pending registration requests.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF64748B),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    _CountChip(
-                      label: 'Pending',
-                      value: _pending.length,
-                      fg: const Color(0xFFD97706),
-                      bg: const Color(0xFFFFFBEB),
-                      border: const Color(0xFFFDE68A),
-                    ),
-                    const SizedBox(width: 8),
-                    _CountChip(
-                      label: 'Rejected',
-                      value: _rejected.length,
-                      fg: const Color(0xFFB91C1C),
-                      bg: const Color(0xFFFEE2E2),
-                      border: const Color(0xFFFCA5A5),
-                    ),
-                    const Spacer(),
-                    OutlinedButton.icon(
-                      onPressed: _refreshing
-                          ? null
-                          : () => _loadAll(forceRefresh: true),
-                      icon: _refreshing
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.refresh, size: 16),
-                      label: const Text('Refresh'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 24),
                 if (_loading)
-                  const Center(child: CircularProgressIndicator())
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(48.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
                 else if (_error != null)
                   Center(
-                    child: Column(
-                      children: [
-                        Text(_error!, textAlign: TextAlign.center),
-                        const SizedBox(height: 10),
-                        FilledButton(
-                          onPressed: _loadAll,
-                          child: const Text('Retry'),
-                        ),
-                      ],
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 48,
+                        horizontal: 24,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.error_outline_rounded,
+                            size: 48,
+                            color: Color(0xFFDC2626),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _error!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          FilledButton.icon(
+                            onPressed: _loadAll,
+                            icon: const Icon(Icons.refresh_rounded, size: 18),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
                     ),
                   )
                 else ...[
                   _SectionCard(
                     title: 'Pending Approval',
+                    icon: Icons.hourglass_empty_rounded,
                     count: _pending.length,
                     countFg: const Color(0xFFD97706),
                     countBg: const Color(0xFFFFFBEB),
                     countBorder: const Color(0xFFFDE68A),
                     child: _pending.isEmpty
                         ? const _EmptySection(
+                            icon: Icons.check_circle_outline_rounded,
                             message: 'No users pending approval.',
                             subMessage:
                                 'All registration requests have been processed.',
@@ -383,15 +514,17 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
                             }).toList(),
                           ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   _SectionCard(
                     title: 'Rejected Users',
+                    icon: Icons.block_rounded,
                     count: _rejected.length,
                     countFg: const Color(0xFFB91C1C),
                     countBg: const Color(0xFFFEE2E2),
                     countBorder: const Color(0xFFFCA5A5),
                     child: _rejected.isEmpty
                         ? const _EmptySection(
+                            icon: Icons.verified_user_outlined,
                             message: 'No rejected users found.',
                           )
                         : Column(
@@ -417,7 +550,7 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
                                 primaryLabel:
                                     acting && _actingAction == 'approve'
                                     ? '...'
-                                    : 'Re-approve',
+                                    : 'Review & Re-approve',
                                 onPrimary: acting
                                     ? null
                                     : () => _showApproveDialog(item),
@@ -453,15 +586,41 @@ class _CountChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: border),
       ),
-      child: Text(
-        '$value $label',
-        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: fg),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: fg.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '$value',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: fg,
+                height: 1,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: fg,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -469,6 +628,7 @@ class _CountChip extends StatelessWidget {
 
 class _SectionCard extends StatelessWidget {
   final String title;
+  final IconData icon;
   final int count;
   final Color countFg;
   final Color countBg;
@@ -477,6 +637,7 @@ class _SectionCard extends StatelessWidget {
 
   const _SectionCard({
     required this.title,
+    required this.icon,
     required this.count,
     required this.countFg,
     required this.countBg,
@@ -488,27 +649,38 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final border = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
 
     return Container(
       width: double.infinity,
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: border),
+        color: isDark ? const Color(0xFF0F172A) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.4 : 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Icon(icon, size: 24, color: theme.colorScheme.primary),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   title,
                   style: TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
                     color: theme.colorScheme.onSurface,
                   ),
                 ),
@@ -516,17 +688,17 @@ class _SectionCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
-                  vertical: 5,
+                  vertical: 4,
                 ),
                 decoration: BoxDecoration(
                   color: countBg,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: countBorder),
                 ),
                 child: Text(
                   '$count',
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w800,
                     color: countFg,
                   ),
@@ -534,7 +706,7 @@ class _SectionCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 24),
           child,
         ],
       ),
@@ -543,10 +715,15 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _EmptySection extends StatelessWidget {
+  final IconData icon;
   final String message;
   final String? subMessage;
 
-  const _EmptySection({required this.message, this.subMessage});
+  const _EmptySection({
+    required this.icon,
+    required this.message,
+    this.subMessage,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -555,39 +732,42 @@ class _EmptySection extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
+        padding: const EdgeInsets.symmetric(vertical: 32),
         child: Column(
           children: [
             Container(
-              width: 64,
-              height: 64,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
                 color: isDark
                     ? const Color(0xFF1E293B)
-                    : const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(18),
+                    : const Color(0xFFF1F5F9),
+                shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.group_outlined,
+                icon,
+                size: 32,
                 color: isDark
-                    ? const Color(0xFF64748B)
+                    ? const Color(0xFF475569)
                     : const Color(0xFF94A3B8),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Text(
               message,
               style: TextStyle(
+                fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: theme.colorScheme.onSurface,
               ),
             ),
             if (subMessage != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Text(
                 subMessage!,
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 14,
                   color: isDark
                       ? const Color(0xFF94A3B8)
                       : const Color(0xFF64748B),
@@ -626,63 +806,189 @@ class _UserApprovalTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final border = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+
+    final isPending = secondaryLabel != null;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: border),
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            name,
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            email,
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            rightTop,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF334155),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            rightBottom,
-            style: TextStyle(
-              fontSize: 11,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-            ),
-          ),
-          const SizedBox(height: 10),
           Row(
             children: [
-              FilledButton.tonal(
-                onPressed: onPrimary,
-                child: Text(primaryLabel),
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: isPending
+                    ? const Color(0xFFD97706).withOpacity(0.15)
+                    : const Color(0xFFDC2626).withOpacity(0.15),
+                child: Icon(
+                  isPending
+                      ? Icons.hourglass_empty_rounded
+                      : Icons.block_rounded,
+                  color: isPending
+                      ? const Color(0xFFD97706)
+                      : const Color(0xFFDC2626),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                    Text(
+                      email,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: isPending
+                  ? (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9))
+                  : const Color(0xFFFEE2E2).withOpacity(isDark ? 0.05 : 0.5),
+              border: Border.all(
+                color: isPending
+                    ? Colors.transparent
+                    : const Color(0xFFFCA5A5).withOpacity(0.5),
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      isPending
+                          ? Icons.badge_outlined
+                          : Icons.edit_note_rounded,
+                      size: 16,
+                      color: isPending
+                          ? (isDark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B))
+                          : const Color(0xFFB91C1C),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isPending
+                            ? 'Requested Role: $rightTop'
+                            : 'Rejected on $rightBottom',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: isPending
+                              ? FontWeight.w500
+                              : FontWeight.w600,
+                          color: isPending
+                              ? theme.colorScheme.onSurface
+                              : const Color(0xFFB91C1C),
+                        ),
+                      ),
+                    ),
+                    if (isPending)
+                      Text(
+                        rightBottom,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark
+                              ? const Color(0xFF64748B)
+                              : const Color(0xFF94A3B8),
+                        ),
+                      ),
+                  ],
+                ),
+                if (!isPending) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    rightTop, // In rejected state, rightTop is the reason
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark
+                          ? const Color(0xFFFCA5A5)
+                          : const Color(0xFF991B1B),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: isPending
+                    ? FilledButton.tonal(
+                        onPressed: onPrimary,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(
+                            0xFF10B981,
+                          ).withOpacity(0.15),
+                          foregroundColor: const Color(0xFF059669),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(primaryLabel),
+                      )
+                    : OutlinedButton(
+                        onPressed: onPrimary,
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(primaryLabel),
+                      ),
               ),
               if (secondaryLabel != null) ...[
-                const SizedBox(width: 8),
-                OutlinedButton(
-                  onPressed: onSecondary,
-                  child: Text(secondaryLabel!),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: onSecondary,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFDC2626),
+                      side: const BorderSide(color: Color(0xFFFCA5A5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(secondaryLabel!),
+                  ),
                 ),
               ],
             ],

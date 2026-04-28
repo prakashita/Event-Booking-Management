@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -277,6 +278,10 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
           SnackBar(
             content: Text('Requirements sent to: $labels.'),
             backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
       }
@@ -509,7 +514,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
 
   bool get _isCompactLayout => MediaQuery.of(context).size.width < 420;
 
-  EdgeInsets get _stepPadding => EdgeInsets.all(_isCompactLayout ? 18 : 24);
+  EdgeInsets get _stepPadding => EdgeInsets.all(_isCompactLayout ? 28 : 32);
 
   // ---- UI Helper Widgets ----
 
@@ -518,48 +523,72 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       labelText: label,
       hintText: hintText,
       filled: true,
-      fillColor: Colors.grey[50],
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      fillColor: const Color(0xFFF7F8FA),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: 18,
+        vertical: _isCompactLayout ? 14 : 16,
+      ),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Colors.transparent),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(
+          color: Theme.of(context).primaryColor,
+          width: 1.5,
+        ),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: Colors.red.shade300, width: 1.0),
+      ),
+      labelStyle: TextStyle(
+        fontSize: _isCompactLayout ? 13 : 14,
+        color: Colors.grey[600],
+        fontWeight: FontWeight.w500,
+      ),
+      hintStyle: TextStyle(
+        fontSize: _isCompactLayout ? 13 : 14,
+        color: Colors.grey[400],
+      ),
+      floatingLabelStyle: TextStyle(
+        fontSize: 14,
+        color: Theme.of(context).primaryColor,
+        fontWeight: FontWeight.w600,
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
+  Widget _buildSectionHeader(String title, String emoji) {
     return Row(
       children: [
         Container(
-          padding: EdgeInsets.all(_isCompactLayout ? 7 : 8),
+          padding: EdgeInsets.all(_isCompactLayout ? 10 : 12),
           decoration: BoxDecoration(
             color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(
-            icon,
-            color: Theme.of(context).primaryColor,
-            size: _isCompactLayout ? 20 : 24,
+          child: Text(
+            emoji,
+            style: TextStyle(fontSize: _isCompactLayout ? 20 : 24),
           ),
         ),
-        SizedBox(width: _isCompactLayout ? 10 : 12),
+        SizedBox(width: _isCompactLayout ? 14 : 16),
         Expanded(
-          child: Text(
-            title,
-            style: GoogleFonts.poppins(
-              fontSize: _isCompactLayout ? 17 : 20,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
+           child: Text(
+             title,
+             style: GoogleFonts.poppins(
+               fontSize: _isCompactLayout ? 16 : 22,
+               fontWeight: FontWeight.w600,
+               color: Colors.grey[900],
+               letterSpacing: -0.5,
+             ),
+           ),
         ),
       ],
     );
@@ -570,42 +599,84 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     required bool value,
     required ValueChanged<bool?> onChanged,
   }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+    final primaryColor = Theme.of(context).primaryColor;
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: value
-            ? Theme.of(context).primaryColor.withValues(alpha: 0.05)
-            : Colors.transparent,
+        color: value ? primaryColor.withValues(alpha: 0.04) : Colors.white,
         border: Border.all(
-          color: value ? Theme.of(context).primaryColor : Colors.grey[300]!,
-          width: value ? 1.5 : 1,
+          color: value
+              ? primaryColor.withValues(alpha: 0.5)
+              : Colors.grey[200]!,
+          width: value ? 1.5 : 1.0,
         ),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: value
+            ? [
+                BoxShadow(
+                  color: primaryColor.withValues(alpha: 0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
-      child: CheckboxListTile(
-        value: value,
-        onChanged: onChanged,
-        title: Text(
-          title,
-          style: TextStyle(
-            fontSize: _isCompactLayout ? 14 : 16,
-            fontWeight: value ? FontWeight.w600 : FontWeight.w400,
-            color: Colors.black87,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => onChanged(!value),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: _isCompactLayout ? 16 : 20,
+              vertical: _isCompactLayout ? 14 : 16,
+            ),
+            child: Row(
+              children: [
+                 Expanded(
+                   child: Text(
+                     title,
+                     style: TextStyle(
+                       fontSize: _isCompactLayout ? 12 : 14,
+                       fontWeight: value ? FontWeight.w600 : FontWeight.w500,
+                       color: value ? primaryColor : Colors.grey[800],
+                     ),
+                   ),
+                 ),
+                SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      checkboxTheme: CheckboxThemeData(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        side: BorderSide(
+                          color: value ? primaryColor : Colors.grey[400]!,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    child: Checkbox(
+                      value: value,
+                      onChanged: onChanged,
+                      activeColor: primaryColor,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        activeColor: Theme.of(context).primaryColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        dense: _isCompactLayout,
-        visualDensity: _isCompactLayout
-            ? const VisualDensity(horizontal: -2, vertical: -2)
-            : VisualDensity.standard,
-        controlAffinity: ListTileControlAffinity.trailing,
-        checkboxShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(4),
-        ),
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: _isCompactLayout ? 10 : 12,
-          vertical: _isCompactLayout ? 0 : 4,
         ),
       ),
     );
@@ -634,6 +705,11 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                 colorScheme: Theme.of(
                   context,
                 ).colorScheme.copyWith(primary: Theme.of(context).primaryColor),
+                dialogTheme: DialogThemeData(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
               ),
               child: child!,
             );
@@ -649,13 +725,20 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: AbsorbPointer(
         child: TextField(
           controller: TextEditingController(text: currentValue),
+          style: TextStyle(
+            fontSize: _isCompactLayout ? 13 : 14,
+            fontWeight: FontWeight.w500,
+          ),
           decoration:
               _buildInputDecoration(
                 label,
                 hintText: hintText ?? 'Select date',
               ).copyWith(
-                prefixIcon: const Icon(Icons.calendar_today, size: 18),
-                suffixIcon: const Icon(Icons.arrow_drop_down, size: 20),
+                prefixIcon: const Icon(Icons.calendar_month_rounded, size: 18),
+                suffixIcon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                ),
               ),
         ),
       ),
@@ -686,6 +769,11 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                 colorScheme: Theme.of(
                   context,
                 ).colorScheme.copyWith(primary: Theme.of(context).primaryColor),
+                timePickerTheme: TimePickerThemeData(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
               ),
               child: child!,
             );
@@ -701,13 +789,20 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: AbsorbPointer(
         child: TextField(
           controller: TextEditingController(text: currentValue),
+          style: TextStyle(
+            fontSize: _isCompactLayout ? 13 : 14,
+            fontWeight: FontWeight.w500,
+          ),
           decoration:
               _buildInputDecoration(
                 label,
                 hintText: hintText ?? 'Select time',
               ).copyWith(
-                prefixIcon: const Icon(Icons.access_time, size: 18),
-                suffixIcon: const Icon(Icons.arrow_drop_down, size: 20),
+                prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
+                suffixIcon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                ),
               ),
         ),
       ),
@@ -716,60 +811,90 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
 
   Widget _buildEventSummary() {
     return Container(
-      padding: EdgeInsets.all(_isCompactLayout ? 14 : 16),
       decoration: BoxDecoration(
-        color: Colors.blueGrey[50],
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blueGrey[100]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.event_note, color: Colors.blueGrey[700], size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  widget.event.title,
-                  style: GoogleFonts.poppins(
-                    fontSize: _isCompactLayout ? 14 : 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blueGrey[900],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(Icons.calendar_today, size: 16, color: Colors.blueGrey[600]),
-              const SizedBox(width: 8),
-              Text(
-                '${widget.event.startTime.toString().split(' ')[0]} - ${widget.event.endTime.toString().split(' ')[0]}',
-                style: TextStyle(
-                  fontSize: _isCompactLayout ? 12 : 13,
-                  color: Colors.blueGrey[800],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(Icons.access_time, size: 16, color: Colors.blueGrey[600]),
-              const SizedBox(width: 8),
-              Text(
-                '${_formatTime(widget.event.startTime)} to ${_formatTime(widget.event.endTime)}',
-                style: TextStyle(
-                  fontSize: _isCompactLayout ? 12 : 13,
-                  color: Colors.blueGrey[800],
-                ),
-              ),
-            ],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
+        border: Border.all(color: Colors.grey.shade100, width: 1.0),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 6,
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.all(_isCompactLayout ? 16 : 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.event.title,
+                      style: GoogleFonts.poppins(
+                        fontSize: _isCompactLayout ? 15 : 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[900],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_month_rounded,
+                          size: 16,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${widget.event.startTime.toString().split(' ')[0]} - ${widget.event.endTime.toString().split(' ')[0]}',
+                          style: TextStyle(
+                            fontSize: _isCompactLayout ? 12 : 13,
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.schedule_rounded,
+                          size: 16,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                        const SizedBox(width: 8),
+                         Text(
+                           '${_formatTime(widget.event.startTime)} to ${_formatTime(widget.event.endTime)}',
+                           style: TextStyle(
+                             fontSize: _isCompactLayout ? 11 : 12,
+                             color: Colors.grey[700],
+                             fontWeight: FontWeight.w500,
+                           ),
+                         ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -801,23 +926,24 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Facility Request', Icons.domain),
-          const SizedBox(height: 24),
+          _buildSectionHeader('Facility Request', '🏢'),
+          const SizedBox(height: 20),
           _buildEventSummary(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           Text(
             'Message Details',
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              color: Colors.grey[800],
             ),
           ),
           const SizedBox(height: 12),
           TextField(
             readOnly: true,
+            style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration: _buildInputDecoration('From').copyWith(
-              prefixIcon: const Icon(Icons.person_outline),
+              prefixIcon: const Icon(Icons.person_outline_rounded, size: 18),
               hintText: widget.requesterEmail.isEmpty
                   ? 'Your account'
                   : widget.requesterEmail,
@@ -826,36 +952,41 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
           const SizedBox(height: 16),
           TextField(
             onChanged: (v) => _facilityForm['to'] = v,
-            decoration: _buildInputDecoration(
-              'To',
-              hintText: 'Facility manager email (Optional)',
-            ).copyWith(prefixIcon: const Icon(Icons.mail_outline)),
+            style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
+            decoration:
+                _buildInputDecoration(
+                  'To',
+                  hintText: 'Facility manager email (Optional)',
+                ).copyWith(
+                  prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
+                ),
           ),
-          const SizedBox(height: 24),
-          Text(
-            'Requirements',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
-            ),
-          ),
+          const SizedBox(height: 32),
+           Text(
+             'Requirements',
+             style: GoogleFonts.poppins(
+               fontSize: _isCompactLayout ? 12 : 14,
+               fontWeight: FontWeight.w600,
+               color: Colors.grey[800],
+             ),
+           ),
           const SizedBox(height: 12),
           _buildCheckboxCard(
-            title: 'Venue Setup',
+            title: 'Venue Setup Needed',
             value: _facilityForm['venue_required'],
             onChanged: (v) =>
                 setState(() => _facilityForm['venue_required'] = v ?? false),
           ),
           _buildCheckboxCard(
-            title: 'Refreshments',
+            title: 'Refreshments Required',
             value: _facilityForm['refreshments'],
             onChanged: (v) =>
                 setState(() => _facilityForm['refreshments'] = v ?? false),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           TextField(
             onChanged: (v) => _facilityForm['other_notes'] = v,
+            style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration: _buildInputDecoration(
               'Additional Notes',
               hintText: 'Any special arrangements needed?',
@@ -873,23 +1004,24 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('IT Support', Icons.computer),
-          const SizedBox(height: 24),
+          _buildSectionHeader('IT Support', '💻'),
+          const SizedBox(height: 20),
           _buildEventSummary(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           Text(
             'Message Details',
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              color: Colors.grey[800],
             ),
           ),
           const SizedBox(height: 12),
           TextField(
             readOnly: true,
+            style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration: _buildInputDecoration('From').copyWith(
-              prefixIcon: const Icon(Icons.person_outline),
+              prefixIcon: const Icon(Icons.person_outline_rounded, size: 18),
               hintText: widget.requesterEmail.isEmpty
                   ? 'Your account'
                   : widget.requesterEmail,
@@ -898,82 +1030,125 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
           const SizedBox(height: 16),
           TextField(
             onChanged: (v) => _itForm['to'] = v,
-            decoration: _buildInputDecoration(
-              'To',
-              hintText: 'IT department email (Optional)',
-            ).copyWith(prefixIcon: const Icon(Icons.mail_outline)),
+            style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
+            decoration:
+                _buildInputDecoration(
+                  'To',
+                  hintText: 'IT department email (Optional)',
+                ).copyWith(
+                  prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
+                ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           Text(
             'Event Mode',
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              color: Colors.grey[800],
             ),
           ),
           const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment<String>(
-                  value: 'online',
-                  label: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('Online'),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF7F8FA),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            padding: const EdgeInsets.all(6),
+            child: SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<String>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment<String>(
+                    value: 'online',
+                    label: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Text(
+                        'Online',
+                        style: TextStyle(
+                          fontSize: _isCompactLayout ? 12 : 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.wifi_rounded, size: 18),
                   ),
-                  icon: Icon(Icons.wifi),
-                ),
-                ButtonSegment<String>(
-                  value: 'offline',
-                  label: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('Offline'),
+                  ButtonSegment<String>(
+                    value: 'offline',
+                    label: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Text(
+                        'Offline',
+                        style: TextStyle(
+                          fontSize: _isCompactLayout ? 12 : 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    icon: const Icon(Icons.wifi_off_rounded, size: 18),
                   ),
-                  icon: Icon(Icons.wifi_off),
-                ),
-              ],
-              selected: {(_itForm['event_mode'] ?? 'offline').toString()},
-              onSelectionChanged: (selection) {
-                setState(() => _itForm['event_mode'] = selection.first);
-              },
-              style: ButtonStyle(
-                shape: WidgetStateProperty.all(
-                  RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                ],
+                selected: {(_itForm['event_mode'] ?? 'offline').toString()},
+                onSelectionChanged: (selection) {
+                  setState(() => _itForm['event_mode'] = selection.first);
+                },
+                style: ButtonStyle(
+                  backgroundColor: WidgetStateProperty.resolveWith<Color>((
+                    Set<WidgetState> states,
+                  ) {
+                    if (states.contains(WidgetState.selected)) {
+                      return Theme.of(context).primaryColor;
+                    }
+                    return Colors.transparent;
+                  }),
+                  foregroundColor: WidgetStateProperty.resolveWith<Color>((
+                    Set<WidgetState> states,
+                  ) {
+                    if (states.contains(WidgetState.selected)) {
+                      return Colors.white;
+                    }
+                    return Colors.grey[600]!;
+                  }),
+                  shape: WidgetStateProperty.all(
+                    RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
+                  side: WidgetStateProperty.all(BorderSide.none),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           Text(
             'Technical Requirements',
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+              color: Colors.grey[800],
             ),
           ),
           const SizedBox(height: 12),
           _buildCheckboxCard(
-            title: 'PA System',
+            title: 'Audio / PA System',
             value: _itForm['pa_system'],
             onChanged: (v) => setState(() => _itForm['pa_system'] = v ?? false),
           ),
           _buildCheckboxCard(
-            title: 'Projection',
+            title: 'Projection Display',
             value: _itForm['projection'],
             onChanged: (v) =>
                 setState(() => _itForm['projection'] = v ?? false),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
           TextField(
             onChanged: (v) => _itForm['other_notes'] = v,
+            style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration: _buildInputDecoration(
               'Additional Notes',
-              hintText: 'Microphones needed? WiFi access?',
+              hintText: 'Microphones needed? WiFi access for guests?',
             ),
             maxLines: 3,
           ),
@@ -990,28 +1165,32 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Marketing Request', Icons.campaign),
-          const SizedBox(height: 24),
+          _buildSectionHeader('Marketing Request', '📢'),
+          const SizedBox(height: 20),
           _buildEventSummary(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           TextField(
             onChanged: (v) => _marketingForm['to'] = v,
-            decoration: _buildInputDecoration(
-              'To',
-              hintText: 'Marketing email (Optional)',
-            ).copyWith(prefixIcon: const Icon(Icons.mail_outline)),
+            style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
+            decoration:
+                _buildInputDecoration(
+                  'To',
+                  hintText: 'Marketing email (Optional)',
+                ).copyWith(
+                  prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
+                ),
           ),
-          const SizedBox(height: 24),
-          Text(
-            'Campaign Phases',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildPhaseGroup('Pre-Event', [
+          const SizedBox(height: 32),
+           Text(
+             'Campaign Phases',
+             style: GoogleFonts.poppins(
+               fontSize: _isCompactLayout ? 12 : 14,
+               fontWeight: FontWeight.w600,
+               color: Colors.grey[800],
+             ),
+           ),
+          const SizedBox(height: 12),
+          _buildPhaseGroup('Pre-Event Phase', [
             _buildCheckboxCard(
               title: 'Poster Design',
               value: req['pre_event']['poster'],
@@ -1019,14 +1198,14 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                   setState(() => req['pre_event']['poster'] = v ?? false),
             ),
             _buildCheckboxCard(
-              title: 'Social Media Post',
+              title: 'Social Media Promotion',
               value: req['pre_event']['social_media'],
               onChanged: (v) =>
                   setState(() => req['pre_event']['social_media'] = v ?? false),
             ),
           ]),
-          const SizedBox(height: 16),
-          _buildPhaseGroup('During Event', [
+          const SizedBox(height: 20),
+          _buildPhaseGroup('During Event Phase', [
             _buildCheckboxCard(
               title: 'Photography Coverage',
               value: req['during_event']['photo'],
@@ -1034,14 +1213,14 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                   setState(() => req['during_event']['photo'] = v ?? false),
             ),
             _buildCheckboxCard(
-              title: 'Video Shoot',
+              title: 'Video Recording',
               value: req['during_event']['video'],
               onChanged: (v) =>
                   setState(() => req['during_event']['video'] = v ?? false),
             ),
           ]),
-          const SizedBox(height: 16),
-          _buildPhaseGroup('Post-Event', [
+          const SizedBox(height: 20),
+          _buildPhaseGroup('Post-Event Phase', [
             _buildCheckboxCard(
               title: 'Social Media Wrap-up',
               value: req['post_event']['social_media'],
@@ -1063,32 +1242,58 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                   setState(() => req['post_event']['video'] = v ?? false),
             ),
           ]),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           TextField(
             onChanged: (v) => _marketingForm['other_notes'] = v,
+            style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration: _buildInputDecoration(
               'Additional Notes',
-              hintText: 'Target audience? Key messaging?',
+              hintText: 'Target audience? Key messaging goals?',
             ),
             maxLines: 3,
           ),
-          const SizedBox(height: 24),
-          Text(
-            'Reference Files',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
+           const SizedBox(height: 32),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Reference Files',
+                    style: GoogleFonts.poppins(
+                      fontSize: _isCompactLayout ? 12 : 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Max $_maxMarketingRequesterFiles',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Max $_maxMarketingRequesterFiles files, up to ${_maxMarketingRequesterFileMb}MB each.',
-            style: TextStyle(
-              fontSize: _isCompactLayout ? 12 : 13,
-              color: Colors.grey[600],
+            const SizedBox(height: 6),
+            Text(
+              'Upload logos, previous posters, or brand guidelines (Max ${_maxMarketingRequesterFileMb}MB each).',
+              style: TextStyle(
+                fontSize: _isCompactLayout ? 11 : 12,
+                color: Colors.grey[500],
+              ),
             ),
-          ),
+            const SizedBox(height: 16),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
@@ -1096,84 +1301,124 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
               onPressed: _status == 'loading'
                   ? null
                   : _pickMarketingAttachments,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('Upload Attachments'),
+              icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+              label: Text(
+                'Browse Files',
+                style: TextStyle(
+                  fontSize: _isCompactLayout ? 13 : 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                foregroundColor: Theme.of(context).primaryColor,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: BorderSide(
+                  color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
+                  width: 1.5,
+                ),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
             ),
           ),
-          if (_marketingAttachments.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            ...List.generate(_marketingAttachments.length, (index) {
-              final file = _marketingAttachments[index];
-              final sizeMb = file.size / (1024 * 1024);
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.grey[200]!),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.02),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.insert_drive_file,
-                        color: Colors.blue[400],
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            file.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w500),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            child: _marketingAttachments.isNotEmpty
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 20.0),
+                    child: Column(
+                      children: List.generate(_marketingAttachments.length, (
+                        index,
+                      ) {
+                        final file = _marketingAttachments[index];
+                        final sizeMb = file.size / (1024 * 1024);
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            border: Border.all(color: Colors.grey.shade200),
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${sizeMb.toStringAsFixed(1)} MB',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[500],
-                            ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).primaryColor.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(
+                                  Icons.insert_drive_file_rounded,
+                                  color: Theme.of(context).primaryColor,
+                                  size: 18,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      file.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${sizeMb.toStringAsFixed(1)} MB',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey[500],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: _status == 'loading'
+                                    ? null
+                                    : () => _removeMarketingAttachmentAt(index),
+                                icon: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: Colors.red.shade400,
+                                    size: 18,
+                                  ),
+                                ),
+                                tooltip: 'Remove',
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        );
+                      }),
                     ),
-                    IconButton(
-                      onPressed: _status == 'loading'
-                          ? null
-                          : () => _removeMarketingAttachmentAt(index),
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      tooltip: 'Remove',
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
     );
@@ -1181,57 +1426,75 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
 
   Widget _buildPhaseGroup(String title, List<Widget> children) {
     return Container(
-      padding: EdgeInsets.all(_isCompactLayout ? 14 : 16),
+      padding: EdgeInsets.all(_isCompactLayout ? 16 : 20),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200, width: 1.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: _isCompactLayout ? 11 : 12,
-              letterSpacing: _isCompactLayout ? 0.8 : 1.2,
-              color: Colors.grey,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                title.toUpperCase(),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                  letterSpacing: 1.0,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           ...children,
         ],
       ),
     );
   }
 
+  // UPDATED: Completely revamped Transport UI logic with visual timelines and grouped sections
   Widget _buildTransportStep() {
     return SingleChildScrollView(
       padding: _stepPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Transport Request', Icons.directions_bus),
-          const SizedBox(height: 24),
+          _buildSectionHeader('Transport Request', '🚕'),
+          const SizedBox(height: 20),
           _buildEventSummary(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
           TextField(
             onChanged: (v) => _transportForm['to'] = v,
-            decoration: _buildInputDecoration(
-              'To',
-              hintText: 'Transport coordinator email (Optional)',
-            ).copyWith(prefixIcon: const Icon(Icons.mail_outline)),
+            style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
+            decoration:
+                _buildInputDecoration(
+                  'To',
+                  hintText: 'Transport coordinator email (Optional)',
+                ).copyWith(
+                  prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
+                ),
           ),
-          const SizedBox(height: 24),
-          Text(
-            'Arrangements Needed',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
-            ),
-          ),
+          const SizedBox(height: 32),
+           Text(
+             'Arrangements Needed',
+             style: GoogleFonts.poppins(
+               fontSize: _isCompactLayout ? 12 : 14,
+               fontWeight: FontWeight.w600,
+               color: Colors.grey[800],
+             ),
+           ),
           const SizedBox(height: 12),
           _buildCheckboxCard(
             title: 'Guest Cab Services',
@@ -1246,132 +1509,308 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             onChanged: (v) =>
                 setState(() => _transportForm['include_students'] = v ?? false),
           ),
+
           if (_transportForm['include_guest_cab']) ...[
-            const SizedBox(height: 24),
-            _buildPhaseGroup('Guest Cab Itinerary', [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      onChanged: (v) =>
-                          _transportForm['guest_pickup_location'] = v,
-                      decoration: _buildInputDecoration('Pickup Location'),
-                    ),
+            const SizedBox(height: 20),
+            Container(
+              padding: EdgeInsets.all(_isCompactLayout ? 16 : 20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.blue.shade100, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    flex: 3,
-                    child: _buildDatePickerField(
-                      label: 'Pickup Date',
-                      formKey: 'guest_pickup_date',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: _buildTimePickerField(
-                      label: 'Time',
-                      formKey: 'guest_pickup_time',
-                    ),
-                  ),
-                ],
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
-                child: Divider(),
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      onChanged: (v) =>
-                          _transportForm['guest_dropoff_location'] = v,
-                      decoration: _buildInputDecoration('Dropoff Location'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: _buildDatePickerField(
-                      label: 'Dropoff Date',
-                      formKey: 'guest_dropoff_date',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: _buildTimePickerField(
-                      label: 'Time',
-                      formKey: 'guest_dropoff_time',
-                    ),
-                  ),
-                ],
-              ),
-            ]),
-          ],
-          if (_transportForm['include_students']) ...[
-            const SizedBox(height: 24),
-            _buildPhaseGroup('Student Logistics', [
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      onChanged: (v) => _transportForm['student_count'] = v,
-                      decoration: _buildInputDecoration('Total Students'),
-                      keyboardType: TextInputType.number,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextField(
-                      onChanged: (v) =>
-                          _transportForm['student_transport_kind'] = v,
-                      decoration: _buildInputDecoration(
-                        'Vehicle Type',
-                        hintText: 'Bus, Van...',
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.local_taxi_rounded,
+                        size: 18,
+                        color: Colors.blue.shade700,
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'GUEST CAB ITINERARY',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          letterSpacing: 1.0,
+                          color: Colors.blue.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  // Pickup Timeline Section
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Column(
+                        children: [
+                          Icon(
+                            Icons.trip_origin_rounded,
+                            size: 16,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                          Container(
+                            height: 60, // visual connection line
+                            width: 2,
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(1),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            TextField(
+                              onChanged: (v) =>
+                                  _transportForm['guest_pickup_location'] = v,
+                              style: TextStyle(
+                                fontSize: _isCompactLayout ? 13 : 14,
+                              ),
+                              decoration:
+                                  _buildInputDecoration(
+                                    'Pickup Location',
+                                    hintText: 'Airport, Hotel...',
+                                  ).copyWith(
+                                    prefixIcon: Icon(
+                                      Icons.my_location_rounded,
+                                      size: 18,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: _buildDatePickerField(
+                                    label: 'Date',
+                                    formKey: 'guest_pickup_date',
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  flex: 2,
+                                  child: _buildTimePickerField(
+                                    label: 'Time',
+                                    formKey: 'guest_pickup_time',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  // Dropoff Timeline Section
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.location_on_rounded,
+                        size: 18,
+                        color: Colors.redAccent.shade400,
+                      ),
+                      const SizedBox(
+                        width: 14,
+                      ), // slightly less due to icon size difference
+                      Expanded(
+                        child: Column(
+                          children: [
+                            TextField(
+                              onChanged: (v) =>
+                                  _transportForm['guest_dropoff_location'] = v,
+                              style: TextStyle(
+                                fontSize: _isCompactLayout ? 13 : 14,
+                              ),
+                              decoration:
+                                  _buildInputDecoration(
+                                    'Dropoff Location',
+                                    hintText: 'Campus, Hotel...',
+                                  ).copyWith(
+                                    prefixIcon: Icon(
+                                      Icons.flag_rounded,
+                                      size: 18,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 3,
+                                  child: _buildDatePickerField(
+                                    label: 'Date',
+                                    formKey: 'guest_dropoff_date',
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  flex: 2,
+                                  child: _buildTimePickerField(
+                                    label: 'Time',
+                                    formKey: 'guest_dropoff_time',
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 3,
-                    child: _buildDatePickerField(
-                      label: 'Date',
-                      formKey: 'student_date',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: _buildTimePickerField(
-                      label: 'Time',
-                      formKey: 'student_time',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                onChanged: (v) => _transportForm['student_pickup_point'] = v,
-                decoration: _buildInputDecoration('Central Pickup Point'),
-              ),
-            ]),
+            ),
           ],
-          const SizedBox(height: 24),
+
+          if (_transportForm['include_students']) ...[
+            const SizedBox(height: 20),
+            Container(
+              padding: EdgeInsets.all(_isCompactLayout ? 16 : 20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.orange.shade100, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.orange.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.groups_rounded,
+                        size: 18,
+                        color: Colors.orange.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'STUDENT LOGISTICS',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 11,
+                          letterSpacing: 1.0,
+                          color: Colors.orange.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          onChanged: (v) => _transportForm['student_count'] = v,
+                          style: TextStyle(
+                            fontSize: _isCompactLayout ? 13 : 14,
+                          ),
+                          decoration:
+                              _buildInputDecoration(
+                                'Total Students',
+                                hintText: 'e.g. 50',
+                              ).copyWith(
+                                prefixIcon: Icon(
+                                  Icons.people_alt_rounded,
+                                  size: 18,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          onChanged: (v) =>
+                              _transportForm['student_transport_kind'] = v,
+                          style: TextStyle(
+                            fontSize: _isCompactLayout ? 13 : 14,
+                          ),
+                          decoration:
+                              _buildInputDecoration(
+                                'Vehicle Type',
+                                hintText: 'Bus, Van...',
+                              ).copyWith(
+                                prefixIcon: Icon(
+                                  Icons.directions_bus_rounded,
+                                  size: 18,
+                                  color: Colors.grey.shade500,
+                                ),
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: _buildDatePickerField(
+                          label: 'Date',
+                          formKey: 'student_date',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: _buildTimePickerField(
+                          label: 'Time',
+                          formKey: 'student_time',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    onChanged: (v) =>
+                        _transportForm['student_pickup_point'] = v,
+                    style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
+                    decoration:
+                        _buildInputDecoration(
+                          'Central Pickup Point',
+                          hintText: 'e.g. Main Gate',
+                        ).copyWith(
+                          prefixIcon: Icon(
+                            Icons.meeting_room_rounded,
+                            size: 18,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 20),
           TextField(
             onChanged: (v) => _transportForm['other_notes'] = v,
+            style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration: _buildInputDecoration(
               'Additional Notes',
               hintText: 'Any special instructions for drivers?',
@@ -1389,10 +1828,19 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Review Requirements', Icons.fact_check),
-          const SizedBox(height: 24),
+          _buildSectionHeader('Review & Submit', '📝'),
+          const SizedBox(height: 20),
           _buildEventSummary(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 32),
+          Text(
+            'Request Summary',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
+          const SizedBox(height: 16),
           ..._departments.map((dept) {
             final isSkipped = _skipped[dept]!;
             return Padding(
@@ -1405,24 +1853,36 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
           if (!_hasAnySelected)
             Container(
               margin: const EdgeInsets.only(top: 8),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.red[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red[200]!),
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.red.shade200, width: 1.0),
               ),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    color: Colors.red[700],
-                    size: 24,
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red[700],
+                      size: 20,
+                    ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: Text(
                       'All departments were skipped. Go back to include at least one request, or close to cancel.',
-                      style: TextStyle(fontSize: 13, color: Colors.red[800]),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.red[900],
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                      ),
                     ),
                   ),
                 ],
@@ -1437,14 +1897,25 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200, width: 1.0),
       ),
       child: Row(
         children: [
-          Icon(Icons.do_not_disturb_alt, color: Colors.grey[500], size: 20),
-          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.do_not_disturb_alt_rounded,
+              color: Colors.grey[500],
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 16),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1456,10 +1927,14 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                   fontSize: 14,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 4),
               Text(
                 'Skipped — No request will be sent.',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[500],
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ],
           ),
@@ -1470,17 +1945,17 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
 
   Widget _buildReviewItemCard(String dept) {
     final title = _getDeptReviewLabel(dept);
+    final primaryColor = Theme.of(context).primaryColor;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200, width: 1.0),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
+            blurRadius: 12,
             offset: const Offset(0, 4),
           ),
         ],
@@ -1488,160 +1963,303 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.check_circle,
-                color: Theme.of(context).primaryColor,
-                size: 20,
+          // Card Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              color: primaryColor.withValues(alpha: 0.04),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
               ),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                  color: Colors.black87,
+              border: Border(
+                bottom: BorderSide(
+                  color: primaryColor.withValues(alpha: 0.1),
+                  width: 1.0,
                 ),
               ),
-            ],
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: primaryColor, size: 18),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    color: Colors.grey[900],
+                  ),
+                ),
+              ],
+            ),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1),
-          ),
-          if (dept == 'facility') ...[
-            _buildReviewLine(
-              'To',
-              _facilityForm['to'].isEmpty
-                  ? 'Default facility desk'
-                  : _facilityForm['to'],
-            ),
-            _buildReviewLine(
-              'Venue setup',
-              _facilityForm['venue_required'] ? 'Required' : 'Not required',
-            ),
-            _buildReviewLine(
-              'Refreshments',
-              _facilityForm['refreshments'] ? 'Required' : 'Not required',
-            ),
-            if (_hasNotes(_facilityForm['other_notes']))
-              _buildReviewLine(
-                'Notes',
-                _facilityForm['other_notes'].toString().trim(),
-              ),
-          ] else if (dept == 'it') ...[
-            _buildReviewLine(
-              'To',
-              _itForm['to'].isEmpty ? 'Default IT desk' : _itForm['to'],
-            ),
-            _buildReviewLine(
-              'Mode',
-              _itForm['event_mode'] == 'online'
-                  ? 'Online Event'
-                  : 'Offline Event',
-            ),
-            _buildReviewLine(
-              'PA system',
-              _itForm['pa_system'] ? 'Required' : 'Not required',
-            ),
-            _buildReviewLine(
-              'Projection',
-              _itForm['projection'] ? 'Required' : 'Not required',
-            ),
-            if (_hasNotes(_itForm['other_notes']))
-              _buildReviewLine(
-                'Notes',
-                _itForm['other_notes'].toString().trim(),
-              ),
-          ] else if (dept == 'marketing') ...[
-            _buildReviewLine(
-              'To',
-              _marketingForm['to'].isEmpty
-                  ? 'Default marketing desk'
-                  : _marketingForm['to'],
-            ),
-            const SizedBox(height: 8),
-            ..._selectedMarketingLines().map(
-              (line) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '• ',
-                      style: TextStyle(color: Colors.grey, fontSize: 13),
+          // Card Body
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (dept == 'facility') ...[
+                  _buildReviewLine(
+                    'To',
+                    _facilityForm['to'].isEmpty
+                        ? 'Default facility desk'
+                        : _facilityForm['to'],
+                  ),
+                  _buildReviewLine(
+                    'Venue setup',
+                    _facilityForm['venue_required']
+                        ? 'Required'
+                        : 'Not required',
+                  ),
+                  _buildReviewLine(
+                    'Refreshments',
+                    _facilityForm['refreshments'] ? 'Required' : 'Not required',
+                  ),
+                  if (_hasNotes(_facilityForm['other_notes']))
+                    _buildReviewLine(
+                      'Notes',
+                      _facilityForm['other_notes'].toString().trim(),
                     ),
-                    Expanded(
-                      child: Text(
-                        line,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.black87,
-                        ),
+                ] else if (dept == 'it') ...[
+                  _buildReviewLine(
+                    'To',
+                    _itForm['to'].isEmpty ? 'Default IT desk' : _itForm['to'],
+                  ),
+                  _buildReviewLine(
+                    'Mode',
+                    _itForm['event_mode'] == 'online'
+                        ? 'Online Event'
+                        : 'Offline Event',
+                  ),
+                  _buildReviewLine(
+                    'PA system',
+                    _itForm['pa_system'] ? 'Required' : 'Not required',
+                  ),
+                  _buildReviewLine(
+                    'Projection',
+                    _itForm['projection'] ? 'Required' : 'Not required',
+                  ),
+                  if (_hasNotes(_itForm['other_notes']))
+                    _buildReviewLine(
+                      'Notes',
+                      _itForm['other_notes'].toString().trim(),
+                    ),
+                ] else if (dept == 'marketing') ...[
+                  _buildReviewLine(
+                    'To',
+                    _marketingForm['to'].isEmpty
+                        ? 'Default marketing desk'
+                        : _marketingForm['to'],
+                  ),
+                  const SizedBox(height: 8),
+                  ..._selectedMarketingLines().map(
+                    (line) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.check_rounded,
+                            size: 16,
+                            color: primaryColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              line,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (_marketingAttachments.isNotEmpty)
+                    _buildReviewLine(
+                      'Attachments',
+                      '${_marketingAttachments.length} files attached',
+                    ),
+                  if (_hasNotes(_marketingForm['other_notes']))
+                    _buildReviewLine(
+                      'Notes',
+                      _marketingForm['other_notes'].toString().trim(),
+                    ),
+                ] else if (dept == 'transport') ...[
+                  _buildReviewLine(
+                    'To',
+                    _transportForm['to'].isEmpty
+                        ? 'Default transport desk'
+                        : _transportForm['to'],
+                  ),
+                  _buildReviewLine(
+                    'Guest cab',
+                    _transportForm['include_guest_cab']
+                        ? 'Required'
+                        : 'Not required',
+                  ),
+                  _buildReviewLine(
+                    'Students',
+                    _transportForm['include_students']
+                        ? 'Required'
+                        : 'Not required',
+                  ),
+                  if (_transportForm['include_guest_cab'])
+                    Container(
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.blue.shade100,
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.local_taxi_rounded,
+                                size: 14,
+                                color: Colors.blue.shade700,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'GUEST ITINERARY',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade800,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.trip_origin_rounded,
+                                size: 14,
+                                color: primaryColor,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${_transportForm['guest_pickup_location'] ?? '—'}\n(${_transportForm['guest_pickup_date'] ?? '—'} at ${_transportForm['guest_pickup_time'] ?? ''})',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.only(
+                              left: 6.0,
+                              top: 4,
+                              bottom: 4,
+                            ),
+                            child: SizedBox(
+                              height: 12,
+                              child: VerticalDivider(
+                                width: 2,
+                                thickness: 1.5,
+                                color: Colors.black26,
+                              ),
+                            ),
+                          ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.location_on_rounded,
+                                size: 14,
+                                color: Colors.redAccent.shade400,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${_transportForm['guest_dropoff_location'] ?? '—'}',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_transportForm['include_students'])
+                    Container(
+                      margin: const EdgeInsets.only(top: 8, bottom: 8),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50.withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.orange.shade100,
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.directions_bus_rounded,
+                                size: 14,
+                                color: Colors.orange.shade700,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'STUDENT LOGISTICS',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange.shade800,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            '${_transportForm['student_count'] ?? '—'} Students via ${_transportForm['student_transport_kind'] ?? '—'}\nOn ${_transportForm['student_date'] ?? '—'} at ${_transportForm['student_time'] ?? ''}\nPickup: ${_transportForm['student_pickup_point'] ?? '—'}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              height: 1.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_hasNotes(_transportForm['other_notes']))
+                    _buildReviewLine(
+                      'Notes',
+                      _transportForm['other_notes'].toString().trim(),
+                    ),
+                ],
+              ],
             ),
-            if (_marketingAttachments.isNotEmpty)
-              _buildReviewLine(
-                'Attachments',
-                '${_marketingAttachments.length} files attached',
-              ),
-            if (_hasNotes(_marketingForm['other_notes']))
-              _buildReviewLine(
-                'Notes',
-                _marketingForm['other_notes'].toString().trim(),
-              ),
-          ] else if (dept == 'transport') ...[
-            _buildReviewLine(
-              'To',
-              _transportForm['to'].isEmpty
-                  ? 'Default transport desk'
-                  : _transportForm['to'],
-            ),
-            _buildReviewLine(
-              'Guest cab',
-              _transportForm['include_guest_cab'] ? 'Required' : 'Not required',
-            ),
-            _buildReviewLine(
-              'Students',
-              _transportForm['include_students'] ? 'Required' : 'Not required',
-            ),
-            if (_transportForm['include_guest_cab'])
-              Container(
-                margin: const EdgeInsets.only(top: 8, bottom: 4),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Guest Itinerary:\n${_transportForm['guest_pickup_location'] ?? '—'} → ${_transportForm['guest_dropoff_location'] ?? '—'} \n(${_transportForm['guest_pickup_date'] ?? '—'} at ${_transportForm['guest_pickup_time'] ?? ''})',
-                  style: const TextStyle(fontSize: 13, height: 1.4),
-                ),
-              ),
-            if (_transportForm['include_students'])
-              Container(
-                margin: const EdgeInsets.only(top: 8, bottom: 4),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Student Logistics:\n${_transportForm['student_count'] ?? '—'} Students via ${_transportForm['student_transport_kind'] ?? '—'}\nOn ${_transportForm['student_date'] ?? '—'} at ${_transportForm['student_time'] ?? ''}\nPickup: ${_transportForm['student_pickup_point'] ?? '—'}',
-                  style: const TextStyle(fontSize: 13, height: 1.4),
-                ),
-              ),
-            if (_hasNotes(_transportForm['other_notes']))
-              _buildReviewLine(
-                'Notes',
-                _transportForm['other_notes'].toString().trim(),
-              ),
-          ],
+          ),
         ],
       ),
     );
@@ -1652,7 +2270,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       case 'facility':
         return 'Facility Management';
       case 'it':
-        return 'IT & Technical';
+        return 'IT & Technical Support';
       case 'marketing':
         return 'Marketing & Media';
       case 'transport':
@@ -1664,7 +2282,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
 
   Widget _buildReviewLine(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1673,9 +2291,9 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
+                fontSize: 12,
+                color: Colors.grey[500],
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -1732,11 +2350,14 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = _isCompactLayout;
+    final theme = Theme.of(context);
+
     if (_departments.isEmpty) {
       return Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(isCompact ? 24 : 32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1744,21 +2365,41 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
               Text(
                 'Send Requirements',
                 style: GoogleFonts.poppins(
-                  fontSize: 20,
+                  fontSize: isCompact ? 18 : 20,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'All department requests are already active. No new requirement can be sent right now.',
-                style: TextStyle(fontSize: 15, height: 1.5),
+                style: TextStyle(
+                  fontSize: isCompact ? 13 : 14,
+                  height: 1.5,
+                  color: Colors.black87,
+                ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               Align(
                 alignment: Alignment.centerRight,
-                child: FilledButton(
+                child: FilledButton.icon(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  label: Text(
+                    'Close',
+                    style: TextStyle(
+                      fontSize: isCompact ? 13 : 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1771,205 +2412,389 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
         ? 1.0
         : (_currentStep + 1) / _totalSteps;
     final media = MediaQuery.of(context);
-    final isCompact = _isCompactLayout;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      elevation: 24,
+      backgroundColor: Colors.white,
       insetPadding: EdgeInsets.symmetric(
-        horizontal: isCompact ? 12 : 24,
-        vertical: isCompact ? 20 : 32,
+        horizontal: isCompact ? 16 : 32,
+        vertical: isCompact ? 24 : 40,
       ),
       clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        width: isCompact ? media.size.width - 24 : 720,
-        height: media.size.height * (isCompact ? 0.94 : 0.9),
-        child: Column(
-          children: [
-            // Header
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isCompact ? 18 : 24,
-                vertical: isCompact ? 14 : 16,
-              ),
-              color: Colors.white,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
+        children: [
+          SizedBox(
+            width: isCompact ? media.size.width - 32 : 720,
+            height: media.size.height * (isCompact ? 0.92 : 0.9),
+            child: Column(
+              children: [
+                // Header
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isCompact ? 20 : 28,
+                    vertical: isCompact ? 16 : 22,
+                  ),
+                  color: Colors.white,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        _phase == 'review'
-                            ? 'Review & Submit'
-                            : 'Setup Requirements',
-                        style: GoogleFonts.poppins(
-                          fontSize: isCompact ? 16 : 20,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                         children: [
+                           Text(
+                             _phase == 'review'
+                                 ? 'Review & Submit'
+                                 : 'Setup Requirements',
+                             style: GoogleFonts.poppins(
+                               fontSize: isCompact ? 16 : 20,
+                               fontWeight: FontWeight.w600,
+                               color: Colors.grey[900],
+                               letterSpacing: -0.5,
+                             ),
+                           ),
+                           const SizedBox(height: 4),
+                           Text(
+                             _phase == 'review'
+                                 ? 'Finalize your requests'
+                                 : 'Step ${_currentStep + 1} of $_totalSteps',
+                             style: TextStyle(
+                               fontSize: isCompact ? 11 : 12,
+                               color: Colors.grey[500],
+                               fontWeight: FontWeight.w600,
+                             ),
+                           ),
+                        ],
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _phase == 'review'
-                            ? 'Finalize your requests'
-                            : 'Step ${_currentStep + 1} of $_totalSteps',
-                        style: TextStyle(
-                          fontSize: isCompact ? 12 : 13,
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.close_rounded),
                           color: Colors.grey[600],
+                          iconSize: 20,
+                          onPressed: () => Navigator.pop(context),
                         ),
                       ),
                     ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    color: Colors.grey[600],
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-
-            // Progress Bar
-            LinearProgressIndicator(
-              value: progress,
-              backgroundColor: Colors.grey[200],
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Theme.of(context).primaryColor,
-              ),
-              minHeight: 3,
-            ),
-
-            // Error Banner
-            if (_errorMessage.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
                 ),
-                color: Colors.red[50],
-                child: Row(
+
+                // Progress Bar
+                Stack(
                   children: [
-                    Icon(Icons.error_outline, color: Colors.red[700], size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _errorMessage,
-                        style: TextStyle(
-                          color: Colors.red[800],
-                          fontSize: isCompact ? 12 : 13,
+                    Container(
+                      height: 4,
+                      width: double.infinity,
+                      color: Colors.grey[100],
+                    ),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOutCubic,
+                      height: 4,
+                      width: media.size.width * progress,
+                      decoration: BoxDecoration(
+                        color: theme.primaryColor,
+                        borderRadius: const BorderRadius.only(
+                          topRight: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.primaryColor.withValues(alpha: 0.4),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ),
 
-            // Body
-            Expanded(
-              child: Container(color: Colors.white, child: _buildStep()),
-            ),
-
-            // Bottom Navigation Area
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: isCompact ? 16 : 24,
-                vertical: isCompact ? 12 : 16,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Colors.grey[200]!)),
-              ),
-              child: SafeArea(
-                child: Row(
-                  children: [
-                    if (_phase == 'edit' && _currentStep > 0 ||
-                        _phase == 'review')
-                      TextButton.icon(
-                        onPressed: _goPrev,
-                        icon: const Icon(Icons.arrow_back),
-                        label: const Text('Back'),
-                        style: TextButton.styleFrom(
-                          textStyle: TextStyle(fontSize: isCompact ? 13 : 14),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isCompact ? 12 : 16,
-                            vertical: isCompact ? 10 : 12,
+                // Animated Error Banner
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  child: _errorMessage.isNotEmpty
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
                           ),
-                        ),
-                      )
-                    else
-                      const SizedBox(width: 80), // Placeholder to balance UI
-                    const Spacer(),
-                    if (_phase == 'edit')
-                      TextButton(
-                        onPressed: _skip,
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.grey[600],
-                          textStyle: TextStyle(fontSize: isCompact ? 13 : 14),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isCompact ? 12 : 16,
-                            vertical: isCompact ? 10 : 12,
-                          ),
-                        ),
-                        child: const Text('Skip Section'),
-                      ),
-                    SizedBox(width: isCompact ? 8 : 12),
-                    if (_phase == 'edit')
-                      FilledButton.icon(
-                        onPressed: _goNext,
-                        icon: Icon(
-                          _currentStep >= _totalSteps - 1
-                              ? Icons.fact_check_outlined
-                              : Icons.arrow_forward,
-                        ),
-                        label: Text(
-                          _currentStep >= _totalSteps - 1 ? 'Review' : 'Next',
-                        ),
-                        style: FilledButton.styleFrom(
-                          textStyle: TextStyle(fontSize: isCompact ? 13 : 14),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isCompact ? 18 : 24,
-                            vertical: isCompact ? 10 : 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    if (_phase == 'review')
-                      FilledButton.icon(
-                        onPressed: _status == 'loading' || !_hasAnySelected
-                            ? null
-                            : _sendAll,
-                        icon: _status == 'loading'
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                          color: Colors.red.shade50,
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error_outline_rounded,
+                                color: Colors.red[700],
+                                size: 18,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage,
+                                  style: TextStyle(
+                                    color: Colors.red[900],
+                                    fontSize: isCompact ? 12 : 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                              )
-                            : const Icon(Icons.send),
-                        label: Text(
-                          _status == 'loading' ? 'Sending...' : 'Send Requests',
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+
+                // Body (Animated Switcher for smooth step transitions)
+                Expanded(
+                  child: Container(
+                    color: Colors.white,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 350),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder:
+                          (Widget child, Animation<double> animation) {
+                            return FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: const Offset(0.02, 0.0),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            );
+                          },
+                      child: KeyedSubtree(
+                        key: ValueKey<String>('$_phase-$_currentStep'),
+                        child: _buildStep(),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Bottom Navigation Area
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isCompact ? 20 : 28,
+                    vertical: isCompact ? 16 : 20,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        offset: const Offset(0, -8),
+                        blurRadius: 24,
+                      ),
+                    ],
+                  ),
+                  child: SafeArea(
+                    child: Row(
+                      children: [
+                        if (_phase == 'edit' && _currentStep > 0 ||
+                            _phase == 'review')
+                          TextButton.icon(
+                            onPressed: _goPrev,
+                            icon: const Icon(
+                              Icons.arrow_back_rounded,
+                              size: 18,
+                            ),
+                            label: const Text('Back'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.grey[700],
+                              textStyle: TextStyle(
+                                fontSize: isCompact ? 13 : 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isCompact ? 16 : 20,
+                                vertical: isCompact ? 12 : 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          )
+                        else
+                          const SizedBox(
+                            width: 60,
+                          ), // Placeholder to balance UI
+                        const Spacer(),
+                        if (_phase == 'edit')
+                          TextButton.icon(
+                            onPressed: _skip,
+                            icon: const Icon(
+                              Icons.keyboard_double_arrow_right_rounded,
+                              size: 18,
+                            ),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.grey[500],
+                              textStyle: TextStyle(
+                                fontSize: isCompact ? 13 : 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isCompact ? 16 : 20,
+                                vertical: isCompact ? 12 : 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            label: const Text('Skip'),
+                          ),
+                        SizedBox(width: isCompact ? 12 : 16),
+                        if (_phase == 'edit')
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: theme.primaryColor.withValues(
+                                    alpha: 0.25,
+                                  ),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: FilledButton.icon(
+                              onPressed: _goNext,
+                              icon: Icon(
+                                _currentStep >= _totalSteps - 1
+                                    ? Icons.fact_check_outlined
+                                    : Icons.arrow_forward_rounded,
+                                size: 18,
+                              ),
+                              label: Text(
+                                _currentStep >= _totalSteps - 1
+                                    ? 'Review'
+                                    : 'Next',
+                              ),
+                              style: FilledButton.styleFrom(
+                                textStyle: TextStyle(
+                                  fontSize: isCompact ? 13 : 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isCompact ? 24 : 32,
+                                  vertical: isCompact ? 14 : 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (_phase == 'review')
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.success.withValues(
+                                    alpha: 0.25,
+                                  ),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: FilledButton.icon(
+                              onPressed:
+                                  _status == 'loading' || !_hasAnySelected
+                                  ? null
+                                  : _sendAll,
+                              icon: const Icon(
+                                Icons.rocket_launch_rounded,
+                                size: 18,
+                              ),
+                              label: const Text('Send Requests'),
+                              style: FilledButton.styleFrom(
+                                textStyle: TextStyle(
+                                  fontSize: isCompact ? 13 : 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: isCompact ? 24 : 32,
+                                  vertical: isCompact ? 14 : 16,
+                                ),
+                                backgroundColor: AppColors.success,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Premium Glass Loading Overlay
+          if (_status == 'loading')
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 8.0, sigmaY: 8.0),
+                  child: Container(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 40,
+                          vertical: 32,
                         ),
-                        style: FilledButton.styleFrom(
-                          textStyle: TextStyle(fontSize: isCompact ? 13 : 14),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: isCompact ? 18 : 24,
-                            vertical: isCompact ? 10 : 12,
-                          ),
-                          backgroundColor: AppColors.success,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 24,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 42,
+                              height: 42,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 4,
+                                strokeCap: StrokeCap.round,
+                                color: Theme.of(context).primaryColor,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'Processing Requests...',
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey[900],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                  ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
