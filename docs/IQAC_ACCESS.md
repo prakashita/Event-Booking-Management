@@ -11,17 +11,16 @@ The feature is used to store and manage NAAC accreditation evidence by the seven
 | Role            | See IQAC menu | View criteria tree | List files | Upload | Download | Delete |
 |-----------------|---------------|--------------------|------------|--------|----------|--------|
 | **IQAC**        | Yes           | Yes                | Yes        | Yes    | Yes      | Yes    |
-| **Admin**       | Yes           | Yes                | Yes        | Yes    | Yes      | Yes    |
-| **Registrar**   | Yes           | Yes                | Yes        | Yes    | Yes      | Yes    |
+| Admin           | No            | No                 | No         | No     | No       | No     |
+| Registrar       | No            | No                 | No         | No     | No       | No     |
 | Faculty         | No            | No                 | No         | No     | No       | No     |
 | Facility Manager| No            | No                 | No         | No     | No       | No     |
 | Marketing       | No            | No                 | No         | No     | No       | No     |
 | IT              | No            | No                 | No         | No     | No       | No     |
 
-- **IQAC**: Primary users; they collect and manage evidence for NAAC.
-- **Admin / Registrar**: Same full access for oversight and support; they are not restricted to “view only”.
+- **IQAC**: Only users who can see and use IQAC Data Collection; they collect and manage evidence for NAAC.
 
-All other roles cannot open the IQAC page or call IQAC APIs (they get 403 if they try).
+All other roles, including Admin and Registrar, cannot open the IQAC page or call IQAC APIs (they get 403 if they try).
 
 ## Where It’s Enforced
 

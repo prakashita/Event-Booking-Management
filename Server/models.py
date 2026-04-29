@@ -1,7 +1,7 @@
 from beanie import Document, Indexed
 from pydantic import Field
 from datetime import datetime, date, time
-from typing import Optional, List, Union
+from typing import Any, Optional, List, Union
 from pydantic import BaseModel
 
 class User(Document):
@@ -472,6 +472,49 @@ class IQACFile(Document):
             "sub_folder",
             "item",
             ("criterion", "sub_folder", "item"),
+        ]
+
+
+class IQACSSRSection(Document):
+    """Persisted SSR/NAAC data-entry section for IQAC users."""
+    section_key: Indexed(str, unique=True)
+    data: dict[str, Any] = Field(default_factory=dict)
+    created_by: str
+    created_by_name: Optional[str] = None
+    updated_by: str
+    updated_by_name: Optional[str] = None
+    updated_by_email: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "iqac_ssr_sections"
+        indexes = [
+            "section_key",
+        ]
+
+
+class IQACSSRHistory(Document):
+    """Edit history for IQAC SSR sections. Kept for 5 days, then purged."""
+    section_key: str
+    previous_data: dict[str, Any] = Field(default_factory=dict)
+    new_data: dict[str, Any] = Field(default_factory=dict)
+    changed_fields: List[str] = Field(default_factory=list)
+    field_diffs: dict[str, Any] = Field(default_factory=dict)
+    change_summary: Optional[str] = None
+    edited_by: str  # legacy user id field
+    edited_by_user_id: Optional[str] = None
+    edited_by_name: Optional[str] = None
+    edited_by_email: Optional[str] = None
+    edited_at: datetime = Field(default_factory=datetime.utcnow)
+    expires_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Settings:
+        name = "iqac_ssr_history"
+        indexes = [
+            "section_key",
+            "edited_at",
+            "expires_at",
         ]
 
 
