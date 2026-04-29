@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
+import '../requirements/requirements_wizard_dialog.dart';
 import 'package:intl/intl.dart';
 
 class EventsScreen extends StatefulWidget {
@@ -122,6 +123,39 @@ class _EventsScreenState extends State<EventsScreen>
   bool _canViewAttendance(Event event) {
     return (event.attendanceWebViewLink?.trim().isNotEmpty ?? false) ||
         (event.attendanceFileId?.trim().isNotEmpty ?? false);
+  }
+
+  bool _canSendRequirementForStatus(String? status) {
+    final normalized = status?.trim().toLowerCase() ?? '';
+    return normalized.isEmpty ||
+        normalized == 'none' ||
+        normalized == 'rejected';
+  }
+
+  List<String> _sendableRequirementDepartments(Event event) {
+    final statuses = <String, String?>{
+      'facility': event.facilityStatus,
+      'it': event.itStatus,
+      'marketing': event.marketingStatus,
+      'transport': event.transportStatus,
+    };
+
+    return statuses.entries
+        .where((entry) => _canSendRequirementForStatus(entry.value))
+        .map((entry) => entry.key)
+        .toList();
+  }
+
+  bool _canSendRequirements(Event event) {
+    if (_isApprovalItem(event)) return false;
+
+    final approvalStatus = event.approvalStatus?.trim().toLowerCase() ?? '';
+    final eventStatus = event.status.trim().toLowerCase();
+    if (approvalStatus.isNotEmpty && approvalStatus != 'approved') return false;
+    if (_hasStarted(event)) return false;
+    if (eventStatus == 'completed' || eventStatus == 'closed') return false;
+
+    return _sendableRequirementDepartments(event).isNotEmpty;
   }
 
   String _expectedReportFilename(Event event) {
@@ -595,6 +629,31 @@ class _EventsScreenState extends State<EventsScreen>
     toCtrl.dispose();
     subjectCtrl.dispose();
     bodyCtrl.dispose();
+  }
+
+  Future<void> _sendRequirements(Event event) async {
+    final departments = _sendableRequirementDepartments(event);
+    if (departments.isEmpty) {
+      _showMessage(
+        'All requirement requests are already active.',
+        isSuccess: true,
+      );
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => RequirementsWizardDialog(
+        event: event,
+        departments: departments,
+        requesterEmail: event.createdBy,
+        onSuccess: () async {
+          await _refreshCurrentTab();
+          if (mounted) setState(() {});
+        },
+      ),
+    );
   }
 
   Future<void> _uploadReport(Event event) async {
@@ -1102,10 +1161,7 @@ class _EventsScreenState extends State<EventsScreen>
                 canCloseEvent: _canCloseEvent(events[i]),
                 canViewReport: _canViewReport(events[i]),
                 canViewAttendance: _canViewAttendance(events[i]),
-                // Requirement eligibility depends on per-department request
-                // state from the event-details payload, so we only expose the
-                // action from the details screen where that full context exists.
-                canSendRequirements: false,
+                canSendRequirements: _canSendRequirements(events[i]),
                 inviteSent: _inviteSentEventIds.contains(events[i].id),
                 onSendInvite: () => _sendInvite(events[i]),
                 onUploadReport: () => _uploadReport(events[i]),
@@ -1118,7 +1174,7 @@ class _EventsScreenState extends State<EventsScreen>
                   events[i].attendanceWebViewLink ?? '',
                   fallbackFileId: events[i].attendanceFileId,
                 ),
-                onSendRequirements: null,
+                onSendRequirements: () => _sendRequirements(events[i]),
               ),
             ),
           );
@@ -1306,27 +1362,22 @@ class _EventCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final cardBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final cardBg = isDark ? const Color(0xFF172033) : Colors.white;
     final borderColor = isDark
         ? const Color(0xFF334155)
-        : const Color(0xFFF1F5F9); // slate-100
-    final titleColor = isDark
-        ? Colors.white
-        : const Color(0xFF1E293B); // slate-800
+        : const Color(0xFFE8EEF7);
+    final titleColor = isDark ? Colors.white : const Color(0xFF172033);
 
+    final metaBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+    final metaBorder = isDark
+        ? const Color(0xFF273449)
+        : const Color(0xFFE6EDF5);
     final labelColor = isDark
-        ? const Color(0xFF64748B)
-        : const Color(0xFFCBD5E1); // slate-300
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF718096);
     final valueColor = isDark
         ? const Color(0xFFE2E8F0)
-        : const Color(0xFF334155); // slate-700
-
-    final detailsBg = isDark
-        ? const Color(0xFF0F172A)
-        : const Color(0xFFEFF6FF).withValues(alpha: 0.5); // blue-50/50
-    final detailsFg = isDark
-        ? const Color(0xFF60A5FA)
-        : const Color(0xFF2563EB); // blue-600
+        : const Color(0xFF263445);
 
     final df = DateFormat('MMM d, yyyy');
     final tf = DateFormat('h:mm a');
@@ -1393,226 +1444,222 @@ class _EventCard extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(24), // rounded-3xl
-      child: Container(
-        padding: const EdgeInsets.all(24),
+      borderRadius: BorderRadius.circular(22),
+      child: DecoratedBox(
         decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: borderColor),
+          borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: isDark ? 0.26 : 0.07),
+              blurRadius: 22,
+              offset: const Offset(0, 12),
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    event.title,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: titleColor,
-                      height: 1.25, // leading-tight
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusBgColor,
-                    borderRadius: BorderRadius.circular(9999), // full
-                    border: Border.all(color: statusBorderColor),
-                  ),
-                  child: Text(
-                    statusLabel,
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                      color: statusColor,
-                      letterSpacing: 2.0, // tracking-widest
-                    ),
-                  ),
-                ),
-              ],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Container(
+            decoration: BoxDecoration(
+              color: cardBg,
+              border: Border.all(color: borderColor),
             ),
-            const SizedBox(height: 24), // gap-6
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'DATE',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900, // font-black
-                          color: labelColor,
-                          letterSpacing: 2.0, // tracking-widest
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        df.format(event.startTime),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: valueColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'TIME',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900, // font-black
-                          color: labelColor,
-                          letterSpacing: 2.0, // tracking-widest
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        tf.format(event.startTime),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: valueColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            if (pipelineText.isNotEmpty) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF0B1220)
-                      : const Color(0xFFF8FAFC),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark
-                        ? const Color(0xFF334155)
-                        : const Color(0xFFE2E8F0),
-                  ),
-                ),
-                child: Text(
-                  pipelineText,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: isDark
-                        ? const Color(0xFFBFDBFE)
-                        : const Color(0xFF1E3A8A),
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (workflowBadges.isNotEmpty) ...[
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: workflowBadges
-                    .map(
-                      (badge) => _WorkflowBadge(
-                        label: badge.$1,
-                        value: badge.$2,
-                        color: badge.$3,
-                      ),
-                    )
-                    .toList(),
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (showForwardAction) ...[
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: onApprovalForward,
-                  icon: const Icon(Icons.send_outlined, size: 16),
-                  label: Text(
-                    approvalForwardLabel,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0891B2),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (actions.isNotEmpty) ...[
-              Wrap(spacing: 10, runSpacing: 10, children: actions),
-              const SizedBox(height: 16),
-            ],
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14), // py-3.5
-              decoration: BoxDecoration(
-                color: detailsBg,
-                borderRadius: BorderRadius.circular(16), // rounded-2xl
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.remove_red_eye,
-                    size: 16,
-                    color: detailsFg,
-                  ), // Eye icon
-                  const SizedBox(width: 8),
-                  Text(
-                    'VIEW DETAILS',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: detailsFg,
-                      letterSpacing: 2.0, // tracking-widest
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          event.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: titleColor,
+                            height: 1.25,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusBgColor,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: statusBorderColor),
+                        ),
+                        child: Text(
+                          statusLabel,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: statusColor,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _EventMetaTile(
+                          icon: Icons.calendar_today_outlined,
+                          label: 'Date',
+                          value: df.format(event.startTime),
+                          backgroundColor: metaBg,
+                          borderColor: metaBorder,
+                          labelColor: labelColor,
+                          valueColor: valueColor,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _EventMetaTile(
+                          icon: Icons.schedule_outlined,
+                          label: 'Time',
+                          value: tf.format(event.startTime),
+                          backgroundColor: metaBg,
+                          borderColor: metaBorder,
+                          labelColor: labelColor,
+                          valueColor: valueColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (pipelineText.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: statusColor.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.route_outlined,
+                            size: 16,
+                            color: statusColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              pipelineText,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: isDark
+                                    ? const Color(0xFFBFDBFE)
+                                    : const Color(0xFF1E3A8A),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (workflowBadges.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: workflowBadges
+                          .map(
+                            (badge) => _WorkflowBadge(
+                              label: badge.$1,
+                              value: badge.$2,
+                              color: badge.$3,
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                  if (showForwardAction) ...[
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: onApprovalForward,
+                        icon: const Icon(Icons.send_outlined, size: 16),
+                        label: Text(
+                          approvalForwardLabel,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0891B2),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (actions.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Wrap(spacing: 8, runSpacing: 8, children: actions),
+                  ],
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF0F172A)
+                          : const Color(0xFFF1F7FF),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF273449)
+                            : const Color(0xFFDDEBFF),
+                      ),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.remove_red_eye_outlined,
+                          size: 16,
+                          color: Color(0xFF2563EB),
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'View Details',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF2563EB),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1820,6 +1867,80 @@ class _ActionChip extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _EventMetaTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Color labelColor;
+  final Color valueColor;
+
+  const _EventMetaTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.labelColor,
+    required this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 72),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 16, color: const Color(0xFF2563EB)),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: labelColor,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: valueColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

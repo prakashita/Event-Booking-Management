@@ -72,10 +72,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   bool _newDiscussionOpen = false;
   bool _creatingDiscussion = false;
   String _newDiscussionDepartment = '';
-   String? _discussionError;
-   bool _expandedActionHistory = false;
+  String? _discussionError;
+  bool _expandedActionHistory = false;
 
-   bool get _isApprovalOnlyEntry =>
+  bool get _isApprovalOnlyEntry =>
       widget.viewMode == EventDetailsViewMode.approval ||
       widget.eventId.startsWith('approval-');
 
@@ -295,7 +295,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
     if (statuses.any((status) => status == 'rejected')) return 'rejected';
     if (statuses.any(
-      (status) => status == 'clarification' || status == 'clarification_requested',
+      (status) =>
+          status == 'clarification' || status == 'clarification_requested',
     )) {
       return 'clarification';
     }
@@ -988,55 +989,57 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 ),
               ),
             ),
-               actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-               actions: [
-                 TextButton(
-                   onPressed: () => Navigator.of(ctx).pop(),
-                   style: TextButton.styleFrom(
-                     foregroundColor: _muted,
-                     textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                   ),
-                   child: const Text('Cancel'),
-                 ),
-                 FilledButton(
-                   onPressed: () {
-                     final comment = commentCtrl.text.trim();
-                     if (selected != 'approved' && comment.isEmpty) {
-                       ScaffoldMessenger.of(context).showSnackBar(
-                         SnackBar(
-                           content: Text(
-                             'Comment is required for reject/clarification.',
-                             style: GoogleFonts.inter(),
-                           ),
-                           backgroundColor: const Color(0xFFDC2626),
-                           behavior: SnackBarBehavior.floating,
-                           shape: RoundedRectangleBorder(
-                             borderRadius: BorderRadius.circular(8),
-                           ),
-                         ),
-                       );
-                       return;
-                     }
-                     Navigator.of(ctx).pop({'decision': selected, 'comment': comment});
-                   },
-                   style: FilledButton.styleFrom(
-                     backgroundColor: const Color(0xFF2563EB),
-                     shape: RoundedRectangleBorder(
-                       borderRadius: BorderRadius.circular(12),
-                     ),
-                     textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                     padding: const EdgeInsets.symmetric(
-                       horizontal: 18,
-                       vertical: 12,
-                     ),
-                   ),
-                   child: const Text('Submit'),
-                 ),
-               ],
-             );
-         },
-       ),
-     );
+            actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: TextButton.styleFrom(
+                  foregroundColor: _muted,
+                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                ),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final comment = commentCtrl.text.trim();
+                  if (selected != 'approved' && comment.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Comment is required for reject/clarification.',
+                          style: GoogleFonts.inter(),
+                        ),
+                        backgroundColor: const Color(0xFFDC2626),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  Navigator.of(
+                    ctx,
+                  ).pop({'decision': selected, 'comment': comment});
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                ),
+                child: const Text('Submit'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
     // Do NOT dispose commentCtrl here — the dialog exit animation may still
     // reference it.  It will be garbage-collected once this scope ends.
     if (result == null) return;
@@ -1734,68 +1737,69 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     };
   }
 
-   ({bool locked, String hint}) _marketingDeliverableRowLock(
-     String type,
-     Map<String, dynamic> request,
-   ) {
-     final started = _requestHasStarted(request);
-     final ended = _requestHasEnded(request);
-     
-     if (type == 'poster') {
-       return started
-           ? (
-               locked: true,
-               hint: 'Upload before the event starts.',
-             )
-           : (locked: false, hint: '');
-     }
-     if (type == 'linkedin') {
-       final normalized = _normalizeMarketingRequirementsFromMap(request);
-       final preSocial = normalized['pre_event']['social_media'] as bool? ?? false;
-       final postSocial = normalized['post_event']['social_media'] as bool? ?? false;
-       
-       if (preSocial && !postSocial) {
-         return started
-             ? (
-                 locked: true,
-                 hint: 'Pre-event social posts: upload before the event starts.',
-               )
-             : (locked: false, hint: '');
-       }
-       if (postSocial && !preSocial) {
-         return !ended
-             ? (
-                 locked: true,
-                 hint: 'Post-event social posts: upload after the event has ended.',
-               )
-             : (locked: false, hint: '');
-       }
-       // Both pre and post
-       return (started && !ended)
-           ? (
-               locked: true,
-               hint: 'Upload before the event starts or after it ends (not during).',
-             )
-           : (locked: false, hint: '');
-     }
-     if (type == 'recording') {
-       return !ended
-           ? (
-               locked: true,
-               hint: 'Post-event video: upload after the event has ended.',
-             )
-           : (locked: false, hint: '');
-     }
-     if (type == 'photography') {
-       return !ended
-           ? (
-               locked: true,
-               hint: 'Post-event photo: upload after the event has ended.',
-             )
-           : (locked: false, hint: '');
-     }
-     return (locked: false, hint: '');
-   }
+  ({bool locked, String hint}) _marketingDeliverableRowLock(
+    String type,
+    Map<String, dynamic> request,
+  ) {
+    final started = _requestHasStarted(request);
+    final ended = _requestHasEnded(request);
+
+    if (type == 'poster') {
+      return started
+          ? (locked: true, hint: 'Upload before the event starts.')
+          : (locked: false, hint: '');
+    }
+    if (type == 'linkedin') {
+      final normalized = _normalizeMarketingRequirementsFromMap(request);
+      final preSocial =
+          normalized['pre_event']['social_media'] as bool? ?? false;
+      final postSocial =
+          normalized['post_event']['social_media'] as bool? ?? false;
+
+      if (preSocial && !postSocial) {
+        return started
+            ? (
+                locked: true,
+                hint: 'Pre-event social posts: upload before the event starts.',
+              )
+            : (locked: false, hint: '');
+      }
+      if (postSocial && !preSocial) {
+        return !ended
+            ? (
+                locked: true,
+                hint:
+                    'Post-event social posts: upload after the event has ended.',
+              )
+            : (locked: false, hint: '');
+      }
+      // Both pre and post
+      return (started && !ended)
+          ? (
+              locked: true,
+              hint:
+                  'Upload before the event starts or after it ends (not during).',
+            )
+          : (locked: false, hint: '');
+    }
+    if (type == 'recording') {
+      return !ended
+          ? (
+              locked: true,
+              hint: 'Post-event video: upload after the event has ended.',
+            )
+          : (locked: false, hint: '');
+    }
+    if (type == 'photography') {
+      return !ended
+          ? (
+              locked: true,
+              hint: 'Post-event photo: upload after the event has ended.',
+            )
+          : (locked: false, hint: '');
+    }
+    return (locked: false, hint: '');
+  }
 
   bool _canSendRequirementForStatus(String status) {
     final normalized = status.trim().toLowerCase();
@@ -2754,14 +2758,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           _buildLabelValue(
             null,
             'Requested To',
-            Text(
-              _s(approval['requested_to'], fallback: 'None'),
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: const Color(0xFF2563EB),
-                decoration: TextDecoration.underline,
-              ),
+            _buildApprovalPersonValue(
+              email: _s(approval['requested_to'], fallback: 'None'),
+              emailColor: const Color(0xFF2563EB),
             ),
           ),
 
@@ -2770,28 +2769,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             _buildLabelValue(
               null,
               'Final Decision By',
-              Row(
-                children: [
-                  Text(
-                    _s(approval['decided_by'], fallback: ''),
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: _onSurface,
-                    ),
-                  ),
-                  if (_getApprovedByRoleLabel(approval).isNotEmpty) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      '• ${_getApprovedByRoleLabel(approval)}',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: _muted,
-                      ),
-                    ),
-                  ],
-                ],
+              _buildApprovalPersonValue(
+                email: _s(approval['decided_by'], fallback: ''),
+                role: _getApprovedByRoleLabel(approval),
               ),
             ),
 
@@ -2964,24 +2944,70 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
-   Widget _buildEventWorkflow() {
-     final approval = _approval;
-     final event = _event;
-     final facility = _mapList('facility_requests');
-     final it = _mapList('it_requests');
-     final marketing = _mapList('marketing_requests');
-     final eventStatus = _s(event['status'], fallback: '').toLowerCase();
-     final approvalStatus = _s(approval['status'], fallback: '').toLowerCase();
+  Widget _buildApprovalPersonValue({
+    required String email,
+    String role = '',
+    Color? emailColor,
+  }) {
+    final trimmedRole = role.trim();
 
-     final finalApprovalStep = (
-       label: 'Registrar',
-       status: approvalStatus.isEmpty ? 'none' : approvalStatus,
-       assignee: _s(
-         approval['requested_to'] ?? approval['decided_by'],
-         fallback: '',
-       ),
-       updatedAt: _s(approval['decided_at'], fallback: ''),
-     );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          email,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          softWrap: false,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: emailColor ?? _onSurface,
+          ),
+        ),
+        if (trimmedRole.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: const Color(0xFFBFDBFE)),
+            ),
+            child: Text(
+              trimmedRole,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFF1D4ED8),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildEventWorkflow() {
+    final approval = _approval;
+    final event = _event;
+    final facility = _mapList('facility_requests');
+    final it = _mapList('it_requests');
+    final marketing = _mapList('marketing_requests');
+    final eventStatus = _s(event['status'], fallback: '').toLowerCase();
+    final approvalStatus = _s(approval['status'], fallback: '').toLowerCase();
+
+    final finalApprovalStep = (
+      label: 'Registrar',
+      status: approvalStatus.isEmpty ? 'none' : approvalStatus,
+      assignee: _s(
+        approval['requested_to'] ?? approval['decided_by'],
+        fallback: '',
+      ),
+      updatedAt: _s(approval['decided_at'], fallback: ''),
+    );
     final facilityStep = (
       label: 'Facility',
       status: _aggregateRequirementStatus(facility),
@@ -3039,7 +3065,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             return nextDt.isAfter(latestDt) ? value : latest;
           }),
     );
-     final iqacHasReport =
+    final iqacHasReport =
         _s(event['report_web_view_link'], fallback: '').isNotEmpty ||
         _s(event['report_file_id'], fallback: '').isNotEmpty;
     final iqacStep = (
@@ -3053,13 +3079,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       updatedAt: _s(event['report_uploaded_at'], fallback: ''),
     );
 
-     final steps = [
-       finalApprovalStep,
-       facilityStep,
-       itStep,
-       marketingStep,
-       iqacStep,
-     ];
+    final steps = [
+      finalApprovalStep,
+      facilityStep,
+      itStep,
+      marketingStep,
+      iqacStep,
+    ];
 
     return _buildCard(
       icon: LucideIcons.gitBranch,
@@ -3073,24 +3099,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               color: _panel,
               borderRadius: BorderRadius.circular(12),
             ),
-             child: Row(
-               crossAxisAlignment: CrossAxisAlignment.start,
-               children: [
-                 Icon(LucideIcons.info, size: 20, color: _muted),
-                 const SizedBox(width: 12),
-                 Expanded(
-                   child: Text(
-                     'Registrar through IQAC. Multiple requests for one team are aggregated into a single status.',
-                     style: GoogleFonts.inter(
-                       fontSize: 13,
-                       fontWeight: FontWeight.w500,
-                       color: _muted,
-                       height: 1.5,
-                     ),
-                   ),
-                 ),
-               ],
-             ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(LucideIcons.info, size: 20, color: _muted),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Registrar through IQAC. Multiple requests for one team are aggregated into a single status.',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: _muted,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 24),
           ...steps.asMap().entries.map((entry) {
@@ -3216,24 +3242,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       color: _muted,
                     ),
                   ),
-                 if (updatedAt.isNotEmpty) ...[
-                   const SizedBox(height: 4),
-                   Text(
-                     () {
-                       try {
-                         final dt = DateTime.parse(updatedAt);
-                         return DateFormat('MMM d, yyyy · h:mm a').format(dt);
-                       } catch (_) {
-                         return updatedAt;
-                       }
-                     }(),
-                     style: GoogleFonts.inter(
-                       fontSize: 12,
-                       fontWeight: FontWeight.w500,
-                       color: _muted,
-                     ),
-                   ),
-                 ],
+                if (updatedAt.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    () {
+                      try {
+                        final dt = DateTime.parse(updatedAt);
+                        return DateFormat('MMM d, yyyy · h:mm a').format(dt);
+                      } catch (_) {
+                        return updatedAt;
+                      }
+                    }(),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: _muted,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -3354,44 +3380,44 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           ],
         ),
         const SizedBox(height: 20),
-         if (approvalThreads.isEmpty && actionLogs.isEmpty)
-           Container(
-             padding: const EdgeInsets.all(20),
-             decoration: BoxDecoration(
-               color: _surface,
-               borderRadius: BorderRadius.circular(16),
-               border: Border.all(color: _border.withValues(alpha: 0.5)),
-             ),
-             child: Row(
-               children: [
-                 Icon(LucideIcons.info, size: 20, color: _muted),
-                 const SizedBox(width: 14),
-                 Expanded(
-                   child: Text(
-                     'No approval discussion threads yet.',
-                     style: GoogleFonts.inter(
-                       fontSize: 14,
-                       color: _muted,
-                       fontWeight: FontWeight.w500,
-                     ),
-                   ),
-                 ),
-               ],
-             ),
-           )
-         else ...[
-           if (approvalThreads.isNotEmpty)
-             ...approvalThreads.map(
-               (thread) => Padding(
-                 padding: const EdgeInsets.only(bottom: 16),
-                 child: _buildThreadPanel(thread, showRequestStatus: false),
-               ),
-             ),
-           if (actionLogs.isNotEmpty) ...[
-             const SizedBox(height: 16),
-             _buildActionHistory(actionLogs),
-           ],
-         ],
+        if (approvalThreads.isEmpty && actionLogs.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _border.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                Icon(LucideIcons.info, size: 20, color: _muted),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    'No approval discussion threads yet.',
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: _muted,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else ...[
+          if (approvalThreads.isNotEmpty)
+            ...approvalThreads.map(
+              (thread) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _buildThreadPanel(thread, showRequestStatus: false),
+              ),
+            ),
+          if (actionLogs.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            _buildActionHistory(actionLogs),
+          ],
+        ],
         if (_discussionError != null &&
             _discussionError!.trim().isNotEmpty) ...[
           const SizedBox(height: 12),
@@ -3684,7 +3710,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               children: [
                 const SizedBox(height: 12),
                 ...actionLogs.map((log) {
-                  final role = _formatWorkflowRoleLabel(log['role']?.toString());
+                  final role = _formatWorkflowRoleLabel(
+                    log['role']?.toString(),
+                  );
                   final actionType = _formatWorkflowActionTypeLabel(
                     log['action_type']?.toString(),
                   );
@@ -3772,14 +3800,22 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         ],
                         if (createdAt != null) ...[
                           const SizedBox(height: 10),
-                          Text(() {
-                            try {
-                              final dt = DateTime.parse(createdAt);
-                              return DateFormat('MMM d, yyyy · h:mm a').format(dt);
-                            } catch (_) {
-                              return createdAt;
-                            }
-                          }(), style: GoogleFonts.inter(fontSize: 12, color: _muted)),
+                          Text(
+                            () {
+                              try {
+                                final dt = DateTime.parse(createdAt);
+                                return DateFormat(
+                                  'MMM d, yyyy · h:mm a',
+                                ).format(dt);
+                              } catch (_) {
+                                return createdAt;
+                              }
+                            }(),
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: _muted,
+                            ),
+                          ),
                         ],
                       ],
                     ),
@@ -5265,20 +5301,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       'post',
     );
 
-     return Column(
-       crossAxisAlignment: CrossAxisAlignment.start,
-       children: [
-         if (preEvent.isNotEmpty)
-           _buildRequirementPhaseSection('Pre-Event', preEvent),
-         if (duringEvent.isNotEmpty) ...[
-           if (preEvent.isNotEmpty) const SizedBox(height: 20),
-           _buildRequirementPhaseSection('During Event', duringEvent),
-         ],
-         if (postEvent.isNotEmpty) ...[
-           if (preEvent.isNotEmpty || duringEvent.isNotEmpty)
-             const SizedBox(height: 20),
-           _buildRequirementPhaseSection('Post-Event', postEvent),
-         ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (preEvent.isNotEmpty)
+          _buildRequirementPhaseSection('Pre-Event', preEvent),
+        if (duringEvent.isNotEmpty) ...[
+          if (preEvent.isNotEmpty) const SizedBox(height: 20),
+          _buildRequirementPhaseSection('During Event', duringEvent),
+        ],
+        if (postEvent.isNotEmpty) ...[
+          if (preEvent.isNotEmpty || duringEvent.isNotEmpty)
+            const SizedBox(height: 20),
+          _buildRequirementPhaseSection('Post-Event', postEvent),
+        ],
         if (departmentKey == 'marketing') ...[
           if (preEvent.isNotEmpty ||
               duringEvent.isNotEmpty ||
@@ -5318,120 +5354,120 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     String phase,
   ) {
     switch (departmentKey) {
-       case 'facility':
-         if (phase != 'pre') return const [];
-         final items = <String>[];
-         if (request['venue_required'] == true) {
-           items.add('Hall / venue booking');
-         }
-         if (request['refreshments'] == true) {
-           items.add('Refreshments');
-         }
-         final notes = _s(request['other_notes'], fallback: '');
-         if (notes.isNotEmpty) items.add('Notes: $notes');
-         if (items.isEmpty) items.add('General facility coordination');
-         return items;
-       case 'it':
-         if (phase != 'pre') return const [];
-         final items = <String>[];
-         final mode = _s(request['event_mode'], fallback: '');
-         if (mode.isNotEmpty) items.add('Event mode: $mode');
-         if (request['pa_system'] == true) items.add('PA system');
-         if (request['projection'] == true) items.add('Projection / display');
-         final notes = _s(request['other_notes'], fallback: '');
-         if (notes.isNotEmpty) items.add('Notes: $notes');
-         if (items.isEmpty) items.add('General IT support');
-         return items;
-       case 'marketing':
-         final normalized = _normalizeMarketingRequirementsFromMap(request);
-         final pre = normalized['pre_event'] as Map<String, dynamic>;
-         final during = normalized['during_event'] as Map<String, dynamic>;
-         final post = normalized['post_event'] as Map<String, dynamic>;
-         if (phase == 'pre') {
-           final items = <String>[];
-           if (pre['poster'] == true) items.add('Poster');
-           if (pre['social_media'] == true) items.add('Social Media Post');
-           final notes = _s(request['other_notes'], fallback: '');
-           if (notes.isNotEmpty) items.add(notes);
-           return items;
-         }
-         if (phase == 'during') {
-           final items = <String>[];
-           if (during['photo'] == true) items.add('Photoshoot');
-           if (during['video'] == true) items.add('Videoshoot');
-           return items;
-         }
-         if (phase == 'post') {
-           final items = <String>[];
-           if (post['social_media'] == true) items.add('Social Media Upload');
-           if (post['photo_upload'] == true) items.add('Photo Upload');
-           if (post['video'] == true) items.add('Video Upload');
-           return items;
-         }
+      case 'facility':
+        if (phase != 'pre') return const [];
+        final items = <String>[];
+        if (request['venue_required'] == true) {
+          items.add('Hall / venue booking');
+        }
+        if (request['refreshments'] == true) {
+          items.add('Refreshments');
+        }
+        final notes = _s(request['other_notes'], fallback: '');
+        if (notes.isNotEmpty) items.add('Notes: $notes');
+        if (items.isEmpty) items.add('General facility coordination');
+        return items;
+      case 'it':
+        if (phase != 'pre') return const [];
+        final items = <String>[];
+        final mode = _s(request['event_mode'], fallback: '');
+        if (mode.isNotEmpty) items.add('Event mode: $mode');
+        if (request['pa_system'] == true) items.add('PA system');
+        if (request['projection'] == true) items.add('Projection / display');
+        final notes = _s(request['other_notes'], fallback: '');
+        if (notes.isNotEmpty) items.add('Notes: $notes');
+        if (items.isEmpty) items.add('General IT support');
+        return items;
+      case 'marketing':
+        final normalized = _normalizeMarketingRequirementsFromMap(request);
+        final pre = normalized['pre_event'] as Map<String, dynamic>;
+        final during = normalized['during_event'] as Map<String, dynamic>;
+        final post = normalized['post_event'] as Map<String, dynamic>;
+        if (phase == 'pre') {
+          final items = <String>[];
+          if (pre['poster'] == true) items.add('Poster');
+          if (pre['social_media'] == true) items.add('Social Media Post');
+          final notes = _s(request['other_notes'], fallback: '');
+          if (notes.isNotEmpty) items.add(notes);
+          return items;
+        }
+        if (phase == 'during') {
+          final items = <String>[];
+          if (during['photo'] == true) items.add('Photoshoot');
+          if (during['video'] == true) items.add('Videoshoot');
+          return items;
+        }
+        if (phase == 'post') {
+          final items = <String>[];
+          if (post['social_media'] == true) items.add('Social Media Upload');
+          if (post['photo_upload'] == true) items.add('Photo Upload');
+          if (post['video'] == true) items.add('Video Upload');
+          return items;
+        }
         return const [];
-       case 'transport':
-         if (phase != 'pre') return const [];
-         final items = <String>[];
-         final transportType = _s(
-           request['transport_type'],
-           fallback: '',
-         ).toLowerCase();
-         final hasGuestTransport =
-             transportType == 'guest_cab' ||
-             transportType == 'both' ||
-             _s(request['guest_pickup_location'], fallback: '').isNotEmpty ||
-             _s(request['guest_dropoff_location'], fallback: '').isNotEmpty;
-         final hasStudentTransport =
-             transportType == 'students_off_campus' ||
-             transportType == 'both' ||
-             _s(request['student_count'], fallback: '').isNotEmpty ||
-             _s(request['student_transport_kind'], fallback: '').isNotEmpty;
+      case 'transport':
+        if (phase != 'pre') return const [];
+        final items = <String>[];
+        final transportType = _s(
+          request['transport_type'],
+          fallback: '',
+        ).toLowerCase();
+        final hasGuestTransport =
+            transportType == 'guest_cab' ||
+            transportType == 'both' ||
+            _s(request['guest_pickup_location'], fallback: '').isNotEmpty ||
+            _s(request['guest_dropoff_location'], fallback: '').isNotEmpty;
+        final hasStudentTransport =
+            transportType == 'students_off_campus' ||
+            transportType == 'both' ||
+            _s(request['student_count'], fallback: '').isNotEmpty ||
+            _s(request['student_transport_kind'], fallback: '').isNotEmpty;
 
-         final typeLabel = _transportTypeLabel(transportType);
-         if (typeLabel.isNotEmpty) {
-           items.add(typeLabel);
-         }
-         if (hasGuestTransport) {
-           items.add('Guest cab');
-           final pickup = [
-             _s(request['guest_pickup_location'], fallback: ''),
-             _s(request['guest_pickup_date'], fallback: ''),
-             _s(request['guest_pickup_time'], fallback: ''),
-           ].where((part) => part.isNotEmpty).join(' · ');
-           if (pickup.isNotEmpty) {
-             items.add('Guest pickup: $pickup');
-           }
-           final dropoff = [
-             _s(request['guest_dropoff_location'], fallback: ''),
-             _s(request['guest_dropoff_date'], fallback: ''),
-             _s(request['guest_dropoff_time'], fallback: ''),
-           ].where((part) => part.isNotEmpty).join(' · ');
-           if (dropoff.isNotEmpty) {
-             items.add('Guest drop-off: $dropoff');
-           }
-         }
-         if (hasStudentTransport) {
-           final count = _s(request['student_count'], fallback: '');
-           final kind = _s(request['student_transport_kind'], fallback: '');
-           final summary = [
-             'Student transport',
-             if (count.isNotEmpty) '$count passengers',
-             if (kind.isNotEmpty) kind,
-           ].join(' · ');
-           items.add(summary);
-           final studentPickup = [
-             _s(request['student_pickup_point'], fallback: ''),
-             _s(request['student_date'], fallback: ''),
-             _s(request['student_time'], fallback: ''),
-           ].where((part) => part.isNotEmpty).join(' · ');
-           if (studentPickup.isNotEmpty) {
-             items.add('Student pickup: $studentPickup');
-           }
-         }
-         final notes = _s(request['other_notes'], fallback: '');
-         if (notes.isNotEmpty) items.add('Notes: $notes');
-         if (items.isEmpty) items.add('Transport coordination');
-         return items;
+        final typeLabel = _transportTypeLabel(transportType);
+        if (typeLabel.isNotEmpty) {
+          items.add(typeLabel);
+        }
+        if (hasGuestTransport) {
+          items.add('Guest cab');
+          final pickup = [
+            _s(request['guest_pickup_location'], fallback: ''),
+            _s(request['guest_pickup_date'], fallback: ''),
+            _s(request['guest_pickup_time'], fallback: ''),
+          ].where((part) => part.isNotEmpty).join(' · ');
+          if (pickup.isNotEmpty) {
+            items.add('Guest pickup: $pickup');
+          }
+          final dropoff = [
+            _s(request['guest_dropoff_location'], fallback: ''),
+            _s(request['guest_dropoff_date'], fallback: ''),
+            _s(request['guest_dropoff_time'], fallback: ''),
+          ].where((part) => part.isNotEmpty).join(' · ');
+          if (dropoff.isNotEmpty) {
+            items.add('Guest drop-off: $dropoff');
+          }
+        }
+        if (hasStudentTransport) {
+          final count = _s(request['student_count'], fallback: '');
+          final kind = _s(request['student_transport_kind'], fallback: '');
+          final summary = [
+            'Student transport',
+            if (count.isNotEmpty) '$count passengers',
+            if (kind.isNotEmpty) kind,
+          ].join(' · ');
+          items.add(summary);
+          final studentPickup = [
+            _s(request['student_pickup_point'], fallback: ''),
+            _s(request['student_date'], fallback: ''),
+            _s(request['student_time'], fallback: ''),
+          ].where((part) => part.isNotEmpty).join(' · ');
+          if (studentPickup.isNotEmpty) {
+            items.add('Student pickup: $studentPickup');
+          }
+        }
+        final notes = _s(request['other_notes'], fallback: '');
+        if (notes.isNotEmpty) items.add('Notes: $notes');
+        if (items.isEmpty) items.add('Transport coordination');
+        return items;
       case 'iqac':
         if (phase != 'post') return const [];
         return [

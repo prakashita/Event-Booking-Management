@@ -67,7 +67,9 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                       border: Border.all(color: cardBorder),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                          color: Colors.black.withValues(
+                            alpha: isDark ? 0.35 : 0.08,
+                          ),
                           blurRadius: 24,
                           offset: const Offset(0, 12),
                         ),
@@ -240,10 +242,18 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                   color: Colors.white.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(LucideIcons.user, color: Colors.white, size: 18),
+                child: const Icon(
+                  LucideIcons.user,
+                  color: Colors.white,
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 8),
-              const Icon(LucideIcons.chevronDown, color: Colors.white, size: 18),
+              const Icon(
+                LucideIcons.chevronDown,
+                color: Colors.white,
+                size: 18,
+              ),
             ],
           ),
         ),
@@ -267,26 +277,33 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
       children: [
         Icon(icon, size: 16, color: mutedText),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: mutedText,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: mutedText,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurface,
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );

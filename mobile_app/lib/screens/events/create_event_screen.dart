@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -130,11 +131,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         barrierDismissible: false,
         builder: (dialogContext) {
           return AlertDialog(
-            title: const Text('Connect Google'),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            title: Text(
+              'Connect Google',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            ),
             content: Text(
               missing.isEmpty
                   ? 'A Google connection is required before continuing with an event that has a budget PDF.'
                   : 'A Google connection is required before continuing with an event that has a budget PDF.\n\nMissing scopes: ${missing.join(', ')}',
+              style: const TextStyle(height: 1.5),
             ),
             actions: [
               TextButton(
@@ -142,6 +150,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                ),
                 onPressed: () async {
                   Navigator.of(dialogContext).pop();
                   try {
@@ -152,6 +165,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       SnackBar(
                         content: Text(e.toString()),
                         backgroundColor: AppColors.error,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     );
                   }
@@ -169,6 +186,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         SnackBar(
           content: Text('Could not verify Google connection: $e'),
           backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       );
       return false;
@@ -177,75 +198,124 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   Future<void> _selectAudienceOptions() async {
     final selected = Set<String>.from(_selectedAudiences);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Select Intended Audience',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
+            return Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 20,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? Colors.white.withOpacity(0.2)
+                              : Colors.black.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Intended Audience',
+                              style: GoogleFonts.poppins(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSurface,
+                              ),
                             ),
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _selectedAudiences
-                                ..clear()
-                                ..addAll(selected);
-                              if (!_selectedAudiences.contains('Others')) {
-                                _audienceOtherCtrl.clear();
-                              }
-                            });
-                            Navigator.of(context).pop();
-                          },
-                          child: const Text('Done'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 360),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: _audienceOptions.length,
-                        itemBuilder: (context, index) {
-                          final value = _audienceOptions[index];
-                          final checked = selected.contains(value);
-                          return CheckboxListTile(
-                            value: checked,
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            title: Text(value),
-                            controlAffinity: ListTileControlAffinity.leading,
-                            onChanged: (v) {
-                              setSheetState(() {
-                                if (v == true) {
-                                  selected.add(value);
-                                } else {
-                                  selected.remove(value);
+                          FilledButton.tonal(
+                            style: FilledButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _selectedAudiences
+                                  ..clear()
+                                  ..addAll(selected);
+                                if (!_selectedAudiences.contains('Others')) {
+                                  _audienceOtherCtrl.clear();
                                 }
                               });
+                              Navigator.of(context).pop();
                             },
-                          );
-                        },
+                            child: const Text('Done'),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 400),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: _audienceOptions.length,
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            color: theme.dividerColor.withOpacity(0.1),
+                          ),
+                          itemBuilder: (context, index) {
+                            final value = _audienceOptions[index];
+                            final checked = selected.contains(value);
+                            return CheckboxListTile(
+                              value: checked,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 4,
+                              ),
+                              activeColor: const Color(0xFF2563EB),
+                              title: Text(
+                                value,
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: checked
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                ),
+                              ),
+                              controlAffinity: ListTileControlAffinity.trailing,
+                              onChanged: (v) {
+                                setSheetState(() {
+                                  if (v == true) {
+                                    selected.add(value);
+                                  } else {
+                                    selected.remove(value);
+                                  }
+                                });
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -262,55 +332,30 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         _startTime == null ||
         _endDate == null ||
         _endTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select all dates and times.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      _showErrorSnackBar('Please select all dates and times.');
       return;
     }
 
     if (_selectedVenueName == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a venue.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      _showErrorSnackBar('Please select a venue.');
       return;
     }
 
     if (_selectedAudiences.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select an intended audience.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      _showErrorSnackBar('Please select an intended audience.');
       return;
     }
 
     if (_selectedAudiences.contains('Others') &&
         _audienceOtherCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please specify the audience in Others.'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      _showErrorSnackBar('Please specify the audience in Others.');
       return;
     }
 
     final budgetVal = double.tryParse(_budgetCtrl.text.trim()) ?? 0.0;
     if (budgetVal > 0 && _budgetPdf == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'A Budget Breakdown PDF is required for events with a budget.',
-          ),
-          backgroundColor: AppColors.error,
-        ),
+      _showErrorSnackBar(
+        'A Budget Breakdown PDF is required for events with a budget.',
       );
       return;
     }
@@ -355,14 +400,23 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 e.message ??
                 'Unable to check schedule conflicts.')
           : (e.message ?? 'Unable to check schedule conflicts.');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(detail), backgroundColor: AppColors.error),
-      );
+      _showErrorSnackBar(detail);
       return;
     }
 
     if (!mounted) return;
     _openApprovalScreen(eventData, overrideConflict: false);
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   String _formatConflictTime(dynamic value) {
@@ -398,7 +452,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }) {
     final theme = Theme.of(context);
     final text = theme.colorScheme.onSurface;
-    final card = theme.colorScheme.surfaceContainerHighest;
+    final cardBg = theme.colorScheme.surfaceContainerHighest.withOpacity(0.5);
 
     showDialog(
       context: context,
@@ -407,31 +461,51 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         return Dialog(
           backgroundColor: theme.colorScheme.surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(28),
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Schedule Conflict',
-                  style: TextStyle(
-                    color: AppColors.error,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        LucideIcons.alertTriangle,
+                        color: AppColors.error,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        'Schedule Conflict',
+                        style: GoogleFonts.poppins(
+                          color: text,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                const Text(
+                const SizedBox(height: 20),
+                Text(
                   'The following event(s) are already scheduled at the selected time:',
-                  style: TextStyle(
-                    color: AppColors.error,
-                    fontWeight: FontWeight.w600,
+                  style: GoogleFonts.inter(
+                    color: text.withOpacity(0.8),
+                    fontSize: 14,
+                    height: 1.5,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 250),
                   child: SingleChildScrollView(
@@ -442,31 +516,67 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             : Map<String, dynamic>.from(c as Map);
                         return Container(
                           width: double.infinity,
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: card,
-                            borderRadius: BorderRadius.circular(12),
+                            color: cardBg,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: theme.dividerColor.withOpacity(0.1),
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 (conflict['name'] ?? '').toString(),
-                                style: TextStyle(
+                                style: GoogleFonts.inter(
                                   color: text,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              Text(
-                                '${(conflict['start_date'] ?? '').toString()} • ${_formatConflictTime(conflict['start_time'])} • ${(conflict['venue_name'] ?? '').toString()}',
-                                style: TextStyle(
-                                  color: text.withValues(alpha: 0.75),
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    LucideIcons.clock,
+                                    size: 14,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      '${(conflict['start_date'] ?? '').toString()} • ${_formatConflictTime(conflict['start_time'])}',
+                                      style: GoogleFonts.inter(
+                                        color: const Color(0xFF64748B),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    LucideIcons.mapPin,
+                                    size: 14,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      (conflict['venue_name'] ?? '').toString(),
+                                      style: GoogleFonts.inter(
+                                        color: const Color(0xFF64748B),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -475,30 +585,32 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
+                const SizedBox(height: 16),
+                Text(
                   'Would you like to reschedule your event or override this conflict?',
-                  style: TextStyle(
-                    color: AppColors.error,
+                  style: GoogleFonts.inter(
+                    color: text.withOpacity(0.9),
                     fontWeight: FontWeight.w600,
+                    fontSize: 14,
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 24),
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final compact = constraints.maxWidth < 360;
                     final buttons = [
-                      _dialogButton(
-                        label: 'Reschedule',
-                        onPressed: () => Navigator.of(ctx).pop(),
-                      ),
                       _dialogButton(
                         label: 'Cancel',
                         onPressed: () {
                           Navigator.of(ctx).pop();
                           context.go('/events');
                         },
-                        isPrimary: false,
+                        isGhost: true,
+                      ),
+                      _dialogButton(
+                        label: 'Reschedule',
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        isSecondary: true,
                       ),
                       _dialogButton(
                         label: 'Override',
@@ -514,12 +626,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
                     if (compact) {
                       return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          for (final button in buttons) ...[
-                            SizedBox(width: double.infinity, child: button),
-                            if (button != buttons.last)
-                              const SizedBox(height: 8),
-                          ],
+                          buttons[2],
+                          const SizedBox(height: 8),
+                          buttons[1],
+                          const SizedBox(height: 8),
+                          buttons[0],
                         ],
                       );
                     }
@@ -528,9 +641,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       children: [
                         Expanded(child: buttons[0]),
                         const SizedBox(width: 8),
-                        Expanded(child: buttons[1]),
+                        Expanded(flex: 2, child: buttons[1]),
                         const SizedBox(width: 8),
-                        Expanded(child: buttons[2]),
+                        Expanded(flex: 2, child: buttons[2]),
                       ],
                     );
                   },
@@ -546,44 +659,106 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   Widget _dialogButton({
     required String label,
     required VoidCallback onPressed,
-    bool isPrimary = true,
+    bool isSecondary = false,
+    bool isGhost = false,
   }) {
     final theme = Theme.of(context);
-    final bg = isPrimary
-        ? const Color(0xFF6366F1).withValues(alpha: 0.2)
-        : theme.colorScheme.surfaceContainerHighest;
-    final fg = isPrimary
-        ? const Color(0xFF4F46E5)
-        : theme.colorScheme.onSurface;
-    return TextButton(
-      style: TextButton.styleFrom(
+    final isDark = theme.brightness == Brightness.dark;
+
+    if (isGhost) {
+      return TextButton(
+        style: TextButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(100),
+          ),
+        ),
+        onPressed: onPressed,
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            color: const Color(0xFF64748B),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
+    final bg = isSecondary
+        ? (isDark
+              ? theme.colorScheme.surfaceContainerHighest
+              : const Color(0xFFF1F5F9))
+        : AppColors.error;
+    final fg = isSecondary ? theme.colorScheme.onSurface : Colors.white;
+
+    return FilledButton(
+      style: FilledButton.styleFrom(
         backgroundColor: bg,
         foregroundColor: fg,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+        elevation: 0,
       ),
       onPressed: onPressed,
-      child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+      child: Text(label, style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
     );
   }
 
-  Widget _buildSectionHeader(IconData icon, String title) {
+  Widget _buildCard({required List<Widget> children}) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final muted = isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.3)
+                : const Color(0xFF94A3B8).withOpacity(0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.05)
+              : Colors.black.withOpacity(0.03),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
+  }
+
+  Widget _buildCardHeader(IconData icon, String title) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.only(bottom: 24),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: muted),
-          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? const Color(0xFF2563EB).withOpacity(0.2)
+                  : const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, size: 20, color: const Color(0xFF2563EB)),
+          ),
+          const SizedBox(width: 16),
           Text(
-            title.toUpperCase(),
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.5,
-              color: muted,
+            title,
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurface,
             ),
           ),
         ],
@@ -594,18 +769,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   Widget _buildLabel(String text) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final labelColor = isDark
-        ? const Color(0xFF94A3B8)
-        : const Color(0xFF475569);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 8, left: 4),
       child: Text(
-        text.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.5,
-          color: labelColor,
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+          letterSpacing: 0.3,
         ),
       ),
     );
@@ -614,45 +786,49 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   InputDecoration _inputDecoration(String hint, {IconData? prefixIcon}) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final fillColor = isDark
+        ? const Color(0xFF0F172A)
+        : const Color(0xFFF8FAFC);
     final hintColor = isDark
-        ? const Color(0xFF64748B)
+        ? const Color(0xFF475569)
         : const Color(0xFF94A3B8);
-    final fillColor = theme.colorScheme.surface;
-    final borderColor = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFE2E8F0);
 
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(
+      hintStyle: GoogleFonts.inter(
         color: hintColor,
-        fontSize: 14,
-        fontWeight: FontWeight.normal,
+        fontSize: 15,
+        fontWeight: FontWeight.w400,
       ),
       filled: true,
       fillColor: fillColor,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       prefixIcon: prefixIcon != null
-          ? Icon(prefixIcon, size: 18, color: hintColor)
+          ? Padding(
+              padding: const EdgeInsets.only(left: 20, right: 12),
+              child: Icon(prefixIcon, size: 20, color: hintColor),
+            )
           : null,
+      prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: borderColor),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: borderColor),
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: isDark
+              ? Colors.white.withOpacity(0.05)
+              : Colors.black.withOpacity(0.03),
+        ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: Color(0xFF3B82F6),
-          width: 2,
-        ), // blue-500
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFEF4444)), // red-500
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: AppColors.error, width: 1.5),
       ),
     );
   }
@@ -663,85 +839,76 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final theme = Theme.of(context);
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = theme.brightness == Brightness.dark;
-    final pageBg = theme.scaffoldBackgroundColor;
+
+    // Premium subtle background
+    final pageBg = isDark ? const Color(0xFF020617) : const Color(0xFFF4F6F9);
     final surface = theme.colorScheme.surface;
-    final borderColor = isDark
-        ? const Color(0xFF334155)
-        : const Color(0xFFF1F5F9);
     final heading = theme.colorScheme.onSurface;
-    final muted = isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569);
 
     return Scaffold(
       backgroundColor: pageBg,
       appBar: AppBar(
-        backgroundColor: surface,
-        surfaceTintColor: surface,
+        backgroundColor: pageBg,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leadingWidth: 0,
-        leading: const SizedBox.shrink(),
-        title: Row(
-          children: [
-            const Icon(
-              LucideIcons.calendar,
-              color: Color(0xFF2563EB),
-              size: 24,
-            ), // blue-600
-            const SizedBox(width: 12),
-            Text(
-              'Create Event',
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: heading,
-                letterSpacing: -0.5,
-              ),
+        centerTitle: true,
+        leading: IconButton(
+          padding: const EdgeInsets.only(left: 16),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/events');
+            }
+          },
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.black.withOpacity(0.05),
+              shape: BoxShape.circle,
             ),
-          ],
+            child: Icon(
+              LucideIcons.arrowLeft,
+              size: 20,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+        ),
+        title: Text(
+          'Create Event',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: heading,
+          ),
         ),
         actions: [
           IconButton(
+            padding: const EdgeInsets.only(right: 16),
             onPressed: () {
               final next = isDark ? 'light' : 'dark';
               themeProvider.setThemeModeByValue(next);
             },
-            icon: Icon(
-              isDark ? LucideIcons.sun : LucideIcons.moon,
-              size: 18,
-              color: isDark ? const Color(0xFFF59E0B) : const Color(0xFF4F46E5),
-            ),
-            tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
-          ),
-          IconButton(
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/events');
-              }
-            },
             icon: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
+                color: isDark
+                    ? Colors.white.withOpacity(0.05)
+                    : Colors.black.withOpacity(0.05),
+                shape: BoxShape.circle,
               ),
-              child: const Icon(
-                LucideIcons.x,
+              child: Icon(
+                isDark ? LucideIcons.sun : LucideIcons.moon,
                 size: 20,
-                color: Color(0xFF94A3B8),
+                color: theme.colorScheme.onSurface,
               ),
             ),
-            hoverColor: isDark
-                ? const Color(0xFF1E293B)
-                : const Color(0xFFF1F5F9),
+            tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
           ),
-          const SizedBox(width: 12),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: borderColor),
-        ),
       ),
       body: SafeArea(
         child: LoadingOverlay(
@@ -752,173 +919,199 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 32,
+                    horizontal: 20,
+                    vertical: 24,
                   ),
                   child: Form(
                     key: _formKey,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // SECTION: DATE & TIME
-                        _buildSectionHeader(
-                          LucideIcons.calendar,
-                          'Date & Time',
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        // CARD 1: DATE & TIME
+                        _buildCard(
                           children: [
-                            _buildLabel('Start'),
+                            _buildCardHeader(LucideIcons.calendar, 'Schedule'),
                             Row(
                               children: [
                                 Expanded(
-                                  child: InkWell(
-                                    onTap: () async {
-                                      final d = await showDatePicker(
-                                        context: context,
-                                        initialDate: DateTime.now(),
-                                        firstDate: DateTime.now(),
-                                        lastDate: DateTime.now().add(
-                                          const Duration(days: 365),
-                                        ),
-                                      );
-                                      if (d != null) {
-                                        setState(() => _startDate = d);
-                                      }
-                                    },
-                                    child: IgnorePointer(
-                                      child: TextFormField(
-                                        key: ValueKey(_startDate),
-                                        initialValue: _startDate != null
-                                            ? df.format(_startDate!)
-                                            : '',
-                                        decoration: _inputDecoration(
-                                          'Date',
-                                          prefixIcon: LucideIcons.calendar,
-                                        ),
-                                        validator: (v) => _startDate == null
-                                            ? 'Required'
-                                            : null,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF64748B),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildLabel('Start Date'),
+                                      InkWell(
+                                        onTap: () async {
+                                          final d = await showDatePicker(
+                                            context: context,
+                                            initialDate: DateTime.now(),
+                                            firstDate: DateTime.now(),
+                                            lastDate: DateTime.now().add(
+                                              const Duration(days: 365),
+                                            ),
+                                          );
+                                          if (d != null) {
+                                            setState(() => _startDate = d);
+                                          }
+                                        },
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: IgnorePointer(
+                                          child: TextFormField(
+                                            key: ValueKey(_startDate),
+                                            initialValue: _startDate != null
+                                                ? df.format(_startDate!)
+                                                : '',
+                                            decoration: _inputDecoration(
+                                              'Select date',
+                                              prefixIcon: LucideIcons.calendar,
+                                            ),
+                                            validator: (v) => _startDate == null
+                                                ? 'Required'
+                                                : null,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w500,
+                                              color: heading,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: 16),
                                 Expanded(
-                                  child: InkWell(
-                                    onTap: () async {
-                                      final t = await showTimePicker(
-                                        context: context,
-                                        initialTime: TimeOfDay.now(),
-                                      );
-                                      if (t != null) {
-                                        setState(() => _startTime = t);
-                                      }
-                                    },
-                                    child: IgnorePointer(
-                                      child: TextFormField(
-                                        key: ValueKey(_startTime),
-                                        initialValue:
-                                            _startTime?.format(context) ?? '',
-                                        decoration: _inputDecoration(
-                                          'Time',
-                                          prefixIcon: LucideIcons.clock,
-                                        ),
-                                        validator: (v) => _startTime == null
-                                            ? 'Required'
-                                            : null,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF475569),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildLabel('Start Time'),
+                                      InkWell(
+                                        onTap: () async {
+                                          final t = await showTimePicker(
+                                            context: context,
+                                            initialTime: TimeOfDay.now(),
+                                          );
+                                          if (t != null) {
+                                            setState(() => _startTime = t);
+                                          }
+                                        },
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: IgnorePointer(
+                                          child: TextFormField(
+                                            key: ValueKey(_startTime),
+                                            initialValue:
+                                                _startTime?.format(context) ??
+                                                '',
+                                            decoration: _inputDecoration(
+                                              'Select time',
+                                              prefixIcon: LucideIcons.clock,
+                                            ),
+                                            validator: (v) => _startTime == null
+                                                ? 'Required'
+                                                : null,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w500,
+                                              color: heading,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
-
-                            const SizedBox(height: 16),
-
-                            _buildLabel('End'),
+                            const SizedBox(height: 24),
                             Row(
                               children: [
                                 Expanded(
-                                  child: InkWell(
-                                    onTap: () async {
-                                      final d = await showDatePicker(
-                                        context: context,
-                                        initialDate:
-                                            _startDate ?? DateTime.now(),
-                                        firstDate: _startDate ?? DateTime.now(),
-                                        lastDate: DateTime.now().add(
-                                          const Duration(days: 365),
-                                        ),
-                                      );
-                                      if (d != null) {
-                                        setState(() => _endDate = d);
-                                      }
-                                    },
-                                    child: IgnorePointer(
-                                      child: TextFormField(
-                                        key: ValueKey(_endDate),
-                                        initialValue: _endDate != null
-                                            ? df.format(_endDate!)
-                                            : '',
-                                        decoration: _inputDecoration(
-                                          'Date',
-                                          prefixIcon: LucideIcons.calendar,
-                                        ),
-                                        validator: (v) => _endDate == null
-                                            ? 'Required'
-                                            : null,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF475569),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildLabel('End Date'),
+                                      InkWell(
+                                        onTap: () async {
+                                          final d = await showDatePicker(
+                                            context: context,
+                                            initialDate:
+                                                _startDate ?? DateTime.now(),
+                                            firstDate:
+                                                _startDate ?? DateTime.now(),
+                                            lastDate: DateTime.now().add(
+                                              const Duration(days: 365),
+                                            ),
+                                          );
+                                          if (d != null) {
+                                            setState(() => _endDate = d);
+                                          }
+                                        },
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: IgnorePointer(
+                                          child: TextFormField(
+                                            key: ValueKey(_endDate),
+                                            initialValue: _endDate != null
+                                                ? df.format(_endDate!)
+                                                : '',
+                                            decoration: _inputDecoration(
+                                              'Select date',
+                                              prefixIcon: LucideIcons.calendar,
+                                            ),
+                                            validator: (v) => _endDate == null
+                                                ? 'Required'
+                                                : null,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w500,
+                                              color: heading,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: 16),
                                 Expanded(
-                                  child: InkWell(
-                                    onTap: () async {
-                                      final t = await showTimePicker(
-                                        context: context,
-                                        initialTime:
-                                            _startTime ?? TimeOfDay.now(),
-                                      );
-                                      if (t != null) {
-                                        setState(() => _endTime = t);
-                                      }
-                                    },
-                                    child: IgnorePointer(
-                                      child: TextFormField(
-                                        key: ValueKey(_endTime),
-                                        initialValue:
-                                            _endTime?.format(context) ?? '',
-                                        decoration: _inputDecoration(
-                                          'Time',
-                                          prefixIcon: LucideIcons.clock,
-                                        ),
-                                        validator: (v) => _endTime == null
-                                            ? 'Required'
-                                            : null,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF475569),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildLabel('End Time'),
+                                      InkWell(
+                                        onTap: () async {
+                                          final t = await showTimePicker(
+                                            context: context,
+                                            initialTime:
+                                                _startTime ?? TimeOfDay.now(),
+                                          );
+                                          if (t != null) {
+                                            setState(() => _endTime = t);
+                                          }
+                                        },
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: IgnorePointer(
+                                          child: TextFormField(
+                                            key: ValueKey(_endTime),
+                                            initialValue:
+                                                _endTime?.format(context) ?? '',
+                                            decoration: _inputDecoration(
+                                              'Select time',
+                                              prefixIcon: LucideIcons.clock,
+                                            ),
+                                            validator: (v) => _endTime == null
+                                                ? 'Required'
+                                                : null,
+                                            style: GoogleFonts.inter(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w500,
+                                              color: heading,
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -926,293 +1119,336 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           ],
                         ),
 
-                        const SizedBox(height: 40),
-
-                        // SECTION: EVENT DETAILS
-                        _buildSectionHeader(LucideIcons.edit3, 'Event Details'),
-                        _buildLabel('Event Name'),
-                        TextFormField(
-                          controller: _nameCtrl,
-                          decoration: _inputDecoration(
-                            'e.g. Annual Tech Conference 2026',
-                          ),
-                          validator: (v) =>
-                              (v?.trim().isEmpty ?? true) ? 'Required' : null,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: theme.colorScheme.onSurface,
-                          ),
+                        // CARD 2: EVENT DETAILS
+                        _buildCard(
+                          children: [
+                            _buildCardHeader(LucideIcons.edit3, 'Details'),
+                            _buildLabel('Event Name'),
+                            TextFormField(
+                              controller: _nameCtrl,
+                              decoration: _inputDecoration(
+                                'e.g. Annual Tech Conference 2026',
+                              ),
+                              validator: (v) => (v?.trim().isEmpty ?? true)
+                                  ? 'Required'
+                                  : null,
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: heading,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            _buildLabel('Facilitator'),
+                            TextFormField(
+                              controller: _facilitatorCtrl,
+                              decoration: _inputDecoration('Facilitator Name'),
+                              validator: (v) => (v?.trim().isEmpty ?? true)
+                                  ? 'Required'
+                                  : null,
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: heading,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        _buildLabel('Facilitator'),
-                        TextFormField(
-                          controller: _facilitatorCtrl,
-                          decoration: _inputDecoration('Facilitator Name'),
-                          validator: (v) =>
-                              (v?.trim().isEmpty ?? true) ? 'Required' : null,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
 
-                        const SizedBox(height: 40),
-
-                        // SECTION: VENUE & AUDIENCE
-                        _buildSectionHeader(
-                          LucideIcons.mapPin,
-                          'Venue & Audience',
-                        ),
-                        _buildLabel('Venue'),
-                        _loadingVenues
-                            ? const Center(child: CircularProgressIndicator())
-                            : DropdownButtonFormField<String>(
-                                value: _selectedVenueName,
-                                decoration: _inputDecoration('Select a Venue'),
-                                icon: const Icon(
-                                  LucideIcons.chevronDown,
-                                  size: 18,
-                                  color: Color(0xFF94A3B8),
-                                ),
-                                items: _venues
-                                    .map(
-                                      (v) => DropdownMenuItem(
-                                        value: v.name,
-                                        child: Text(
-                                          v.name.toUpperCase(),
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFF64748B),
+                        // CARD 3: VENUE & AUDIENCE
+                        _buildCard(
+                          children: [
+                            _buildCardHeader(
+                              LucideIcons.mapPin,
+                              'Location & Audience',
+                            ),
+                            _buildLabel('Venue'),
+                            _loadingVenues
+                                ? const Padding(
+                                    padding: EdgeInsets.all(16.0),
+                                    child: Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  )
+                                : DropdownButtonFormField<String>(
+                                    value: _selectedVenueName,
+                                    decoration: _inputDecoration(
+                                      'Select a Venue',
+                                    ),
+                                    icon: const Icon(
+                                      LucideIcons.chevronDown,
+                                      size: 20,
+                                      color: Color(0xFF94A3B8),
+                                    ),
+                                    dropdownColor: theme.colorScheme.surface,
+                                    borderRadius: BorderRadius.circular(16),
+                                    items: _venues
+                                        .map(
+                                          (v) => DropdownMenuItem(
+                                            value: v.name,
+                                            child: Text(
+                                              v.name,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
                                           ),
+                                        )
+                                        .toList(),
+                                    onChanged: (v) =>
+                                        setState(() => _selectedVenueName = v),
+                                    validator: (v) =>
+                                        v == null ? 'Required' : null,
+                                  ),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8, left: 4),
+                              child: Text(
+                                'Make sure the venue is verified in DigiCampus.',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: const Color(0xFF94A3B8),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            _buildLabel('Intended Audience'),
+                            InkWell(
+                              onTap: _selectAudienceOptions,
+                              borderRadius: BorderRadius.circular(16),
+                              child: InputDecorator(
+                                decoration:
+                                    _inputDecoration(
+                                      'Select Audience (Multi)',
+                                    ).copyWith(
+                                      suffixIcon: const Padding(
+                                        padding: EdgeInsets.only(right: 12),
+                                        child: Icon(
+                                          LucideIcons.chevronDown,
+                                          size: 20,
+                                          color: Color(0xFF94A3B8),
                                         ),
                                       ),
-                                    )
-                                    .toList(),
-                                onChanged: (v) =>
-                                    setState(() => _selectedVenueName = v),
-                                validator: (v) => v == null ? 'Required' : null,
-                              ),
-                        const Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: Text(
-                            'Make sure the venue is verified in DigiCampus.',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        _buildLabel('Intended Audience'),
-                        InkWell(
-                          onTap: _selectAudienceOptions,
-                          borderRadius: BorderRadius.circular(12),
-                          child: InputDecorator(
-                            decoration:
-                                _inputDecoration(
-                                  'Select Audience (Multi)',
-                                ).copyWith(
-                                  suffixIcon: const Icon(
-                                    LucideIcons.chevronDown,
-                                    size: 18,
-                                    color: Color(0xFF94A3B8),
+                                    ),
+                                child: Text(
+                                  _selectedAudiences.isEmpty
+                                      ? 'Select audience (multi)'
+                                      : _selectedAudiences.join(', '),
+                                  style: GoogleFonts.inter(
+                                    fontSize: 15,
+                                    fontWeight: _selectedAudiences.isEmpty
+                                        ? FontWeight.w400
+                                        : FontWeight.w500,
+                                    color: _selectedAudiences.isEmpty
+                                        ? (isDark
+                                              ? const Color(0xFF475569)
+                                              : const Color(0xFF94A3B8))
+                                        : heading,
                                   ),
                                 ),
-                            child: Text(
-                              _selectedAudiences.isEmpty
-                                  ? 'Select audience (multi)'
-                                  : _selectedAudiences.join(', '),
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: _selectedAudiences.isEmpty
-                                    ? const Color(0xFF94A3B8)
-                                    : theme.colorScheme.onSurface,
                               ),
                             ),
-                          ),
-                        ),
-                        if (_selectedAudiences.contains('Others')) ...[
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _audienceOtherCtrl,
-                            decoration: _inputDecoration(
-                              'Specify other audience...',
-                            ),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xFF1E293B),
-                            ),
-                            maxLength: 500,
-                            validator: (v) {
-                              if (_selectedAudiences.contains('Others') &&
-                                  (v?.trim().isEmpty ?? true)) {
-                                return 'Required';
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
-
-                        const SizedBox(height: 40),
-
-                        // SECTION: DESCRIPTION & BUDGET
-                        _buildSectionHeader(
-                          LucideIcons.alignLeft,
-                          'Description & Budget',
-                        ),
-                        _buildLabel('Description'),
-                        TextFormField(
-                          controller: _descCtrl,
-                          decoration: _inputDecoration(
-                            'Add a short overview of the event...',
-                          ),
-                          maxLines: 4,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.only(top: 4, bottom: 20),
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: Text(
-                              'Max 2000 chars',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF94A3B8),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        _buildLabel('Budget (RS)'),
-                        TextFormField(
-                          controller: _budgetCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: _inputDecoration('e.g. 50000').copyWith(
-                            prefixIcon: const Padding(
-                              padding: EdgeInsets.all(14.0),
-                              child: Text(
-                                '₹',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF94A3B8),
+                            if (_selectedAudiences.contains('Others')) ...[
+                              const SizedBox(height: 16),
+                              TextFormField(
+                                controller: _audienceOtherCtrl,
+                                decoration: _inputDecoration(
+                                  'Specify other audience...',
                                 ),
-                              ),
-                            ),
-                          ),
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E293B),
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        RichText(
-                          text: const TextSpan(
-                            children: [
-                              TextSpan(
-                                text: 'BUDGET BREAKDOWN PDF ',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.5,
-                                  color: Color(0xFF475569),
+                                style: GoogleFonts.inter(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                  color: heading,
                                 ),
-                              ),
-                              TextSpan(
-                                text: '(REQUIRED)',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontStyle: FontStyle.italic,
-                                  color: Color(0xFF94A3B8),
-                                ),
+                                maxLength: 500,
+                                validator: (v) {
+                                  if (_selectedAudiences.contains('Others') &&
+                                      (v?.trim().isEmpty ?? true)) {
+                                    return 'Required';
+                                  }
+                                  return null;
+                                },
                               ),
                             ],
-                          ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Upload a PDF with your budget breakdown. You can upload it with any file name. It will be stored automatically using the event name and date.',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            height: 1.5,
-                            color: Color(0xFF94A3B8),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        InkWell(
-                          onTap: _pickPdf,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 20,
-                              horizontal: 16,
+
+                        // CARD 4: DESCRIPTION & BUDGET
+                        _buildCard(
+                          children: [
+                            _buildCardHeader(
+                              LucideIcons.alignLeft,
+                              'Overview & Budget',
                             ),
-                            decoration: BoxDecoration(
-                              color: _budgetPdf == null
-                                  ? surface
-                                  : (isDark
-                                        ? theme
-                                              .colorScheme
-                                              .surfaceContainerHighest
-                                        : const Color(0xFFEFF6FF)),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: _budgetPdf == null
-                                    ? borderColor
-                                    : const Color(0xFF93C5FD),
-                                width: 2,
-                                style: BorderStyle.solid,
+                            _buildLabel('Description'),
+                            TextFormField(
+                              controller: _descCtrl,
+                              decoration: _inputDecoration(
+                                'Add a short overview of the event...',
+                              ),
+                              maxLines: 4,
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w400,
+                                height: 1.5,
+                                color: heading,
                               ),
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: 8,
+                                bottom: 24,
+                                right: 4,
+                              ),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: Text(
+                                  'Max 2000 chars',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: const Color(0xFF94A3B8),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            _buildLabel('Budget (RS)'),
+                            TextFormField(
+                              controller: _budgetCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: _inputDecoration('e.g. 50000')
+                                  .copyWith(
+                                    prefixIcon: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                      ),
+                                      child: Text(
+                                        '₹',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w500,
+                                          color: const Color(0xFF94A3B8),
+                                        ),
+                                      ),
+                                    ),
+                                    prefixIconConstraints: const BoxConstraints(
+                                      minWidth: 0,
+                                      minHeight: 0,
+                                    ),
+                                  ),
+                              style: GoogleFonts.inter(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: heading,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            Row(
                               children: [
-                                Icon(
-                                  _budgetPdf == null
-                                      ? LucideIcons.uploadCloud
-                                      : LucideIcons.fileText,
-                                  size: 18,
-                                  color: _budgetPdf == null
-                                      ? const Color(0xFF64748B)
-                                      : const Color(0xFF2563EB),
+                                Text(
+                                  'Budget Breakdown PDF',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark
+                                        ? const Color(0xFF94A3B8)
+                                        : const Color(0xFF475569),
+                                  ),
                                 ),
                                 const SizedBox(width: 8),
-                                Flexible(
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
                                   child: Text(
-                                    _budgetPdf == null
-                                        ? 'CHOOSE PDF FILE'
-                                        : _budgetPdf!.name.toUpperCase(),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w900,
-                                      letterSpacing: 1.5,
-                                      color: _budgetPdf == null
-                                          ? const Color(0xFF64748B)
-                                          : const Color(0xFF2563EB),
+                                    'Required',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.error,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                          ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Upload a PDF with your budget breakdown. It will be stored automatically using the event name and date.',
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: const Color(0xFF94A3B8),
+                                height: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            InkWell(
+                              onTap: _pickPdf,
+                              borderRadius: BorderRadius.circular(16),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 24,
+                                  horizontal: 20,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _budgetPdf == null
+                                      ? (isDark
+                                            ? const Color(0xFF0F172A)
+                                            : const Color(0xFFF8FAFC))
+                                      : (isDark
+                                            ? const Color(
+                                                0xFF1E3A8A,
+                                              ).withOpacity(0.3)
+                                            : const Color(0xFFEFF6FF)),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: _budgetPdf == null
+                                        ? (isDark
+                                              ? Colors.white.withOpacity(0.1)
+                                              : Colors.black.withOpacity(0.05))
+                                        : const Color(0xFF3B82F6),
+                                    width: 1.5,
+                                    style: BorderStyle.solid,
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      _budgetPdf == null
+                                          ? LucideIcons.uploadCloud
+                                          : LucideIcons.fileCheck,
+                                      size: 32,
+                                      color: _budgetPdf == null
+                                          ? const Color(0xFF94A3B8)
+                                          : const Color(0xFF2563EB),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      _budgetPdf == null
+                                          ? 'Tap to upload PDF'
+                                          : _budgetPdf!.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: _budgetPdf == null
+                                            ? (isDark
+                                                  ? const Color(0xFF94A3B8)
+                                                  : const Color(0xFF64748B))
+                                            : const Color(0xFF2563EB),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -1220,89 +1456,89 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 ),
               ),
 
-              // FOOTER ACTIONS
+              // PREMIUM BOTTOM ACTION BAR
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 20,
                 ),
-                decoration: const BoxDecoration().copyWith(
+                decoration: BoxDecoration(
                   color: surface,
-                  border: Border(top: BorderSide(color: borderColor)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        if (context.canPop()) {
-                          context.pop();
-                        } else {
-                          context.go('/events');
-                        }
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: muted,
-                        backgroundColor: isDark
-                            ? theme.colorScheme.surfaceContainerHighest
-                            : Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(
-                            color: isDark
-                                ? const Color(0xFF475569)
-                                : const Color(0xFFDADCE0),
-                          ),
-                        ),
-                      ),
-                      child: Text(
-                        'Cancel',
-                        style: GoogleFonts.roboto(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: muted,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A73E8),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 16,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            LucideIcons.plus,
-                            size: 18,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Create Event',
-                            style: GoogleFonts.roboto(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark
+                          ? Colors.black.withOpacity(0.5)
+                          : const Color(0xFF94A3B8).withOpacity(0.1),
+                      blurRadius: 20,
+                      offset: const Offset(0, -5),
                     ),
                   ],
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go('/events');
+                            }
+                          },
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            backgroundColor: isDark
+                                ? const Color(0xFF1E293B)
+                                : const Color(0xFFF1F5F9),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: isDark
+                                  ? const Color(0xFFCBD5E1)
+                                  : const Color(0xFF475569),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          onPressed: _submit,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(100),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(LucideIcons.check, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Create Event',
+                                style: GoogleFonts.inter(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

@@ -660,15 +660,15 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
         ),
         SizedBox(width: _isCompactLayout ? 14 : 16),
         Expanded(
-           child: Text(
-             title,
-             style: GoogleFonts.poppins(
-               fontSize: _isCompactLayout ? 16 : 22,
-               fontWeight: FontWeight.w600,
-               color: Colors.grey[900],
-               letterSpacing: -0.5,
-             ),
-           ),
+          child: Text(
+            title,
+            style: GoogleFonts.poppins(
+              fontSize: _isCompactLayout ? 16 : 22,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[900],
+              letterSpacing: -0.5,
+            ),
+          ),
         ),
       ],
     );
@@ -721,16 +721,16 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             ),
             child: Row(
               children: [
-                 Expanded(
-                   child: Text(
-                     title,
-                     style: TextStyle(
-                       fontSize: _isCompactLayout ? 12 : 14,
-                       fontWeight: value ? FontWeight.w600 : FontWeight.w500,
-                       color: value ? primaryColor : Colors.grey[800],
-                     ),
-                   ),
-                 ),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: _isCompactLayout ? 12 : 14,
+                      fontWeight: value ? FontWeight.w600 : FontWeight.w500,
+                      color: value ? primaryColor : Colors.grey[800],
+                    ),
+                  ),
+                ),
                 SizedBox(
                   height: 24,
                   width: 24,
@@ -959,14 +959,14 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                           color: Theme.of(context).primaryColor,
                         ),
                         const SizedBox(width: 8),
-                         Text(
-                           '${_formatTime(widget.event.startTime)} to ${_formatTime(widget.event.endTime)}',
-                           style: TextStyle(
-                             fontSize: _isCompactLayout ? 11 : 12,
-                             color: Colors.grey[700],
-                             fontWeight: FontWeight.w500,
-                           ),
-                         ),
+                        Text(
+                          '${_formatTime(widget.event.startTime)} to ${_formatTime(widget.event.endTime)}',
+                          style: TextStyle(
+                            fontSize: _isCompactLayout ? 11 : 12,
+                            color: Colors.grey[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -1006,7 +1006,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Facility Request', '🏢'),
+          _buildSectionHeader('FACILITY MANAGER REQUEST', '🏢'),
           const SizedBox(height: 20),
           _buildEventSummary(),
           const SizedBox(height: 32),
@@ -1039,29 +1039,29 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                   'To',
                   hintText: _routingEmailsLoading
                       ? 'Loading facility manager email...'
-                      : 'Facility manager email',
+                      : 'facilitymanager@campus.edu',
                 ).copyWith(
                   prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
                 ),
           ),
           const SizedBox(height: 32),
-           Text(
-             'Requirements',
-             style: GoogleFonts.poppins(
-               fontSize: _isCompactLayout ? 12 : 14,
-               fontWeight: FontWeight.w600,
-               color: Colors.grey[800],
-             ),
-           ),
+          Text(
+            'Requirements:',
+            style: GoogleFonts.poppins(
+              fontSize: _isCompactLayout ? 12 : 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
           const SizedBox(height: 12),
           _buildCheckboxCard(
-            title: 'Venue Setup Needed',
+            title: 'Venue setup',
             value: _facilityForm['venue_required'],
             onChanged: (v) =>
                 setState(() => _facilityForm['venue_required'] = v ?? false),
           ),
           _buildCheckboxCard(
-            title: 'Refreshments Required',
+            title: 'Refreshments',
             value: _facilityForm['refreshments'],
             onChanged: (v) =>
                 setState(() => _facilityForm['refreshments'] = v ?? false),
@@ -1071,8 +1071,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             onChanged: (v) => _facilityForm['other_notes'] = v,
             style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration: _buildInputDecoration(
-              'Additional Notes',
-              hintText: 'Any special arrangements needed?',
+              'Others',
+              hintText: 'Add additional notes for the facility manager.',
             ),
             maxLines: 3,
           ),
@@ -1087,7 +1087,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('IT Support', '💻'),
+          _buildSectionHeader('IT SUPPORT REQUEST', '💻'),
           const SizedBox(height: 20),
           _buildEventSummary(),
           const SizedBox(height: 32),
@@ -1120,14 +1120,14 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                   'To',
                   hintText: _routingEmailsLoading
                       ? 'Loading IT department email...'
-                      : 'IT department email',
+                      : 'it@campus.edu',
                 ).copyWith(
                   prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
                 ),
           ),
           const SizedBox(height: 32),
           Text(
-            'Event Mode',
+            'Event mode',
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -1209,7 +1209,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
           ),
           const SizedBox(height: 32),
           Text(
-            'Technical Requirements',
+            'Requirements:',
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -1218,12 +1218,12 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
           ),
           const SizedBox(height: 12),
           _buildCheckboxCard(
-            title: 'Audio / PA System',
+            title: 'Audio System',
             value: _itForm['pa_system'],
             onChanged: (v) => setState(() => _itForm['pa_system'] = v ?? false),
           ),
           _buildCheckboxCard(
-            title: 'Projection Display',
+            title: 'Projection',
             value: _itForm['projection'],
             onChanged: (v) =>
                 setState(() => _itForm['projection'] = v ?? false),
@@ -1233,8 +1233,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             onChanged: (v) => _itForm['other_notes'] = v,
             style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration: _buildInputDecoration(
-              'Additional Notes',
-              hintText: 'Microphones needed? WiFi access for guests?',
+              'Others',
+              hintText: 'Add additional notes for IT.',
             ),
             maxLines: 3,
           ),
@@ -1251,7 +1251,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Marketing Request', '📢'),
+          _buildSectionHeader('MARKETING REQUEST', '📢'),
           const SizedBox(height: 20),
           _buildEventSummary(),
           const SizedBox(height: 32),
@@ -1264,61 +1264,61 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                   'To',
                   hintText: _routingEmailsLoading
                       ? 'Loading marketing email...'
-                      : 'Marketing email',
+                      : 'marketing@campus.edu',
                 ).copyWith(
                   prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
                 ),
           ),
           const SizedBox(height: 32),
-           Text(
-             'Campaign Phases',
-             style: GoogleFonts.poppins(
-               fontSize: _isCompactLayout ? 12 : 14,
-               fontWeight: FontWeight.w600,
-               color: Colors.grey[800],
-             ),
-           ),
+          Text(
+            'Requirements:',
+            style: GoogleFonts.poppins(
+              fontSize: _isCompactLayout ? 12 : 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
           const SizedBox(height: 12),
-          _buildPhaseGroup('Pre-Event Phase', [
+          _buildPhaseGroup('Pre-Event', [
             _buildCheckboxCard(
-              title: 'Poster Design',
+              title: 'Poster',
               value: req['pre_event']['poster'],
               onChanged: (v) =>
                   setState(() => req['pre_event']['poster'] = v ?? false),
             ),
             _buildCheckboxCard(
-              title: 'Social Media Promotion',
+              title: 'Social Media Post',
               value: req['pre_event']['social_media'],
               onChanged: (v) =>
                   setState(() => req['pre_event']['social_media'] = v ?? false),
             ),
           ]),
           const SizedBox(height: 20),
-          _buildPhaseGroup('During Event Phase', [
+          _buildPhaseGroup('During Event', [
             _buildCheckboxCard(
-              title: 'Photography Coverage',
+              title: 'Photography',
               value: req['during_event']['photo'],
               onChanged: (v) =>
                   setState(() => req['during_event']['photo'] = v ?? false),
             ),
             _buildCheckboxCard(
-              title: 'Video Recording',
+              title: 'Videography',
               value: req['during_event']['video'],
               onChanged: (v) =>
                   setState(() => req['during_event']['video'] = v ?? false),
             ),
           ]),
           const SizedBox(height: 20),
-          _buildPhaseGroup('Post-Event Phase', [
+          _buildPhaseGroup('Post-Event', [
             _buildCheckboxCard(
-              title: 'Social Media Wrap-up',
+              title: 'Social Media Post',
               value: req['post_event']['social_media'],
               onChanged: (v) => setState(
                 () => req['post_event']['social_media'] = v ?? false,
               ),
             ),
             _buildCheckboxCard(
-              title: 'Photo Gallery Upload',
+              title: 'Photo Upload',
               value: req['post_event']['photo_upload'],
               onChanged: (v) => setState(
                 () => req['post_event']['photo_upload'] = v ?? false,
@@ -1336,53 +1336,53 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             onChanged: (v) => _marketingForm['other_notes'] = v,
             style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration: _buildInputDecoration(
-              'Additional Notes',
-              hintText: 'Target audience? Key messaging goals?',
+              'Others',
+              hintText: 'Add additional notes for the marketing team.',
             ),
             maxLines: 3,
           ),
-           const SizedBox(height: 32),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Reference Files',
-                    style: GoogleFonts.poppins(
-                      fontSize: _isCompactLayout ? 12 : 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[800],
-                    ),
+          const SizedBox(height: 32),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Any necessary documents (optional)',
+                  style: GoogleFonts.poppins(
+                    fontSize: _isCompactLayout ? 12 : 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'Max $_maxMarketingRequesterFiles',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey[700],
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Upload logos, previous posters, or brand guidelines (Max ${_maxMarketingRequesterFileMb}MB each).',
-              style: TextStyle(
-                fontSize: _isCompactLayout ? 11 : 12,
-                color: Colors.grey[500],
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Max $_maxMarketingRequesterFiles',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Up to $_maxMarketingRequesterFiles files, $_maxMarketingRequesterFileMb MB each (PDF, Word, images, text). Files upload after the request is created; Google must be connected.',
+            style: TextStyle(
+              fontSize: _isCompactLayout ? 11 : 12,
+              color: Colors.grey[500],
             ),
-            const SizedBox(height: 16),
+          ),
+          const SizedBox(height: 16),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
@@ -1560,7 +1560,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionHeader('Transport Request', '🚕'),
+          _buildSectionHeader('TRANSPORT REQUEST', '🚕'),
           const SizedBox(height: 20),
           _buildEventSummary(),
           const SizedBox(height: 32),
@@ -1572,31 +1572,31 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                 _buildInputDecoration(
                   'To',
                   hintText: _routingEmailsLoading
-                      ? 'Loading transport coordinator email...'
-                      : 'Transport coordinator email',
+                      ? 'Loading transport email...'
+                      : 'transport@campus.edu',
                 ).copyWith(
                   prefixIcon: const Icon(Icons.mail_outline_rounded, size: 18),
                 ),
           ),
           const SizedBox(height: 32),
-           Text(
-             'Arrangements Needed',
-             style: GoogleFonts.poppins(
-               fontSize: _isCompactLayout ? 12 : 14,
-               fontWeight: FontWeight.w600,
-               color: Colors.grey[800],
-             ),
-           ),
+          Text(
+            'Transport arrangement (you can select both)',
+            style: GoogleFonts.poppins(
+              fontSize: _isCompactLayout ? 12 : 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
+            ),
+          ),
           const SizedBox(height: 12),
           _buildCheckboxCard(
-            title: 'Guest Cab Services',
+            title: 'Cab for guest',
             value: _transportForm['include_guest_cab'],
             onChanged: (v) => setState(
               () => _transportForm['include_guest_cab'] = v ?? false,
             ),
           ),
           _buildCheckboxCard(
-            title: 'Student Transport (Off-campus)',
+            title: 'Students (off-campus event)',
             value: _transportForm['include_students'],
             onChanged: (v) =>
                 setState(() => _transportForm['include_students'] = v ?? false),
@@ -1630,7 +1630,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'GUEST CAB ITINERARY',
+                        'Guest cab',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 11,
@@ -1675,8 +1675,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                               ),
                               decoration:
                                   _buildInputDecoration(
-                                    'Pickup Location',
-                                    hintText: 'Airport, Hotel...',
+                                    'Pick up location',
+                                    hintText: 'Address or landmark',
                                   ).copyWith(
                                     prefixIcon: Icon(
                                       Icons.my_location_rounded,
@@ -1691,7 +1691,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                                 Expanded(
                                   flex: 3,
                                   child: _buildDatePickerField(
-                                    label: 'Date',
+                                    label: 'Pick up date',
                                     formKey: 'guest_pickup_date',
                                   ),
                                 ),
@@ -1699,7 +1699,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                                 Expanded(
                                   flex: 2,
                                   child: _buildTimePickerField(
-                                    label: 'Time',
+                                    label: 'Pick up time',
                                     formKey: 'guest_pickup_time',
                                   ),
                                 ),
@@ -1734,8 +1734,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                               ),
                               decoration:
                                   _buildInputDecoration(
-                                    'Dropoff Location',
-                                    hintText: 'Campus, Hotel...',
+                                    'Drop off location',
+                                    hintText: 'Address or landmark',
                                   ).copyWith(
                                     prefixIcon: Icon(
                                       Icons.flag_rounded,
@@ -1750,7 +1750,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                                 Expanded(
                                   flex: 3,
                                   child: _buildDatePickerField(
-                                    label: 'Date',
+                                    label: 'Drop off date (optional)',
                                     formKey: 'guest_dropoff_date',
                                   ),
                                 ),
@@ -1758,7 +1758,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                                 Expanded(
                                   flex: 2,
                                   child: _buildTimePickerField(
-                                    label: 'Time',
+                                    label: 'Drop off time',
                                     formKey: 'guest_dropoff_time',
                                   ),
                                 ),
@@ -1802,7 +1802,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'STUDENT LOGISTICS',
+                        'Student transport',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 11,
@@ -1823,7 +1823,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                           ),
                           decoration:
                               _buildInputDecoration(
-                                'Total Students',
+                                'Number of students',
                                 hintText: 'e.g. 50',
                               ).copyWith(
                                 prefixIcon: Icon(
@@ -1845,8 +1845,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                           ),
                           decoration:
                               _buildInputDecoration(
-                                'Vehicle Type',
-                                hintText: 'Bus, Van...',
+                                'Kind of transport',
+                                hintText: 'e.g. bus, van',
                               ).copyWith(
                                 prefixIcon: Icon(
                                   Icons.directions_bus_rounded,
@@ -1885,8 +1885,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                     style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
                     decoration:
                         _buildInputDecoration(
-                          'Central Pickup Point',
-                          hintText: 'e.g. Main Gate',
+                          'Pick up point',
+                          hintText: 'Meeting point for students',
                         ).copyWith(
                           prefixIcon: Icon(
                             Icons.meeting_room_rounded,
@@ -1904,8 +1904,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
             onChanged: (v) => _transportForm['other_notes'] = v,
             style: TextStyle(fontSize: _isCompactLayout ? 13 : 14),
             decoration: _buildInputDecoration(
-              'Additional Notes',
-              hintText: 'Any special instructions for drivers?',
+              'Additional notes',
+              hintText: 'Any other details for transport.',
             ),
             maxLines: 3,
           ),
@@ -2101,13 +2101,11 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                   ),
                   _buildReviewLine(
                     'Venue setup',
-                    _facilityForm['venue_required']
-                        ? 'Required'
-                        : 'Not required',
+                    _facilityForm['venue_required'] ? 'Yes' : 'No',
                   ),
                   _buildReviewLine(
                     'Refreshments',
-                    _facilityForm['refreshments'] ? 'Required' : 'Not required',
+                    _facilityForm['refreshments'] ? 'Yes' : 'No',
                   ),
                   if (_hasNotes(_facilityForm['other_notes']))
                     _buildReviewLine(
@@ -2121,17 +2119,15 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                   ),
                   _buildReviewLine(
                     'Mode',
-                    _itForm['event_mode'] == 'online'
-                        ? 'Online Event'
-                        : 'Offline Event',
+                    _itForm['event_mode'] == 'online' ? 'Online' : 'Offline',
                   ),
                   _buildReviewLine(
-                    'PA system',
-                    _itForm['pa_system'] ? 'Required' : 'Not required',
+                    'Audio System',
+                    _itForm['pa_system'] ? 'Yes' : 'No',
                   ),
                   _buildReviewLine(
                     'Projection',
-                    _itForm['projection'] ? 'Required' : 'Not required',
+                    _itForm['projection'] ? 'Yes' : 'No',
                   ),
                   if (_hasNotes(_itForm['other_notes']))
                     _buildReviewLine(
@@ -2192,15 +2188,11 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                   ),
                   _buildReviewLine(
                     'Guest cab',
-                    _transportForm['include_guest_cab']
-                        ? 'Required'
-                        : 'Not required',
+                    _transportForm['include_guest_cab'] ? 'Yes' : 'No',
                   ),
                   _buildReviewLine(
                     'Students',
-                    _transportForm['include_students']
-                        ? 'Required'
-                        : 'Not required',
+                    _transportForm['include_students'] ? 'Yes' : 'No',
                   ),
                   if (_transportForm['include_guest_cab'])
                     Container(
@@ -2360,13 +2352,13 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
   String _getDeptReviewLabel(String dept) {
     switch (dept) {
       case 'facility':
-        return 'Facility Management';
+        return 'Facility manager';
       case 'it':
-        return 'IT & Technical Support';
+        return 'IT';
       case 'marketing':
-        return 'Marketing & Media';
+        return 'Marketing';
       case 'transport':
-        return 'Transport & Logistics';
+        return 'Transport';
       default:
         return dept;
     }
@@ -2414,7 +2406,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
         _marketingForm['marketing_requirements'] as Map<String, dynamic>;
     final out = <String>[];
     if (req['pre_event']['poster'] == true) {
-      out.add('Pre-Event: Poster Design');
+      out.add('Pre-Event: Poster');
     }
     if (req['pre_event']['social_media'] == true) {
       out.add('Pre-Event: Social Media Post');
@@ -2423,13 +2415,13 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       out.add('During Event: Photography');
     }
     if (req['during_event']['video'] == true) {
-      out.add('During Event: Video Shoot');
+      out.add('During Event: Videography');
     }
     if (req['post_event']['social_media'] == true) {
-      out.add('Post-Event: Social Media Wrap-up');
+      out.add('Post-Event: Social Media Post');
     }
     if (req['post_event']['photo_upload'] == true) {
-      out.add('Post-Event: Photo Gallery');
+      out.add('Post-Event: Photo Upload');
     }
     if (req['post_event']['video'] == true) {
       out.add('Post-Event: Video Upload');
@@ -2533,29 +2525,29 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                         children: [
-                           Text(
-                             _phase == 'review'
-                                 ? 'Review & Submit'
-                                 : 'Setup Requirements',
-                             style: GoogleFonts.poppins(
-                               fontSize: isCompact ? 16 : 20,
-                               fontWeight: FontWeight.w600,
-                               color: Colors.grey[900],
-                               letterSpacing: -0.5,
-                             ),
-                           ),
-                           const SizedBox(height: 4),
-                           Text(
-                             _phase == 'review'
-                                 ? 'Finalize your requests'
-                                 : 'Step ${_currentStep + 1} of $_totalSteps',
-                             style: TextStyle(
-                               fontSize: isCompact ? 11 : 12,
-                               color: Colors.grey[500],
-                               fontWeight: FontWeight.w600,
-                             ),
-                           ),
+                        children: [
+                          Text(
+                            _phase == 'review'
+                                ? 'Review & Submit'
+                                : 'Setup Requirements',
+                            style: GoogleFonts.poppins(
+                              fontSize: isCompact ? 16 : 20,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[900],
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _phase == 'review'
+                                ? 'Finalize your requests'
+                                : 'Step ${_currentStep + 1} of $_totalSteps',
+                            style: TextStyle(
+                              fontSize: isCompact ? 11 : 12,
+                              color: Colors.grey[500],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ],
                       ),
                       Container(

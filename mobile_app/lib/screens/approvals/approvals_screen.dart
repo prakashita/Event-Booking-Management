@@ -62,7 +62,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
   bool get _isItRole => AppConstants.itRoles.contains(_roleKey);
   bool get _isTransportRole => AppConstants.transportRoles.contains(_roleKey);
 
-   bool get _canAccess => _isApproverRole;
+  bool get _canAccess => _isApproverRole;
 
   String get _departmentLabel {
     if (_isFacilityRole) return 'Facility Manager';
@@ -1426,10 +1426,14 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
       child: requests.isEmpty
           ? EmptyState(
               icon: emptyIcon,
-              title: _searchCtrl.text.trim().isNotEmpty || _hasApprovalFiltersActive
+              title:
+                  _searchCtrl.text.trim().isNotEmpty ||
+                      _hasApprovalFiltersActive
                   ? 'No items match your filters'
                   : emptyTitle,
-              message: _searchCtrl.text.trim().isNotEmpty || _hasApprovalFiltersActive
+              message:
+                  _searchCtrl.text.trim().isNotEmpty ||
+                      _hasApprovalFiltersActive
                   ? 'Try adjusting search, status, or view filters.'
                   : emptyMessage,
             )
@@ -1688,8 +1692,7 @@ class _ApprovalCard extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isCompact = screenWidth < 430;
     final isHistorical = !request.isActionable;
-    final stageText =
-        request.currentStageLabel?.trim().isNotEmpty == true
+    final stageText = request.currentStageLabel?.trim().isNotEmpty == true
         ? request.currentStageLabel!.trim()
         : _pipelineStageLabel(request.pipelineStage);
 
@@ -1972,19 +1975,25 @@ class _HistoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Text(
-        '$label: $value',
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: ApprovalUi.muted,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 220),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Text(
+          '$label: $value',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          softWrap: false,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: ApprovalUi.muted,
+          ),
         ),
       ),
     );
