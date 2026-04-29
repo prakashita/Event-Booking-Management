@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
@@ -166,6 +169,160 @@ class _EventsScreenState extends State<EventsScreen>
     final eventName = sanitized.isEmpty ? 'Event' : sanitized;
     final datePart = DateFormat('yyyy-MM-dd').format(event.startTime);
     return '${eventName}_${datePart}_Report.pdf';
+  }
+
+  String _pdfText(String value) {
+    return value
+        .replaceAll(RegExp(r'[^\x09\x0A\x0D\x20-\x7E]'), '-')
+        .replaceAll('\\', r'\\')
+        .replaceAll('(', r'\(')
+        .replaceAll(')', r'\)');
+  }
+
+  List<String> _wrapPdfLine(String text, {int maxChars = 88}) {
+    final cleaned = text.trim();
+    if (cleaned.isEmpty) return const [''];
+    final words = cleaned.split(RegExp(r'\s+'));
+    final lines = <String>[];
+    var line = '';
+    for (final word in words) {
+      if (line.isEmpty) {
+        line = word;
+      } else if (line.length + word.length + 1 <= maxChars) {
+        line = '$line $word';
+      } else {
+        lines.add(line);
+        line = word;
+      }
+    }
+    if (line.isNotEmpty) lines.add(line);
+    return lines;
+  }
+
+  Uint8List _buildReportPdfBytes({
+    required Event event,
+    required String executiveSummary,
+    required String attendance,
+    required String programAgenda,
+    required String outcomesLearnings,
+    required String followUp,
+    required String appendix,
+  }) {
+    final lines = <String>[];
+
+    void addLine(String line) => lines.add(line);
+
+    void addWrapped(String text) {
+      for (final line in text.split('\n')) {
+        lines.addAll(_wrapPdfLine(line));
+      }
+    }
+
+    void addSection(String title, String text) {
+      addLine('');
+      addLine(title);
+      if (text.trim().isEmpty) {
+        addLine('-');
+      } else {
+        addWrapped(text);
+      }
+    }
+
+    addLine('Event Report');
+    addLine('');
+    addLine('Event: ${event.title}');
+    addLine('Date: ${DateFormat('yyyy-MM-dd').format(event.startTime)}');
+    addLine('Venue: ${event.venueName.isEmpty ? '-' : event.venueName}');
+    addLine(
+      'Facilitator: ${event.facilitator?.trim().isNotEmpty == true ? event.facilitator!.trim() : '-'}',
+    );
+    addLine(
+      'Report submitted on: ${DateFormat('yyyy-MM-dd').format(DateTime.now())}',
+    );
+    addSection('Executive Summary', executiveSummary);
+    addSection('Attendance', attendance);
+    addSection('Program / Agenda', programAgenda);
+    addSection('Outcomes and Learnings', outcomesLearnings);
+    if (followUp.trim().isNotEmpty) addSection('Follow-up', followUp);
+    if (appendix.trim().isNotEmpty) addSection('Appendix', appendix);
+
+    const pageLineLimit = 52;
+    final pages = <List<String>>[];
+    for (var i = 0; i < lines.length; i += pageLineLimit) {
+      pages.add(
+        lines.sublist(
+          i,
+          i + pageLineLimit > lines.length ? lines.length : i + pageLineLimit,
+        ),
+      );
+    }
+    if (pages.isEmpty) pages.add(const ['Event Report']);
+
+    final objects = <String>[];
+    final pageObjectIds = <int>[];
+    final contentObjectIds = <int>[];
+    final fontObjectId = 3 + pages.length * 2;
+
+    objects.add('<< /Type /Catalog /Pages 2 0 R >>');
+
+    for (var i = 0; i < pages.length; i++) {
+      final pageId = 3 + i * 2;
+      final contentId = pageId + 1;
+      pageObjectIds.add(pageId);
+      contentObjectIds.add(contentId);
+    }
+
+    objects.add(
+      '<< /Type /Pages /Kids [${pageObjectIds.map((id) => '$id 0 R').join(' ')}] /Count ${pages.length} >>',
+    );
+
+    for (var i = 0; i < pages.length; i++) {
+      final content = StringBuffer()
+        ..writeln('BT')
+        ..writeln('/F1 10 Tf')
+        ..writeln('50 792 Td')
+        ..writeln('14 TL');
+      for (final line in pages[i]) {
+        content.writeln('(${_pdfText(line)}) Tj');
+        content.writeln('T*');
+      }
+      content.writeln('ET');
+      final contentText = content.toString();
+
+      objects.add(
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 $fontObjectId 0 R >> >> /Contents ${contentObjectIds[i]} 0 R >>',
+      );
+      objects.add(
+        '<< /Length ${utf8.encode(contentText).length} >>\nstream\n$contentText'
+        'endstream',
+      );
+    }
+
+    objects.add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+
+    final out = StringBuffer('%PDF-1.4\n');
+    final offsets = <int>[0];
+    var byteOffset = utf8.encode(out.toString()).length;
+    for (var i = 0; i < objects.length; i++) {
+      offsets.add(byteOffset);
+      final objectText = '${i + 1} 0 obj\n${objects[i]}\nendobj\n';
+      out.write(objectText);
+      byteOffset += utf8.encode(objectText).length;
+    }
+    final xrefOffset = byteOffset;
+    out.writeln('xref');
+    out.writeln('0 ${objects.length + 1}');
+    out.writeln('0000000000 65535 f ');
+    for (var i = 1; i < offsets.length; i++) {
+      out.writeln('${offsets[i].toString().padLeft(10, '0')} 00000 n ');
+    }
+    out.writeln('trailer');
+    out.writeln('<< /Size ${objects.length + 1} /Root 1 0 R >>');
+    out.writeln('startxref');
+    out.writeln(xrefOffset);
+    out.writeln('%%EOF');
+
+    return Uint8List.fromList(utf8.encode(out.toString()));
   }
 
   String _extractError(
@@ -657,22 +814,24 @@ class _EventsScreenState extends State<EventsScreen>
   }
 
   Future<void> _uploadReport(Event event) async {
-    String? reportPath;
-    String? reportName;
+    final executiveSummaryCtrl = TextEditingController();
+    final programAgendaCtrl = TextEditingController();
+    final outcomesLearningsCtrl = TextEditingController();
+    final followUpCtrl = TextEditingController();
+    final appendixCtrl = TextEditingController();
     String? attendancePath;
     String? attendanceName;
     var attendanceNotApplicable = false;
     var submitting = false;
     final expectedName = _expectedReportFilename(event);
+    final hasExistingReport = event.reportFileId?.trim().isNotEmpty ?? false;
 
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
           title: Text(
-            (event.reportFileId?.trim().isNotEmpty ?? false)
-                ? 'Replace Report'
-                : 'Upload Report',
+            hasExistingReport ? 'Replace Report' : 'Submit Event Report',
           ),
           content: SingleChildScrollView(
             child: Column(
@@ -680,36 +839,28 @@ class _EventsScreenState extends State<EventsScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'The report will be uploaded as:',
+                  'Event (cover details)',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  expectedName,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+                  '${event.title} · ${DateFormat('yyyy-MM-dd').format(event.startTime)} · ${event.venueName.isEmpty ? '—' : event.venueName} · ${event.facilitator?.trim().isNotEmpty == true ? event.facilitator!.trim() : '—'}',
+                  style: Theme.of(ctx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: submitting
-                      ? null
-                      : () async {
-                          final result = await FilePicker.platform.pickFiles(
-                            type: FileType.custom,
-                            allowedExtensions: const ['pdf'],
-                          );
-                          final picked = result?.files.single;
-                          if (picked?.path == null) return;
-                          setLocal(() {
-                            reportPath = picked!.path!;
-                            reportName = picked.name;
-                          });
-                        },
-                  icon: const Icon(Icons.upload_file_outlined),
-                  label: Text(
-                    reportName == null ? 'Choose report PDF' : reportName!,
+                TextField(
+                  controller: executiveSummaryCtrl,
+                  minLines: 3,
+                  maxLines: 5,
+                  decoration: const InputDecoration(
+                    labelText: 'Executive summary (required)',
+                    helperText: 'Brief overview, goal, and main outcome',
+                    hintText: 'e.g. The workshop aimed to… and achieved…',
                   ),
                 ),
                 const SizedBox(height: 16),
+                Text('Attendance', style: Theme.of(ctx).textTheme.titleSmall),
+                const SizedBox(height: 4),
                 CheckboxListTile(
                   value: attendanceNotApplicable,
                   onChanged: submitting
@@ -724,13 +875,13 @@ class _EventsScreenState extends State<EventsScreen>
                           });
                         },
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Attendance not applicable'),
+                  title: const Text('Not applicable'),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   attendanceNotApplicable
-                      ? 'Existing attendance will be removed when you submit.'
-                      : 'Upload a PDF, Word, or Excel file unless not applicable.',
+                      ? 'No attendance document will be stored for this event. Any previous attendance file will be removed when you submit.'
+                      : 'Upload a PDF, Word, or Excel file (max 10 MB), unless you tick Not applicable above.',
                   style: Theme.of(ctx).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
@@ -750,8 +901,15 @@ class _EventsScreenState extends State<EventsScreen>
                           );
                           final picked = result?.files.single;
                           if (picked?.path == null) return;
+                          if (picked!.size > 10 * 1024 * 1024) {
+                            _showMessage(
+                              'Attendance file must be 10 MB or smaller.',
+                              isError: true,
+                            );
+                            return;
+                          }
                           setLocal(() {
-                            attendancePath = picked!.path!;
+                            attendancePath = picked.path!;
                             attendanceName = picked.name;
                           });
                         },
@@ -764,6 +922,90 @@ class _EventsScreenState extends State<EventsScreen>
                               : 'Choose attendance file')
                         : attendanceName!,
                   ),
+                ),
+                if (attendanceName != null) ...[
+                  const SizedBox(height: 6),
+                  TextButton(
+                    onPressed: submitting
+                        ? null
+                        : () {
+                            setLocal(() {
+                              attendancePath = null;
+                              attendanceName = null;
+                            });
+                          },
+                    child: const Text('Remove file'),
+                  ),
+                ],
+                if ((event.attendanceFileName?.trim().isNotEmpty ?? false) &&
+                    attendanceName == null &&
+                    !attendanceNotApplicable) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Current attendance file on record: ${event.attendanceFileName}. Upload a new file here to replace it, or tick Not applicable to remove it on submit.',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  if (_canViewAttendance(event))
+                    TextButton(
+                      onPressed: () => _openExternalLink(
+                        event.attendanceWebViewLink ?? '',
+                        fallbackFileId: event.attendanceFileId,
+                      ),
+                      child: const Text('View current attendance'),
+                    ),
+                ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: programAgendaCtrl,
+                  minLines: 4,
+                  maxLines: 7,
+                  decoration: const InputDecoration(
+                    labelText: 'Program / agenda (required)',
+                    helperText: 'Sessions or activities with times',
+                    hintText: 'e.g. 10:00-10:30 Intro, 10:30-12:00 Session 1…',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: outcomesLearningsCtrl,
+                  minLines: 4,
+                  maxLines: 7,
+                  decoration: const InputDecoration(
+                    labelText: 'Outcomes and learnings (required)',
+                    helperText: 'Key takeaways and feedback highlights',
+                    hintText: 'e.g. Participants reported… Next steps include…',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: followUpCtrl,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Follow-up (optional)',
+                    helperText: 'Action items or next steps',
+                    hintText: 'e.g. Send follow-up survey by…',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: appendixCtrl,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Appendix (optional)',
+                    helperText:
+                        'Any additional notes, photos summary, or supporting material',
+                    hintText:
+                        'e.g. Key photos uploaded separately; feedback quotes…',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Report will be saved as PDF: $expectedName',
+                  style: Theme.of(
+                    ctx,
+                  ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -779,9 +1021,15 @@ class _EventsScreenState extends State<EventsScreen>
                   : () async {
                       final hasExistingAttendance =
                           event.attendanceFileId?.trim().isNotEmpty ?? false;
-                      if (reportPath == null) {
+                      final executiveSummary = executiveSummaryCtrl.text.trim();
+                      final programAgenda = programAgendaCtrl.text.trim();
+                      final outcomesLearnings = outcomesLearningsCtrl.text
+                          .trim();
+                      if (executiveSummary.isEmpty ||
+                          programAgenda.isEmpty ||
+                          outcomesLearnings.isEmpty) {
                         _showMessage(
-                          'Choose a report PDF first.',
+                          'Executive summary, program / agenda, and outcomes are required.',
                           isError: true,
                         );
                         return;
@@ -797,10 +1045,25 @@ class _EventsScreenState extends State<EventsScreen>
                       }
                       setLocal(() => submitting = true);
                       try {
+                        final attendanceText = attendanceNotApplicable
+                            ? 'Not applicable.'
+                            : attendancePath != null
+                            ? 'Supporting attendance document uploaded with this submission: $attendanceName'
+                            : 'Supporting attendance document on file: ${event.attendanceFileName?.trim() ?? ''}';
+                        final reportBytes = _buildReportPdfBytes(
+                          event: event,
+                          executiveSummary: executiveSummary,
+                          attendance: attendanceText,
+                          programAgenda: programAgenda,
+                          outcomesLearnings: outcomesLearnings,
+                          followUp: followUpCtrl.text.trim(),
+                          appendix: appendixCtrl.text.trim(),
+                        );
                         final payload = <String, dynamic>{
-                          'file': await MultipartFile.fromFile(
-                            reportPath!,
+                          'file': MultipartFile.fromBytes(
+                            reportBytes,
                             filename: expectedName,
+                            contentType: DioMediaType('application', 'pdf'),
                           ),
                         };
                         if (attendanceNotApplicable) {
@@ -831,12 +1094,22 @@ class _EventsScreenState extends State<EventsScreen>
                         );
                       }
                     },
-              child: Text(submitting ? 'Uploading...' : 'Upload'),
+              child: Text(
+                submitting
+                    ? 'Generating & uploading...'
+                    : 'Generate PDF & upload',
+              ),
             ),
           ],
         ),
       ),
     );
+
+    executiveSummaryCtrl.dispose();
+    programAgendaCtrl.dispose();
+    outcomesLearningsCtrl.dispose();
+    followUpCtrl.dispose();
+    appendixCtrl.dispose();
   }
 
   Future<void> _closeEvent(Event event) async {
