@@ -115,15 +115,23 @@ async def require_admin_or_registrar(
     return user
 
 
+async def require_admin_only(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> User:
+    user = await get_current_user(credentials)
+    if (user.role or "").strip().lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return user
+
+
 # Roles that may access IQAC Data Collection (criteria, upload/list/download/delete).
 # Frontend must mirror this for sidebar visibility and route guard (see ROLES_WITH_IQAC_ACCESS in Client).
-IQAC_ALLOWED_ROLES = frozenset(
-    {"iqac", "faculty", "admin", "registrar", "vice_chancellor", "deputy_registrar", "finance_team"}
-)
-# Faculty may upload and view but not delete; must match Client ROLES_WITH_IQAC_DELETE_ACCESS.
-IQAC_DELETE_ALLOWED_ROLES = frozenset(
-    {"iqac", "admin", "registrar", "vice_chancellor", "deputy_registrar", "finance_team"}
-)
+IQAC_ALLOWED_ROLES = frozenset({"iqac"})
+# Must match Client ROLES_WITH_IQAC_DELETE_ACCESS.
+IQAC_DELETE_ALLOWED_ROLES = frozenset({"iqac"})
 
 
 async def require_iqac(

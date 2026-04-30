@@ -247,9 +247,9 @@ export default function App() {
   });
   const REQUIREMENT_OPTIONS = [
     { key: "poster_required", type: "poster", label: "Poster" },
-    { key: "video_required", type: "video", label: "Videoshoot" },
+    { key: "video_required", type: "video", label: "Videography" },
     { key: "linkedin_post", type: "linkedin", label: "Social Media Post" },
-    { key: "photography", type: "photography", label: "Photoshoot / Photo upload" },
+    { key: "photography", type: "photography", label: "Photography / Photo upload" },
     { key: "recording", type: "recording", label: "Video Upload" }
   ];
   const MARKETING_REQUIREMENT_GROUPS = [
@@ -265,8 +265,8 @@ export default function App() {
       key: "during_event",
       title: "During Event",
       fields: [
-        { key: "photo", label: "Photoshoot" },
-        { key: "video", label: "Videoshoot" }
+        { key: "photo", label: "Photography" },
+        { key: "video", label: "Videography" }
       ]
     },
     {
@@ -461,17 +461,13 @@ export default function App() {
   const isItRole = normalizedUserRole === "it";
   const isTransportRole = normalizedUserRole === "transport";
   const canAccessAdminConsole = isAdmin;
-  const canAccessCalendarUpdates =
-    isAdmin ||
-    isRegistrar ||
-    isViceChancellor ||
-    isDeputyRegistrar ||
-    isFinanceTeam;
+  const canAccessCalendarUpdates = isAdmin;
   const canAccessUserApprovals = isAdmin;
   const canAccessApprovals = isRegistrarDashboard;
   const canAccessRequirements =
     isFacilityManagerRole || isMarketingRole || isItRole || isTransportRole;
   const canAccessIqac = ROLES_WITH_IQAC_ACCESS.includes(normalizedUserRole);
+  const canShowIqacDataCollection = canAccessIqac;
   const canDeleteIqacFiles = ROLES_WITH_IQAC_DELETE_ACCESS.includes(normalizedUserRole);
   const defaultFacilitator = (user?.name || "").trim();
 
@@ -1937,14 +1933,14 @@ export default function App() {
       (activeView === "approvals" && !canAccessApprovals) ||
       (activeView === "requirements" && !canAccessRequirements) ||
       (activeView === "event-reports" && !isAdmin && !isRegistrarDashboard) ||
-      (activeView === "iqac-data" && !canAccessIqac) ||
+      (activeView === "iqac-data" && !canShowIqacDataCollection) ||
       (activeView === "calendar-updates" && !canAccessCalendarUpdates) ||
       (activeView === "user-approvals" && !canAccessUserApprovals) ||
       (activeView === "admin" && !canAccessAdminConsole)
     ) {
       navigate(ROUTES.DASHBOARD);
     }
-  }, [activeView, canAccessApprovals, canAccessRequirements, canAccessIqac, canAccessCalendarUpdates, canAccessUserApprovals, canAccessAdminConsole, isAdmin, isRegistrarDashboard, navigate]);
+  }, [activeView, canAccessApprovals, canAccessRequirements, canShowIqacDataCollection, canAccessCalendarUpdates, canAccessUserApprovals, canAccessAdminConsole, isAdmin, isRegistrarDashboard, navigate]);
 
   useEffect(() => {
     const showApprovalsOrRequirements =
@@ -4745,7 +4741,7 @@ export default function App() {
       if (item.id === "requirements" && !canAccessRequirements) {
         return false;
       }
-      if (item.id === "iqac-data" && !canAccessIqac) {
+      if (item.id === "iqac-data" && !canShowIqacDataCollection) {
         return false;
       }
       return true;
@@ -6953,7 +6949,7 @@ export default function App() {
                             checked={itForm.pa_system}
                             onChange={handleItToggle("pa_system")}
                           />
-                          PA System
+                          Audio system
                         </label>
                         <label>
                           <input
@@ -7149,7 +7145,7 @@ export default function App() {
                         </ul>
                       ) : null}
                     </div>
-                    {canAccessIqac ? (
+                    {canShowIqacDataCollection ? (
                       <div className="form-field report-iqac-section">
                         <span>IQAC Data Collection (optional)</span>
                         <p className="form-hint">
@@ -7243,7 +7239,7 @@ export default function App() {
       }
 
       if (isIqacData) {
-        if (!canAccessIqac) {
+        if (!canShowIqacDataCollection) {
           return (
             <div className="admin-empty">
               <p>IQAC access required.</p>
@@ -8740,7 +8736,7 @@ export default function App() {
               </p>
               <p className="form-hint" style={{ marginBottom: "1rem" }}>
                 Upload pre-event items (poster, pre-event social) before the event starts. Post-event items (video upload,
-                post social, post-event photos) after the event ends. Videoshoot and on-site photoshoot are handled during
+                post social, post-event photos) after the event ends. Videography and on-site photography are handled during
                 the event and do not use this form. You can save in multiple visits (max 25MB per file).
               </p>
               <form className="event-form" onSubmit={submitMarketingDeliverable}>

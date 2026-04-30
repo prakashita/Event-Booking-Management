@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date as DateType, time, datetime
-from typing import Generic, List, Literal, Optional, TypeVar, Union
+from typing import Any, Dict, Generic, List, Literal, Optional, TypeVar, Union
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -165,6 +165,44 @@ class UserAdminResponse(BaseModel):
     requested_role: Optional[str] = None
     created_at: datetime
     last_seen: Optional[datetime] = None
+
+
+IQACSSRSectionKey = Literal["executive_summary", "university_profile", "extended_profile", "qif"]
+
+
+class IQACSSRSectionUpdate(BaseModel):
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class IQACSSRSectionResponse(BaseModel):
+    id: Optional[str] = None
+    section_key: IQACSSRSectionKey
+    data: Dict[str, Any] = Field(default_factory=dict)
+    no_changes: bool = False
+    message: Optional[str] = None
+    created_by: Optional[str] = None
+    created_by_name: Optional[str] = None
+    updated_by: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    updated_by_email: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class IQACSSRHistoryResponse(BaseModel):
+    id: str
+    section_key: str
+    previous_data: Dict[str, Any] = Field(default_factory=dict)
+    new_data: Dict[str, Any] = Field(default_factory=dict)
+    changed_fields: List[str] = Field(default_factory=list)
+    field_diffs: Dict[str, Any] = Field(default_factory=dict)
+    change_summary: Optional[str] = None
+    edited_by: str
+    edited_by_user_id: Optional[str] = None
+    edited_by_name: Optional[str] = None
+    edited_by_email: Optional[str] = None
+    edited_at: datetime
+    expires_at: Optional[datetime] = None
 
 
 class UserRoleUpdate(BaseModel):
