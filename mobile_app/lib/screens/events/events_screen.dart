@@ -829,279 +829,467 @@ class _EventsScreenState extends State<EventsScreen>
     await showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: Text(
-            hasExistingReport ? 'Replace Report' : 'Submit Event Report',
-          ),
-          content: SingleChildScrollView(
+        builder: (ctx, setLocal) {
+          void closeDialog() {
+            FocusScope.of(ctx).unfocus();
+            if (!ctx.mounted) return;
+            Navigator.of(ctx).pop();
+          }
+
+          final colorScheme = Theme.of(ctx).colorScheme;
+          return Dialog(
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Event (cover details)',
-                  style: Theme.of(ctx).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${event.title} · ${DateFormat('yyyy-MM-dd').format(event.startTime)} · ${event.venueName.isEmpty ? '—' : event.venueName} · ${event.facilitator?.trim().isNotEmpty == true ? event.facilitator!.trim() : '—'}',
-                  style: Theme.of(ctx).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: executiveSummaryCtrl,
-                  minLines: 3,
-                  maxLines: 5,
-                  decoration: const InputDecoration(
-                    labelText: 'Executive summary (required)',
-                    helperText: 'Brief overview, goal, and main outcome',
-                    hintText: 'e.g. The workshop aimed to… and achieved…',
+                // ── Header ──
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 20, 8, 12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.primaryContainer,
                   ),
-                ),
-                const SizedBox(height: 16),
-                Text('Attendance', style: Theme.of(ctx).textTheme.titleSmall),
-                const SizedBox(height: 4),
-                CheckboxListTile(
-                  value: attendanceNotApplicable,
-                  onChanged: submitting
-                      ? null
-                      : (value) {
-                          setLocal(() {
-                            attendanceNotApplicable = value ?? false;
-                            if (attendanceNotApplicable) {
-                              attendancePath = null;
-                              attendanceName = null;
-                            }
-                          });
-                        },
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Not applicable'),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  attendanceNotApplicable
-                      ? 'No attendance document will be stored for this event. Any previous attendance file will be removed when you submit.'
-                      : 'Upload a PDF, Word, or Excel file (max 10 MB), unless you tick Not applicable above.',
-                  style: Theme.of(ctx).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: submitting || attendanceNotApplicable
-                      ? null
-                      : () async {
-                          final result = await FilePicker.platform.pickFiles(
-                            type: FileType.custom,
-                            allowedExtensions: const [
-                              'pdf',
-                              'doc',
-                              'docx',
-                              'xls',
-                              'xlsx',
-                            ],
-                          );
-                          final picked = result?.files.single;
-                          if (picked?.path == null) return;
-                          if (picked!.size > 10 * 1024 * 1024) {
-                            _showMessage(
-                              'Attendance file must be 10 MB or smaller.',
-                              isError: true,
-                            );
-                            return;
-                          }
-                          setLocal(() {
-                            attendancePath = picked.path!;
-                            attendanceName = picked.name;
-                          });
-                        },
-                  icon: const Icon(Icons.attach_file),
-                  label: Text(
-                    attendanceName == null
-                        ? ((event.attendanceFileName?.trim().isNotEmpty ??
-                                  false)
-                              ? 'Replace attendance file'
-                              : 'Choose attendance file')
-                        : attendanceName!,
-                  ),
-                ),
-                if (attendanceName != null) ...[
-                  const SizedBox(height: 6),
-                  TextButton(
-                    onPressed: submitting
-                        ? null
-                        : () {
-                            setLocal(() {
-                              attendancePath = null;
-                              attendanceName = null;
-                            });
-                          },
-                    child: const Text('Remove file'),
-                  ),
-                ],
-                if ((event.attendanceFileName?.trim().isNotEmpty ?? false) &&
-                    attendanceName == null &&
-                    !attendanceNotApplicable) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Current attendance file on record: ${event.attendanceFileName}. Upload a new file here to replace it, or tick Not applicable to remove it on submit.',
-                    style: Theme.of(ctx).textTheme.bodySmall,
-                  ),
-                  if (_canViewAttendance(event))
-                    TextButton(
-                      onPressed: () => _openExternalLink(
-                        event.attendanceWebViewLink ?? '',
-                        fallbackFileId: event.attendanceFileId,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.description_outlined,
+                        color: colorScheme.onPrimaryContainer,
                       ),
-                      child: const Text('View current attendance'),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          hasExistingReport
+                              ? 'Replace Report'
+                              : 'Submit Event Report',
+                          style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                            color: colorScheme.onPrimaryContainer,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: submitting ? null : closeDialog,
+                        icon: const Icon(Icons.close, size: 20),
+                        color: colorScheme.onPrimaryContainer,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
+                  ),
+                ),
+                // ── Scrollable form ──
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Cover details
+                        _SectionLabel(
+                          icon: Icons.event,
+                          label: 'Event Details',
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHighest
+                                .withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${event.title} · ${DateFormat('yyyy-MM-dd').format(event.startTime)} · ${event.venueName.isEmpty ? '—' : event.venueName} · ${event.facilitator?.trim().isNotEmpty == true ? event.facilitator!.trim() : '—'}',
+                            style: Theme.of(ctx).textTheme.bodySmall,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Executive summary
+                        _SectionLabel(
+                          icon: Icons.summarize,
+                          label: 'Executive Summary *',
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: executiveSummaryCtrl,
+                          minLines: 3,
+                          maxLines: 5,
+                          decoration: const InputDecoration(
+                            labelText: 'Executive summary (required)',
+                            helperText:
+                                'Brief overview, goal, and main outcome',
+                            hintText:
+                                'e.g. The workshop aimed to… and achieved…',
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Attendance
+                        _SectionLabel(
+                          icon: Icons.how_to_reg,
+                          label: 'Attendance',
+                        ),
+                        const SizedBox(height: 8),
+                        CheckboxListTile(
+                          value: attendanceNotApplicable,
+                          onChanged: submitting
+                              ? null
+                              : (value) {
+                                  setLocal(() {
+                                    attendanceNotApplicable = value ?? false;
+                                    if (attendanceNotApplicable) {
+                                      attendancePath = null;
+                                      attendanceName = null;
+                                    }
+                                  });
+                                },
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: const Text('Not applicable'),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          attendanceNotApplicable
+                              ? 'No attendance document will be stored. Any previous file will be removed on submit.'
+                              : 'Upload a PDF, Word, or Excel file (max 10 MB), or tick Not applicable.',
+                          style: Theme.of(ctx).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: submitting || attendanceNotApplicable
+                                ? null
+                                : () async {
+                                    final result = await FilePicker.platform
+                                        .pickFiles(
+                                          type: FileType.custom,
+                                          allowedExtensions: const [
+                                            'pdf',
+                                            'doc',
+                                            'docx',
+                                            'xls',
+                                            'xlsx',
+                                          ],
+                                        );
+                                    final picked = result?.files.single;
+                                    if (picked?.path == null) return;
+                                    if (picked!.size > 10 * 1024 * 1024) {
+                                      _showMessage(
+                                        'Attendance file must be 10 MB or smaller.',
+                                        isError: true,
+                                      );
+                                      return;
+                                    }
+                                    setLocal(() {
+                                      attendancePath = picked.path!;
+                                      attendanceName = picked.name;
+                                    });
+                                  },
+                            icon: const Icon(Icons.attach_file),
+                            label: Text(
+                              attendanceName == null
+                                  ? ((event.attendanceFileName
+                                                ?.trim()
+                                                .isNotEmpty ??
+                                            false)
+                                        ? 'Replace attendance file'
+                                        : 'Choose attendance file')
+                                  : attendanceName!,
+                            ),
+                          ),
+                        ),
+                        if (attendanceName != null) ...[
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: submitting
+                                  ? null
+                                  : () {
+                                      setLocal(() {
+                                        attendancePath = null;
+                                        attendanceName = null;
+                                      });
+                                    },
+                              child: const Text('Remove file'),
+                            ),
+                          ),
+                        ],
+                        if ((event.attendanceFileName?.trim().isNotEmpty ??
+                                false) &&
+                            attendanceName == null &&
+                            !attendanceNotApplicable) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerHighest
+                                  .withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Current: ${event.attendanceFileName}',
+                                  style: Theme.of(ctx).textTheme.bodySmall,
+                                ),
+                                if (_canViewAttendance(event))
+                                  TextButton(
+                                    onPressed: () => _openExternalLink(
+                                      event.attendanceWebViewLink ?? '',
+                                      fallbackFileId: event.attendanceFileId,
+                                    ),
+                                    child: const Text(
+                                      'View current attendance',
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 20),
+
+                        // Program / agenda
+                        _SectionLabel(
+                          icon: Icons.schedule,
+                          label: 'Program / Agenda *',
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: programAgendaCtrl,
+                          minLines: 4,
+                          maxLines: 7,
+                          decoration: const InputDecoration(
+                            labelText: 'Program / agenda (required)',
+                            helperText: 'Sessions or activities with times',
+                            hintText:
+                                'e.g. 10:00-10:30 Intro, 10:30-12:00 Session 1…',
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Outcomes
+                        _SectionLabel(
+                          icon: Icons.lightbulb_outline,
+                          label: 'Outcomes & Learnings *',
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: outcomesLearningsCtrl,
+                          minLines: 4,
+                          maxLines: 7,
+                          decoration: const InputDecoration(
+                            labelText: 'Outcomes and learnings (required)',
+                            helperText: 'Key takeaways and feedback highlights',
+                            hintText:
+                                'e.g. Participants reported… Next steps include…',
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Follow-up
+                        _SectionLabel(
+                          icon: Icons.follow_the_signs,
+                          label: 'Follow-up',
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: followUpCtrl,
+                          minLines: 2,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            labelText: 'Follow-up (optional)',
+                            helperText: 'Action items or next steps',
+                            hintText: 'e.g. Send follow-up survey by…',
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Appendix
+                        _SectionLabel(icon: Icons.note_add, label: 'Appendix'),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: appendixCtrl,
+                          minLines: 2,
+                          maxLines: 4,
+                          decoration: const InputDecoration(
+                            labelText: 'Appendix (optional)',
+                            helperText:
+                                'Any additional notes, photos summary, or supporting material',
+                            hintText:
+                                'e.g. Key photos uploaded separately; feedback quotes…',
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // PDF filename note
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: colorScheme.tertiaryContainer.withValues(
+                              alpha: 0.5,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.picture_as_pdf,
+                                size: 16,
+                                color: colorScheme.onTertiaryContainer,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Saved as: $expectedName',
+                                  style: Theme.of(ctx).textTheme.bodySmall
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: colorScheme.onTertiaryContainer,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                     ),
-                ],
-                const SizedBox(height: 16),
-                TextField(
-                  controller: programAgendaCtrl,
-                  minLines: 4,
-                  maxLines: 7,
-                  decoration: const InputDecoration(
-                    labelText: 'Program / agenda (required)',
-                    helperText: 'Sessions or activities with times',
-                    hintText: 'e.g. 10:00-10:30 Intro, 10:30-12:00 Session 1…',
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: outcomesLearningsCtrl,
-                  minLines: 4,
-                  maxLines: 7,
-                  decoration: const InputDecoration(
-                    labelText: 'Outcomes and learnings (required)',
-                    helperText: 'Key takeaways and feedback highlights',
-                    hintText: 'e.g. Participants reported… Next steps include…',
+                // ── Sticky action bar ──
+                const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: submitting ? null : closeDialog,
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: submitting
+                              ? null
+                              : () async {
+                                  final hasExistingAttendance =
+                                      event.attendanceFileId
+                                          ?.trim()
+                                          .isNotEmpty ??
+                                      false;
+                                  final executiveSummary = executiveSummaryCtrl
+                                      .text
+                                      .trim();
+                                  final programAgenda = programAgendaCtrl.text
+                                      .trim();
+                                  final outcomesLearnings =
+                                      outcomesLearningsCtrl.text.trim();
+                                  if (executiveSummary.isEmpty ||
+                                      programAgenda.isEmpty ||
+                                      outcomesLearnings.isEmpty) {
+                                    _showMessage(
+                                      'Executive summary, program / agenda, and outcomes are required.',
+                                      isError: true,
+                                    );
+                                    return;
+                                  }
+                                  if (!attendanceNotApplicable &&
+                                      attendancePath == null &&
+                                      !hasExistingAttendance) {
+                                    _showMessage(
+                                      'Upload an attendance file or mark it as not applicable.',
+                                      isError: true,
+                                    );
+                                    return;
+                                  }
+                                  setLocal(() => submitting = true);
+                                  try {
+                                    final attendanceText =
+                                        attendanceNotApplicable
+                                        ? 'Not applicable.'
+                                        : attendancePath != null
+                                        ? 'Supporting attendance document uploaded with this submission: $attendanceName'
+                                        : 'Supporting attendance document on file: ${event.attendanceFileName?.trim() ?? ''}';
+                                    final reportBytes = _buildReportPdfBytes(
+                                      event: event,
+                                      executiveSummary: executiveSummary,
+                                      attendance: attendanceText,
+                                      programAgenda: programAgenda,
+                                      outcomesLearnings: outcomesLearnings,
+                                      followUp: followUpCtrl.text.trim(),
+                                      appendix: appendixCtrl.text.trim(),
+                                    );
+                                    final payload = <String, dynamic>{
+                                      'file': MultipartFile.fromBytes(
+                                        reportBytes,
+                                        filename: expectedName,
+                                        contentType: DioMediaType(
+                                          'application',
+                                          'pdf',
+                                        ),
+                                      ),
+                                    };
+                                    if (attendanceNotApplicable) {
+                                      payload['attendance_not_applicable'] =
+                                          '1';
+                                    } else if (attendancePath != null) {
+                                      payload['attendance_file'] =
+                                          await MultipartFile.fromFile(
+                                            attendancePath!,
+                                            filename: attendanceName,
+                                          );
+                                    }
+                                    await _api
+                                        .postMultipart<Map<String, dynamic>>(
+                                          '/events/${event.id}/report',
+                                          FormData.fromMap(payload),
+                                        );
+                                    if (!mounted) return;
+                                    Navigator.of(
+                                      context,
+                                      rootNavigator: true,
+                                    ).pop();
+                                    await _refreshCurrentTab();
+                                    _showMessage(
+                                      'Report uploaded.',
+                                      isSuccess: true,
+                                    );
+                                  } catch (e) {
+                                    setLocal(() => submitting = false);
+                                    _showMessage(
+                                      _extractError(
+                                        e,
+                                        fallback: 'Unable to upload report.',
+                                      ),
+                                      isError: true,
+                                    );
+                                  }
+                                },
+                          child: Text(
+                            submitting
+                                ? 'Generating & uploading...'
+                                : 'Generate PDF & upload',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: followUpCtrl,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Follow-up (optional)',
-                    helperText: 'Action items or next steps',
-                    hintText: 'e.g. Send follow-up survey by…',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: appendixCtrl,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Appendix (optional)',
-                    helperText:
-                        'Any additional notes, photos summary, or supporting material',
-                    hintText:
-                        'e.g. Key photos uploaded separately; feedback quotes…',
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Report will be saved as PDF: $expectedName',
-                  style: Theme.of(
-                    ctx,
-                  ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
               ],
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: submitting ? null : () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: submitting
-                  ? null
-                  : () async {
-                      final hasExistingAttendance =
-                          event.attendanceFileId?.trim().isNotEmpty ?? false;
-                      final executiveSummary = executiveSummaryCtrl.text.trim();
-                      final programAgenda = programAgendaCtrl.text.trim();
-                      final outcomesLearnings = outcomesLearningsCtrl.text
-                          .trim();
-                      if (executiveSummary.isEmpty ||
-                          programAgenda.isEmpty ||
-                          outcomesLearnings.isEmpty) {
-                        _showMessage(
-                          'Executive summary, program / agenda, and outcomes are required.',
-                          isError: true,
-                        );
-                        return;
-                      }
-                      if (!attendanceNotApplicable &&
-                          attendancePath == null &&
-                          !hasExistingAttendance) {
-                        _showMessage(
-                          'Upload an attendance file or mark it as not applicable.',
-                          isError: true,
-                        );
-                        return;
-                      }
-                      setLocal(() => submitting = true);
-                      try {
-                        final attendanceText = attendanceNotApplicable
-                            ? 'Not applicable.'
-                            : attendancePath != null
-                            ? 'Supporting attendance document uploaded with this submission: $attendanceName'
-                            : 'Supporting attendance document on file: ${event.attendanceFileName?.trim() ?? ''}';
-                        final reportBytes = _buildReportPdfBytes(
-                          event: event,
-                          executiveSummary: executiveSummary,
-                          attendance: attendanceText,
-                          programAgenda: programAgenda,
-                          outcomesLearnings: outcomesLearnings,
-                          followUp: followUpCtrl.text.trim(),
-                          appendix: appendixCtrl.text.trim(),
-                        );
-                        final payload = <String, dynamic>{
-                          'file': MultipartFile.fromBytes(
-                            reportBytes,
-                            filename: expectedName,
-                            contentType: DioMediaType('application', 'pdf'),
-                          ),
-                        };
-                        if (attendanceNotApplicable) {
-                          payload['attendance_not_applicable'] = '1';
-                        } else if (attendancePath != null) {
-                          payload['attendance_file'] =
-                              await MultipartFile.fromFile(
-                                attendancePath!,
-                                filename: attendanceName,
-                              );
-                        }
-                        await _api.postMultipart<Map<String, dynamic>>(
-                          '/events/${event.id}/report',
-                          FormData.fromMap(payload),
-                        );
-                        if (!mounted) return;
-                        Navigator.of(context, rootNavigator: true).pop();
-                        await _refreshCurrentTab();
-                        _showMessage('Report uploaded.', isSuccess: true);
-                      } catch (e) {
-                        setLocal(() => submitting = false);
-                        _showMessage(
-                          _extractError(
-                            e,
-                            fallback: 'Unable to upload report.',
-                          ),
-                          isError: true,
-                        );
-                      }
-                    },
-              child: Text(
-                submitting
-                    ? 'Generating & uploading...'
-                    : 'Generate PDF & upload',
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
 
@@ -2070,6 +2258,30 @@ class _EventCard extends StatelessWidget {
         return const Color(0xFFF8FAFC); // slate-50
       default:
         return const Color(0xFFF8FAFC); // slate-50
+    }
+    
+    class _SectionLabel extends StatelessWidget {
+      const _SectionLabel({required this.icon, required this.label});
+      final IconData icon;
+      final String label;
+    
+      @override
+      Widget build(BuildContext context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return Row(
+          children: [
+            Icon(icon, size: 16, color: colorScheme.primary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ],
+        );
+      }
     }
   }
 
