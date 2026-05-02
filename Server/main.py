@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from database import init_db, close_db
 from event_status import update_event_statuses
-from routers import admin, approvals, auth, calendar, chat, events, facility, institution_calendar, invites, iqac, it, marketing, publications, transport, users, venues
+from routers import admin, approvals, auth, calendar, chat, events, facility, institution_calendar, invites, iqac, it, marketing, publications, student_achievements, transport, users, venues
 from routers.calendar import oauth_callback as google_calendar_oauth_callback
 from dotenv import load_dotenv
 from settings import load_settings
@@ -227,6 +227,7 @@ app.include_router(transport.router, prefix=API_PREFIX)
 app.include_router(invites.router, prefix=API_PREFIX)
 app.include_router(chat.router, prefix=API_PREFIX)
 app.include_router(publications.router, prefix=API_PREFIX)
+app.include_router(student_achievements.router, prefix=API_PREFIX)
 app.include_router(iqac.router, prefix=API_PREFIX)
 
 

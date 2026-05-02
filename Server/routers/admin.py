@@ -1,9 +1,10 @@
 from datetime import datetime
 
+from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from models import ApprovalRequest, Event, FacilityManagerRequest, InstitutionCalendarEntry, Invite, ItRequest, MarketingRequest, Publication, TransportRequest, User, Venue
-from routers.deps import require_admin, require_registrar_dashboard
+from models import ApprovalRequest, Event, FacilityManagerRequest, InstitutionCalendarEntry, Invite, ItRequest, MarketingRequest, Publication, StudentAchievement, TransportRequest, User, Venue
+from routers.deps import require_admin, require_admin_only, require_registrar_dashboard
 from schemas import (
     ApprovalRequestResponse,
     EventResponse,
@@ -15,6 +16,9 @@ from schemas import (
     MarketingRequestResponse,
     PaginatedResponse,
     PublicationResponse,
+    StudentAchievementFileResponse,
+    StudentAchievementResponse,
+    StudentAchievementStudentPayload,
     TransportRequestResponse,
     VenueResponse,
 )
@@ -396,6 +400,95 @@ def serialize_publication(item: Publication) -> PublicationResponse:
     )
 
 
+def serialize_student_achievement(item: StudentAchievement) -> StudentAchievementResponse:
+    attachments = list(getattr(item, "attachments", None) or [])
+    if not attachments:
+        attachments.extend(getattr(item, "assets", None) or [])
+        attachments.extend(getattr(item, "proofs", None) or [])
+    def student_name(student):
+        return (getattr(student, "student_name", None) or getattr(student, "name", None) or "").strip()
+
+    return StudentAchievementResponse(
+        id=str(item.id),
+        achievement_title=item.achievement_title or "Student Achievement",
+        students=[
+            StudentAchievementStudentPayload(
+                student_name=student_name(s),
+                batch=getattr(s, "batch", None),
+                course=getattr(s, "course", None),
+                name=getattr(s, "name", None),
+                registration_number=getattr(s, "registration_number", None),
+            )
+            for s in (item.students or [])
+        ],
+        activity_description=item.activity_description or item.detailed_writeup or item.brief_context,
+        additional_context_objective=item.additional_context_objective or item.additional_notes,
+        social_media_writeup=item.social_media_writeup or item.detailed_writeup,
+        attachments=[
+            StudentAchievementFileResponse(
+                file_id=f.file_id,
+                file_name=f.file_name,
+                web_view_link=f.web_view_link,
+                content_type=getattr(f, "content_type", None),
+                size=getattr(f, "size", None),
+                uploaded_at=f.uploaded_at,
+            )
+            for f in attachments
+        ],
+        iqac_criterion_id=item.iqac_criterion_id,
+        iqac_subfolder_id=item.iqac_subfolder_id,
+        iqac_item_id=item.iqac_item_id,
+        iqac_description=item.iqac_description,
+        department_programme=item.department_programme,
+        year_semester=item.year_semester,
+        faculty_mentor=item.faculty_mentor,
+        achievement_category=item.achievement_category,
+        achievement_date=item.achievement_date,
+        activity_name=item.activity_name,
+        organising_institution=item.organising_institution,
+        level=item.level,
+        award_recognition=item.award_recognition,
+        brief_context=item.brief_context,
+        detailed_writeup=item.detailed_writeup,
+        suggested_platforms=item.suggested_platforms or [],
+        preferred_posting_date=item.preferred_posting_date,
+        assets=[
+            StudentAchievementFileResponse(
+                file_id=f.file_id,
+                file_name=f.file_name,
+                web_view_link=f.web_view_link,
+                content_type=getattr(f, "content_type", None),
+                size=getattr(f, "size", None),
+                uploaded_at=f.uploaded_at,
+            )
+            for f in (item.assets or [])
+        ],
+        proofs=[
+            StudentAchievementFileResponse(
+                file_id=f.file_id,
+                file_name=f.file_name,
+                web_view_link=f.web_view_link,
+                content_type=getattr(f, "content_type", None),
+                size=getattr(f, "size", None),
+                uploaded_at=f.uploaded_at,
+            )
+            for f in (item.proofs or [])
+        ],
+        consent_confirmed=item.consent_confirmed,
+        additional_notes=item.additional_notes,
+        status=item.status,
+        created_by=item.created_by,
+        created_by_name=item.created_by_name,
+        created_by_email=item.created_by_email,
+        created_at=item.created_at,
+        updated_by=item.updated_by,
+        updated_by_name=item.updated_by_name,
+        updated_by_email=item.updated_by_email,
+        updated_at=item.updated_at,
+        audit_log=item.audit_log or [],
+    )
+
+
 @router.get("/overview")
 async def admin_overview(admin: User = Depends(require_admin)):
     return {
@@ -409,6 +502,7 @@ async def admin_overview(admin: User = Depends(require_admin)):
         "transport": await TransportRequest.find_all().count(),
         "invites": await Invite.find_all().count(),
         "publications": await Publication.find_all().count(),
+        "student_achievements": await StudentAchievement.find_all().count(),
         "institution_calendar": await InstitutionCalendarEntry.find_all().count(),
         "pending_user_approvals": await User.find(User.approval_status == "pending").count(),
     }
@@ -579,6 +673,25 @@ async def list_all_publications(
     next_offset = offset + limit if offset + limit < total else None
     return PaginatedResponse[PublicationResponse](
         items=[serialize_publication(item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+        next_offset=next_offset,
+    )
+
+
+@router.get("/student-achievements", response_model=PaginatedResponse[StudentAchievementResponse])
+async def list_all_student_achievements(
+    admin: User = Depends(require_admin),
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+):
+    query = StudentAchievement.find_all().sort("-created_at")
+    total = await query.count()
+    items = await query.skip(offset).limit(limit).to_list()
+    next_offset = offset + limit if offset + limit < total else None
+    return PaginatedResponse[StudentAchievementResponse](
+        items=[serialize_student_achievement(item) for item in items],
         total=total,
         limit=limit,
         offset=offset,
@@ -781,4 +894,17 @@ async def delete_publication(publication_id: str, admin: User = Depends(require_
         raise HTTPException(status_code=404, detail="Publication not found")
     await item.delete()
     return {"status": "deleted", "id": publication_id}
+
+
+@router.delete("/student-achievements/{achievement_id}")
+async def delete_student_achievement(achievement_id: str, admin: User = Depends(require_admin_only)):
+    try:
+        oid = PydanticObjectId(achievement_id)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="Student achievement not found") from exc
+    item = await StudentAchievement.get(oid)
+    if not item:
+        raise HTTPException(status_code=404, detail="Student achievement not found")
+    await item.delete()
+    return {"status": "deleted", "id": achievement_id}
 

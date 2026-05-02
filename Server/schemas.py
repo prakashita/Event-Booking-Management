@@ -893,4 +893,91 @@ class PublicationResponse(BaseModel):
     page_title: Optional[str] = None
 
 
+class StudentAchievementStudentPayload(BaseModel):
+    student_name: str = Field(default="", max_length=200)
+    batch: Optional[str] = Field(default=None, max_length=120)
+    course: Optional[str] = Field(default=None, max_length=200)
+    # Legacy input/response aliases retained for older records and clients.
+    name: Optional[str] = Field(default=None, max_length=200)
+    registration_number: Optional[str] = Field(default=None, max_length=120)
+
+
+class StudentAchievementFileResponse(BaseModel):
+    file_id: str
+    file_name: str
+    web_view_link: Optional[str] = None
+    content_type: Optional[str] = None
+    size: Optional[int] = None
+    uploaded_at: datetime
+
+
+class StudentAchievementPatch(BaseModel):
+    achievement_title: Optional[str] = Field(default=None, max_length=240)
+    students: Optional[List[StudentAchievementStudentPayload]] = None
+    activity_description: Optional[str] = Field(default=None, max_length=6000)
+    additional_context_objective: Optional[str] = Field(default=None, max_length=6000)
+    social_media_writeup: Optional[str] = Field(default=None, max_length=6000)
+    department_programme: Optional[str] = Field(default=None, max_length=200)
+    year_semester: Optional[str] = Field(default=None, max_length=120)
+    faculty_mentor: Optional[str] = Field(default=None, max_length=200)
+    achievement_category: Optional[str] = Field(default=None, max_length=80)
+    achievement_date: Optional[str] = Field(default=None, max_length=40)
+    activity_name: Optional[str] = Field(default=None, max_length=240)
+    organising_institution: Optional[str] = Field(default=None, max_length=240)
+    level: Optional[str] = Field(default=None, max_length=80)
+    award_recognition: Optional[str] = Field(default=None, max_length=240)
+    brief_context: Optional[str] = Field(default=None, max_length=2000)
+    detailed_writeup: Optional[str] = Field(default=None, max_length=6000)
+    suggested_platforms: Optional[List[str]] = None
+    iqac_criterion_id: Optional[str] = Field(default=None, max_length=40)
+    iqac_subfolder_id: Optional[str] = Field(default=None, max_length=40)
+    iqac_item_id: Optional[str] = Field(default=None, max_length=40)
+    iqac_description: Optional[str] = Field(default=None, max_length=500)
+    preferred_posting_date: Optional[str] = Field(default=None, max_length=40)
+    consent_confirmed: Optional[bool] = None
+    additional_notes: Optional[str] = Field(default=None, max_length=3000)
+    status: Optional[Literal["submitted", "reviewed", "posted"]] = None
+
+
+class StudentAchievementResponse(BaseModel):
+    id: str
+    achievement_title: str
+    students: List[StudentAchievementStudentPayload] = Field(default_factory=list)
+    activity_description: Optional[str] = None
+    additional_context_objective: Optional[str] = None
+    social_media_writeup: Optional[str] = None
+    attachments: List[StudentAchievementFileResponse] = Field(default_factory=list)
+    iqac_criterion_id: Optional[str] = None
+    iqac_subfolder_id: Optional[str] = None
+    iqac_item_id: Optional[str] = None
+    iqac_description: Optional[str] = None
+    department_programme: Optional[str] = None
+    year_semester: Optional[str] = None
+    faculty_mentor: Optional[str] = None
+    achievement_category: Optional[str] = None
+    achievement_date: Optional[str] = None
+    activity_name: Optional[str] = None
+    organising_institution: Optional[str] = None
+    level: Optional[str] = None
+    award_recognition: Optional[str] = None
+    brief_context: Optional[str] = None
+    detailed_writeup: Optional[str] = None
+    suggested_platforms: List[str] = Field(default_factory=list)
+    preferred_posting_date: Optional[str] = None
+    assets: List[StudentAchievementFileResponse] = Field(default_factory=list)
+    proofs: List[StudentAchievementFileResponse] = Field(default_factory=list)
+    consent_confirmed: bool
+    additional_notes: Optional[str] = None
+    status: str
+    created_by: str
+    created_by_name: Optional[str] = None
+    created_by_email: Optional[str] = None
+    created_at: datetime
+    updated_by: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    updated_by_email: Optional[str] = None
+    updated_at: datetime
+    audit_log: List[dict] = Field(default_factory=list)
+
+
 WorkflowActionThreadNode.model_rebuild()

@@ -17331,3 +17331,293 @@ button.marketing-attachment-remove {
   color: var(--ink-soft);
 }
 
+/* Student Achievements */
+.student-achievements-page {
+  gap: 20px;
+}
+
+.student-achievements-header,
+.student-achievements-toolbar,
+.student-achievements-list,
+.student-achievement-card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e4e8f0);
+  border-radius: 8px;
+}
+
+.student-achievements-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.05);
+}
+
+.student-achievements-header h2,
+.student-achievements-header p,
+.student-achievements-list h3,
+.student-achievement-main h3,
+.student-achievement-main p {
+  margin: 0;
+}
+
+.student-achievements-kicker {
+  color: var(--muted, #64748b);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.student-submit-top {
+  min-width: 250px;
+  justify-content: center;
+}
+
+.student-achievements-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.6fr) minmax(150px, 0.8fr) minmax(190px, 1fr) auto;
+  gap: 12px;
+  padding: 16px;
+}
+
+.student-achievements-toolbar input,
+.student-achievements-toolbar select,
+.student-row input,
+.student-achievement-form input,
+.student-achievement-form select,
+.student-achievement-form textarea {
+  border: 1px solid var(--border, #d8dee8);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  background: var(--surface, #fff);
+  color: var(--text, #111827);
+}
+
+.student-achievement-form textarea {
+  min-height: 128px;
+  resize: vertical;
+}
+
+.student-achievements-list {
+  padding: 16px;
+}
+
+.student-achievements-list-head,
+.student-achievement-main,
+.student-form-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.student-achievements-list-head {
+  margin-bottom: 12px;
+}
+
+.student-achievement-card {
+  padding: 18px;
+  margin-top: 12px;
+}
+
+.student-achievement-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.student-achievement-meta div {
+  min-width: 0;
+}
+
+.student-achievement-meta dt {
+  color: var(--muted, #64748b);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.student-achievement-meta dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.student-achievement-caption {
+  margin: 0 0 12px;
+  color: var(--muted, #475569);
+  line-height: 1.55;
+}
+
+.student-achievement-files,
+.student-platforms > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.student-achievement-modal {
+  max-width: 1040px;
+  width: min(96vw, 1040px);
+  max-height: 92vh;
+  overflow: auto;
+}
+
+.student-achievement-form {
+  display: grid;
+  gap: 18px;
+}
+
+.student-form-block {
+  border: 1px solid var(--border, #e4e8f0);
+  border-radius: 8px;
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.student-form-block h4,
+.student-form-section-head h4,
+.student-form-section-head p,
+.student-detail-view h4,
+.student-detail-view p {
+  margin: 0;
+}
+
+.student-form-section-head p {
+  color: var(--muted, #64748b);
+  font-size: 0.88rem;
+}
+
+.student-rows {
+  display: grid;
+  gap: 12px;
+}
+
+.student-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(130px, 0.65fr) minmax(160px, 0.9fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.student-platforms {
+  display: grid;
+  gap: 10px;
+}
+
+.student-platforms label,
+.student-file-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.student-platforms > span,
+.student-form-block > h4 {
+  font-weight: 700;
+}
+
+.student-platforms > div {
+  gap: 10px;
+}
+
+.student-platforms label {
+  border: 1px solid var(--border, #e4e8f0);
+  border-radius: 999px;
+  padding: 8px 12px;
+}
+
+.student-submit-action {
+  min-width: 230px;
+  justify-content: center;
+}
+
+.student-iqac-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.student-detail-view {
+  display: grid;
+  gap: 18px;
+}
+
+.student-detail-view section {
+  display: grid;
+  gap: 8px;
+}
+
+.student-detail-view p {
+  color: var(--text, #111827);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.student-detail-table {
+  border: 1px solid var(--border, #e4e8f0);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.student-detail-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.6fr 1fr;
+}
+
+.student-detail-row + .student-detail-row {
+  border-top: 1px solid var(--border, #e4e8f0);
+}
+
+.student-detail-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: 10px 12px;
+}
+
+.student-detail-row span + span {
+  border-left: 1px solid var(--border, #e4e8f0);
+}
+
+.student-detail-row-head {
+  background: var(--surface-muted, #f8fafc);
+  font-weight: 700;
+}
+
+.student-detail-note {
+  color: var(--muted, #64748b) !important;
+}
+
+.student-detail-audit {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .student-achievements-header,
+  .student-achievement-main {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .student-achievements-toolbar,
+  .student-achievement-meta,
+  .student-row,
+  .student-iqac-grid,
+  .student-detail-row {
+    grid-template-columns: 1fr;
+  }
+
+  .student-submit-top,
+  .student-submit-action {
+    width: 100%;
+  }
+
+  .student-detail-row span + span {
+    border-left: 0;
+    border-top: 1px solid var(--border, #e4e8f0);
+  }
+}
+

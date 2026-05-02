@@ -378,6 +378,68 @@ class Publication(Document):
         name = "publications"
 
 
+class StudentAchievementStudent(BaseModel):
+    student_name: str = ""
+    batch: Optional[str] = None
+    course: Optional[str] = None
+    # Legacy fields retained so older submissions continue to deserialize.
+    name: Optional[str] = None
+    registration_number: Optional[str] = None
+
+
+class StudentAchievementFile(BaseModel):
+    file_id: str
+    file_name: str
+    web_view_link: Optional[str] = None
+    content_type: Optional[str] = None
+    size: Optional[int] = None
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class StudentAchievement(Document):
+    achievement_title: str = ""
+    students: List[StudentAchievementStudent] = Field(default_factory=list)
+    activity_description: Optional[str] = None
+    additional_context_objective: Optional[str] = None
+    social_media_writeup: Optional[str] = None
+    attachments: List[StudentAchievementFile] = Field(default_factory=list)
+    iqac_criterion_id: Optional[str] = None
+    iqac_subfolder_id: Optional[str] = None
+    iqac_item_id: Optional[str] = None
+    iqac_description: Optional[str] = None
+    # Legacy fields retained for existing records.
+    department_programme: Optional[str] = None
+    year_semester: Optional[str] = None
+    faculty_mentor: Optional[str] = None
+    achievement_category: Optional[str] = None
+    achievement_date: Optional[str] = None
+    activity_name: Optional[str] = None
+    organising_institution: Optional[str] = None
+    level: Optional[str] = None
+    award_recognition: Optional[str] = None
+    brief_context: Optional[str] = None
+    detailed_writeup: Optional[str] = None
+    suggested_platforms: List[str] = Field(default_factory=list)
+    preferred_posting_date: Optional[str] = None
+    assets: List[StudentAchievementFile] = Field(default_factory=list)
+    proofs: List[StudentAchievementFile] = Field(default_factory=list)
+    consent_confirmed: bool = False
+    additional_notes: Optional[str] = None
+    status: str = Field(default="submitted")
+    created_by: str
+    created_by_name: Optional[str] = None
+    created_by_email: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_by: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    updated_by_email: Optional[str] = None
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    audit_log: List[dict] = Field(default_factory=list)
+
+    class Settings:
+        name = "student_achievements"
+
+
 class ChatAttachment(BaseModel):
     name: str
     url: str
