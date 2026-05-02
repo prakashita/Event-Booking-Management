@@ -8099,6 +8099,8 @@ export default function App() {
           const visibleItems = showFilters ? applyApprInboxFilter(rawItems) : rawItems;
           const totalCount = rawItems.length;
           const pendingCount = rawItems.filter((i) => canActOnWorkflowRow(i.status, i)).length;
+          // Team channels (facility/it/marketing/transport) use "Noted" instead of "Approved"
+          const isTeamChannel = channel !== "approval";
 
           return (
           <div className="events-table-card appr-card">
@@ -8192,7 +8194,8 @@ export default function App() {
                     const isHistorical = item.is_actionable === false;
                     // Compact badge for list: historical → "Approved" + sublabel; active → status label
                     const badgeInfo = isHistorical ? getCompactListBadge(item) : null;
-                    const statusLabel = badgeInfo ? badgeInfo.primary : formatInboxDecisionStatusLabel(item.status);
+                    const rawStatusLabel = badgeInfo ? badgeInfo.primary : formatInboxDecisionStatusLabel(item.status);
+                    const statusLabel = isTeamChannel && rawStatusLabel === "Approved" ? "Noted" : rawStatusLabel;
                     const stageSublabel = badgeInfo ? badgeInfo.sub : null;
                     const eventHasStarted = isEventStarted(item);
                     const rowAttention = canActOnWorkflowRow(item.status, item);
@@ -8240,7 +8243,7 @@ export default function App() {
                                 onChange={(e) => {
                                   const v = e.target.value;
                                   e.target.value = "";
-                                  if (v === "approved") openWorkflowActionModal(channel, item.id, "approved", "Approve");
+                                  if (v === "approved") openWorkflowActionModal(channel, item.id, "approved", isTeamChannel ? "Noted" : "Approve");
                                   else if (v === "rejected") openWorkflowActionModal(channel, item.id, "rejected", "Reject");
                                   else if (v === "clarification_requested") {
                                     openWorkflowActionModal(channel, item.id, "clarification_requested", "Need clarification");
@@ -8248,7 +8251,7 @@ export default function App() {
                                 }}
                               >
                                 <option value="">Action</option>
-                                <option value="approved">Approve</option>
+                                <option value="approved">{isTeamChannel ? "Noted" : "Approve"}</option>
                                 <option value="rejected">Reject</option>
                                 <option value="clarification_requested">Need clarification</option>
                               </select>

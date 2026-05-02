@@ -19,7 +19,8 @@ import {
   formatWorkflowRoleLabel,
   orderDepartmentSectionsForRole,
   wfBadgeClass,
-  wfBadgeLabel
+  wfBadgeLabel,
+  wfTeamBadgeLabel
 } from "../utils/eventDetailsView";
 
 export default function EventDetailsModalBody({
@@ -200,7 +201,11 @@ export default function EventDetailsModalBody({
               <div className="evt-workflow-step-inner">
                 <div className="evt-workflow-step-head">
                   <span className="evt-workflow-step-label">{step.label}</span>
-                  <span className={wfBadgeClass(step.status)}>{wfBadgeLabel(step.status)}</span>
+                  <span className={wfBadgeClass(step.status)}>
+                    {(step.key === "facility" || step.key === "it" || step.key === "marketing" || step.key === "transport")
+                      ? wfTeamBadgeLabel(step.status)
+                      : wfBadgeLabel(step.status)}
+                  </span>
                 </div>
                 <div className="evt-workflow-meta">
                   {step.assignee ? (

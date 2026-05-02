@@ -297,9 +297,9 @@ export default function DiscussionPanel({
                     <button
                       type="button"
                       className="dp-action-btn dp-action-btn--approve"
-                      onClick={() => onOpenActionModal("approved", "Approve")}
+                      onClick={() => onOpenActionModal("approved", "Noted")}
                     >
-                      Approve
+                      Noted
                     </button>
                     <button
                       type="button"
@@ -346,9 +346,9 @@ export default function DiscussionPanel({
                   <button
                     type="button"
                     className="dp-action-btn dp-action-btn--approve"
-                    onClick={() => onOpenActionModal("approved", "Approve")}
+                    onClick={() => onOpenActionModal("approved", "Noted")}
                   >
-                    Approve
+                    Noted
                   </button>
                   <button
                     type="button"
