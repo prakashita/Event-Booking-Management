@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from models import IQACFile, IQACSSRHistory, IQACSSRSection, User
 from routers.deps import IQAC_DELETE_ALLOWED_ROLES, require_iqac
@@ -636,6 +636,78 @@ async def restore_ssr_section_history(
     await history_entry.insert()
 
     return _format_ssr_section(normalized, doc, message="Version restored")
+
+
+@router.get("/ssr-export/pdf")
+async def export_ssr_pdf(current_user: User = Depends(require_iqac)):
+    """Generate and download a NAAC SSR PDF document with all saved section data."""
+    try:
+        from ssr_pdf import generate_ssr_pdf
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="PDF generation library (reportlab) is not installed. "
+                   "Run: pip install reportlab",
+        ) from exc
+
+    # Fetch all four SSR sections
+    docs = await IQACSSRSection.find(
+        {"section_key": {"$in": list(SSR_SECTION_KEYS)}}
+    ).to_list()
+    by_key: dict[str, dict] = {doc.section_key: doc.data or {} for doc in docs}
+
+    sections_data = {key: by_key.get(key, {}) for key in SSR_SECTION_KEYS}
+
+    try:
+        pdf_bytes = generate_ssr_pdf(
+            sections_data,
+            generated_by=current_user.email or getattr(current_user, "full_name", "") or "",
+            generated_at=datetime.utcnow(),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {exc}") from exc
+
+    filename = f"IQAC_SSR_NAAC_Report_{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/ssr-export/docx")
+async def export_ssr_docx(current_user: User = Depends(require_iqac)):
+    """Generate and download a NAAC SSR Word (.docx) document with all saved section data."""
+    try:
+        from ssr_docx import generate_ssr_docx
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Word generation library (python-docx) is not installed. "
+                   "Run: pip install python-docx",
+        ) from exc
+
+    docs = await IQACSSRSection.find(
+        {"section_key": {"$in": list(SSR_SECTION_KEYS)}}
+    ).to_list()
+    by_key: dict[str, dict] = {doc.section_key: doc.data or {} for doc in docs}
+    sections_data = {key: by_key.get(key, {}) for key in SSR_SECTION_KEYS}
+
+    try:
+        docx_bytes = generate_ssr_docx(
+            sections_data,
+            generated_by=current_user.email or getattr(current_user, "full_name", "") or "",
+            generated_at=datetime.utcnow(),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Word generation failed: {exc}") from exc
+
+    filename = f"IQAC_SSR_NAAC_Report_{datetime.utcnow().strftime('%Y-%m-%d')}.docx"
+    return Response(
+        content=docx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/templates")

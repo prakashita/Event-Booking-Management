@@ -8514,16 +8514,13 @@ button.marketing-attachment-remove {
   margin-bottom: 0.85rem;
 }
 
-.iqac-ssr-form-section-head h4,
-.iqac-qif-note h4 {
+.iqac-ssr-form-section-head h4 {
   margin: 0 0 0.25rem;
   color: var(--ink);
   font-size: 0.98rem;
 }
 
-.iqac-ssr-form-section-head p,
-.iqac-qif-note p,
-.iqac-qif-note li {
+.iqac-ssr-form-section-head p {
   margin: 0;
   color: var(--ink-soft);
   font-size: 0.86rem;
@@ -8633,6 +8630,231 @@ button.marketing-attachment-remove {
   background: #fef3c7;
 }
 
+/* ─── Executive Summary Premium Writing Cards ─────────────────────────────── */
+
+.exec-sum-status-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.exec-sum-status-label {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  flex: 1;
+  min-width: 0;
+}
+
+.exec-sum-status-count {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+
+.exec-sum-status-count--warn {
+  color: #92400e;
+  border-color: #fcd34d;
+  background: #fef3c7;
+}
+
+.exec-sum-status-strip--warn .exec-sum-status-label {
+  color: #92400e;
+}
+
+.exec-sum-status-over {
+  font-weight: 700;
+  color: #b45309;
+}
+
+.exec-sum-card {
+  position: relative;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 1.1rem 1.2rem 0.85rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  border-left: 4px solid var(--border);
+}
+
+.exec-sum-card--focused {
+  border-color: var(--accent-blue);
+  border-left-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-tint-medium), 0 2px 12px rgba(59, 130, 246, 0.08);
+}
+
+.exec-sum-card--warn {
+  border-left-color: #f59e0b;
+}
+
+.exec-sum-card--focused.exec-sum-card--warn {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12), 0 2px 12px rgba(245, 158, 11, 0.08);
+}
+
+.exec-sum-card-header {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
+  margin-bottom: 0.65rem;
+}
+
+.exec-sum-card-title {
+  font-size: 0.94rem;
+  font-weight: 700;
+  color: var(--ink);
+  flex-shrink: 0;
+}
+
+.exec-sum-guidance-chip {
+  display: inline-block;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: var(--accent-tint-subtle);
+  border: 1px solid var(--accent-tint-border);
+  padding: 0.18rem 0.6rem;
+  border-radius: 20px;
+  line-height: 1.45;
+  max-width: 100%;
+}
+
+.exec-sum-textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 110px;
+  max-height: 520px;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input-bg, var(--surface));
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  resize: none;
+  overflow-y: auto;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.exec-sum-textarea::placeholder {
+  color: var(--ink-muted, #a0aec0);
+  font-style: italic;
+  font-size: 0.87rem;
+}
+
+.exec-sum-textarea:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px var(--accent-tint-medium);
+}
+
+.exec-sum-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 0.45rem;
+}
+
+.exec-sum-word-count {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.1rem 0.55rem;
+  border-radius: 20px;
+}
+
+.exec-sum-word-count--warn {
+  color: #b45309;
+  border-color: #fcd34d;
+  background: #fef9c3;
+}
+
+.exec-sum-word-over {
+  font-weight: 700;
+  color: #b45309;
+}
+
+/* ─── Dark mode overrides ─────────────────────────────────────────────────── */
+[data-theme="dark"] .exec-sum-status-strip {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .exec-sum-status-count {
+  background: var(--card);
+  border-color: var(--border);
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .exec-sum-status-count--warn {
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+[data-theme="dark"] .exec-sum-card {
+  background: var(--card);
+  border-color: var(--border);
+  border-left-color: var(--border);
+}
+
+[data-theme="dark"] .exec-sum-card--focused {
+  border-color: var(--accent-blue);
+  border-left-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18), 0 2px 12px rgba(59, 130, 246, 0.1);
+}
+
+[data-theme="dark"] .exec-sum-guidance-chip {
+  background: var(--accent-tint-subtle);
+  border-color: var(--accent-tint-border);
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .exec-sum-textarea {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .exec-sum-textarea::placeholder {
+  color: var(--ink-muted, #4b5563);
+}
+
+[data-theme="dark"] .exec-sum-textarea:focus {
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+[data-theme="dark"] .exec-sum-word-count {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .exec-sum-word-count--warn {
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.1);
+}
+
 .iqac-ssr-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--border);
@@ -8684,18 +8906,6 @@ button.marketing-attachment-remove {
 
 .iqac-ssr-add-row {
   margin-top: 0.85rem;
-}
-
-.iqac-qif-note {
-  padding: 1rem;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--surface);
-}
-
-.iqac-qif-note ul {
-  margin: 0.75rem 0 0;
-  padding-left: 1.1rem;
 }
 
 .iqac-ssr-save-message {
@@ -8915,30 +9125,463 @@ button.marketing-attachment-remove {
   color: #fff;
 }
 
-.iqac-qif-readonly-grid {
+.naac-profile-editor {
+  gap: 1.1rem;
+}
+
+.naac-section {
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--card) 0%, var(--surface) 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045);
+}
+
+.naac-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.75rem;
+}
+
+.naac-section-head span {
+  color: var(--accent-blue);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.naac-section-head h4 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.naac-section-head p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.naac-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 8px;
+  background: var(--card);
+  scrollbar-width: thin;
+}
+
+.naac-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  color: var(--ink);
+}
+
+.naac-table th,
+.naac-table td {
+  min-height: 44px;
+  padding: 0.5rem 0.55rem;
+  border-right: 1px solid rgba(148, 163, 184, 0.42);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.42);
+  vertical-align: middle;
+  text-align: left;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.naac-table th:last-child,
+.naac-table td:last-child {
+  border-right: 0;
+}
+
+.naac-table tr:last-child > th,
+.naac-table tr:last-child > td {
+  border-bottom: 0;
+}
+
+.naac-table thead th {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  color: #1f2937;
+  font-size: 0.76rem;
+  font-weight: 800;
+  vertical-align: bottom;
+}
+
+.naac-table tbody th {
+  background: rgba(248, 250, 252, 0.78);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.naac-table td {
+  background: var(--card);
+  color: var(--ink-soft);
+}
+
+.naac-super-label {
+  background: rgba(37, 99, 235, 0.06) !important;
+  color: var(--ink) !important;
+}
+
+.naac-cell-input,
+.naac-cell-textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: rgba(244, 244, 245, 0.78);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.84rem;
+  line-height: 1.25;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.naac-cell-input {
+  height: 34px;
+  padding: 0.38rem 0.48rem;
+}
+
+.naac-table select.naac-cell-input,
+.naac-cell-input[type="date"] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.naac-cell-input--compact {
+  text-align: center;
+}
+
+.naac-cell-textarea {
+  display: block;
+  min-height: 64px;
+  padding: 0.45rem 0.5rem;
+  resize: vertical;
+}
+
+.naac-cell-input:focus,
+.naac-cell-textarea:focus,
+.naac-table select:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+  background: var(--card);
+  box-shadow: 0 0 0 3px var(--accent-tint-medium);
+}
+
+.naac-readonly-cell {
+  display: block;
+  min-width: 0;
+  color: var(--ink);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.naac-cell-wide .naac-cell-input,
+.naac-cell-wide .naac-cell-textarea {
+  text-align: left;
+}
+
+.naac-col-compact,
+.naac-cell-compact {
+  text-align: center;
+}
+
+.naac-actions-col {
+  width: 104px;
+  text-align: center !important;
+}
+
+.naac-fixed-row-note {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.naac-row-remove,
+.naac-add-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 800;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.naac-row-remove {
+  padding: 0.38rem 0.55rem;
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.25);
+}
+
+.naac-row-remove:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.naac-add-row {
+  margin-top: 0.75rem;
+  padding: 0.52rem 0.78rem;
+  color: var(--accent-blue);
+  border-color: var(--accent-tint-border);
+  background: var(--accent-tint-subtle);
+}
+
+.naac-add-row:hover {
+  background: var(--accent-tint-hover);
+}
+
+.naac-yesno-cell {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: 1fr 1fr;
+  min-width: 116px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--card);
+}
+
+.naac-yesno-choice {
+  height: 34px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.naac-yesno-choice + .naac-yesno-choice {
+  border-left: 1px solid var(--border);
+}
+
+.naac-yesno-choice--active {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.naac-academic-title {
+  display: flex;
+  justify-content: center;
+  padding: 0.4rem 0;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.naac-academic-stack {
+  display: grid;
   gap: 0.85rem;
 }
 
-.iqac-qif-readonly-card {
+.naac-staff-stack {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.naac-staff-stack .naac-section {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.naac-matrix-table th,
+.naac-matrix-table td,
+.naac-student-table th,
+.naac-student-table td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.naac-matrix-table tbody th,
+.naac-student-table tbody th,
+.naac-key-value-table tbody th {
+  text-align: left;
+  vertical-align: middle;
+}
+
+.naac-matrix-table .naac-cell-input,
+.naac-student-table .naac-cell-input {
+  padding-inline: 0.25rem;
+}
+
+.naac-affiliation-type-table td,
+.naac-key-value-table td,
+.naac-recognition-table td {
+  vertical-align: middle;
+}
+
+.naac-key-value-table .naac-cell-input {
+  text-align: right;
+  max-width: 150px;
+  margin-left: auto;
+}
+
+.naac-key-value-table td {
+  width: 30%;
+}
+
+.extended-profile-editor {
+  display: grid;
+  gap: 1rem;
+}
+
+.extended-profile-title {
+  display: flex;
+  justify-content: center;
+  padding: 0.35rem 0 0.2rem;
+  color: var(--ink);
+  font-size: 1.02rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.extended-profile-section {
   padding: 1rem;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--card) 0%, var(--surface) 100%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045);
+}
+
+.extended-profile-section h4 {
+  margin: 0 0 0.9rem;
+  color: var(--ink);
+  font-size: 0.94rem;
+  font-weight: 900;
+}
+
+.extended-profile-section h4 span {
+  color: var(--ink);
+}
+
+.extended-profile-section-body {
+  display: grid;
+  gap: 1rem;
+}
+
+.extended-metric-block {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.extended-metric-block h5 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.extended-year-table th,
+.extended-year-table td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.extended-year-table tbody th {
+  text-align: left;
+  font-weight: 900;
+}
+
+.extended-year-table .naac-cell-input {
+  text-align: center;
+}
+
+.extended-single-metric label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 180px);
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 8px;
   background: var(--card);
 }
 
-.iqac-qif-readonly-card h5 {
-  margin: 0 0 0.35rem;
+.extended-single-metric span {
   color: var(--ink);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
-.iqac-qif-readonly-card p {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 0.84rem;
-  line-height: 1.5;
+.extended-single-metric .naac-cell-input {
+  text-align: center;
+}
+
+.qif-readonly-page {
+  display: flex;
+  justify-content: center;
+}
+
+.qif-note-panel {
+  width: min(860px, 100%);
+  padding: clamp(1.1rem, 2vw, 1.65rem);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+  color: var(--ink);
+}
+
+.qif-note-panel h3 {
+  margin: 0 0 1.05rem;
+  color: var(--ink);
+  font-size: 1.08rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.qif-note-panel h4 {
+  margin: 0 0 0.9rem;
+  color: var(--ink);
+  font-size: 0.94rem;
+  font-weight: 900;
+}
+
+.qif-note-panel p {
+  margin: 0 0 0.9rem;
+  color: var(--ink);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.qif-note-list-block {
+  margin: 1rem 0;
+  padding-left: clamp(1rem, 4vw, 2.5rem);
+}
+
+.qif-note-list-block ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.qif-note-list-block li {
+  color: var(--ink);
+  font-size: 0.9rem;
+  line-height: 1.6;
 }
 
 .iqac-history-section-name {
@@ -9049,6 +9692,33 @@ button.marketing-attachment-remove {
     grid-template-columns: 1fr;
   }
 
+  .naac-section {
+    padding: 0.8rem;
+    border-radius: 8px;
+  }
+
+  .naac-table-wrap {
+    margin-inline: -0.15rem;
+  }
+
+  .naac-table th,
+  .naac-table td {
+    padding: 0.45rem;
+    font-size: 0.78rem;
+  }
+
+  .naac-section-head h4 {
+    font-size: 0.92rem;
+  }
+
+  .extended-profile-section {
+    padding: 0.8rem;
+  }
+
+  .extended-single-metric label {
+    grid-template-columns: 1fr;
+  }
+
   .iqac-field-span-two {
     grid-column: 1 / -1;
   }
@@ -9075,6 +9745,154 @@ button.marketing-attachment-remove {
   gap: 0.75rem;
   margin-bottom: 1.25rem;
   flex-wrap: wrap;
+}
+
+/* SSR section header: title+badge on left, actions on right */
+.iqac-ssr-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+/* Generate PDF button – primary variant */
+.iqac-pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+  border-radius: 8px;
+  border: 1.5px solid #1d4ed8;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.iqac-pdf-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1e40af;
+}
+
+.iqac-pdf-btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.iqac-pdf-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* Compact variant for modal topbar */
+.iqac-pdf-btn--compact {
+  padding: 0.32rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+/* Spinner inside button */
+.iqac-pdf-btn-spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: iqac-spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes iqac-spin {
+  to { transform: rotate(360deg); }
+}
+
+[data-theme="dark"] .iqac-pdf-btn {
+  background: #3b82f6;
+  border-color: #3b82f6;
+  color: #fff;
+}
+
+/* Export dropdown wrapper */
+.iqac-export-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.iqac-export-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 200;
+  min-width: 190px;
+  background: var(--card, #fff);
+  border: 1.5px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.iqac-export-dropdown--up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.iqac-export-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ink, #1e293b);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+  white-space: nowrap;
+}
+
+.iqac-export-option:hover {
+  background: var(--accent-blue-10, rgba(37,99,235,0.08));
+  color: #2563eb;
+}
+
+.iqac-export-option--word:hover {
+  background: rgba(22,163,74,0.08);
+  color: #15803d;
+}
+
+[data-theme="dark"] .iqac-export-dropdown {
+  background: var(--card, #1e293b);
+  border-color: var(--border, #334155);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+[data-theme="dark"] .iqac-export-option {
+  color: var(--ink, #e2e8f0);
+}
+
+[data-theme="dark"] .iqac-export-option:hover {
+  background: rgba(59,130,246,0.15);
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .iqac-export-option--word:hover {
+  background: rgba(34,197,94,0.12);
+  color: #86efac;
+}
+
+[data-theme="dark"] .iqac-pdf-btn:hover:not(:disabled) {
+  background: #2563eb;
+  border-color: #2563eb;
 }
 
 .iqac-structure-title {
@@ -14609,8 +15427,6 @@ button.marketing-attachment-remove {
 
 [data-theme="dark"] .iqac-ssr-form-section,
 [data-theme="dark"] .iqac-ssr-total-words,
-[data-theme="dark"] .iqac-qif-note,
-[data-theme="dark"] .iqac-qif-readonly-card,
 [data-theme="dark"] .iqac-ssr-modal-topbar,
 [data-theme="dark"] .iqac-ssr-stepper,
 [data-theme="dark"] .iqac-ssr-step-pill,
@@ -14666,6 +15482,61 @@ button.marketing-attachment-remove {
   color: #fca5a5;
   border-color: rgba(248, 113, 113, 0.28);
   background: rgba(248, 113, 113, 0.08);
+}
+
+[data-theme="dark"] .naac-section {
+  background: linear-gradient(180deg, var(--card) 0%, var(--surface) 100%);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+[data-theme="dark"] .extended-profile-section,
+[data-theme="dark"] .qif-note-panel {
+  background: var(--card);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+[data-theme="dark"] .naac-table-wrap,
+[data-theme="dark"] .naac-table th,
+[data-theme="dark"] .naac-table td,
+[data-theme="dark"] .naac-yesno-cell {
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .naac-table-wrap,
+[data-theme="dark"] .naac-table td,
+[data-theme="dark"] .naac-cell-input,
+[data-theme="dark"] .naac-cell-textarea,
+[data-theme="dark"] .naac-row-remove {
+  background: var(--input-bg);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .naac-table thead th,
+[data-theme="dark"] .naac-table tbody th {
+  background: var(--surface-strong);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .naac-super-label {
+  background: rgba(96, 165, 250, 0.1) !important;
+}
+
+[data-theme="dark"] .naac-add-row {
+  background: rgba(96, 165, 250, 0.1);
+  border-color: rgba(96, 165, 250, 0.3);
+  color: var(--accent-blue);
+}
+
+[data-theme="dark"] .naac-fixed-row-note {
+  background: var(--surface-strong);
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .extended-single-metric label {
+  background: var(--input-bg);
+  border-color: var(--border);
 }
 
 [data-theme="dark"] .iqac-subfolder-btn {
