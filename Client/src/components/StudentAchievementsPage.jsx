@@ -100,7 +100,7 @@ export default function StudentAchievementsPage({ user }) {
 
   const role = String(user?.role || "").toLowerCase();
   const isAdmin = role === "admin";
-  const canViewAll = ["admin", "registrar", "vice_chancellor", "deputy_registrar", "marketing"].includes(role);
+  const canViewAll = isAdmin;
   const userId = String(user?.id || user?._id || "");
 
   const loadItems = useCallback(async () => {
@@ -156,8 +156,8 @@ export default function StudentAchievementsPage({ user }) {
     setter((prev) => ({ ...prev, [field]: value }));
   };
 
-  const updateFiles = (event) => {
-    setForm((prev) => ({ ...prev, attachments: Array.from(event.target.files || []) }));
+  const updateFiles = (setter) => (event) => {
+    setter((prev) => ({ ...prev, attachments: Array.from(event.target.files || []) }));
   };
 
   const updateStudent = (setter, index, field, value) => {
@@ -290,18 +290,18 @@ export default function StudentAchievementsPage({ user }) {
     }
     setDetailModal((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
-      const payload = {
-        students: cleanedStudents(editForm),
-        activity_description: editForm.activity_description.trim(),
-        additional_context_objective: editForm.additional_context_objective.trim(),
-        suggested_platforms: editForm.suggested_platforms,
-        social_media_writeup: editForm.social_media_writeup.trim(),
-        iqac_criterion_id: editForm.iqac_criterion_id,
-        iqac_subfolder_id: editForm.iqac_subfolder_id,
-        iqac_item_id: editForm.iqac_item_id,
-        iqac_description: editForm.iqac_description.trim(),
-      };
-      const res = await api.patch(`/student-achievements/${detailModal.item.id}`, payload);
+      const fd = new FormData();
+      fd.append("students", JSON.stringify(cleanedStudents(editForm)));
+      fd.append("activity_description", editForm.activity_description.trim());
+      fd.append("additional_context_objective", editForm.additional_context_objective.trim());
+      fd.append("suggested_platforms", JSON.stringify(editForm.suggested_platforms));
+      fd.append("social_media_writeup", editForm.social_media_writeup.trim());
+      fd.append("iqac_criterion_id", editForm.iqac_criterion_id);
+      fd.append("iqac_subfolder_id", editForm.iqac_subfolder_id);
+      fd.append("iqac_item_id", editForm.iqac_item_id);
+      fd.append("iqac_description", editForm.iqac_description.trim());
+      editForm.attachments.forEach((file) => fd.append("attachments", file));
+      const res = await api.patch(`/student-achievements/${detailModal.item.id}`, fd);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.detail || "Unable to update submission.");
       setDetailModal({ open: true, mode: "view", item: data, status: "ready", error: "" });
@@ -414,7 +414,10 @@ export default function StudentAchievementsPage({ user }) {
         {!options.hideFileUpload ? (
           <label className="form-field student-file-field">
             <span>Images and Attachments/Documents</span>
-            <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx" onChange={updateFiles} />
+            <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx" onChange={updateFiles(setter)} />
+            {state.attachments?.length ? (
+              <small>{state.attachments.length} file{state.attachments.length === 1 ? "" : "s"} selected</small>
+            ) : null}
           </label>
         ) : null}
         <section className="student-form-block">
@@ -590,7 +593,6 @@ export default function StudentAchievementsPage({ user }) {
                 onCancel: cancelEdit,
                 loading: detailModal.status === "loading",
                 error: detailModal.status === "error" ? detailModal.error : "",
-                hideFileUpload: true,
               })
             ) : detailItem ? (
               <div className="student-detail-view">

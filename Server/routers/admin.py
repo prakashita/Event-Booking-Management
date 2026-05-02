@@ -682,7 +682,7 @@ async def list_all_publications(
 
 @router.get("/student-achievements", response_model=PaginatedResponse[StudentAchievementResponse])
 async def list_all_student_achievements(
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_only),
     limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ):

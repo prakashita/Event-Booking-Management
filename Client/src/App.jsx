@@ -9026,7 +9026,9 @@ export default function App() {
                     <p className="profile-name">{profileName}</p>
                     <p className="profile-role">{profileRole}</p>
                   </div>
-                  <div className="profile-avatar" aria-hidden="true" />
+                  <div className="profile-avatar" aria-hidden="true">
+                    <SimpleIcon path="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
+                  </div>
                   <span className="account-trigger-chevron" aria-hidden="true" />
                 </button>
                 {accountMenuOpen && (
@@ -9042,7 +9044,9 @@ export default function App() {
                       aria-label="Account options"
                     >
                       <div className="account-dropdown-header">
-                        <div className="account-dropdown-avatar" aria-hidden="true" />
+                        <div className="account-dropdown-avatar" aria-hidden="true">
+                          <SimpleIcon path="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-4.42 0-8 2.24-8 5v1h16v-1c0-2.76-3.58-5-8-5Z" />
+                        </div>
                         <div className="account-dropdown-meta">
                           <p className="account-dropdown-name">{profileName}</p>
                           <p className="account-dropdown-role">{profileRole}</p>
