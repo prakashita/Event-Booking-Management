@@ -6,7 +6,7 @@ from typing import Optional
 from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 
-from auth import ensure_google_access_token, is_admin_email
+from auth import ensure_google_access_token
 from drive import upload_report_file
 from models import StudentAchievement, StudentAchievementFile, StudentAchievementStudent, User
 from rate_limit import limiter
@@ -29,7 +29,7 @@ router = APIRouter(prefix="/student-achievements", tags=["Student Achievements"]
 
 MAX_ATTACHMENT_FILES = 15
 MAX_FILE_BYTES = 25 * 1024 * 1024
-ADMIN_VIEW_ROLES = {"admin", "registrar", "vice_chancellor", "deputy_registrar", "marketing"}
+ADMIN_VIEW_ROLES = {"admin"}
 EDITABLE_TEXT_FIELDS = {
     "activity_description",
     "additional_context_objective",
@@ -105,11 +105,11 @@ def _parse_platforms(raw: Optional[str]) -> list[str]:
 
 def _can_view_all(user: User) -> bool:
     role = (user.role or "").strip().lower()
-    return role in ADMIN_VIEW_ROLES or is_admin_email(user.email or "")
+    return role in ADMIN_VIEW_ROLES
 
 
 def _is_admin_actor(user: User) -> bool:
-    return (user.role or "").strip().lower() == "admin" or is_admin_email(user.email or "")
+    return (user.role or "").strip().lower() == "admin"
 
 
 def _is_owner(item: StudentAchievement, user: User) -> bool:
@@ -215,7 +215,7 @@ def _to_response(item: StudentAchievement) -> StudentAchievementResponse:
     )
 
 
-async def _upload_files(files: Optional[list[UploadFile]], user: User, folder_id: str) -> list[StudentAchievementFile]:
+async def _upload_files(files: Optional[list[UploadFile]], user: User, folder_id: Optional[str]) -> list[StudentAchievementFile]:
     selected = [file for file in (files or []) if file and file.filename]
     if len(selected) > MAX_ATTACHMENT_FILES:
         raise HTTPException(status_code=400, detail=f"At most {MAX_ATTACHMENT_FILES} files are allowed")
@@ -391,7 +391,7 @@ async def get_student_achievement(
 @router.patch("/{achievement_id}", response_model=StudentAchievementResponse)
 async def update_student_achievement(
     achievement_id: str,
-    payload: StudentAchievementPatch,
+    request: Request,
     user: User = Depends(get_current_user),
 ):
     item = await _get_visible_achievement(achievement_id, user)
@@ -400,18 +400,47 @@ async def update_student_achievement(
     if not _is_owner(item, user):
         raise HTTPException(status_code=403, detail="Only the owner can edit this submission")
 
-    updates = payload.model_dump(exclude_unset=True)
+    content_type = (request.headers.get("content-type") or "").lower()
     changed_fields: list[str] = []
-    for field, value in updates.items():
-        if field == "students":
-            item.students = _payload_students(payload.students)
-            changed_fields.append(field)
-        elif field == "suggested_platforms":
-            item.suggested_platforms = [str(v).strip() for v in (value or []) if str(v or "").strip()]
-            changed_fields.append(field)
-        elif field in EDITABLE_TEXT_FIELDS:
-            setattr(item, field, _clean(value))
-            changed_fields.append(field)
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        if "students" in form:
+            item.students = _parse_students(str(form.get("students") or "[]"))
+            changed_fields.append("students")
+        if "suggested_platforms" in form:
+            item.suggested_platforms = _parse_platforms(str(form.get("suggested_platforms") or "[]"))
+            changed_fields.append("suggested_platforms")
+        for field in EDITABLE_TEXT_FIELDS:
+            if field in form:
+                setattr(item, field, _clean(form.get(field)))
+                changed_fields.append(field)
+        uploads = [file for file in form.getlist("attachments") if getattr(file, "filename", None)]
+        if uploads:
+            folder_id = os.getenv("STUDENT_ACHIEVEMENTS_DRIVE_FOLDER_ID") or os.getenv("GOOGLE_DRIVE_FOLDER_ID") or None
+            try:
+                attachment_files = await _upload_files(uploads, user, folder_id)
+            except RuntimeError as exc:
+                raise HTTPException(status_code=500, detail=str(exc)) from exc
+            item.attachments = list(item.attachments or []) + attachment_files
+            changed_fields.append("attachments")
+    else:
+        try:
+            raw_updates = await request.json()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
+        payload = StudentAchievementPatch.model_validate(raw_updates or {})
+        updates = payload.model_dump(exclude_unset=True)
+        for field, value in updates.items():
+            if field == "students":
+                item.students = _payload_students(payload.students)
+                changed_fields.append(field)
+            elif field == "suggested_platforms":
+                item.suggested_platforms = [str(v).strip() for v in (value or []) if str(v or "").strip()]
+                changed_fields.append(field)
+            elif field in EDITABLE_TEXT_FIELDS:
+                setattr(item, field, _clean(value))
+                changed_fields.append(field)
 
     if not item.students:
         raise HTTPException(status_code=400, detail="At least one student is required")

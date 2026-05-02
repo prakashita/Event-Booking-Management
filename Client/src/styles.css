@@ -1126,8 +1126,17 @@ body {
   width: 40px;
   height: 40px;
   border-radius: 50%;
+  display: grid;
+  place-items: center;
   background: var(--surface-strong);
+  color: var(--ink-soft);
   flex-shrink: 0;
+}
+
+.profile-avatar svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
 }
 
 /* ─── Account menu (profile dropdown) ─────────────────────────── */
@@ -1212,8 +1221,17 @@ body {
   width: 38px;
   height: 38px;
   border-radius: 50%;
+  display: grid;
+  place-items: center;
   background: var(--surface-strong, #e4e8f0);
+  color: var(--ink-soft);
   flex-shrink: 0;
+}
+
+.account-dropdown-avatar svg {
+  width: 19px;
+  height: 19px;
+  fill: currentColor;
 }
 
 .account-dropdown-meta {
@@ -14800,6 +14818,7 @@ button.marketing-attachment-remove {
 
 [data-theme="dark"] .profile-avatar {
   background: var(--surface-strong);
+  color: var(--ink-soft);
 }
 
 /* ── Account dropdown ── */
@@ -14823,6 +14842,7 @@ button.marketing-attachment-remove {
 
 [data-theme="dark"] .account-dropdown-avatar {
   background: var(--surface-strong);
+  color: var(--ink-soft);
 }
 
 [data-theme="dark"] .account-dropdown-divider {
@@ -16273,8 +16293,70 @@ button.marketing-attachment-remove {
   border-color: var(--accent-blue);
 }
 
+[data-theme="dark"] .appr-card {
+  background: var(--card);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .appr-toolbar {
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .appr-section-title {
+  color: var(--ink);
+}
+
+[data-theme="dark"] .appr-section-count,
+[data-theme="dark"] .appr-filter-bar {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .appr-refresh-btn,
+[data-theme="dark"] .appr-filter-clear {
+  border-color: var(--border);
+  color: var(--ink-soft);
+  background: transparent;
+}
+
+[data-theme="dark"] .appr-refresh-btn:hover,
+[data-theme="dark"] .appr-filter-clear:hover {
+  background: var(--hover-bg);
+  border-color: var(--border);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .appr-filter-search,
+[data-theme="dark"] .appr-filter-select {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .appr-filter-search::placeholder {
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .appr-filter-search:focus,
+[data-theme="dark"] .appr-filter-select:focus {
+  background: var(--card);
+  border-color: var(--input-focus);
+  box-shadow: var(--accent-focus-glow);
+}
+
+[data-theme="dark"] .appr-filter-search-icon {
+  color: var(--ink-soft);
+}
+
 [data-theme="dark"] .appr-table-row {
   border-color: var(--border);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .appr-table-row:not(.appr-table-header):hover {
+  background: var(--hover-bg);
+  box-shadow: var(--shadow);
 }
 
 [data-theme="dark"] .appr-table-header {
@@ -16290,8 +16372,78 @@ button.marketing-attachment-remove {
   color: var(--ink-soft);
 }
 
+[data-theme="dark"] .appr-row--attention {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.12) 0%, transparent 42%);
+  border-left-color: #fbbf24;
+}
+
+[data-theme="dark"] .appr-row--attention:hover {
+  background: var(--hover-bg);
+}
+
+[data-theme="dark"] .appr-row--historical {
+  opacity: 0.9;
+}
+
+[data-theme="dark"] .appr-row--historical:hover {
+  opacity: 1;
+  background: var(--hover-bg);
+}
+
+[data-theme="dark"] .appr-row--historical .appr-col-event,
+[data-theme="dark"] .appr-stage-sublabel,
+[data-theme="dark"] .appr-col-meta-sub {
+  color: var(--ink-soft);
+}
+
 [data-theme="dark"] .appr-no-action {
   color: var(--ink-soft);
+}
+
+[data-theme="dark"] .appr-detail-btn {
+  border-color: var(--accent-blue);
+  color: #93c5fd;
+  background: transparent;
+}
+
+[data-theme="dark"] .appr-detail-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.16);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .appr-detail-btn:disabled {
+  border-color: var(--border);
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .appr-history-tag {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
+[data-theme="dark"] .appr-status--pending {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.22);
+}
+
+[data-theme="dark"] .appr-status--approved {
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+  box-shadow: inset 0 0 0 1px rgba(134, 239, 172, 0.2);
+}
+
+[data-theme="dark"] .appr-status--rejected {
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
+  box-shadow: inset 0 0 0 1px rgba(252, 165, 165, 0.22);
+}
+
+[data-theme="dark"] .appr-status--clarification_requested {
+  background: rgba(139, 92, 246, 0.18);
+  color: #c4b5fd;
+  box-shadow: inset 0 0 0 1px rgba(196, 181, 253, 0.22);
 }
 
 [data-theme="dark"] .appr-upload-btn {
@@ -17342,7 +17494,7 @@ button.marketing-attachment-remove {
 .student-achievement-card {
   background: var(--surface, #fff);
   border: 1px solid var(--border, #e4e8f0);
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 .student-achievements-header {
@@ -17352,6 +17504,9 @@ button.marketing-attachment-remove {
   gap: 20px;
   padding: 24px;
   box-shadow: 0 14px 32px rgba(15, 23, 42, 0.05);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent-blue, #2563eb) 8%, transparent), transparent 42%),
+    var(--surface, #fff);
 }
 
 .student-achievements-header h2,
@@ -17370,8 +17525,10 @@ button.marketing-attachment-remove {
 }
 
 .student-submit-top {
-  min-width: 250px;
+  min-width: 292px;
   justify-content: center;
+  min-height: 44px;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.2);
 }
 
 .student-achievements-toolbar {
@@ -17379,6 +17536,7 @@ button.marketing-attachment-remove {
   grid-template-columns: minmax(260px, 1.6fr) minmax(150px, 0.8fr) minmax(190px, 1fr) auto;
   gap: 12px;
   padding: 16px;
+  align-items: center;
 }
 
 .student-achievements-toolbar input,
@@ -17393,6 +17551,11 @@ button.marketing-attachment-remove {
   font: inherit;
   background: var(--surface, #fff);
   color: var(--text, #111827);
+}
+
+.student-achievements-toolbar input,
+.student-achievements-toolbar select {
+  min-height: 42px;
 }
 
 .student-achievement-form textarea {
@@ -17418,8 +17581,16 @@ button.marketing-attachment-remove {
 }
 
 .student-achievement-card {
-  padding: 18px;
+  padding: 20px;
   margin-top: 12px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.student-achievement-card:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent-tint-border, #bfdbfe);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
 }
 
 .student-achievement-meta {
@@ -17446,9 +17617,13 @@ button.marketing-attachment-remove {
 }
 
 .student-achievement-caption {
-  margin: 0 0 12px;
+  margin: 0;
   color: var(--muted, #475569);
   line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .student-achievement-files,
@@ -17472,10 +17647,11 @@ button.marketing-attachment-remove {
 
 .student-form-block {
   border: 1px solid var(--border, #e4e8f0);
-  border-radius: 8px;
+  border-radius: 12px;
   display: grid;
   gap: 14px;
   padding: 16px;
+  background: color-mix(in srgb, var(--surface, #fff) 84%, transparent);
 }
 
 .student-form-block h4,
@@ -17528,11 +17704,21 @@ button.marketing-attachment-remove {
   border: 1px solid var(--border, #e4e8f0);
   border-radius: 999px;
   padding: 8px 12px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.student-platforms label:has(input:checked) {
+  border-color: var(--accent-blue, #2563eb);
+  background: var(--accent-tint-subtle, rgba(37, 99, 235, 0.1));
+  color: var(--accent-blue, #2563eb);
 }
 
 .student-submit-action {
   min-width: 230px;
   justify-content: center;
+  min-height: 42px;
 }
 
 .student-iqac-grid {
@@ -17549,6 +17735,10 @@ button.marketing-attachment-remove {
 .student-detail-view section {
   display: grid;
   gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--border, #e4e8f0);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface, #fff) 86%, transparent);
 }
 
 .student-detail-view p {
@@ -17593,6 +17783,88 @@ button.marketing-attachment-remove {
 
 .student-detail-audit {
   margin-bottom: 0;
+  padding: 14px;
+  border: 1px solid var(--border, #e4e8f0);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface, #fff) 86%, transparent);
+}
+
+[data-theme="dark"] .student-achievements-header,
+[data-theme="dark"] .student-achievements-toolbar,
+[data-theme="dark"] .student-achievements-list,
+[data-theme="dark"] .student-achievement-card,
+[data-theme="dark"] .student-form-block,
+[data-theme="dark"] .student-detail-view section,
+[data-theme="dark"] .student-detail-audit {
+  background: var(--card);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .student-achievements-header {
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.12), transparent 44%),
+    var(--card);
+}
+
+[data-theme="dark"] .student-achievement-card:hover {
+  background: var(--hover-bg);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+}
+
+[data-theme="dark"] .student-achievements-toolbar input,
+[data-theme="dark"] .student-achievements-toolbar select,
+[data-theme="dark"] .student-row input,
+[data-theme="dark"] .student-achievement-form input,
+[data-theme="dark"] .student-achievement-form select,
+[data-theme="dark"] .student-achievement-form textarea {
+  background: var(--input-bg);
+  border-color: var(--input-border);
+  color: var(--ink);
+}
+
+[data-theme="dark"] .student-achievements-toolbar input::placeholder,
+[data-theme="dark"] .student-achievement-form textarea::placeholder {
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .student-achievement-caption,
+[data-theme="dark"] .student-achievements-kicker,
+[data-theme="dark"] .student-form-section-head p,
+[data-theme="dark"] .student-achievement-meta dt,
+[data-theme="dark"] .student-detail-note {
+  color: var(--ink-soft) !important;
+}
+
+[data-theme="dark"] .student-achievements-header h2,
+[data-theme="dark"] .student-achievements-list h3,
+[data-theme="dark"] .student-achievement-main h3,
+[data-theme="dark"] .student-detail-view h4,
+[data-theme="dark"] .student-detail-view p,
+[data-theme="dark"] .student-achievement-meta dd {
+  color: var(--ink);
+}
+
+[data-theme="dark"] .student-platforms label {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .student-platforms label:has(input:checked) {
+  background: rgba(59, 130, 246, 0.14);
+  border-color: var(--accent-blue);
+  color: #bfdbfe;
+}
+
+[data-theme="dark"] .student-detail-table,
+[data-theme="dark"] .student-detail-row + .student-detail-row,
+[data-theme="dark"] .student-detail-row span + span {
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .student-detail-row-head {
+  background: var(--surface);
 }
 
 @media (max-width: 900px) {
