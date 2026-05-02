@@ -27,7 +27,6 @@ except Exception:  # pragma: no cover - defensive import guard for optional rout
 
 router = APIRouter(prefix="/student-achievements", tags=["Student Achievements"])
 
-DEFAULT_STUDENT_ACHIEVEMENTS_FOLDER_ID = "1Ad_30BIMiZSLxzyVvcCXcSi9zEMmPSw0"
 MAX_ATTACHMENT_FILES = 15
 MAX_FILE_BYTES = 25 * 1024 * 1024
 ADMIN_VIEW_ROLES = {"admin", "registrar", "vice_chancellor", "deputy_registrar", "marketing"}
@@ -235,6 +234,7 @@ async def _upload_files(files: Optional[list[UploadFile]], user: User, folder_id
             file_bytes=contents,
             mime_type=file.content_type or "application/octet-stream",
             folder_id=folder_id,
+            allow_root_fallback=True,
         )
         uploaded.append(
             StudentAchievementFile(
@@ -295,7 +295,7 @@ async def create_student_achievement(
         raise HTTPException(status_code=400, detail="Description of activity and achievement is required")
 
     upload_candidates = list(attachments or []) + list(assets or []) + list(proofs or [])
-    folder_id = os.getenv("STUDENT_ACHIEVEMENTS_DRIVE_FOLDER_ID", DEFAULT_STUDENT_ACHIEVEMENTS_FOLDER_ID)
+    folder_id = os.getenv("STUDENT_ACHIEVEMENTS_DRIVE_FOLDER_ID") or os.getenv("GOOGLE_DRIVE_FOLDER_ID") or None
     try:
         attachment_files = await _upload_files(upload_candidates, user, folder_id)
     except RuntimeError as exc:

@@ -13,8 +13,9 @@ def upload_report_file(
     file_name: str,
     file_bytes: bytes,
     mime_type: str,
-    folder_id: str,
+    folder_id: str | None = None,
     replace_file_id: str | None = None,
+    allow_root_fallback: bool = False,
 ) -> dict:
     if replace_file_id:
         try:
@@ -28,10 +29,9 @@ def upload_report_file(
             pass
 
     boundary = f"===============/{uuid.uuid4().hex}"
-    metadata = {
-        "name": file_name,
-        "parents": [folder_id],
-    }
+    metadata = {"name": file_name}
+    if folder_id:
+        metadata["parents"] = [folder_id]
     multipart_body = (
         f"--{boundary}\r\n"
         "Content-Type: application/json; charset=UTF-8\r\n\r\n"
@@ -51,6 +51,16 @@ def upload_report_file(
     )
 
     if response.status_code not in {200, 201}:
+        if allow_root_fallback and folder_id and "insufficientParentPermissions" in response.text:
+            return upload_report_file(
+                access_token=access_token,
+                file_name=file_name,
+                file_bytes=file_bytes,
+                mime_type=mime_type,
+                folder_id=None,
+                replace_file_id=None,
+                allow_root_fallback=False,
+            )
         raise RuntimeError(response.text)
 
     return response.json()
