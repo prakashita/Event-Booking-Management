@@ -102,6 +102,38 @@ export const api = {
     }
     return data;
   },
+
+  /**
+   * Download the IQAC SSR NAAC PDF. Returns a Blob on success.
+   * Throws an Error with a human-readable message on failure.
+   */
+  async downloadSsrPdf() {
+    const res = await this.get("/iqac/ssr-export/pdf");
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      let msg = "Failed to generate PDF";
+      try {
+        const json = JSON.parse(text);
+        if (typeof json?.detail === "string") msg = json.detail;
+      } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+    return res.blob();
+  },
+
+  async downloadSsrDocx() {
+    const res = await this.get("/iqac/ssr-export/docx");
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      let msg = "Failed to generate Word document";
+      try {
+        const json = JSON.parse(text);
+        if (typeof json?.detail === "string") msg = json.detail;
+      } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+    return res.blob();
+  },
 };
 
 export default api;

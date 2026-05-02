@@ -85,7 +85,7 @@ function ActionRow({ channel, requestId, onActionDone }) {
     const pendingStatus = phase.replace("confirm:", "");
     const isNeedConfirmation = pendingStatus === "clarification_requested";
     const label = pendingStatus === "approved"
-      ? "Accept"
+      ? "Noted"
       : pendingStatus === "rejected"
         ? "Reject"
         : "Need Confirmation";
@@ -138,7 +138,7 @@ function ActionRow({ channel, requestId, onActionDone }) {
         className="dra-btn dra-btn--accept"
         onClick={() => startAction("approved")}
       >
-        Accept
+        Noted
       </button>
       <button
         type="button"

@@ -13,6 +13,7 @@ import {
   inboxItems,
   eventsTable,
   PUB_META,
+  CITATION_FORMAT_OPTIONS,
   PATH_TO_VIEW,
   ROUTES,
   ROLES_WITH_IQAC_ACCESS,
@@ -32,6 +33,7 @@ import PremiumDatePicker from "./components/ui/PremiumDatePicker";
 import PremiumTimePicker from "./components/ui/PremiumTimePicker";
 import SearchableSelect from "./components/ui/SearchableSelect";
 import IqacDataPage from "./components/IqacDataPage";
+import StudentAchievementsPage from "./components/StudentAchievementsPage";
 import EventDetailsModalBody, { ConnectedEventDetailsModalBody } from "./components/EventDetailsModalBody";
 import { ConnectedApprovalDetailsModalBody } from "./components/ApprovalDetailsModalBody";
 import RequirementsWizardModal from "./components/RequirementsWizardModal";
@@ -384,6 +386,7 @@ export default function App() {
   });
   const [publicationSort, setPublicationSort] = useState("date_desc");
   const [publicationTypeFilter, setPublicationTypeFilter] = useState("");
+  const [publicationCitationFormat, setPublicationCitationFormat] = useState("mla");
 
   const [adminTab, setAdminTab] = useState("users");
   const [adminOverview, setAdminOverview] = useState({ status: "idle", data: null, error: "" });
@@ -4718,6 +4721,7 @@ export default function App() {
     const showApprovalsOrRequirementsContent =
       (isApprovals && canAccessApprovals) || (isRequirements && canAccessRequirements);
     const isPublications = activeView === "publications";
+    const isStudentAchievements = activeView === "student-achievements";
     const isAdminView = activeView === "admin";
     const isIqacData = activeView === "iqac-data";
     const isCalendarUpdatesView = activeView === "calendar-updates";
@@ -7249,6 +7253,10 @@ export default function App() {
         return <IqacDataPage canDeleteIqacFiles={canDeleteIqacFiles} />;
       }
 
+      if (isStudentAchievements) {
+        return <StudentAchievementsPage user={user} />;
+      }
+
       if (isPublications) {
         /** Format a single publication as MLA-style citation. Uses *asterisks* for italicized container titles. */
         const formatPublicationMLA = (item) => {
@@ -7346,6 +7354,42 @@ export default function App() {
           return item.title || item.name || "Untitled";
         };
 
+        const formatPublicationCitation = (item, format) => {
+          if (!format || format === "mla") return formatPublicationMLA(item);
+          const author =
+            item.author_last_name && item.author_first_name
+              ? `${item.author_last_name}, ${item.author_first_name}`.trim()
+              : item.author?.trim();
+          const year = item.year?.trim() || item.publication_date?.trim();
+          const title =
+            item.article_title?.trim() ||
+            item.book_title?.trim() ||
+            item.report_title?.trim() ||
+            item.video_title?.trim() ||
+            item.page_title?.trim() ||
+            item.title?.trim() ||
+            item.name?.trim() ||
+            "Untitled";
+          const container =
+            item.journal_name?.trim() ||
+            item.website_name?.trim() ||
+            item.newspaper_name?.trim() ||
+            item.publisher?.trim() ||
+            item.platform?.trim();
+          const url = item.doi?.trim()
+            ? `https://doi.org/${item.doi.replace(/^https?:\/\/doi\.org\/?/i, "")}`
+            : item.url?.trim();
+          const compact = [author, year && `(${year})`, title, container && `*${container}*`, url].filter(Boolean);
+
+          if (format === "apa") return compact.join(". ").replace(/\.\./g, ".");
+          if (format === "harvard") return [author, year, title, container && `*${container}*`, url].filter(Boolean).join(", ");
+          if (format === "chicago") return [author, `"${title}"`, container && `*${container}*`, year, url].filter(Boolean).join(", ");
+          if (format === "ieee") {
+            return [author, `"${title},"`, container && `*${container}*`, year, url].filter(Boolean).join(", ");
+          }
+          return formatPublicationMLA(item);
+        };
+
         const renderMlaCitation = (citation) => {
           if (!citation) return null;
           return citation.split(/(\*[^*]+\*)/g).map((seg, i) =>
@@ -7428,11 +7472,25 @@ export default function App() {
                     </select>
                     <svg className="pub-select-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                   </div>
+                  <div className="pub-select-wrapper">
+                    <svg className="pub-select-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+                    <select
+                      value={publicationCitationFormat}
+                      onChange={(e) => setPublicationCitationFormat(e.target.value)}
+                      className="pub-styled-select"
+                      aria-label="Citation format"
+                    >
+                      {CITATION_FORMAT_OPTIONS.map((item) => (
+                        <option key={item.value} value={item.value}>{item.label}</option>
+                      ))}
+                    </select>
+                    <svg className="pub-select-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* ── Publications list (MLA style) ── */}
+            {/* Publications list with configurable citation style */}
             {publicationsState.status === "loading" ? (
               <ul className="pub-mla-list" aria-label="Loading publications">
                 {Array.from({ length: 4 }).map((_, i) => (
@@ -7464,7 +7522,7 @@ export default function App() {
               <ul className="pub-mla-list" aria-label="Publications">
                 {filteredPubItems.map((item) => {
                   const meta = PUB_META[item.pub_type] || { icon: "📋", label: item.pub_type || "Unknown", color: "#666" };
-                  const citation = formatPublicationMLA(item);
+                  const citation = formatPublicationCitation(item, publicationCitationFormat);
                   const linkUrl = item.web_view_link || item.url;
                   const isFile = Boolean(item.web_view_link);
                   const linkLabel = item.web_view_link ? "View file" : item.url ? "Visit URL" : null;
@@ -8099,6 +8157,8 @@ export default function App() {
           const visibleItems = showFilters ? applyApprInboxFilter(rawItems) : rawItems;
           const totalCount = rawItems.length;
           const pendingCount = rawItems.filter((i) => canActOnWorkflowRow(i.status, i)).length;
+          // Team channels (facility/it/marketing/transport) use "Noted" instead of "Approved"
+          const isTeamChannel = channel !== "approval";
 
           return (
           <div className="events-table-card appr-card">
@@ -8192,7 +8252,8 @@ export default function App() {
                     const isHistorical = item.is_actionable === false;
                     // Compact badge for list: historical → "Approved" + sublabel; active → status label
                     const badgeInfo = isHistorical ? getCompactListBadge(item) : null;
-                    const statusLabel = badgeInfo ? badgeInfo.primary : formatInboxDecisionStatusLabel(item.status);
+                    const rawStatusLabel = badgeInfo ? badgeInfo.primary : formatInboxDecisionStatusLabel(item.status);
+                    const statusLabel = isTeamChannel && rawStatusLabel === "Approved" ? "Noted" : rawStatusLabel;
                     const stageSublabel = badgeInfo ? badgeInfo.sub : null;
                     const eventHasStarted = isEventStarted(item);
                     const rowAttention = canActOnWorkflowRow(item.status, item);
@@ -8240,7 +8301,7 @@ export default function App() {
                                 onChange={(e) => {
                                   const v = e.target.value;
                                   e.target.value = "";
-                                  if (v === "approved") openWorkflowActionModal(channel, item.id, "approved", "Approve");
+                                  if (v === "approved") openWorkflowActionModal(channel, item.id, "approved", isTeamChannel ? "Noted" : "Approve");
                                   else if (v === "rejected") openWorkflowActionModal(channel, item.id, "rejected", "Reject");
                                   else if (v === "clarification_requested") {
                                     openWorkflowActionModal(channel, item.id, "clarification_requested", "Need clarification");
@@ -8248,7 +8309,7 @@ export default function App() {
                                 }}
                               >
                                 <option value="">Action</option>
-                                <option value="approved">Approve</option>
+                                <option value="approved">{isTeamChannel ? "Noted" : "Approve"}</option>
                                 <option value="rejected">Reject</option>
                                 <option value="clarification_requested">Need clarification</option>
                               </select>
@@ -8899,6 +8960,8 @@ export default function App() {
                     ? "Event Reports"
                     : isPublications
                       ? "Publications"
+                    : isStudentAchievements
+                      ? "Student Achievements"
                       : isIqacData
                         ? "IQAC Data Collection"
                         : isCalendar

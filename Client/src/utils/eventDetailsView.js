@@ -116,6 +116,16 @@ export function wfBadgeLabel(status) {
   return "—";
 }
 
+/**
+ * Like wfBadgeLabel but maps "approved" → "Noted" for internal team
+ * acknowledgement contexts (Facility, IT, Marketing, Transport).
+ * All other statuses delegate to wfBadgeLabel.
+ */
+export function wfTeamBadgeLabel(status) {
+  if (status === "approved") return "Noted";
+  return wfBadgeLabel(status);
+}
+
 export function normalizeDecisionStatusForWf(status) {
   const x = String(status || "").toLowerCase();
   if (x === "none") return "none";

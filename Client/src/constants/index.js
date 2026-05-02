@@ -68,6 +68,7 @@ export const ROUTES = {
   APPROVALS: "/approvals",
   REQUIREMENTS: "/requirements",
   PUBLICATIONS: "/publications",
+  STUDENT_ACHIEVEMENTS: "/student-achievements",
   IQAC_DATA: "/iqac-data",
   CALENDAR_UPDATES: "/calendar-updates",
   USER_APPROVALS: "/user-approvals",
@@ -83,6 +84,7 @@ export const PATH_TO_VIEW = {
   [ROUTES.APPROVALS]: "approvals",
   [ROUTES.REQUIREMENTS]: "requirements",
   [ROUTES.PUBLICATIONS]: "publications",
+  [ROUTES.STUDENT_ACHIEVEMENTS]: "student-achievements",
   [ROUTES.IQAC_DATA]: "iqac-data",
   [ROUTES.CALENDAR_UPDATES]: "calendar-updates",
   [ROUTES.USER_APPROVALS]: "user-approvals",
@@ -109,6 +111,7 @@ export const MENU_ICONS = {
   "approvals":        "M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z",
   "requirements":     "M19 3h-4.18C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z",
   "publications":     "M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z",
+  "student-achievements": "M12 2l2.7 5.47 6.03.88-4.36 4.25 1.03 6-5.4-2.84-5.4 2.84 1.03-6-4.36-4.25 6.03-.88L12 2zm0 11.5l2.45 1.29-.47-2.73 1.98-1.93-2.74-.4L12 6.25l-1.22 2.48-2.74.4 1.98 1.93-.47 2.73L12 13.5z",
   "iqac-data":        "M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4h16v3z",
   "calendar-updates": "M17 12h-5v5h5v-5zm-1-11v2H8V1H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-1V1h-2zm3 18H5V8h14v11z",
   "user-approvals":   "M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z",
@@ -151,6 +154,7 @@ export const menuItems = [
   { id: "approvals", label: "Approvals" },
   { id: "requirements", label: "Requirements" },
   { id: "publications", label: "Publications" },
+  { id: "student-achievements", label: "Student Achievements" },
   { id: "iqac-data", label: "IQAC Data Collection" },
   { id: "calendar-updates", label: "Calendar Updates" },
   { id: "user-approvals", label: "User Approvals" },
@@ -188,3 +192,11 @@ export const PUB_META = {
   video: { icon: "🎬", label: "Video", color: "#c53030" },
   online_newspaper: { icon: "📰", label: "Online Newspaper", color: "#276749" }
 };
+
+export const CITATION_FORMAT_OPTIONS = [
+  { value: "mla", label: "MLA" },
+  { value: "apa", label: "APA" },
+  { value: "harvard", label: "Harvard" },
+  { value: "chicago", label: "Chicago" },
+  { value: "ieee", label: "IEEE" },
+];
