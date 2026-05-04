@@ -2159,21 +2159,23 @@ class _EventCard extends StatelessWidget {
 
     final badges = <(String, String, Color)>[];
 
-    void addBadge(String label, String? status) {
+    void addBadge(String label, String? status, {bool teamChannel = false}) {
       final normalized = status?.trim().toLowerCase() ?? '';
       if (normalized.isEmpty) return;
       badges.add((
         label,
-        _formatWorkflowStatus(normalized),
+        teamChannel && normalized == 'approved'
+            ? 'Noted'
+            : _formatWorkflowStatus(normalized),
         _workflowColor(normalized),
       ));
     }
 
     addBadge('Approval', value.approvalStatus);
-    addBadge('Facility', value.facilityStatus);
-    addBadge('Marketing', value.marketingStatus);
-    addBadge('IT', value.itStatus);
-    addBadge('Transport', value.transportStatus);
+    addBadge('Facility', value.facilityStatus, teamChannel: true);
+    addBadge('Marketing', value.marketingStatus, teamChannel: true);
+    addBadge('IT', value.itStatus, teamChannel: true);
+    addBadge('Transport', value.transportStatus, teamChannel: true);
     return badges;
   }
 

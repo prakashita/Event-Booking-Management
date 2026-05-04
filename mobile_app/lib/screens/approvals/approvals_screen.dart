@@ -878,7 +878,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
         SnackBar(
           content: Text(
             decision == 'approved'
-                ? 'Request approved.'
+                ? 'Request noted.'
                 : decision == 'rejected'
                 ? 'Request rejected.'
                 : 'Clarification requested.',
@@ -931,7 +931,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
                     border: OutlineInputBorder(),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'approved', child: Text('Approve')),
+                    DropdownMenuItem(value: 'approved', child: Text('Noted')),
                     DropdownMenuItem(value: 'rejected', child: Text('Reject')),
                     DropdownMenuItem(
                       value: 'clarification_requested',
@@ -2059,7 +2059,12 @@ class _DepartmentApprovalCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              StatusBadge(status),
+              StatusBadge(
+                status,
+                label: status.trim().toLowerCase() == 'approved'
+                    ? 'Noted'
+                    : null,
+              ),
             ],
           ),
           SizedBox(height: isCompact ? 14 : 16),

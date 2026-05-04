@@ -16,6 +16,7 @@ import '../screens/calendar/calendar_updates_screen.dart';
 import '../screens/chat/chat_list_screen.dart';
 import '../screens/chat/chat_screen.dart';
 import '../screens/publications/publications_screen.dart';
+import '../screens/student_achievements/student_achievements_screen.dart';
 import '../screens/iqac/iqac_screen.dart';
 import '../screens/admin/admin_screen.dart';
 import '../screens/admin/user_approvals_screen.dart';
@@ -142,6 +143,10 @@ class AppRouter {
             GoRoute(
               path: '/publications',
               builder: (_, _) => const PublicationsScreen(),
+            ),
+            GoRoute(
+              path: '/student-achievements',
+              builder: (_, _) => const StudentAchievementsScreen(),
             ),
             GoRoute(path: '/iqac', builder: (_, _) => const IQACScreen()),
             GoRoute(path: '/admin', builder: (_, _) => const AdminScreen()),

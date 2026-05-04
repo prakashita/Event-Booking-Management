@@ -46,7 +46,7 @@ class SideNavBar extends StatelessWidget {
     final isIt = roleKey == 'it';
     final isTransport = roleKey == 'transport';
 
-     final canAccessApprovals = isRegistrarDashboard;
+    final canAccessApprovals = isRegistrarDashboard;
     final canAccessRequirements =
         isFacilityManager || isMarketing || isIt || isTransport;
     final canAccessEventReports = isAdmin || isRegistrarDashboard;
@@ -55,7 +55,7 @@ class SideNavBar extends StatelessWidget {
     final canAccessIqac = AppConstants.iqacAllowedRoles.contains(roleKey);
 
     return Container(
-      width: 256,
+      width: 288,
       color: const Color(0xFF1B254B),
       child: Column(
         children: [
@@ -172,6 +172,12 @@ class SideNavBar extends StatelessWidget {
                       title: 'Publications',
                       route: '/publications',
                     ),
+                    _buildNavItem(
+                      context,
+                      icon: LucideIcons.star,
+                      title: 'Student Achievements',
+                      route: '/student-achievements',
+                    ),
                     if (canAccessIqac)
                       _buildNavItem(
                         context,
@@ -237,7 +243,12 @@ class SideNavBar extends StatelessWidget {
         },
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsetsDirectional.fromSTEB(
+            isSelected ? 12 : 16,
+            12,
+            12,
+            12,
+          ),
           decoration: BoxDecoration(
             color: isSelected
                 ? Colors.blue.withValues(alpha: 0.2)
@@ -259,12 +270,17 @@ class SideNavBar extends StatelessWidget {
                     : const Color(0xFFA0AEC0),
               ),
               const SizedBox(width: 16),
-              Text(
-                title,
-                style: TextStyle(
-                  color: isSelected ? Colors.white : const Color(0xFFA0AEC0),
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : const Color(0xFFA0AEC0),
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ],

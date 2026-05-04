@@ -5,9 +5,13 @@ import '../../constants/app_colors.dart';
 
 class StatusBadge extends StatelessWidget {
   final String status;
-  const StatusBadge(this.status, {super.key});
+  final String? label;
+
+  const StatusBadge(this.status, {super.key, this.label});
 
   String get _label {
+    final override = label?.trim();
+    if (override != null && override.isNotEmpty) return override.toUpperCase();
     final normalized = status.trim().toLowerCase();
     if (normalized == 'clarification' ||
         normalized == 'clarification_requested' ||

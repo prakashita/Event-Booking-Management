@@ -856,7 +856,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         SnackBar(
           content: Text(
             decision == 'approved'
-                ? 'Request approved.'
+                ? 'Request noted.'
                 : decision == 'rejected'
                 ? 'Request rejected.'
                 : 'Clarification requested.',
@@ -943,7 +943,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       items: [
                         DropdownMenuItem(
                           value: 'approved',
-                          child: Text('Approve', style: GoogleFonts.inter()),
+                          child: Text('Noted', style: GoogleFonts.inter()),
                         ),
                         DropdownMenuItem(
                           value: 'rejected',
@@ -3147,6 +3147,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }) {
     final colors = _getRequirementStatusColor(status);
     final normalized = status.trim().toLowerCase();
+    final teamWorkflow =
+        label == 'Facility' ||
+        label == 'Marketing' ||
+        label == 'IT' ||
+        label == 'Transport';
     final isDone = normalized == 'approved' || normalized == 'accepted';
     final isPending = normalized == 'pending';
     final isClarification =
@@ -3212,7 +3217,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          normalized.replaceAll('_', ' ').toUpperCase(),
+                          teamWorkflow && normalized == 'approved'
+                              ? 'NOTED'
+                              : normalized.replaceAll('_', ' ').toUpperCase(),
                           style: GoogleFonts.inter(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
@@ -3713,9 +3720,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   final role = _formatWorkflowRoleLabel(
                     log['role']?.toString(),
                   );
-                  final actionType = _formatWorkflowActionTypeLabel(
-                    log['action_type']?.toString(),
-                  );
+                  final rawRole = log['role']?.toString().toLowerCase() ?? '';
+                  final rawActionType =
+                      log['action_type']?.toString().toLowerCase() ?? '';
+                  final actionType =
+                      {
+                            'facility_manager',
+                            'marketing',
+                            'it',
+                            'transport',
+                            'iqac',
+                          }.contains(rawRole) &&
+                          rawActionType == 'approve'
+                      ? 'Noted'
+                      : _formatWorkflowActionTypeLabel(rawActionType);
                   final comment = log['comment']?.toString() ?? '';
                   final createdAt = log['created_at']?.toString();
                   final actorName = log['actor_name']?.toString() ?? '';
@@ -4168,7 +4186,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                       fontSize: 13,
                                     ),
                                   ),
-                                  child: const Text('Approve'),
+                                  child: const Text('Noted'),
                                 ),
                                 OutlinedButton(
                                   onPressed: () => _openTakeActionFromThread(
@@ -4278,7 +4296,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               fontSize: 13,
                             ),
                           ),
-                          child: const Text('Approve'),
+                          child: const Text('Noted'),
                         ),
                         OutlinedButton(
                           onPressed: () => _openTakeActionFromThread(

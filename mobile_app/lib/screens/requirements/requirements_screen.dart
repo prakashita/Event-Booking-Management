@@ -661,7 +661,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
         SnackBar(
           content: Text(
             decision == 'approved'
-                ? 'Request approved.'
+                ? 'Request noted.'
                 : decision == 'rejected'
                 ? 'Request rejected.'
                 : 'Clarification requested.',
@@ -704,7 +704,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                     border: OutlineInputBorder(),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'approved', child: Text('Approve')),
+                    DropdownMenuItem(value: 'approved', child: Text('Noted')),
                     DropdownMenuItem(value: 'rejected', child: Text('Reject')),
                     DropdownMenuItem(
                       value: 'clarification_requested',
@@ -1042,6 +1042,8 @@ class _RequestCard extends StatelessWidget {
                   (normalizedStatus == 'clarification' ||
                           normalizedStatus == 'clarification_requested')
                       ? 'CLARIFICATION'
+                      : normalizedStatus == 'approved'
+                      ? 'NOTED'
                       : normalizedStatus.replaceAll('_', ' ').toUpperCase(),
                   style: TextStyle(
                     fontSize: 10,
