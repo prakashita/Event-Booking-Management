@@ -1815,11 +1815,11 @@ class _IQACScreenState extends State<IQACScreen> {
                                 Text(
                                   activeCard.title,
                                   style: GoogleFonts.poppins(
-                                    fontSize: isCompactScreen ? 16 : 17,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.15,
+                                    fontSize: isCompactScreen ? 19 : 21,
+                                    fontWeight: FontWeight.w700,
+                                    height: 1.18,
                                     color: _slate900,
-                                    letterSpacing: -0.3,
+                                    letterSpacing: 0,
                                   ),
                                 ),
                               ],
@@ -3438,6 +3438,13 @@ String _titleForKey(String key) {
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
   if (cleaned.isEmpty) return key;
+  const overrides = {
+    'Non Teaching': 'Non-teaching',
+    'Part Time Teachers': 'Part-time Teachers',
+    'Qualification Details': 'Qualification Details',
+  };
+  final overridden = overrides[cleaned];
+  if (overridden != null) return overridden;
   return cleaned
       .split(' ')
       .map(
@@ -3500,8 +3507,11 @@ String _compactValuePreview(dynamic value) {
     final meaningful = value.entries
         .where((entry) => _SsrSectionMeta._hasMeaningfulValue(entry.value))
         .take(2)
-        .map((entry) => '${_titleForKey(entry.key.toString())}: ${entry.value}')
-        .join(' · ');
+        .map(
+          (entry) =>
+              '${_titleForKey(entry.key.toString())}: ${_compactPreviewValue(entry.value)}',
+        )
+        .join('\n');
     return meaningful.isEmpty ? 'No content yet' : meaningful;
   }
   if (value is List) {
@@ -3510,6 +3520,22 @@ String _compactValuePreview(dynamic value) {
   final text = (value ?? '').toString().trim().replaceAll(RegExp(r'\s+'), ' ');
   if (text.isEmpty) return 'Blank';
   return text.length > 80 ? '${text.substring(0, 80)}...' : text;
+}
+
+String _compactPreviewValue(dynamic value) {
+  if (value is List) {
+    return '${value.length} ${value.length == 1 ? 'entry' : 'entries'}';
+  }
+  if (value is Map) {
+    final filled = value.values
+        .where((item) => _SsrSectionMeta._hasMeaningfulValue(item))
+        .length;
+    if (filled == 0) return 'No content';
+    return '$filled ${filled == 1 ? 'field' : 'fields'} filled';
+  }
+  final text = (value ?? '').toString().trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (text.isEmpty) return 'Blank';
+  return text.length > 36 ? '${text.substring(0, 36)}...' : text;
 }
 
 int _countWords(String value) {
@@ -4535,7 +4561,7 @@ class _UniversityProfileEditor extends StatelessWidget {
             'qualification_details': data['qualification_details'],
           },
           intro:
-              'Open the sections below to enter teaching, non-teaching, technical staff, and teacher qualification figures.',
+              'Use the cards below to enter staff counts and teacher qualification details.',
           onChanged: (value, {rebuild = false}) {
             final grouped = Map<String, dynamic>.from(value as Map);
             final next = _deepCopyMap(data);
@@ -4686,8 +4712,8 @@ class _ProfileAccordionCard extends StatelessWidget {
       child: _LazyExpansionCard(
         title: title,
         subtitle: '',
-        tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        childrenPadding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
         leading: _ProfileIcon(icon: icon),
         childrenBuilder: () => [
           if (intro != null) ...[
@@ -4714,13 +4740,18 @@ class _ProfileShell extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _slate200),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFDDE6F3)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.035),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
+            color: _slate900.withValues(alpha: 0.055),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Colors.white.withValues(alpha: 0.9),
+            blurRadius: 1,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -4737,13 +4768,18 @@ class _ProfileIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 34,
-      height: 34,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
-        color: _indigo50,
-        borderRadius: BorderRadius.circular(10),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFF5F7FF), _indigo50],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _indigo100),
       ),
-      child: Icon(icon, color: _indigo600, size: 19),
+      child: Icon(icon, color: _indigo600, size: 20),
     );
   }
 }
@@ -4757,20 +4793,43 @@ class _ProfileInfoBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: _blue50,
+        color: const Color(0xFFF7FAFF),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _blue100),
+        border: Border.all(color: const Color(0xFFDDE8FA)),
       ),
-      child: Text(
-        text,
-        style: GoogleFonts.poppins(
-          fontSize: 13,
-          height: 1.4,
-          fontWeight: FontWeight.w600,
-          color: _blue800,
-        ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFDDE8FA)),
+            ),
+            child: const Icon(
+              Icons.info_outline_rounded,
+              size: 15,
+              color: _blue600,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.poppins(
+                fontSize: 12.5,
+                height: 1.45,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF24406F),
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -4994,9 +5053,10 @@ class _SsrValueEditorState extends State<_SsrValueEditor> {
             child: Text(
               widget.label,
               style: GoogleFonts.poppins(
-                fontSize: 12,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w700,
-                color: _slate500,
+                color: const Color(0xFF536179),
+                letterSpacing: 0,
               ),
             ),
           ),
@@ -5023,22 +5083,24 @@ class _SsrValueEditorState extends State<_SsrValueEditor> {
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: _slate200),
+                  borderSide: const BorderSide(color: Color(0xFFDCE5F1)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: const BorderSide(color: _indigo500, width: 2),
                 ),
                 filled: true,
-                fillColor: _slate50,
+                fillColor: const Color(0xFFF8FAFD),
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
+                  horizontal: 18,
+                  vertical: 17,
                 ),
               ),
               style: GoogleFonts.poppins(
-                fontSize: 15,
+                fontSize: 15.5,
                 color: theme.colorScheme.onSurface,
+                height: 1.35,
+                letterSpacing: 0,
               ),
             )
           else
@@ -5064,20 +5126,25 @@ class _SsrValueEditorState extends State<_SsrValueEditor> {
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: _slate200),
+                  borderSide: const BorderSide(color: Color(0xFFDCE5F1)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: const BorderSide(color: _indigo500, width: 2),
                 ),
                 filled: true,
-                fillColor: multiLine ? Colors.white : _slate50,
+                fillColor: const Color(0xFFF8FAFD),
                 contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
+                  horizontal: 18,
+                  vertical: 17,
                 ),
               ),
-              style: GoogleFonts.poppins(fontSize: 15),
+              style: GoogleFonts.poppins(
+                fontSize: 15.5,
+                height: 1.45,
+                color: _slate800,
+                letterSpacing: 0,
+              ),
               onChanged: (next) => widget.onChanged(
                 _isNumericLabel(widget.label)
                     ? next.replaceAll(RegExp(r'[^\d.]'), '')
@@ -5235,12 +5302,14 @@ class _LazyExpansionCardState extends State<_LazyExpansionCard> {
         leading: widget.leading,
         title: Text(
           widget.title,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w900,
-            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            fontSize: 15.5,
+            height: 1.25,
             color: _slate900,
+            letterSpacing: 0,
           ),
         ),
         subtitle: widget.subtitle.isEmpty
@@ -5249,19 +5318,21 @@ class _LazyExpansionCardState extends State<_LazyExpansionCard> {
                 padding: const EdgeInsets.only(top: 4.0),
                 child: Text(
                   widget.subtitle,
-                  maxLines: 2,
+                  maxLines: widget.subtitle.contains('\n') ? 3 : 2,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    height: 1.35,
                     color: _slate500,
+                    letterSpacing: 0,
                   ),
                 ),
               ),
         collapsedShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(24),
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         iconColor: _slate400,
         collapsedIconColor: _slate400,
         trailing: Row(
@@ -5269,17 +5340,21 @@ class _LazyExpansionCardState extends State<_LazyExpansionCard> {
           children: [
             ...widget.trailingLeading,
             Container(
-              width: 32,
-              height: 32,
-              decoration: const BoxDecoration(
-                color: _slate50,
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: _expanded ? _indigo50 : const Color(0xFFF8FAFC),
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: _expanded ? _indigo100 : Colors.transparent,
+                ),
               ),
               child: Icon(
                 _expanded
                     ? Icons.keyboard_arrow_up_rounded
                     : Icons.keyboard_arrow_down_rounded,
-                color: _slate400,
+                color: _expanded ? _indigo600 : _slate400,
+                size: 23,
               ),
             ),
           ],
