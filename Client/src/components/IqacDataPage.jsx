@@ -1,7 +1,7 @@
 /**
  * IQAC Data Collection: SSR/NAAC form sections plus criteria evidence collection.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SimpleIcon } from "./icons";
 import { Modal } from "./ui";
 import IqacTemplateDownloadCard from "./IqacTemplateDownloadCard";
@@ -92,17 +92,58 @@ const SSR_CARDS = [
 ];
 
 const EXTENDED_PROFILE_METRICS = [
-  { key: "programmes_offered", code: "1.1", label: "Number of programmes offered year-wise for last five years" },
-  { key: "students", code: "2.1", label: "Number of students year-wise during last five years" },
-  { key: "outgoing_students", code: "2.2", label: "Number of outgoing / final year students year-wise during last five years" },
-  { key: "exam_appeared", code: "2.3", label: "Number of students appeared in university examination year-wise during last five years" },
-  { key: "revaluation_applications", code: "2.4", label: "Number of revaluation applications year-wise during last five years" },
-  { key: "courses", code: "3.1", label: "Number of courses in all programmes year-wise during last five years" },
-  { key: "full_time_teachers", code: "3.2", label: "Number of full-time teachers year-wise during last five years" },
-  { key: "sanctioned_posts", code: "3.3", label: "Number of sanctioned posts year-wise during last five years" },
-  { key: "eligible_applications", code: "4.1", label: "Eligible applications received for admissions year-wise" },
-  { key: "reserved_seats", code: "4.2", label: "Reserved category seats year-wise" },
-  { key: "expenditure_excluding_salary", code: "4.5", label: "Total expenditure excluding salary year-wise in INR Lakhs" },
+  { key: "programmes_offered", code: "1.1", label: "Number of Programmes offered year wise for last five years" },
+  { key: "students", code: "2.1", label: "Number of students year wise during the last five years" },
+  { key: "outgoing_students", code: "2.2", label: "Number of outgoing / final year students year wise during the last five years" },
+  { key: "exam_appeared", code: "2.3", label: "Number of students appeared in the University examination year wise during the last five years" },
+  { key: "revaluation_applications", code: "2.4", label: "Number of revaluation applications year wise during the last 5 years" },
+  { key: "courses", code: "3.1", label: "Number of courses in all Programmes year wise during the last five years" },
+  { key: "full_time_teachers", code: "3.2", label: "Number of full time teachers year wise during the last five years" },
+  { key: "sanctioned_posts", code: "3.3", label: "Number of sanctioned posts year wise during the last five years" },
+  { key: "eligible_applications", code: "4.1", label: "Number of eligible applications received for admissions to all the Programmes year wise during the last five years" },
+  { key: "reserved_seats", code: "4.2", label: "Number of seats earmarked for reserved category as per GOI/State Govt rule year wise during the last five years" },
+  { key: "expenditure_excluding_salary", code: "4.5", label: "Total Expenditure excluding salary year wise during the last five years (INR in Lakhs)", valueRowLabel: "Expenditure" },
+];
+
+const EXTENDED_PROFILE_SECTIONS = [
+  {
+    index: "1",
+    title: "Programme",
+    items: [
+      { type: "year", key: "programmes_offered" },
+      { type: "single", key: "departments_offering_programmes", code: "1.2", label: "Number of departments offering academic programmes" },
+    ],
+  },
+  {
+    index: "2",
+    title: "Student",
+    items: [
+      { type: "year", key: "students" },
+      { type: "year", key: "outgoing_students" },
+      { type: "year", key: "exam_appeared" },
+      { type: "year", key: "revaluation_applications" },
+    ],
+  },
+  {
+    index: "3",
+    title: "Academic",
+    items: [
+      { type: "year", key: "courses" },
+      { type: "year", key: "full_time_teachers" },
+      { type: "year", key: "sanctioned_posts" },
+    ],
+  },
+  {
+    index: "4",
+    title: "Institution",
+    items: [
+      { type: "year", key: "eligible_applications" },
+      { type: "year", key: "reserved_seats" },
+      { type: "single", key: "total_classrooms_seminar_halls", code: "4.3", label: "Total number of classrooms and seminar halls" },
+      { type: "single", key: "total_computers_academic", code: "4.4", label: "Total number of computers in the campus for academic purpose" },
+      { type: "year", key: "expenditure_excluding_salary" },
+    ],
+  },
 ];
 
 const STAFF_STATUSES = ["Sanctioned", "Recruited", "Yet to Recruit", "On Contract"];
@@ -110,6 +151,7 @@ const TEACHING_ROLES = ["Professor", "Associate Professor", "Assistant Professor
 const GENDER_COLUMNS = ["Male", "Female", "Others", "Total"];
 const QUALIFICATIONS = ["D.Sc/D.Litt", "Ph.D.", "M.Phil.", "PG"];
 const ACADEMIC_YEAR_LABELS = ["Year 1", "Year 2", "Year 3", "Year 4", "Year 5"];
+const CAMPUS_LOCATIONS = ["Urban", "Semi Urban", "Rural", "Tribal", "Hill"];
 
 function createExecutiveSummaryData() {
   return {
@@ -141,24 +183,59 @@ function qualificationRows() {
   });
 }
 
+function affiliatedInstitutionRows() {
+  return [{ college_type: "", permanent_affiliation: "", temporary_affiliation: "" }];
+}
+
+function collegeTypeAffiliationRows() {
+  return [
+    { college_type: "Education/Teachers Training", permanent: "", temporary: "", total: "" },
+    { college_type: "Business administration/Commerce/Management/Finance", permanent: "", temporary: "", total: "" },
+    { college_type: "Universal/Common to all Disciplines", permanent: "", temporary: "", total: "" },
+  ];
+}
+
+function mergeRowsByKey(rows, fallbackRows, keyName, valueMapper = (row) => row) {
+  const source = Array.isArray(rows) ? rows : [];
+  return fallbackRows.map((fallbackRow) => {
+    const match = source.find((row) => row?.[keyName] === fallbackRow[keyName]);
+    return match ? { ...fallbackRow, ...valueMapper(match) } : fallbackRow;
+  });
+}
+
+function normalizeCollegeTypeAffiliations(rows, fallbackRows) {
+  return mergeRowsByKey(rows, fallbackRows, "college_type", (row) => ({
+    permanent: row.permanent ?? row.permanent_affiliation ?? "",
+    temporary: row.temporary ?? row.temporary_affiliation ?? "",
+    total: row.total ?? "",
+  }));
+}
+
+function normalizeCampuses(rows, fallbackRows) {
+  const source = cloneRows(rows, fallbackRows);
+  return source.map((row) => {
+    const oldCampusTypeWasLocation = CAMPUS_LOCATIONS.includes(row.campus_type) && !row.location;
+    return oldCampusTypeWasLocation
+      ? { ...row, campus_type: "", location: row.campus_type }
+      : row;
+  });
+}
+
 function createProfileData() {
   return {
     basic_information: { name: "", address: "", city: "", pin: "", state: "", website: "" },
     contacts: [{ designation: "", name: "", telephone: "", mobile: "", fax: "", email: "" }],
     institution: { nature: "", status: "", type: "" },
     establishment: { establishment_date: "", status_prior: "", establishment_date_if_applicable: "" },
-    recognition: { ugc_2f_date: "", ugc_12b_date: "", other_agency_name: "", other_agency_date: "" },
+    recognition: { ugc_2f_date: "", ugc_12b_date: "", other_agencies: [] },
     upe_recognized: "",
     campuses: [{
       campus_type: "", address: "", location: "", campus_area_acres: "", built_up_area_sq_mts: "",
       programmes_offered: "", establishment_date: "", recognition_date: "",
     }],
     academic_information: {
-      affiliated_institutions: [
-        { college_type: "Education/Teachers Training", permanent_affiliation: "", temporary_affiliation: "" },
-        { college_type: "Business administration/Commerce/Management/Finance", permanent_affiliation: "", temporary_affiliation: "" },
-        { college_type: "Universal/Common to all Disciplines", permanent_affiliation: "", temporary_affiliation: "" },
-      ],
+      affiliated_institutions: affiliatedInstitutionRows(),
+      college_type_affiliations: collegeTypeAffiliationRows(),
       college_details: [
         { label: "Constituent Colleges", value: "" },
         { label: "Affiliated Colleges", value: "" },
@@ -173,6 +250,7 @@ function createProfileData() {
       ],
       sra_recognized: "",
       sra_details: "",
+      sra_programmes: [{ programme: "", regulatory_authority: "", recognition_year: "", intake: "" }],
     },
     staff: {
       teaching: staffRows(TEACHING_ROLES.flatMap((role) => GENDER_COLUMNS.map((gender) => `${role}_${gender}`))),
@@ -282,18 +360,43 @@ function normalizeSectionData(sectionKey, data) {
   }
   if (sectionKey === "university_profile") {
     const base = createProfileData();
+    const recognitionValue = value.recognition || {};
+    const { other_agency_name, other_agency_date, ...cleanRecognitionValue } = recognitionValue;
+    const legacyRecognitionAgency =
+      (other_agency_name || other_agency_date)
+        ? [{ agency_name: other_agency_name || "", date: other_agency_date || "" }]
+        : [];
+    const recognitionExtraRows = Array.isArray(recognitionValue.other_agencies)
+      ? recognitionValue.other_agencies
+      : legacyRecognitionAgency;
     return {
       ...base,
       ...value,
       basic_information: { ...base.basic_information, ...(value.basic_information || {}) },
       institution: { ...base.institution, ...(value.institution || {}) },
       establishment: { ...base.establishment, ...(value.establishment || {}) },
-      recognition: { ...base.recognition, ...(value.recognition || {}) },
+      recognition: {
+        ...base.recognition,
+        ...cleanRecognitionValue,
+        other_agencies: recognitionExtraRows,
+      },
       academic_information: {
         ...base.academic_information,
         ...(value.academic_information || {}),
-        affiliated_institutions: cloneRows(value.academic_information?.affiliated_institutions, base.academic_information.affiliated_institutions),
+        affiliated_institutions: cloneRows(
+          value.academic_information?.affiliated_institutions &&
+            !value.academic_information?.college_type_affiliations
+            ? base.academic_information.affiliated_institutions
+            : value.academic_information?.affiliated_institutions,
+          base.academic_information.affiliated_institutions
+        ),
+        college_type_affiliations: normalizeCollegeTypeAffiliations(
+          value.academic_information?.college_type_affiliations ||
+            value.academic_information?.affiliated_institutions,
+          base.academic_information.college_type_affiliations
+        ),
         college_details: cloneRows(value.academic_information?.college_details, base.academic_information.college_details),
+        sra_programmes: cloneRows(value.academic_information?.sra_programmes, base.academic_information.sra_programmes),
       },
       staff: {
         teaching: cloneRows(value.staff?.teaching, base.staff.teaching),
@@ -312,7 +415,7 @@ function normalizeSectionData(sectionKey, data) {
       },
       hrdc: { ...base.hrdc, ...(value.hrdc || {}) },
       contacts: cloneRows(value.contacts, base.contacts),
-      campuses: cloneRows(value.campuses, base.campuses),
+      campuses: normalizeCampuses(value.campuses, base.campuses),
       distinguished_academicians: cloneRows(value.distinguished_academicians, base.distinguished_academicians),
       chairs: cloneRows(value.chairs, base.chairs),
       student_enrolment: cloneRows(value.student_enrolment, base.student_enrolment),
@@ -427,52 +530,468 @@ function FormSection({ title, children, note = "" }) {
   );
 }
 
-function RepeatableTable({ title, rows, columns, onCellChange, onAdd, onRemove, note = "" }) {
+function NaacSection({ title, children, note = "", eyebrow = "" }) {
   return (
-    <FormSection title={title} note={note}>
-      <div className="iqac-ssr-table-wrap">
-        <table className="iqac-ssr-table">
-          <thead>
-            <tr>
-              {columns.map((col) => <th key={col.key}>{col.label}</th>)}
-              {onRemove ? <th>Actions</th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, rowIndex) => (
-              <tr key={rowIndex}>
-                {columns.map((col) => (
-                  <td key={col.key}>
-                    {col.readonly ? (
-                      <span className="iqac-ssr-cell-label">{row[col.key]}</span>
-                    ) : col.type === "select" ? (
-                      <select value={row[col.key] || ""} onChange={(event) => onCellChange(rowIndex, col.key, event.target.value)}>
-                        <option value="">Select</option>
-                        {(col.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
-                      </select>
-                    ) : col.numeric ? (
-                      <input type="text" value={row[col.key] || ""} onChange={(event) => onCellChange(rowIndex, col.key, sanitizeNumber(event.target.value))} />
-                    ) : (
-                      <input type={col.type || "text"} value={row[col.key] || ""} onChange={(event) => onCellChange(rowIndex, col.key, event.target.value)} />
-                    )}
-                  </td>
-                ))}
-                {onRemove ? (
-                  <td>
-                    <button type="button" className="details-button reject" onClick={() => onRemove(rowIndex)}>Remove</button>
-                  </td>
-                ) : null}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <section className="naac-section">
+      <div className="naac-section-head">
+        {eyebrow ? <span>{eyebrow}</span> : null}
+        <h4>{title}</h4>
+        {note ? <p>{note}</p> : null}
       </div>
+      {children}
+    </section>
+  );
+}
+
+function NaacTable({ children, minWidth = 760, className = "", colgroup = null }) {
+  return (
+    <div className="naac-table-wrap">
+      <table className={`naac-table${className ? ` ${className}` : ""}`} style={{ minWidth }}>
+        {colgroup ? (
+          <colgroup>
+            {colgroup.map((width, index) => (
+              <col key={index} style={width ? { width } : undefined} />
+            ))}
+          </colgroup>
+        ) : null}
+        {children}
+      </table>
+    </div>
+  );
+}
+
+function NaacTableRow({ children, className = "" }) {
+  return <tr className={className}>{children}</tr>;
+}
+
+function NaacInputCell({
+  value,
+  onChange,
+  type = "text",
+  numeric = false,
+  compact = false,
+  placeholder = "",
+  ariaLabel = "",
+}) {
+  return (
+    <input
+      aria-label={ariaLabel}
+      className={compact ? "naac-cell-input naac-cell-input--compact" : "naac-cell-input"}
+      type={numeric ? "text" : type}
+      value={value || ""}
+      placeholder={placeholder}
+      onChange={(event) => onChange(numeric ? sanitizeNumber(event.target.value) : event.target.value)}
+    />
+  );
+}
+
+function NaacTextareaCell({ value, onChange, rows = 2, placeholder = "", ariaLabel = "" }) {
+  return (
+    <textarea
+      aria-label={ariaLabel}
+      className="naac-cell-textarea"
+      rows={rows}
+      value={value || ""}
+      placeholder={placeholder}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
+
+function NaacYesNoCell({ value, onChange, ariaLabel = "Yes or No" }) {
+  return (
+    <span className="naac-yesno-cell" role="group" aria-label={ariaLabel}>
+      {["Yes", "No"].map((option) => (
+        <button
+          key={option}
+          type="button"
+          className={value === option ? "naac-yesno-choice naac-yesno-choice--active" : "naac-yesno-choice"}
+          onClick={() => onChange(option)}
+        >
+          {option}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+function TextInputCell(props) {
+  return <NaacInputCell {...props} type="text" />;
+}
+
+function NumberInputCell(props) {
+  return <NaacInputCell {...props} numeric compact />;
+}
+
+function DateInputCell(props) {
+  return <NaacInputCell {...props} type="date" />;
+}
+
+function TextAreaCell(props) {
+  return <NaacTextareaCell {...props} />;
+}
+
+function YesNoCell(props) {
+  return <NaacYesNoCell {...props} />;
+}
+
+function FixedRowsWithDynamicExtraRows({
+  title,
+  fixedRows,
+  extraRows,
+  onFixedDateChange,
+  onExtraChange,
+  onAdd,
+  onRemove,
+  addLabel = "Add Recognition Agency",
+}) {
+  return (
+    <NaacSection title={title}>
+      <NaacTable minWidth={820} className="naac-recognition-table" colgroup={["50%", "34%", "16%"]}>
+        <thead>
+          <NaacTableRow>
+            <th colSpan="3">Date of Recognition as a University by UGC or Any Other National Agency</th>
+          </NaacTableRow>
+          <NaacTableRow>
+            <th>Under Section</th>
+            <th>Date</th>
+            <th className="naac-actions-col">Actions</th>
+          </NaacTableRow>
+        </thead>
+        <tbody>
+          {fixedRows.map((row) => (
+            <NaacTableRow key={row.key}>
+              <th scope="row">{row.label}</th>
+              <td>
+                <DateInputCell value={row.date} ariaLabel={`${row.label} date`} onChange={(value) => onFixedDateChange(row.key, value)} />
+              </td>
+              <td className="naac-actions-col">
+                <span className="naac-fixed-row-note">Fixed</span>
+              </td>
+            </NaacTableRow>
+          ))}
+          {(extraRows || []).map((row, rowIndex) => (
+            <NaacTableRow key={rowIndex}>
+              <td>
+                <TextInputCell value={row.agency_name} placeholder="Agency/Section name" ariaLabel="Agency or section name" onChange={(value) => onExtraChange(rowIndex, "agency_name", value)} />
+              </td>
+              <td>
+                <DateInputCell value={row.date} ariaLabel="Recognition agency date" onChange={(value) => onExtraChange(rowIndex, "date", value)} />
+              </td>
+              <td className="naac-actions-col">
+                <button type="button" className="naac-row-remove" onClick={() => onRemove(rowIndex)}>Remove</button>
+              </td>
+            </NaacTableRow>
+          ))}
+        </tbody>
+      </NaacTable>
+      <button type="button" className="naac-add-row" onClick={onAdd}>
+        {addLabel}
+      </button>
+    </NaacSection>
+  );
+}
+
+function RepeatableRowsTable({
+  title,
+  rows,
+  columns,
+  onCellChange,
+  onAdd,
+  onRemove,
+  note = "",
+  minWidth = 860,
+  addLabel = "Add Row",
+}) {
+  return (
+    <NaacSection title={title} note={note}>
+      <NaacTable minWidth={minWidth} colgroup={columns.map((col) => col.width || null).concat(onRemove ? ["104px"] : [])}>
+        <thead>
+          <NaacTableRow>
+            {columns.map((col) => (
+              <th key={col.key} className={col.compact ? "naac-col-compact" : ""}>{col.label}</th>
+            ))}
+            {onRemove ? <th className="naac-actions-col">Actions</th> : null}
+          </NaacTableRow>
+        </thead>
+        <tbody>
+          {(rows || []).map((row, rowIndex) => (
+            <NaacTableRow key={rowIndex}>
+              {columns.map((col) => (
+                <td key={col.key} className={`${col.wide ? "naac-cell-wide" : ""}${col.compact ? " naac-cell-compact" : ""}`}>
+                  {col.readonly ? (
+                    <span className="naac-readonly-cell">{row[col.key]}</span>
+                  ) : col.type === "select" ? (
+                    <select
+                      className="naac-cell-input"
+                      value={row[col.key] || ""}
+                      onChange={(event) => onCellChange(rowIndex, col.key, event.target.value)}
+                      aria-label={col.label}
+                    >
+                      <option value="">Select</option>
+                      {(col.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  ) : col.type === "textarea" ? (
+                    <TextAreaCell
+                      value={row[col.key]}
+                      rows={col.rows || 2}
+                      ariaLabel={col.label}
+                      onChange={(value) => onCellChange(rowIndex, col.key, value)}
+                    />
+                  ) : col.type === "date" ? (
+                    <DateInputCell
+                      value={row[col.key]}
+                      ariaLabel={col.label}
+                      onChange={(value) => onCellChange(rowIndex, col.key, value)}
+                    />
+                  ) : col.numeric ? (
+                    <NumberInputCell
+                      value={row[col.key]}
+                      ariaLabel={col.label}
+                      onChange={(value) => onCellChange(rowIndex, col.key, value)}
+                    />
+                  ) : (
+                    <TextInputCell
+                      type={col.type || "text"}
+                      value={row[col.key]}
+                      compact={col.compact}
+                      ariaLabel={col.label}
+                      onChange={(value) => onCellChange(rowIndex, col.key, value)}
+                    />
+                  )}
+                </td>
+              ))}
+              {onRemove ? (
+                <td className="naac-actions-col">
+                  <button type="button" className="naac-row-remove" onClick={() => onRemove(rowIndex)}>Remove</button>
+                </td>
+              ) : null}
+            </NaacTableRow>
+          ))}
+        </tbody>
+      </NaacTable>
       {onAdd ? (
-        <button type="button" className="secondary-action iqac-ssr-add-row" onClick={onAdd}>
-          Add row
+        <button type="button" className="naac-add-row" onClick={onAdd}>
+          {addLabel}
         </button>
       ) : null}
-    </FormSection>
+    </NaacSection>
+  );
+}
+
+function StaffMatrixTable({ title, rows, grouped = false, onCellChange }) {
+  const minWidth = grouped ? 1180 : 620;
+  return (
+    <NaacSection title={title}>
+      <NaacTable minWidth={minWidth} className="naac-matrix-table">
+        {grouped ? (
+          <thead>
+            <NaacTableRow>
+              <th rowSpan="2">Teaching Faculty</th>
+              {TEACHING_ROLES.map((role) => <th key={role} colSpan={GENDER_COLUMNS.length}>{role}</th>)}
+            </NaacTableRow>
+            <NaacTableRow>
+              {TEACHING_ROLES.flatMap((role) => GENDER_COLUMNS.map((gender) => <th key={`${role}-${gender}`}>{gender}</th>))}
+            </NaacTableRow>
+          </thead>
+        ) : (
+          <thead>
+            <NaacTableRow>
+              <th>Staff</th>
+              {GENDER_COLUMNS.map((gender) => <th key={gender}>{gender}</th>)}
+            </NaacTableRow>
+          </thead>
+        )}
+        <tbody>
+          {(rows || []).map((row, rowIndex) => (
+            <NaacTableRow key={row.status || rowIndex}>
+              <th scope="row">{row.status}</th>
+              {(grouped ? TEACHING_ROLES.flatMap((role) => GENDER_COLUMNS.map((gender) => `${role}_${gender}`)) : GENDER_COLUMNS).map((key) => (
+                <td key={key}>
+                  <NaacInputCell compact numeric value={row[key]} ariaLabel={`${row.status} ${key}`} onChange={(value) => onCellChange(rowIndex, key, value)} />
+                </td>
+              ))}
+            </NaacTableRow>
+          ))}
+        </tbody>
+      </NaacTable>
+    </NaacSection>
+  );
+}
+
+function QualificationMatrixTable({ title, rows, onCellChange }) {
+  return (
+    <NaacSection title={title}>
+      <NaacTable minWidth={1100} className="naac-matrix-table naac-qualification-table">
+        <thead>
+          <NaacTableRow>
+            <th rowSpan="2">Highest Qualification</th>
+            {TEACHING_ROLES.map((role) => <th key={role} colSpan="3">{role}</th>)}
+            <th rowSpan="2">Total</th>
+          </NaacTableRow>
+          <NaacTableRow>
+            {TEACHING_ROLES.flatMap((role) => GENDER_COLUMNS.slice(0, 3).map((gender) => <th key={`${role}-${gender}`}>{gender}</th>))}
+          </NaacTableRow>
+        </thead>
+        <tbody>
+          {(rows || []).map((row, rowIndex) => (
+            <NaacTableRow key={row.qualification || rowIndex}>
+              <th scope="row">{row.qualification}</th>
+              {TEACHING_ROLES.flatMap((role) => GENDER_COLUMNS.slice(0, 3).map((gender) => `${role}_${gender}`)).map((key) => (
+                <td key={key}>
+                  <NaacInputCell compact numeric value={row[key]} ariaLabel={`${row.qualification} ${key}`} onChange={(value) => onCellChange(rowIndex, key, value)} />
+                </td>
+              ))}
+              <td>
+                <NaacInputCell compact numeric value={row.Total} ariaLabel={`${row.qualification} total`} onChange={(value) => onCellChange(rowIndex, "Total", value)} />
+              </td>
+            </NaacTableRow>
+          ))}
+        </tbody>
+      </NaacTable>
+    </NaacSection>
+  );
+}
+
+function StudentEnrolmentTable({ title, rows, onCellChange, programmeKey = "programme" }) {
+  const rowSpans = (rows || []).reduce((acc, row) => {
+    const label = row[programmeKey] || "";
+    acc[label] = (acc[label] || 0) + 1;
+    return acc;
+  }, {});
+  const seen = {};
+  return (
+    <NaacSection title={title}>
+      <NaacTable minWidth={980} className="naac-student-table">
+        <thead>
+          <NaacTableRow>
+            <th>{programmeKey === "programme" ? "Programme" : "Integrated Programme"}</th>
+            <th>Gender</th>
+            <th>From the State Where University is Located</th>
+            <th>From Other States of India</th>
+            <th>NRI Students</th>
+            <th>Foreign Students</th>
+            <th>Total</th>
+          </NaacTableRow>
+        </thead>
+        <tbody>
+          {(rows || []).map((row, rowIndex) => {
+            const label = row[programmeKey] || "";
+            const isFirst = !seen[label];
+            seen[label] = true;
+            return (
+              <NaacTableRow key={`${label}-${row.gender}-${rowIndex}`}>
+                {isFirst ? <th rowSpan={rowSpans[label]} scope="rowgroup">{label}</th> : null}
+                <th scope="row">{row.gender}</th>
+                {["from_state", "from_other_states", "nri", "foreign", "total"].map((key) => (
+                  <td key={key}>
+                    <NaacInputCell compact numeric value={row[key]} ariaLabel={`${label} ${row.gender} ${key}`} onChange={(value) => onCellChange(rowIndex, key, value)} />
+                  </td>
+                ))}
+              </NaacTableRow>
+            );
+          })}
+        </tbody>
+      </NaacTable>
+    </NaacSection>
+  );
+}
+
+function IntegratedProgrammeEnrolmentTable({ rows, onCellChange }) {
+  return (
+    <NaacSection title="Integrated Programme Enrolment">
+      <NaacTable minWidth={920} className="naac-student-table">
+        <thead>
+          <NaacTableRow>
+            <th>Integrated Programme</th>
+            <th>From the state where university is located</th>
+            <th>From other states of India</th>
+            <th>NRI Students</th>
+            <th>Foreign Students</th>
+            <th>Total</th>
+          </NaacTableRow>
+        </thead>
+        <tbody>
+          {(rows || []).map((row, rowIndex) => (
+            <NaacTableRow key={row.gender || rowIndex}>
+              <th scope="row">{row.gender}</th>
+              {["from_state", "from_other_states", "nri", "foreign", "total"].map((key) => (
+                <td key={key}>
+                  <NumberInputCell value={row[key]} ariaLabel={`${row.gender} ${key}`} onChange={(value) => onCellChange(rowIndex, key, value)} />
+                </td>
+              ))}
+            </NaacTableRow>
+          ))}
+        </tbody>
+      </NaacTable>
+    </NaacSection>
+  );
+}
+
+function SimpleKeyValueTable({ title, rows, onCellChange, note = "", minWidth = 560 }) {
+  return (
+    <NaacSection title={title} note={note}>
+      <NaacTable minWidth={minWidth} className="naac-key-value-table" colgroup={["70%", "30%"]}>
+        <tbody>
+          {(rows || []).map((row, rowIndex) => (
+            <NaacTableRow key={row.label || row.key || rowIndex}>
+              <th scope="row">{row.label}</th>
+              <td>
+                <NaacInputCell
+                  compact
+                  numeric={row.numeric !== false}
+                  value={row.value}
+                  ariaLabel={row.label}
+                  onChange={(value) => onCellChange(rowIndex, value)}
+                />
+              </td>
+            </NaacTableRow>
+          ))}
+        </tbody>
+      </NaacTable>
+    </NaacSection>
+  );
+}
+
+function ExecSummaryWritingCard({ title, value, onChange, guidance, placeholder, warnAt = null }) {
+  const taRef = useRef(null);
+  const [focused, setFocused] = useState(false);
+  const words = countWords(value);
+  const isWarn = warnAt !== null && words > warnAt;
+
+  const applyAutoGrow = useCallback((el) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }, []);
+
+  useEffect(() => {
+    applyAutoGrow(taRef.current);
+  }, [value, applyAutoGrow]);
+
+  return (
+    <div className={`exec-sum-card${focused ? " exec-sum-card--focused" : ""}${isWarn ? " exec-sum-card--warn" : ""}`}>
+      <div className="exec-sum-card-header">
+        <span className="exec-sum-card-title">{title}</span>
+        {guidance && <span className="exec-sum-guidance-chip">{guidance}</span>}
+      </div>
+      <textarea
+        ref={taRef}
+        className="exec-sum-textarea"
+        value={value || ""}
+        placeholder={placeholder || ""}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onInput={(e) => applyAutoGrow(e.currentTarget)}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <div className="exec-sum-footer">
+        <span className={`exec-sum-word-count${isWarn ? " exec-sum-word-count--warn" : ""}`}>
+          {words.toLocaleString()}{warnAt !== null ? ` / ${warnAt} words` : " words"}
+          {isWarn && <span className="exec-sum-word-over"> · Over limit</span>}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -491,48 +1010,53 @@ function ExecutiveSummaryEditor({ data, onChange }) {
     countWords(data.swoc_analysis) +
     countWords(data.additional_information) +
     countWords(data.conclusive_explication);
+  const totalWarn = totalWords > 5000;
 
   return (
     <div className="iqac-ssr-editor-grid">
-      <div className="iqac-ssr-guidance-intro">
-        Every HEI applying for the A&amp;A process shall prepare an Executive Summary highlighting the main features of the Institution.
+      <div className={`exec-sum-status-strip${totalWarn ? " exec-sum-status-strip--warn" : ""}`}>
+        <span className="exec-sum-status-label">
+          Every HEI shall prepare an Executive Summary highlighting the main features of the institution.
+        </span>
+        <span className={`exec-sum-status-count${totalWarn ? " exec-sum-status-count--warn" : ""}`}>
+          {totalWords.toLocaleString()} / 5,000 words
+          {totalWarn && <span className="exec-sum-status-over"> · Over limit</span>}
+        </span>
       </div>
-      <div className={`iqac-ssr-total-words${totalWords > 5000 ? " iqac-ssr-total-words--warn" : ""}`}>
-        The Executive summary shall not be more than 5000 words. Current count: {totalWords}/5000 words.
-      </div>
-      <TextareaField
-        label="Introductory Note on the Institution"
+      <ExecSummaryWritingCard
+        title="1. Introductory Note on the Institution"
         value={data.introductory_note}
-        rows={7}
-        guidance="Location, vision, mission, type of institution, etc."
+        guidance="Location, vision, mission, type and founding background of the institution."
+        placeholder="Provide a brief introduction covering location, type, founding year, vision, mission, and key characteristics of the institution…"
         onChange={(value) => update("introductory_note", value)}
       />
-      <TextareaField
-        label="Criterion-wise Summary"
+      <ExecSummaryWritingCard
+        title="2. Criterion-wise Summary"
         value={data.criteria_summary}
-        rows={10}
-        guidance="Summarise the institution's functioning criterion-wise in not more than 250 words for each criterion."
+        guidance="Summarise the institution's functioning criterion-wise — not more than 250 words per criterion."
+        placeholder="Provide a concise summary for each of the seven NAAC criteria, highlighting key achievements and performance indicators…"
+        warnAt={250}
         onChange={(value) => update("criteria_summary", value)}
       />
-      <TextareaField
-        label="SWOC Analysis"
+      <ExecSummaryWritingCard
+        title="3. SWOC Analysis"
         value={data.swoc_analysis}
-        rows={8}
         guidance="Brief note on Strengths, Weaknesses, Opportunities and Challenges."
+        placeholder={"Strengths: …\n\nWeaknesses: …\n\nOpportunities: …\n\nChallenges: …"}
         onChange={(value) => update("swoc_analysis", value)}
       />
-      <TextareaField
-        label="Additional Information about the Institution"
+      <ExecSummaryWritingCard
+        title="4. Additional Information about the Institution"
         value={data.additional_information}
-        rows={7}
         guidance="Any additional information about the institution other than already stated."
+        placeholder="Include notable achievements, collaborations, special initiatives, or other relevant details not covered in the criteria summary…"
         onChange={(value) => update("additional_information", value)}
       />
-      <TextareaField
-        label="Overall Conclusive Explication"
+      <ExecSummaryWritingCard
+        title="5. Overall Conclusive Explication"
         value={data.conclusive_explication}
-        rows={7}
         guidance="Overall conclusive explication about the institution's functioning."
+        placeholder="Provide a concluding narrative that synthesises the institution's overall performance, commitment to quality, and future direction…"
         onChange={(value) => update("conclusive_explication", value)}
       />
     </div>
@@ -566,36 +1090,83 @@ function ProfileEditor({ data, onChange, emailErrors }) {
     rows[rowIndex] = { ...rows[rowIndex], [key]: value };
     onChange((prev) => ({ ...prev, qualification_details: { ...(prev.qualification_details || {}), [group]: rows } }));
   };
+  const updateRecognitionExtra = (rowIndex, key, value) => {
+    const rows = [...(data.recognition?.other_agencies || [])];
+    rows[rowIndex] = { ...rows[rowIndex], [key]: value };
+    patch("recognition", "other_agencies", rows);
+  };
+  const updateIntegratedProgramme = (key, value) => {
+    onChange((prev) => ({ ...prev, integrated_programmes: { ...(prev.integrated_programmes || {}), [key]: value } }));
+  };
 
   const basic = data.basic_information || {};
   const recognition = data.recognition || {};
   const establishment = data.establishment || {};
   const institution = data.institution || {};
   const academic = data.academic_information || {};
+  const hrdcRows = [
+    { label: "Year of Establishment", value: data.hrdc?.year_of_establishment },
+    { label: "Number of UGC Orientation Programmes", value: data.hrdc?.orientation_programmes },
+    { label: "Number of UGC Refresher Course", value: data.hrdc?.refresher_courses },
+    { label: "Number of University's own Programmes", value: data.hrdc?.own_programmes },
+    { label: "Total Number of Programmes Conducted (last five years)", value: data.hrdc?.total_programmes_last_five_years },
+  ];
 
   return (
-    <div className="iqac-ssr-editor-grid">
-      <FormSection title="Basic Information">
-        <div className="iqac-profile-basic-grid">
-          <Field className="iqac-field-span-all" label="Name of College/University" value={basic.name} onChange={(value) => patch("basic_information", "name", value)} />
-          <TextareaField className="iqac-field-span-all" label="Address" value={basic.address} rows={4} onChange={(value) => patch("basic_information", "address", value)} />
-          <Field label="City" value={basic.city} onChange={(value) => patch("basic_information", "city", value)} />
-          <NumericField label="PIN" value={basic.pin} onChange={(value) => patch("basic_information", "pin", value)} />
-          <Field label="State" value={basic.state} onChange={(value) => patch("basic_information", "state", value)} />
-          <Field className="iqac-field-span-two" type="url" label="Website" value={basic.website} onChange={(value) => patch("basic_information", "website", value)} />
-        </div>
-      </FormSection>
+    <div className="iqac-ssr-editor-grid naac-profile-editor">
+      <NaacSection title="Basic Information">
+        <NaacTable minWidth={720} className="naac-basic-table" colgroup={["22%", "22%", "20%", "36%"]}>
+          <tbody>
+            <NaacTableRow>
+              <th colSpan="4" className="naac-super-label">Name and Address of the University</th>
+            </NaacTableRow>
+            <NaacTableRow>
+              <th scope="row">Name</th>
+              <td colSpan="3">
+                <NaacInputCell value={basic.name} ariaLabel="Name of University" onChange={(value) => patch("basic_information", "name", value)} />
+              </td>
+            </NaacTableRow>
+            <NaacTableRow>
+              <th scope="row">Address</th>
+              <td colSpan="3">
+                <NaacTextareaCell value={basic.address} rows={3} ariaLabel="Address" onChange={(value) => patch("basic_information", "address", value)} />
+              </td>
+            </NaacTableRow>
+            <NaacTableRow>
+              <th scope="row">City</th>
+              <td>
+                <NaacInputCell compact value={basic.city} ariaLabel="City" onChange={(value) => patch("basic_information", "city", value)} />
+              </td>
+              <th scope="row">Pin</th>
+              <td>
+                <NaacInputCell compact numeric value={basic.pin} ariaLabel="Pin" onChange={(value) => patch("basic_information", "pin", value)} />
+              </td>
+            </NaacTableRow>
+            <NaacTableRow>
+              <th scope="row">State</th>
+              <td>
+                <NaacInputCell compact value={basic.state} ariaLabel="State" onChange={(value) => patch("basic_information", "state", value)} />
+              </td>
+              <th scope="row">Website</th>
+              <td>
+                <NaacInputCell type="url" value={basic.website} ariaLabel="Website" onChange={(value) => patch("basic_information", "website", value)} />
+              </td>
+            </NaacTableRow>
+          </tbody>
+        </NaacTable>
+      </NaacSection>
 
-      <RepeatableTable
+      <RepeatableRowsTable
         title="Contacts for Communication"
         rows={data.contacts || []}
+        minWidth={980}
         columns={[
-          { key: "designation", label: "Designation" },
-          { key: "name", label: "Name" },
-          { key: "telephone", label: "Telephone with STD Code" },
-          { key: "mobile", label: "Mobile" },
-          { key: "fax", label: "Fax" },
-          { key: "email", label: "Email", type: "email" },
+          { key: "designation", label: "Designation", width: "16%" },
+          { key: "name", label: "Name", width: "22%", wide: true },
+          { key: "telephone", label: "Telephone with STD Code", width: "15%" },
+          { key: "mobile", label: "Mobile", width: "13%" },
+          { key: "fax", label: "Fax", width: "11%", compact: true },
+          { key: "email", label: "Email", type: "email", width: "23%", wide: true },
         ]}
         onCellChange={(row, key, value) => updateRow("contacts", row, key, value)}
         onAdd={() => setRows("contacts", [...(data.contacts || []), { designation: "", name: "", telephone: "", mobile: "", fax: "", email: "" }])}
@@ -603,163 +1174,244 @@ function ProfileEditor({ data, onChange, emailErrors }) {
       />
       {emailErrors.length ? <p className="form-error">Invalid email in contact row(s): {emailErrors.join(", ")}</p> : null}
 
-      <FormSection title="Nature and Status">
-        <div className="iqac-ssr-grid-3">
-          <Field label="Nature of University" value={institution.nature} onChange={(value) => patch("institution", "nature", value)} />
-          <Field label="Institution Status" value={institution.status} onChange={(value) => patch("institution", "status", value)} />
-          <Field label="Type of University" value={institution.type} onChange={(value) => patch("institution", "type", value)} />
-        </div>
-      </FormSection>
+      <NaacSection title="Nature of University / Type / Establishment Details">
+        <NaacTable minWidth={860} colgroup={["22%", "28%", "22%", "28%"]}>
+          <tbody>
+            <NaacTableRow>
+              <th scope="row">Nature of University</th>
+              <td>
+                <NaacInputCell value={institution.nature} ariaLabel="Nature of University" onChange={(value) => patch("institution", "nature", value)} />
+              </td>
+              <th scope="row">Institution Status</th>
+              <td>
+                <NaacInputCell value={institution.status} ariaLabel="Institution status" onChange={(value) => patch("institution", "status", value)} />
+              </td>
+            </NaacTableRow>
+            <NaacTableRow>
+              <th scope="row">Type of University</th>
+              <td colSpan="3">
+                <NaacInputCell value={institution.type} ariaLabel="Type of University" onChange={(value) => patch("institution", "type", value)} />
+              </td>
+            </NaacTableRow>
+            <NaacTableRow>
+              <th rowSpan="3" scope="rowgroup">Establishment Details</th>
+              <td>Establishment Date of the University</td>
+              <td colSpan="2">
+                <NaacInputCell type="date" value={establishment.establishment_date} ariaLabel="Establishment date" onChange={(value) => patch("establishment", "establishment_date", value)} />
+              </td>
+            </NaacTableRow>
+            <NaacTableRow>
+              <td>Status Prior to Establishment, if applicable</td>
+              <td colSpan="2">
+                <NaacInputCell value={establishment.status_prior} ariaLabel="Status prior to establishment" onChange={(value) => patch("establishment", "status_prior", value)} />
+              </td>
+            </NaacTableRow>
+            <NaacTableRow>
+              <td>Establishment Date, if applicable</td>
+              <td colSpan="2">
+                <NaacInputCell type="date" value={establishment.establishment_date_if_applicable} ariaLabel="Establishment date if applicable" onChange={(value) => patch("establishment", "establishment_date_if_applicable", value)} />
+              </td>
+            </NaacTableRow>
+          </tbody>
+        </NaacTable>
+      </NaacSection>
 
-      <FormSection title="Establishment Details">
-        <div className="iqac-ssr-grid-3">
-          <Field type="date" label="Establishment Date" value={establishment.establishment_date} onChange={(value) => patch("establishment", "establishment_date", value)} />
-          <Field label="Status Prior to Establishment" value={establishment.status_prior} onChange={(value) => patch("establishment", "status_prior", value)} />
-          <Field type="date" label="Establishment Date, if applicable" value={establishment.establishment_date_if_applicable} onChange={(value) => patch("establishment", "establishment_date_if_applicable", value)} />
-        </div>
-      </FormSection>
+      <FixedRowsWithDynamicExtraRows
+        title="Recognition Details"
+        fixedRows={[
+          { key: "ugc_2f_date", label: "2f of UGC", date: recognition.ugc_2f_date },
+          { key: "ugc_12b_date", label: "12B of UGC", date: recognition.ugc_12b_date },
+        ]}
+        extraRows={recognition.other_agencies || []}
+        onFixedDateChange={(key, value) => patch("recognition", key, value)}
+        onExtraChange={updateRecognitionExtra}
+        onAdd={() => patch("recognition", "other_agencies", [...(recognition.other_agencies || []), { agency_name: "", date: "" }])}
+        onRemove={(index) => patch("recognition", "other_agencies", (recognition.other_agencies || []).filter((_, i) => i !== index))}
+      />
 
-      <FormSection title="Recognition Details">
-        <div className="iqac-ssr-grid-3">
-          <Field type="date" label="2f of UGC Date" value={recognition.ugc_2f_date} onChange={(value) => patch("recognition", "ugc_2f_date", value)} />
-          <Field type="date" label="12B of UGC Date" value={recognition.ugc_12b_date} onChange={(value) => patch("recognition", "ugc_12b_date", value)} />
-          <Field label="Other National Agency" value={recognition.other_agency_name} onChange={(value) => patch("recognition", "other_agency_name", value)} />
-          <Field type="date" label="Other Agency Recognition Date" value={recognition.other_agency_date} onChange={(value) => patch("recognition", "other_agency_date", value)} />
-          <YesNoField label="Recognised as University with Potential for Excellence (UPE)" value={data.upe_recognized} onChange={(value) => onChange((prev) => ({ ...prev, upe_recognized: value }))} />
-        </div>
-      </FormSection>
+      <NaacSection title="University with Potential for Excellence">
+        <NaacTable minWidth={640} colgroup={["78%", "22%"]}>
+          <tbody>
+            <NaacTableRow>
+              <th scope="row">Is the University Recognised as a 'University with Potential for Excellence (UPE)' by the UGC?</th>
+              <td>
+                <NaacYesNoCell value={data.upe_recognized} ariaLabel="UPE recognition" onChange={(value) => onChange((prev) => ({ ...prev, upe_recognized: value }))} />
+              </td>
+            </NaacTableRow>
+          </tbody>
+        </NaacTable>
+      </NaacSection>
 
-      <RepeatableTable
+      <RepeatableRowsTable
         title="Location, Area and Activity of Campus"
         rows={data.campuses || []}
+        minWidth={1160}
         columns={[
-          { key: "campus_type", label: "Campus Type", type: "select", options: ["Urban", "Semi Urban", "Rural", "Tribal", "Hill"] },
-          { key: "address", label: "Address" },
-          { key: "location", label: "Location" },
-          { key: "campus_area_acres", label: "Campus Area in Acres", numeric: true },
-          { key: "built_up_area_sq_mts", label: "Built-up Area in sq.mts.", numeric: true },
-          { key: "programmes_offered", label: "Programmes Offered" },
-          { key: "establishment_date", label: "Date of Establishment", type: "date" },
-          { key: "recognition_date", label: "Date of Recognition by UGC/MHRD", type: "date" },
+          { key: "campus_type", label: "Campus Type", width: "12%" },
+          { key: "address", label: "Address", type: "textarea", width: "22%", wide: true },
+          { key: "location", label: "Location", type: "select", options: CAMPUS_LOCATIONS, width: "12%" },
+          { key: "campus_area_acres", label: "Campus Area in Acres", numeric: true, width: "10%", compact: true },
+          { key: "built_up_area_sq_mts", label: "Built up Area in sq.mts.", numeric: true, width: "10%", compact: true },
+          { key: "programmes_offered", label: "Programmes Offered", width: "18%", wide: true },
+          { key: "establishment_date", label: "Date of Establishment", type: "date", width: "13%" },
+          { key: "recognition_date", label: "Date of Recognition by UGC/MHRD", type: "date", width: "13%" },
         ]}
         onCellChange={(row, key, value) => updateRow("campuses", row, key, value)}
         onAdd={() => setRows("campuses", [...(data.campuses || []), createProfileData().campuses[0]])}
         onRemove={(index) => setRows("campuses", (data.campuses || []).filter((_, i) => i !== index))}
       />
 
-      <RepeatableTable
+      <div className="naac-academic-title">Academic Information</div>
+
+      <NaacSection
         title="Affiliated Institutions to the University"
-        note="Not applicable for private and deemed to be universities."
-        rows={academic.affiliated_institutions || []}
-        columns={[
-          { key: "college_type", label: "College Type", readonly: true },
-          { key: "permanent_affiliation", label: "Number with permanent affiliation", numeric: true },
-          { key: "temporary_affiliation", label: "Number with temporary affiliation", numeric: true },
-        ]}
-        onCellChange={(row, key, value) => updateNestedRow("academic_information", "affiliated_institutions", row, key, value)}
-      />
+        note="Not applicable for private and deemed to be Universities"
+      >
+        <div className="naac-academic-stack">
+          <NaacTable minWidth={820} colgroup={["34%", "33%", "33%"]}>
+            <thead>
+              <NaacTableRow>
+                <th>College Type</th>
+                <th>Number of colleges with permanent affiliation</th>
+                <th>Number of colleges with temporary affiliation</th>
+              </NaacTableRow>
+            </thead>
+            <tbody>
+              {(academic.affiliated_institutions || []).map((row, rowIndex) => (
+                <NaacTableRow key={rowIndex}>
+                  <td>
+                    <TextInputCell value={row.college_type} ariaLabel="College Type" onChange={(value) => updateNestedRow("academic_information", "affiliated_institutions", rowIndex, "college_type", value)} />
+                  </td>
+                  <td>
+                    <NumberInputCell value={row.permanent_affiliation} ariaLabel="Number of colleges with permanent affiliation" onChange={(value) => updateNestedRow("academic_information", "affiliated_institutions", rowIndex, "permanent_affiliation", value)} />
+                  </td>
+                  <td>
+                    <NumberInputCell value={row.temporary_affiliation} ariaLabel="Number of colleges with temporary affiliation" onChange={(value) => updateNestedRow("academic_information", "affiliated_institutions", rowIndex, "temporary_affiliation", value)} />
+                  </td>
+                </NaacTableRow>
+              ))}
+            </tbody>
+          </NaacTable>
 
-      <RepeatableTable
-        title="Details of Colleges under University"
-        rows={academic.college_details || []}
-        columns={[
-          { key: "label", label: "College Detail", readonly: true },
-          { key: "value", label: "Number / Detail", numeric: true },
-        ]}
-        onCellChange={(row, key, value) => updateNestedRow("academic_information", "college_details", row, key, value)}
-      />
-
-      <FormSection title="Statutory Regulatory Authority Recognition">
-        <div className="iqac-ssr-grid-2">
-          <YesNoField label="Programmes recognized by any SRA" value={academic.sra_recognized} onChange={(value) => patch("academic_information", "sra_recognized", value)} />
-          <Field label="SRA Details" value={academic.sra_details} onChange={(value) => patch("academic_information", "sra_details", value)} />
+          <NaacTable minWidth={760} className="naac-affiliation-type-table" colgroup={["42%", "19%", "19%", "20%"]}>
+            <thead>
+              <NaacTableRow>
+                <th>Type of Colleges</th>
+                <th>Permanent</th>
+                <th>Temporary</th>
+                <th>Total</th>
+              </NaacTableRow>
+            </thead>
+            <tbody>
+              {(academic.college_type_affiliations || []).map((row, rowIndex) => (
+                <NaacTableRow key={row.college_type || rowIndex}>
+                  <th scope="row">{row.college_type}</th>
+                  {["permanent", "temporary", "total"].map((key) => (
+                    <td key={key}>
+                      <NumberInputCell value={row[key]} ariaLabel={`${row.college_type} ${key}`} onChange={(value) => updateNestedRow("academic_information", "college_type_affiliations", rowIndex, key, value)} />
+                    </td>
+                  ))}
+                </NaacTableRow>
+              ))}
+            </tbody>
+          </NaacTable>
         </div>
-      </FormSection>
+      </NaacSection>
+
+      <SimpleKeyValueTable
+        title="Furnish the Details of Colleges under University"
+        rows={academic.college_details || []}
+        onCellChange={(row, value) => updateNestedRow("academic_information", "college_details", row, "value", value)}
+      />
+
+      <NaacSection title="SRA Recognised Programmes">
+        <NaacTable minWidth={760} colgroup={["70%", "30%"]}>
+          <tbody>
+            <NaacTableRow>
+              <th scope="row">Is the University Offering any Programmes Recognized by any Statutory Regulatory authority (SRA)</th>
+              <td>
+                <YesNoCell value={academic.sra_recognized} ariaLabel="SRA recognised programmes" onChange={(value) => patch("academic_information", "sra_recognized", value)} />
+              </td>
+            </NaacTableRow>
+          </tbody>
+        </NaacTable>
+      </NaacSection>
 
       <StaffTables data={data} updateStaff={updateStaff} updateQualification={updateQualification} />
 
-      <RepeatableTable
+      <RepeatableRowsTable
         title="Distinguished Academicians Appointed"
         rows={data.distinguished_academicians || []}
+        minWidth={720}
         columns={[
-          { key: "role", label: "Role", readonly: true },
-          { key: "male", label: "Male", numeric: true },
-          { key: "female", label: "Female", numeric: true },
-          { key: "others", label: "Others", numeric: true },
-          { key: "total", label: "Total", numeric: true },
+          { key: "role", label: "Role", readonly: true, width: "38%", wide: true },
+          { key: "male", label: "Male", numeric: true, compact: true },
+          { key: "female", label: "Female", numeric: true, compact: true },
+          { key: "others", label: "Others", numeric: true, compact: true },
+          { key: "total", label: "Total", numeric: true, compact: true },
         ]}
         onCellChange={(row, key, value) => updateRow("distinguished_academicians", row, key, value)}
       />
 
-      <RepeatableTable
+      <RepeatableRowsTable
         title="Chairs Instituted by the University"
         rows={data.chairs || []}
+        minWidth={920}
         columns={[
-          { key: "sl_no", label: "Sl.No", numeric: true },
-          { key: "department", label: "Name of Department" },
-          { key: "chair", label: "Name of Chair" },
-          { key: "sponsor", label: "Name of Sponsor Organisation/Agency" },
+          { key: "sl_no", label: "Sl.No", numeric: true, width: "10%", compact: true },
+          { key: "department", label: "Name of Department", width: "26%", wide: true },
+          { key: "chair", label: "Name of Chair", width: "24%", wide: true },
+          { key: "sponsor", label: "Name of Sponsor Organisation/Agency", width: "40%", wide: true },
         ]}
         onCellChange={(row, key, value) => updateRow("chairs", row, key, value)}
         onAdd={() => setRows("chairs", [...(data.chairs || []), { sl_no: "", department: "", chair: "", sponsor: "" }])}
         onRemove={(index) => setRows("chairs", (data.chairs || []).filter((_, i) => i !== index))}
       />
 
-      <RepeatableTable
+      <StudentEnrolmentTable
         title="Students Enrolled during the Current Academic Year"
         rows={data.student_enrolment || []}
-        columns={[
-          { key: "programme", label: "Programme", readonly: true },
-          { key: "gender", label: "Gender", readonly: true },
-          { key: "from_state", label: "From the State", numeric: true },
-          { key: "from_other_states", label: "From Other States of India", numeric: true },
-          { key: "nri", label: "NRI Students", numeric: true },
-          { key: "foreign", label: "Foreign Students", numeric: true },
-          { key: "total", label: "Total", numeric: true },
-        ]}
         onCellChange={(row, key, value) => updateRow("student_enrolment", row, key, value)}
       />
 
-      <FormSection title="Integrated Programmes">
-        <div className="iqac-ssr-grid-2">
-          <YesNoField label="Does the university offer integrated programmes?" value={data.integrated_programmes?.offered} onChange={(value) => onChange((prev) => ({ ...prev, integrated_programmes: { ...(prev.integrated_programmes || {}), offered: value } }))} />
-          <NumericField label="Total number of integrated programmes" value={data.integrated_programmes?.total_programmes} onChange={(value) => onChange((prev) => ({ ...prev, integrated_programmes: { ...(prev.integrated_programmes || {}), total_programmes: value } }))} />
-        </div>
-      </FormSection>
-      <RepeatableTable
-        title="Integrated Programme Enrolment"
+      <NaacSection title="Integrated Programmes">
+        <NaacTable minWidth={720} colgroup={["64%", "36%"]}>
+          <tbody>
+            <NaacTableRow>
+              <th scope="row">Does the university offer any integrated programmes?</th>
+              <td>
+                <YesNoCell value={data.integrated_programmes?.offered} ariaLabel="Integrated programmes offered" onChange={(value) => updateIntegratedProgramme("offered", value)} />
+              </td>
+            </NaacTableRow>
+            <NaacTableRow>
+              <th scope="row">Total number of integrated programmes</th>
+              <td>
+                <NumberInputCell value={data.integrated_programmes?.total_programmes} ariaLabel="Total integrated programmes" onChange={(value) => updateIntegratedProgramme("total_programmes", value)} />
+              </td>
+            </NaacTableRow>
+          </tbody>
+        </NaacTable>
+      </NaacSection>
+
+      <IntegratedProgrammeEnrolmentTable
         rows={data.integrated_programmes?.enrolment || []}
-        columns={[
-          { key: "gender", label: "Gender", readonly: true },
-          { key: "from_state", label: "From the State", numeric: true },
-          { key: "from_other_states", label: "From Other States of India", numeric: true },
-          { key: "nri", label: "NRI Students", numeric: true },
-          { key: "foreign", label: "Foreign Students", numeric: true },
-          { key: "total", label: "Total", numeric: true },
-        ]}
         onCellChange={(row, key, value) => updateNestedRow("integrated_programmes", "enrolment", row, key, value)}
       />
 
-      <FormSection title="UGC Human Resource Development Centre">
-        <div className="iqac-ssr-grid-3">
-          {[
-            ["year_of_establishment", "Year of Establishment"],
-            ["orientation_programmes", "Number of UGC Orientation Programmes"],
-            ["refresher_courses", "Number of UGC Refresher Course"],
-            ["own_programmes", "Number of University's own Programmes"],
-            ["total_programmes_last_five_years", "Total Number of Programmes Conducted (last five years)"],
-          ].map(([key, label]) => (
-            <NumericField key={key} label={label} value={data.hrdc?.[key]} onChange={(value) => patch("hrdc", key, value)} />
-          ))}
-        </div>
-      </FormSection>
+      <SimpleKeyValueTable
+        title="UGC HRDC Details"
+        note="Details of UGC Human Resource Development Centre, if applicable."
+        rows={hrdcRows}
+        onCellChange={(row, value) => patch("hrdc", ["year_of_establishment", "orientation_programmes", "refresher_courses", "own_programmes", "total_programmes_last_five_years"][row], value)}
+      />
 
-      <RepeatableTable
+      <RepeatableRowsTable
         title="Evaluative Report of the Departments"
         rows={data.department_reports || []}
+        minWidth={760}
         columns={[
-          { key: "department_name", label: "Department Name" },
-          { key: "report_reference", label: "Upload Report / File Reference" },
+          { key: "department_name", label: "Department Name", width: "45%", wide: true },
+          { key: "report_reference", label: "Upload Report / File Reference", width: "55%", wide: true },
         ]}
         onCellChange={(row, key, value) => updateRow("department_reports", row, key, value)}
         onAdd={() => setRows("department_reports", [...(data.department_reports || []), { department_name: "", report_reference: "" }])}
@@ -770,28 +1422,80 @@ function ProfileEditor({ data, onChange, emailErrors }) {
 }
 
 function StaffTables({ data, updateStaff, updateQualification }) {
-  const teachingColumns = [
-    { key: "status", label: "Teaching Faculty", readonly: true },
-    ...TEACHING_ROLES.flatMap((role) => GENDER_COLUMNS.map((gender) => ({ key: `${role}_${gender}`, label: `${role} ${gender}`, numeric: true }))),
-  ];
-  const genderColumns = [
-    { key: "status", label: "Staff" },
-    ...GENDER_COLUMNS.map((gender) => ({ key: gender, label: gender, numeric: true })),
-  ];
-  const qualificationColumns = [
-    { key: "qualification", label: "Highest Qualification", readonly: true },
-    ...TEACHING_ROLES.flatMap((role) => GENDER_COLUMNS.slice(0, 3).map((gender) => ({ key: `${role}_${gender}`, label: `${role} ${gender}`, numeric: true }))),
-    { key: "Total", label: "Total", numeric: true },
-  ];
   return (
     <>
-      <RepeatableTable title="Teaching Faculty" rows={data.staff?.teaching || []} columns={teachingColumns} onCellChange={(row, key, value) => updateStaff("teaching", row, key, value)} />
-      <RepeatableTable title="Non-Teaching Staff" rows={data.staff?.non_teaching || []} columns={genderColumns} onCellChange={(row, key, value) => updateStaff("non_teaching", row, key, value)} />
-      <RepeatableTable title="Technical Staff" rows={data.staff?.technical || []} columns={genderColumns} onCellChange={(row, key, value) => updateStaff("technical", row, key, value)} />
-      <RepeatableTable title="Qualification Details - Permanent Teachers" rows={data.qualification_details?.permanent_teachers || []} columns={qualificationColumns} onCellChange={(row, key, value) => updateQualification("permanent_teachers", row, key, value)} />
-      <RepeatableTable title="Qualification Details - Temporary Teachers" rows={data.qualification_details?.temporary_teachers || []} columns={qualificationColumns} onCellChange={(row, key, value) => updateQualification("temporary_teachers", row, key, value)} />
-      <RepeatableTable title="Qualification Details - Part Time Teachers" rows={data.qualification_details?.part_time_teachers || []} columns={qualificationColumns} onCellChange={(row, key, value) => updateQualification("part_time_teachers", row, key, value)} />
+      <NaacSection title="Teaching / Non-Teaching / Technical Staff" note="Details of Teaching and Non-Teaching Staff of University">
+        <div className="naac-staff-stack">
+          <StaffMatrixTable title="Teaching Faculty" grouped rows={data.staff?.teaching || []} onCellChange={(row, key, value) => updateStaff("teaching", row, key, value)} />
+          <StaffMatrixTable title="Non-Teaching Staff" rows={data.staff?.non_teaching || []} onCellChange={(row, key, value) => updateStaff("non_teaching", row, key, value)} />
+          <StaffMatrixTable title="Technical Staff" rows={data.staff?.technical || []} onCellChange={(row, key, value) => updateStaff("technical", row, key, value)} />
+        </div>
+      </NaacSection>
+      <NaacSection title="Qualification Details of Teaching Staff">
+        <div className="naac-staff-stack">
+          <QualificationMatrixTable title="Permanent Teachers" rows={data.qualification_details?.permanent_teachers || []} onCellChange={(row, key, value) => updateQualification("permanent_teachers", row, key, value)} />
+          <QualificationMatrixTable title="Temporary Teachers" rows={data.qualification_details?.temporary_teachers || []} onCellChange={(row, key, value) => updateQualification("temporary_teachers", row, key, value)} />
+          <QualificationMatrixTable title="Part Time Teachers" rows={data.qualification_details?.part_time_teachers || []} onCellChange={(row, key, value) => updateQualification("part_time_teachers", row, key, value)} />
+        </div>
+      </NaacSection>
     </>
+  );
+}
+
+function getExtendedMetric(metricKey) {
+  return EXTENDED_PROFILE_METRICS.find((metric) => metric.key === metricKey) || {};
+}
+
+function MetricYearTable({ metric, yearLabels, values, onYearChange, onValueChange }) {
+  const safeYears = [...(yearLabels || ACADEMIC_YEAR_LABELS), "", "", "", "", ""].slice(0, 5);
+  const safeValues = [...(Array.isArray(values) ? values : []), "", "", "", "", ""].slice(0, 5);
+  const valueRowLabel = metric.valueRowLabel || "Number";
+  return (
+    <div className="extended-metric-block">
+      <h5>{metric.code} {metric.label}</h5>
+      <NaacTable minWidth={760} className="extended-year-table" colgroup={["17%", "16.6%", "16.6%", "16.6%", "16.6%", "16.6%"]}>
+        <tbody>
+          <NaacTableRow>
+            <th scope="row">Year</th>
+            {safeYears.map((year, index) => (
+              <td key={`year-${index}`}>
+                <TextInputCell value={year} ariaLabel={`Year ${index + 1}`} onChange={(value) => onYearChange(index, value)} />
+              </td>
+            ))}
+          </NaacTableRow>
+          <NaacTableRow>
+            <th scope="row">{valueRowLabel}</th>
+            {safeValues.map((value, index) => (
+              <td key={`value-${index}`}>
+                <NumberInputCell value={value} ariaLabel={`${metric.code} ${valueRowLabel} ${index + 1}`} onChange={(nextValue) => onValueChange(index, nextValue)} />
+              </td>
+            ))}
+          </NaacTableRow>
+        </tbody>
+      </NaacTable>
+    </div>
+  );
+}
+
+function SingleMetricInput({ code, label, value, onChange }) {
+  return (
+    <div className="extended-single-metric">
+      <label>
+        <span>{code} {label}</span>
+        <NumberInputCell value={value} ariaLabel={`${code} ${label}`} onChange={onChange} />
+      </label>
+    </div>
+  );
+}
+
+function ExtendedProfileSection({ index, title, children }) {
+  return (
+    <section className="extended-profile-section">
+      <h4><span>{index}</span> {title}:</h4>
+      <div className="extended-profile-section-body">
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -810,94 +1514,74 @@ function ExtendedProfileEditor({ data, onChange }) {
       return { ...prev, metrics: { ...(prev.metrics || {}), [metricKey]: metricValues } };
     });
   };
+  const setSingleMetric = (key, value) => {
+    onChange((prev) => ({ ...prev, [key]: sanitizeNumber(value) }));
+  };
+  const yearLabels = [...(data.year_labels || ACADEMIC_YEAR_LABELS), "", "", "", "", ""].slice(0, 5);
+
   return (
-    <div className="iqac-ssr-editor-grid">
-      <FormSection title="Year Labels" note="Edit labels to match the five-year NAAC cycle.">
-        <div className="iqac-ssr-year-labels">
-          {(data.year_labels || ACADEMIC_YEAR_LABELS).map((year, index) => (
-            <Field key={index} label={`Year ${index + 1}`} value={year} onChange={(value) => setYear(index, value)} />
-          ))}
-        </div>
-      </FormSection>
-      <FormSection title="Single-value Institution Fields">
-        <div className="iqac-ssr-grid-3">
-          <NumericField label="1.2 Number of departments offering academic programmes" value={data.departments_offering_programmes} onChange={(value) => onChange((prev) => ({ ...prev, departments_offering_programmes: value }))} />
-          <NumericField label="4.3 Total classrooms and seminar halls" value={data.total_classrooms_seminar_halls} onChange={(value) => onChange((prev) => ({ ...prev, total_classrooms_seminar_halls: value }))} />
-          <NumericField label="4.4 Total computers for academic purpose" value={data.total_computers_academic} onChange={(value) => onChange((prev) => ({ ...prev, total_computers_academic: value }))} />
-        </div>
-      </FormSection>
-      <FormSection title="Year-wise Metrics">
-        <div className="iqac-ssr-table-wrap">
-          <table className="iqac-ssr-table iqac-ssr-yearly-table">
-            <thead>
-              <tr>
-                <th>Metric</th>
-                {(data.year_labels || ACADEMIC_YEAR_LABELS).map((year, index) => <th key={index}>{year || `Year ${index + 1}`}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {EXTENDED_PROFILE_METRICS.map((metric) => (
-                <tr key={metric.key}>
-                  <td><strong>{metric.code}</strong> {metric.label}</td>
-                  {(data.metrics?.[metric.key] || ["", "", "", "", ""]).map((value, index) => (
-                    <td key={index}>
-                      <input type="text" value={value || ""} onChange={(event) => setMetricValue(metric.key, index, event.target.value)} />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </FormSection>
+    <div className="extended-profile-editor">
+      <div className="extended-profile-title">3. Extended Profile of the University</div>
+      {EXTENDED_PROFILE_SECTIONS.map((section) => (
+        <ExtendedProfileSection key={section.title} index={section.index} title={section.title}>
+          {section.items.map((item) => {
+            if (item.type === "single") {
+              return (
+                <SingleMetricInput
+                  key={item.key}
+                  code={item.code}
+                  label={item.label}
+                  value={data[item.key]}
+                  onChange={(value) => setSingleMetric(item.key, value)}
+                />
+              );
+            }
+            const metric = getExtendedMetric(item.key);
+            return (
+              <MetricYearTable
+                key={item.key}
+                metric={metric}
+                yearLabels={yearLabels}
+                values={data.metrics?.[item.key]}
+                onYearChange={setYear}
+                onValueChange={(index, value) => setMetricValue(item.key, index, value)}
+              />
+            );
+          })}
+        </ExtendedProfileSection>
+      ))}
     </div>
   );
 }
 
-function QifEditor() {
-  const notes = [
-    {
-      title: "Connected Criteria",
-      text: "QIF is connected to the seven IQAC criteria below, where the final evidence upload and document flow continues.",
-    },
-    {
-      title: "Key Indicators and Metrics",
-      text: "The framework contains Key Indicators and metric-wise requirements under each criterion.",
-    },
-    {
-      title: "Qualitative and Quantitative Metrics",
-      text: "Qualitative metrics require descriptive information, while quantitative metrics use specified data and calculations.",
-    },
-    {
-      title: "Data, Formulas, Files and Weightage",
-      text: "Each metric may include data requirements, formulas where applicable, file descriptions for evidence upload, and metric-wise weightage.",
-    },
-    {
-      title: "Online Format Note",
-      text: "The actual online format may vary slightly for IT design compatibility, so this section is kept as read-only guidance for now.",
-    },
-  ];
+function ReadOnlyQifNote() {
   return (
-    <div className="iqac-ssr-editor-grid">
-      <div className="iqac-qif-note">
-        <h4>QIF Guidance</h4>
-        <p>The SSR is filled in NAAC's online format. QIF presents the metrics under each Key Indicator for all seven criteria and helps the institution prepare data before entering the online SSR.</p>
+    <article className="qif-note-panel">
+      <h3>4. Quality Indicator Framework (QIF)</h3>
+      <h4>Essential Note:</h4>
+      <p>The SSR has to be filled in an online format available on the NAAC website.</p>
+      <p>The QIF given below presents the Metrics under each Key Indicator (KI) for all the seven Criteria.</p>
+      <div className="qif-note-list-block">
+        <p>While going through the QIF, details are given below each Metric in the form of:</p>
         <ul>
-          <li>Data required for each metric</li>
-          <li>Formula guidance wherever required</li>
-          <li>File descriptions for upload evidence</li>
-          <li>Qualitative and quantitative metric preparation notes</li>
-          <li>Metric-wise weightage and IT-format compatibility changes</li>
+          <li>data required</li>
+          <li>formula for calculating the information, wherever required, and</li>
+          <li>File description &ndash; for uploading of document where so-ever required.</li>
         </ul>
       </div>
-      <div className="iqac-qif-readonly-grid">
-        {notes.map((note) => (
-          <article key={note.title} className="iqac-qif-readonly-card">
-            <h5>{note.title}</h5>
-            <p>{note.text}</p>
-          </article>
-        ))}
-      </div>
+      <p>These will help Institutions in the preparation of their SSR.</p>
+      <p>For some Qualitative Metrics (QlM) which seek descriptive data it is specified as to what kind of information has to be given and how much. It is advisable to keep data accordingly compiled beforehand.</p>
+      <p>For the Quantitative Metrics (QnM) wherever formula is given, it must be noted that these are given merely to inform the HEIs about the manner in which data submitted will be used. That is the actual online format seeks only data in specified manner which will be processed digitally.</p>
+      <p>Metric wise weightage is also given.</p>
+      <p>The actual online format may change slightly from the QIF given in this Manual, in order to bring compatibility with IT design. Observe this carefully while filling up.</p>
+    </article>
+  );
+}
+
+function QifEditor() {
+  return (
+    <div className="qif-readonly-page">
+      <ReadOnlyQifNote />
     </div>
   );
 }
@@ -928,6 +1612,53 @@ export default function IqacDataPage({ canDeleteIqacFiles = false }) {
   const [historyDetailLoading, setHistoryDetailLoading] = useState(false);
   const [historyActionLoading, setHistoryActionLoading] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [pdfExportError, setPdfExportError] = useState("");
+  const [docxExporting, setDocxExporting] = useState(false);
+  const [docxExportError, setDocxExportError] = useState("");
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+
+  const handleGeneratePdf = useCallback(async () => {
+    setExportMenuOpen(false);
+    setPdfExporting(true);
+    setPdfExportError("");
+    try {
+      const blob = await api.downloadSsrPdf();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `IQAC_SSR_NAAC_Report_${new Date().toISOString().slice(0, 10)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setPdfExportError(err?.message || "PDF generation failed. Please try again.");
+    } finally {
+      setPdfExporting(false);
+    }
+  }, []);
+
+  const handleGenerateDocx = useCallback(async () => {
+    setExportMenuOpen(false);
+    setDocxExporting(true);
+    setDocxExportError("");
+    try {
+      const blob = await api.downloadSsrDocx();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `IQAC_SSR_NAAC_Report_${new Date().toISOString().slice(0, 10)}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setDocxExportError(err?.message || "Word generation failed. Please try again.");
+    } finally {
+      setDocxExporting(false);
+    }
+  }, []);
 
   const activeSsrCard = useMemo(() => SSR_CARDS.find((card) => card.key === activeSsrKey) || null, [activeSsrKey]);
   const activeSsrIndex = useMemo(() => SSR_CARDS.findIndex((card) => card.key === activeSsrKey), [activeSsrKey]);
@@ -1335,8 +2066,58 @@ export default function IqacDataPage({ canDeleteIqacFiles = false }) {
       <section className="iqac-ssr-section">
         <div className="iqac-structure-head">
           <h3 className="iqac-structure-title">SSR / NAAC Data Entry</h3>
-          <span className="iqac-badge">IQAC Portal Only</span>
+          <div className="iqac-ssr-head-actions">
+            <span className="iqac-badge">IQAC Portal Only</span>
+            <div className="iqac-export-wrap">
+              <button
+                type="button"
+                className="iqac-pdf-btn"
+                disabled={pdfExporting || docxExporting || ssrLoading}
+                onClick={() => setExportMenuOpen((o) => !o)}
+                title="Export the full NAAC SSR report"
+              >
+                {(pdfExporting || docxExporting) ? (
+                  <>
+                    <span className="iqac-pdf-btn-spinner" aria-hidden="true" />
+                    Exporting…
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                      <path d="M3 15v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2" strokeLinecap="round"/>
+                      <path d="M10 3v9m0 0-3-3m3 3 3-3" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Export Report ▾
+                  </>
+                )}
+              </button>
+              {exportMenuOpen && (
+                <div className="iqac-export-dropdown">
+                  <button type="button" className="iqac-export-option" onClick={handleGeneratePdf}>
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" width="16" height="16">
+                      <rect x="3" y="2" width="14" height="16" rx="1.5" />
+                      <path d="M7 7h6M7 10h6M7 13h4" strokeLinecap="round"/>
+                    </svg>
+                    Export as PDF
+                  </button>
+                  <button type="button" className="iqac-export-option iqac-export-option--word" onClick={handleGenerateDocx}>
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" width="16" height="16">
+                      <rect x="3" y="2" width="14" height="16" rx="1.5" />
+                      <path d="M6 7l2 7 2-4 2 4 2-7" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Export as Word (.docx)
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+        {pdfExportError ? (
+          <p className="iqac-template-message iqac-template-message--error">{pdfExportError}</p>
+        ) : null}
+        {docxExportError ? (
+          <p className="iqac-template-message iqac-template-message--error">{docxExportError}</p>
+        ) : null}
         {ssrError ? <p className="iqac-template-message iqac-template-message--error">{ssrError}</p> : null}
         <div className="iqac-ssr-cards-grid">
           {SSR_CARDS.map((card) => {
@@ -1405,6 +2186,27 @@ export default function IqacDataPage({ canDeleteIqacFiles = false }) {
                 <button type="button" className="secondary-action" onClick={openHistoryDrawer}>
                   History
                 </button>
+                <div className="iqac-export-wrap">
+                  <button
+                    type="button"
+                    className="iqac-pdf-btn iqac-pdf-btn--compact"
+                    disabled={pdfExporting || docxExporting}
+                    onClick={() => setExportMenuOpen((o) => !o)}
+                    title="Export the full SSR report"
+                  >
+                    {(pdfExporting || docxExporting) ? "Exporting…" : "Export Report ▾"}
+                  </button>
+                  {exportMenuOpen && (
+                    <div className="iqac-export-dropdown iqac-export-dropdown--up">
+                      <button type="button" className="iqac-export-option" onClick={handleGeneratePdf}>
+                        Export as PDF
+                      </button>
+                      <button type="button" className="iqac-export-option iqac-export-option--word" onClick={handleGenerateDocx}>
+                        Export as Word (.docx)
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <button type="button" className="secondary-action" disabled={saveState.status === "loading" || ssrLoading} onClick={() => saveActiveSsr()}>
                   {saveState.status === "loading" ? "Saving..." : "Save"}
                 </button>

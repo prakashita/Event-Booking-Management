@@ -7,7 +7,7 @@ import {
   IconLayers,
   IconUploadCloud
 } from "./icons/EventModalIcons";
-import { formatModalDateTime, normalizeDecisionStatusForWf, viewerDepartmentKey, wfBadgeClass, wfBadgeLabel } from "../utils/eventDetailsView";
+import { formatModalDateTime, normalizeDecisionStatusForWf, viewerDepartmentKey, wfBadgeClass, wfTeamBadgeLabel } from "../utils/eventDetailsView";
 
 const DEPT_ICONS = {
   marketing: DeptIconMarketing,
@@ -110,7 +110,7 @@ export default function DepartmentRequirementsDeck({
                     <div key={block.id} className="evt-req-block">
                       {block.subtitle ? <p className="evt-req-block-sub">{block.subtitle}</p> : null}
                       <div className="evt-req-block-status">
-                        <span className={wfBadgeClass(wf)}>{wfBadgeLabel(wf)}</span>
+                        <span className={wfBadgeClass(wf)}>{wfTeamBadgeLabel(wf)}</span>
                         <div className="evt-req-people">
                           {block.requestedTo ? (
                             <p className="evt-req-assignee">

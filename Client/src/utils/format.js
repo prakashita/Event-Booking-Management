@@ -80,12 +80,12 @@ export function timePartsTo24(parts) {
 }
 
 /**
- * Facility / marketing / IT requests use status "approved" in the API; show "accepted" in the UI.
+ * Facility / marketing / IT / Transport requests use status "approved" in the API; show "Noted" in the UI.
  * Registrar approval keeps the raw "approved" label elsewhere.
  */
 export function formatRequirementDecisionStatusLabel(status) {
   if (status == null || status === "") return "";
   const s = String(status).trim().toLowerCase();
-  if (s === "approved" || s === "accepted") return "accepted";
+  if (s === "approved" || s === "accepted") return "Noted";
   return String(status).trim();
 }
