@@ -30,29 +30,19 @@ class SideNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
-    final roleKey = user?.roleKey ?? 'faculty';
+    final roleKey = AppConstants.normalizeRole(user?.roleKey ?? 'faculty');
     final roleLabel = user?.roleLabel ?? 'FACULTY';
     final headerRoleLabel = _headerRoleLabel(roleKey, roleLabel);
 
-    final isAdmin = roleKey == 'admin';
-    final isRegistrar = roleKey == 'registrar';
-    final isViceChancellor = roleKey == 'vice_chancellor';
-    final isDeputyRegistrar = roleKey == 'deputy_registrar';
-    final isFinanceTeam = roleKey == 'finance_team';
-    final isRegistrarDashboard =
-        isRegistrar || isViceChancellor || isDeputyRegistrar || isFinanceTeam;
-    final isFacilityManager = roleKey == 'facility_manager';
-    final isMarketing = roleKey == 'marketing';
-    final isIt = roleKey == 'it';
-    final isTransport = roleKey == 'transport';
-
-    final canAccessApprovals = isRegistrarDashboard;
-    final canAccessRequirements =
-        isFacilityManager || isMarketing || isIt || isTransport;
-    final canAccessEventReports = isAdmin || isRegistrarDashboard;
-    final canAccessCalendarUpdates = isAdmin || isRegistrarDashboard;
-    final canAccessAdminConsole = isAdmin;
-    final canAccessIqac = AppConstants.iqacAllowedRoles.contains(roleKey);
+    final canAccessApprovals = AppConstants.canAccessApprovals(roleKey);
+    final canAccessRequirements = AppConstants.canAccessRequirements(roleKey);
+    final canAccessEventReports = AppConstants.canAccessEventReports(roleKey);
+    final canAccessCalendarUpdates = AppConstants.canAccessCalendarUpdates(
+      roleKey,
+    );
+    final canAccessAdminConsole = AppConstants.canAccessAdminConsole(roleKey);
+    final canAccessUserApprovals = AppConstants.canAccessUserApprovals(roleKey);
+    final canAccessIqac = AppConstants.canAccessIqac(roleKey);
 
     return Container(
       width: 288,
@@ -185,7 +175,7 @@ class SideNavBar extends StatelessWidget {
                         title: 'IQAC Data Collection',
                         route: '/iqac',
                       ),
-                    if (canAccessAdminConsole) ...[
+                    if (canAccessUserApprovals || canAccessAdminConsole) ...[
                       const SizedBox(height: 24),
                       const Text(
                         'ADMINISTRATION',
@@ -197,18 +187,20 @@ class SideNavBar extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      _buildNavItem(
-                        context,
-                        icon: LucideIcons.users,
-                        title: 'User Approvals',
-                        route: '/user-approvals',
-                      ),
-                      _buildNavItem(
-                        context,
-                        icon: LucideIcons.userCog,
-                        title: 'Admin Console',
-                        route: '/admin',
-                      ),
+                      if (canAccessUserApprovals)
+                        _buildNavItem(
+                          context,
+                          icon: LucideIcons.users,
+                          title: 'User Approvals',
+                          route: '/user-approvals',
+                        ),
+                      if (canAccessAdminConsole)
+                        _buildNavItem(
+                          context,
+                          icon: LucideIcons.userCog,
+                          title: 'Admin Console',
+                          route: '/admin',
+                        ),
                     ],
                   ],
                 ),

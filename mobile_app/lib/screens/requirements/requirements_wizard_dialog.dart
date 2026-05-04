@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
@@ -448,19 +449,40 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       return;
     }
 
-    final files = <MultipartFile>[];
+    final formData = FormData();
     for (final file in _marketingAttachments) {
-      final path = file.path;
-      if (path == null || path.trim().isEmpty) continue;
-      files.add(await MultipartFile.fromFile(path, filename: file.name));
+      final multipart = await _multipartFromPlatformFile(file);
+      if (multipart != null) {
+        formData.files.add(MapEntry('files', multipart));
+      }
     }
 
-    if (files.isEmpty) return;
+    if (formData.files.isEmpty) return;
 
     await _api.postMultipart(
       '/marketing/requests/$requestId/requester-attachments',
-      FormData.fromMap({'files': files}),
+      formData,
     );
+  }
+
+  Future<MultipartFile?> _multipartFromPlatformFile(PlatformFile file) async {
+    final path = file.path;
+    if (path != null && path.trim().isNotEmpty) {
+      return MultipartFile.fromFile(path, filename: file.name);
+    }
+    final bytes = file.bytes;
+    if (bytes != null) {
+      return MultipartFile.fromBytes(bytes, filename: file.name);
+    }
+    final readStream = file.readStream;
+    if (readStream != null) {
+      return MultipartFile.fromStream(
+        () => readStream,
+        file.size,
+        filename: file.name,
+      );
+    }
+    return null;
   }
 
   Future<void> _pickMarketingAttachments() async {
@@ -477,7 +499,8 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
 
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
-      withData: false,
+      withData: kIsWeb,
+      withReadStream: !kIsWeb,
       allowCompression: false,
     );
     final picked = result?.files ?? const <PlatformFile>[];

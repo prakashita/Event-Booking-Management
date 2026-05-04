@@ -566,6 +566,7 @@ class FacilityRequest {
   final String status;
   final String requestedBy;
   final DateTime createdAt;
+  final bool isActionable;
 
   const FacilityRequest({
     required this.id,
@@ -580,6 +581,7 @@ class FacilityRequest {
     required this.status,
     required this.requestedBy,
     required this.createdAt,
+    this.isActionable = true,
   });
 
   factory FacilityRequest.fromJson(Map<String, dynamic> json) =>
@@ -612,6 +614,7 @@ class FacilityRequest {
         createdAt:
             DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
             DateTime.now(),
+        isActionable: json['is_actionable'] != false,
       );
 }
 
@@ -633,6 +636,7 @@ class ITRequest {
   final String status;
   final String requestedBy;
   final DateTime createdAt;
+  final bool isActionable;
 
   const ITRequest({
     required this.id,
@@ -649,6 +653,7 @@ class ITRequest {
     required this.status,
     required this.requestedBy,
     required this.createdAt,
+    this.isActionable = true,
   });
 
   factory ITRequest.fromJson(Map<String, dynamic> json) => ITRequest(
@@ -669,6 +674,7 @@ class ITRequest {
     createdAt:
         DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
         DateTime.now(),
+    isActionable: json['is_actionable'] != false,
   );
 }
 
@@ -695,6 +701,7 @@ class MarketingRequest {
   final Map<String, dynamic> marketingRequirements;
   final List<MarketingDeliverable> deliverables;
   final DateTime createdAt;
+  final bool isActionable;
 
   const MarketingRequest({
     required this.id,
@@ -716,6 +723,7 @@ class MarketingRequest {
     this.marketingRequirements = const <String, dynamic>{},
     required this.deliverables,
     required this.createdAt,
+    this.isActionable = true,
   });
 
   factory MarketingRequest.fromJson(Map<String, dynamic> json) {
@@ -745,6 +753,7 @@ class MarketingRequest {
       createdAt:
           DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
           DateTime.now(),
+      isActionable: json['is_actionable'] != false,
     );
   }
 }
@@ -798,6 +807,7 @@ class TransportRequest {
   final String status;
   final String requestedBy;
   final DateTime createdAt;
+  final bool isActionable;
 
   const TransportRequest({
     required this.id,
@@ -823,6 +833,7 @@ class TransportRequest {
     required this.status,
     required this.requestedBy,
     required this.createdAt,
+    this.isActionable = true,
   });
 
   factory TransportRequest.fromJson(Map<String, dynamic> json) =>
@@ -854,6 +865,7 @@ class TransportRequest {
         createdAt:
             DateTime.tryParse(json['created_at'] ?? '')?.toLocal() ??
             DateTime.now(),
+        isActionable: json['is_actionable'] != false,
       );
 }
 

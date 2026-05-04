@@ -37,28 +37,30 @@ class AppRouter {
         final isLoading = authProvider.isLoading;
         final approvalPending = authProvider.isApprovalPending;
         final approvalRejected = authProvider.isApprovalRejected;
-        final roleKey = (authProvider.user?.roleKey ?? '').trim().toLowerCase();
+        final roleKey = AppConstants.normalizeRole(
+          authProvider.user?.roleKey ?? '',
+        );
         final goingToLogin = state.matchedLocation == '/login';
         final goingToApprovalGate = state.matchedLocation == '/approval-gate';
         final currentPath = state.matchedLocation;
 
-        final isAdmin = roleKey == 'admin';
-        final isRegistrarDashboard =
-            roleKey == 'registrar' ||
-            roleKey == 'vice_chancellor' ||
-            roleKey == 'deputy_registrar' ||
-            roleKey == 'finance_team';
-        final canAccessApprovals = isRegistrarDashboard;
-        final canAccessRequirements =
-            roleKey == 'facility_manager' ||
-            roleKey == 'marketing' ||
-            roleKey == 'it' ||
-            roleKey == 'transport';
-        final canAccessCalendarUpdates = isAdmin;
-        final canAccessIqac = AppConstants.iqacAllowedRoles.contains(roleKey);
-        final canAccessUserApprovals = isAdmin;
-        final canAccessAdminConsole = isAdmin;
-        final canAccessEventReports = isAdmin || isRegistrarDashboard;
+        final canAccessApprovals = AppConstants.canAccessApprovals(roleKey);
+        final canAccessRequirements = AppConstants.canAccessRequirements(
+          roleKey,
+        );
+        final canAccessCalendarUpdates = AppConstants.canAccessCalendarUpdates(
+          roleKey,
+        );
+        final canAccessIqac = AppConstants.canAccessIqac(roleKey);
+        final canAccessUserApprovals = AppConstants.canAccessUserApprovals(
+          roleKey,
+        );
+        final canAccessAdminConsole = AppConstants.canAccessAdminConsole(
+          roleKey,
+        );
+        final canAccessEventReports = AppConstants.canAccessEventReports(
+          roleKey,
+        );
 
         if (isLoading) return null;
         if (!isAuth && !goingToLogin) return '/login';

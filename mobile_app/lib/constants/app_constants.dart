@@ -47,6 +47,43 @@ class AppConstants {
   static const List<String> itRoles = ['it'];
   static const List<String> transportRoles = ['transport'];
 
+  static String normalizeRole(String role) => role.trim().toLowerCase();
+
+  static bool isRegistrarDashboardRole(String role) {
+    final normalized = normalizeRole(role);
+    return approvalRoles.contains(normalized);
+  }
+
+  static bool isDepartmentWorkflowRole(String role) {
+    final normalized = normalizeRole(role);
+    return facilityRoles.contains(normalized) ||
+        marketingRoles.contains(normalized) ||
+        itRoles.contains(normalized) ||
+        transportRoles.contains(normalized);
+  }
+
+  static bool canAccessApprovals(String role) => isRegistrarDashboardRole(role);
+
+  static bool canAccessRequirements(String role) =>
+      isDepartmentWorkflowRole(role);
+
+  static bool canAccessEventReports(String role) {
+    final normalized = normalizeRole(role);
+    return normalized == 'admin' || isRegistrarDashboardRole(normalized);
+  }
+
+  static bool canAccessCalendarUpdates(String role) =>
+      normalizeRole(role) == 'admin';
+
+  static bool canAccessUserApprovals(String role) =>
+      normalizeRole(role) == 'admin';
+
+  static bool canAccessAdminConsole(String role) =>
+      normalizeRole(role) == 'admin';
+
+  static bool canAccessIqac(String role) =>
+      iqacAllowedRoles.contains(normalizeRole(role));
+
   // Event status
   static const String statusUpcoming = 'upcoming';
   static const String statusOngoing = 'ongoing';
