@@ -767,7 +767,9 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFD97706).withValues(alpha: 0.1),
+                              color: const Color(
+                                0xFFD97706,
+                              ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
@@ -1195,7 +1197,9 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2563EB).withValues(alpha: 0.1),
+                              color: const Color(
+                                0xFF2563EB,
+                              ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
@@ -1729,6 +1733,9 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isLarge = screenWidth > 1200;
+    final isMedium = screenWidth > 768;
 
     final heading = isDark
         ? Colors.white
@@ -1736,6 +1743,11 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     final subheading = isDark
         ? const Color(0xFF94A3B8) // slate-400
         : const Color(0xFF64748B); // slate-500
+
+    final horizontalPadding = isLarge
+        ? (screenWidth - 1100) / 2
+        : (isMedium ? 32.0 : 20.0);
+    final verticalPadding = isLarge ? 32.0 : 16.0;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -1748,7 +1760,12 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                 physics: const BouncingScrollPhysics(),
                 slivers: [
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                    padding: EdgeInsets.fromLTRB(
+                      horizontalPadding,
+                      verticalPadding,
+                      horizontalPadding,
+                      verticalPadding,
+                    ),
                     sliver: SliverToBoxAdapter(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1756,20 +1773,23 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                           Text(
                             'Calendar Updates',
                             style: TextStyle(
-                              fontSize: 28,
+                              fontSize: isLarge ? 32 : 28,
                               fontWeight: FontWeight.w800,
                               color: heading,
                               letterSpacing: -0.5,
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Text(
-                            'Manage institution holidays and academic calendar events visible across the organization.',
-                            style: TextStyle(
-                              color: subheading,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              height: 1.4,
+                          SizedBox(
+                            width: isLarge ? 900 : null,
+                            child: Text(
+                              'Manage institution holidays and academic calendar events visible across the organization.',
+                              style: TextStyle(
+                                color: subheading,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                height: 1.4,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 24),
@@ -1781,34 +1801,43 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                     ),
                   ),
                   SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                    ),
                     sliver: _error != null
                         ? SliverToBoxAdapter(
                             child: Center(
-                              child: Column(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      _error!,
-                                      style: TextStyle(
-                                        color: Colors.red.shade700,
-                                        fontWeight: FontWeight.w500,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 600,
+                                ),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
-                                      textAlign: TextAlign.center,
+                                      child: Text(
+                                        _error!,
+                                        style: TextStyle(
+                                          color: Colors.red.shade700,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  FilledButton.icon(
-                                    onPressed: _loadEntries,
-                                    icon: const Icon(Icons.refresh),
-                                    label: const Text('Retry'),
-                                  ),
-                                ],
+                                    const SizedBox(height: 12),
+                                    FilledButton.icon(
+                                      onPressed: _loadEntries,
+                                      icon: const Icon(Icons.refresh),
+                                      label: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           )
@@ -1832,7 +1861,9 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                                       child: Icon(
                                         Icons.event_busy_rounded,
                                         size: 48,
-                                        color: subheading.withValues(alpha: 0.5),
+                                        color: subheading.withValues(
+                                          alpha: 0.5,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(height: 20),
@@ -1855,14 +1886,15 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                             ),
                           )
                         : SliverGrid(
-                            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 400,
-                              mainAxisSpacing: 16,
-                              crossAxisSpacing: 16,
-                              mainAxisExtent: _canManage
-                                  ? 200
-                                  : 148, // Adjusted for cleaner layout and to prevent vertical overflow
-                            ),
+                            gridDelegate:
+                                SliverGridDelegateWithMaxCrossAxisExtent(
+                                  maxCrossAxisExtent: isLarge
+                                      ? 450
+                                      : (isMedium ? 380 : 400),
+                                  mainAxisSpacing: isMedium ? 20 : 16,
+                                  crossAxisSpacing: isMedium ? 20 : 16,
+                                  mainAxisExtent: _canManage ? 200 : 148,
+                                ),
                             delegate: SliverChildBuilderDelegate((
                               context,
                               index,
@@ -1897,6 +1929,10 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
   Widget _buildSearchAndFilters() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompactLayout = screenWidth < 600;
+    final isMedium = screenWidth > 768;
+
     final hintColor = isDark
         ? const Color(0xFF64748B) // slate-500
         : const Color(0xFF94A3B8); // slate-400
@@ -1932,186 +1968,292 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
           ),
         ),
         const SizedBox(height: 16),
-        // Horizontal Scrollable Filter Chips
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          child: Row(
-            children: [
-              // Clear Button (Only show if a filter is active)
-              if (_typeFilter != _EntryTypeFilter.all ||
-                  _yearFilter != 'All Years' ||
-                  _semesterFilter != 'All Semesters' ||
-                  _categoryFilter != 'All Categories' ||
-                  _syncFilter != _SyncFilter.all ||
-                  _activeFilter != _ActiveFilter.all)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8.0),
-                  child: ActionChip(
-                    avatar: Icon(
-                      Icons.close,
-                      size: 16,
-                      color: theme.colorScheme.error,
-                    ),
-                    label: Text(
-                      'Clear',
-                      style: TextStyle(
-                        color: theme.colorScheme.error,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    backgroundColor: theme.colorScheme.error.withValues(alpha: 0.1),
-                    side: BorderSide.none,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _search = '';
-                        _typeFilter = _EntryTypeFilter.all;
-                        _yearFilter = 'All Years';
-                        _semesterFilter = 'All Semesters';
-                        _categoryFilter = 'All Categories';
-                        _syncFilter = _SyncFilter.all;
-                        _activeFilter = _ActiveFilter.all;
-                      });
-                      _loadEntries();
-                    },
-                  ),
-                ),
-
-              _buildFilterChip(
-                label: 'Type',
-                value: switch (_typeFilter) {
-                  _EntryTypeFilter.all => 'All',
-                  _EntryTypeFilter.holiday => 'Holiday',
-                  _EntryTypeFilter.academic => 'Academic',
-                },
-                options: const ['All', 'Holiday', 'Academic'],
-                onChanged: (v) {
-                  setState(() {
-                    if (v == 'Holiday') {
-                      _typeFilter = _EntryTypeFilter.holiday;
-                    } else if (v == 'Academic') {
-                      _typeFilter = _EntryTypeFilter.academic;
-                    } else {
-                      _typeFilter = _EntryTypeFilter.all;
-                    }
-                  });
-                  _loadEntries();
-                },
+        // Filter Chips - Wrapping or Scrolling based on screen size
+        isCompactLayout
+            ? SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: _buildFilterRow(isMedium),
+              )
+            : Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _buildFilterRowItems(isMedium),
               ),
-              const SizedBox(width: 8),
+      ],
+    );
+  }
 
-              _buildFilterChip(
-                label: 'Year',
-                value: _yearFilter == 'All Years' ? 'All' : _yearFilter,
-                options: [
-                  'All',
-                  ..._yearOptions.where((y) => y != 'All Years'),
-                ],
-                onChanged: (v) {
-                  setState(() => _yearFilter = (v == 'All') ? 'All Years' : v!);
-                  _loadEntries();
-                },
-              ),
-              const SizedBox(width: 8),
+  List<Widget> _buildFilterRowItems(bool isMedium) {
+    return [
+      if (_typeFilter != _EntryTypeFilter.all ||
+          _yearFilter != 'All Years' ||
+          _semesterFilter != 'All Semesters' ||
+          _categoryFilter != 'All Categories' ||
+          _syncFilter != _SyncFilter.all ||
+          _activeFilter != _ActiveFilter.all)
+        Padding(
+          padding: const EdgeInsets.only(right: 0),
+          child: _buildClearChip(),
+        ),
+      _buildFilterChip(
+        label: 'Type',
+        value: switch (_typeFilter) {
+          _EntryTypeFilter.all => 'All',
+          _EntryTypeFilter.holiday => 'Holiday',
+          _EntryTypeFilter.academic => 'Academic',
+        },
+        options: const ['All', 'Holiday', 'Academic'],
+        onChanged: (v) {
+          setState(() {
+            if (v == 'Holiday') {
+              _typeFilter = _EntryTypeFilter.holiday;
+            } else if (v == 'Academic') {
+              _typeFilter = _EntryTypeFilter.academic;
+            } else {
+              _typeFilter = _EntryTypeFilter.all;
+            }
+          });
+          _loadEntries();
+        },
+      ),
+      _buildFilterChip(
+        label: 'Year',
+        value: _yearFilter == 'All Years' ? 'All' : _yearFilter,
+        options: ['All', ..._yearOptions.where((y) => y != 'All Years')],
+        onChanged: (v) {
+          setState(() => _yearFilter = (v == 'All') ? 'All Years' : v!);
+          _loadEntries();
+        },
+      ),
+      _buildFilterChip(
+        label: 'Semester',
+        value: _semesterFilter == 'All Semesters' ? 'All' : _semesterFilter,
+        options: [
+          'All',
+          ..._semesterOptions.where((s) => s != 'All Semesters'),
+        ],
+        onChanged: (v) {
+          setState(() => _semesterFilter = (v == 'All') ? 'All Semesters' : v!);
+          _loadEntries();
+        },
+      ),
+      _buildFilterChip(
+        label: 'Category',
+        value: _categoryFilter == 'All Categories' ? 'All' : _categoryFilter,
+        options: [
+          'All',
+          ..._categoryOptions.where((c) => c != 'All Categories'),
+        ],
+        onChanged: (v) {
+          setState(
+            () => _categoryFilter = (v == 'All') ? 'All Categories' : v!,
+          );
+          _loadEntries();
+        },
+      ),
+      _buildFilterChip(
+        label: 'Sync',
+        value: switch (_syncFilter) {
+          _SyncFilter.all => 'All',
+          _SyncFilter.synced => 'Synced',
+          _SyncFilter.pending => 'Pending',
+          _SyncFilter.failed => 'Failed',
+          _SyncFilter.disabled => 'Disabled',
+        },
+        options: const ['All', 'Synced', 'Pending', 'Failed', 'Disabled'],
+        onChanged: (v) {
+          setState(() {
+            if (v == 'Synced') {
+              _syncFilter = _SyncFilter.synced;
+            } else if (v == 'Pending') {
+              _syncFilter = _SyncFilter.pending;
+            } else if (v == 'Failed') {
+              _syncFilter = _SyncFilter.failed;
+            } else if (v == 'Disabled') {
+              _syncFilter = _SyncFilter.disabled;
+            } else {
+              _syncFilter = _SyncFilter.all;
+            }
+          });
+        },
+      ),
+      _buildFilterChip(
+        label: 'Status',
+        value: switch (_activeFilter) {
+          _ActiveFilter.all => 'All',
+          _ActiveFilter.active => 'Active',
+          _ActiveFilter.inactive => 'Inactive',
+        },
+        options: const ['All', 'Active', 'Inactive'],
+        onChanged: (v) {
+          setState(() {
+            if (v == 'Active') {
+              _activeFilter = _ActiveFilter.active;
+            } else if (v == 'Inactive') {
+              _activeFilter = _ActiveFilter.inactive;
+            } else {
+              _activeFilter = _ActiveFilter.all;
+            }
+          });
+        },
+      ),
+    ];
+  }
 
-              _buildFilterChip(
-                label: 'Semester',
-                value: _semesterFilter == 'All Semesters'
-                    ? 'All'
-                    : _semesterFilter,
-                options: [
-                  'All',
-                  ..._semesterOptions.where((s) => s != 'All Semesters'),
-                ],
-                onChanged: (v) {
-                  setState(
-                    () => _semesterFilter = (v == 'All') ? 'All Semesters' : v!,
-                  );
-                  _loadEntries();
-                },
-              ),
-              const SizedBox(width: 8),
-
-              _buildFilterChip(
-                label: 'Category',
-                value: _categoryFilter == 'All Categories'
-                    ? 'All'
-                    : _categoryFilter,
-                options: [
-                  'All',
-                  ..._categoryOptions.where((c) => c != 'All Categories'),
-                ],
-                onChanged: (v) {
-                  setState(
-                    () =>
-                        _categoryFilter = (v == 'All') ? 'All Categories' : v!,
-                  );
-                  _loadEntries();
-                },
-              ),
-              const SizedBox(width: 8),
-
-              _buildFilterChip(
-                label: 'Sync',
-                value: switch (_syncFilter) {
-                  _SyncFilter.all => 'All',
-                  _SyncFilter.synced => 'Synced',
-                  _SyncFilter.pending => 'Pending',
-                  _SyncFilter.failed => 'Failed',
-                  _SyncFilter.disabled => 'Disabled',
-                },
-                options: const [
-                  'All',
-                  'Synced',
-                  'Pending',
-                  'Failed',
-                  'Disabled',
-                ],
-                onChanged: (v) {
-                  setState(() {
-                    if (v == 'Synced') {
-                      _syncFilter = _SyncFilter.synced;
-                    } else if (v == 'Pending') {
-                      _syncFilter = _SyncFilter.pending;
-                    } else if (v == 'Failed') {
-                      _syncFilter = _SyncFilter.failed;
-                    } else if (v == 'Disabled') {
-                      _syncFilter = _SyncFilter.disabled;
-                    } else {
-                      _syncFilter = _SyncFilter.all;
-                    }
-                  });
-                },
-              ),
-              const SizedBox(width: 8),
-
-              _buildFilterChip(
-                label: 'Status',
-                value: switch (_activeFilter) {
-                  _ActiveFilter.all => 'All',
-                  _ActiveFilter.active => 'Active',
-                  _ActiveFilter.inactive => 'Inactive',
-                },
-                options: const ['All', 'Active', 'Inactive'],
-                onChanged: (v) {
-                  setState(() {
-                    if (v == 'Active') {
-                      _activeFilter = _ActiveFilter.active;
-                    } else if (v == 'Inactive') {
-                      _activeFilter = _ActiveFilter.inactive;
-                    } else {
-                      _activeFilter = _ActiveFilter.all;
-                    }
-                  });
-                },
-              ),
-            ],
+  Widget _buildFilterRow(bool isMedium) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_typeFilter != _EntryTypeFilter.all ||
+            _yearFilter != 'All Years' ||
+            _semesterFilter != 'All Semesters' ||
+            _categoryFilter != 'All Categories' ||
+            _syncFilter != _SyncFilter.all ||
+            _activeFilter != _ActiveFilter.all)
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: _buildClearChip(),
           ),
+        _buildFilterChip(
+          label: 'Type',
+          value: switch (_typeFilter) {
+            _EntryTypeFilter.all => 'All',
+            _EntryTypeFilter.holiday => 'Holiday',
+            _EntryTypeFilter.academic => 'Academic',
+          },
+          options: const ['All', 'Holiday', 'Academic'],
+          onChanged: (v) {
+            setState(() {
+              if (v == 'Holiday') {
+                _typeFilter = _EntryTypeFilter.holiday;
+              } else if (v == 'Academic') {
+                _typeFilter = _EntryTypeFilter.academic;
+              } else {
+                _typeFilter = _EntryTypeFilter.all;
+              }
+            });
+            _loadEntries();
+          },
+        ),
+        const SizedBox(width: 8),
+        _buildFilterChip(
+          label: 'Year',
+          value: _yearFilter == 'All Years' ? 'All' : _yearFilter,
+          options: ['All', ..._yearOptions.where((y) => y != 'All Years')],
+          onChanged: (v) {
+            setState(() => _yearFilter = (v == 'All') ? 'All Years' : v!);
+            _loadEntries();
+          },
+        ),
+        const SizedBox(width: 8),
+        _buildFilterChip(
+          label: 'Semester',
+          value: _semesterFilter == 'All Semesters' ? 'All' : _semesterFilter,
+          options: [
+            'All',
+            ..._semesterOptions.where((s) => s != 'All Semesters'),
+          ],
+          onChanged: (v) {
+            setState(
+              () => _semesterFilter = (v == 'All') ? 'All Semesters' : v!,
+            );
+            _loadEntries();
+          },
+        ),
+        const SizedBox(width: 8),
+        _buildFilterChip(
+          label: 'Category',
+          value: _categoryFilter == 'All Categories' ? 'All' : _categoryFilter,
+          options: [
+            'All',
+            ..._categoryOptions.where((c) => c != 'All Categories'),
+          ],
+          onChanged: (v) {
+            setState(
+              () => _categoryFilter = (v == 'All') ? 'All Categories' : v!,
+            );
+            _loadEntries();
+          },
+        ),
+        const SizedBox(width: 8),
+        _buildFilterChip(
+          label: 'Sync',
+          value: switch (_syncFilter) {
+            _SyncFilter.all => 'All',
+            _SyncFilter.synced => 'Synced',
+            _SyncFilter.pending => 'Pending',
+            _SyncFilter.failed => 'Failed',
+            _SyncFilter.disabled => 'Disabled',
+          },
+          options: const ['All', 'Synced', 'Pending', 'Failed', 'Disabled'],
+          onChanged: (v) {
+            setState(() {
+              if (v == 'Synced') {
+                _syncFilter = _SyncFilter.synced;
+              } else if (v == 'Pending') {
+                _syncFilter = _SyncFilter.pending;
+              } else if (v == 'Failed') {
+                _syncFilter = _SyncFilter.failed;
+              } else if (v == 'Disabled') {
+                _syncFilter = _SyncFilter.disabled;
+              } else {
+                _syncFilter = _SyncFilter.all;
+              }
+            });
+          },
+        ),
+        const SizedBox(width: 8),
+        _buildFilterChip(
+          label: 'Status',
+          value: switch (_activeFilter) {
+            _ActiveFilter.all => 'All',
+            _ActiveFilter.active => 'Active',
+            _ActiveFilter.inactive => 'Inactive',
+          },
+          options: const ['All', 'Active', 'Inactive'],
+          onChanged: (v) {
+            setState(() {
+              if (v == 'Active') {
+                _activeFilter = _ActiveFilter.active;
+              } else if (v == 'Inactive') {
+                _activeFilter = _ActiveFilter.inactive;
+              } else {
+                _activeFilter = _ActiveFilter.all;
+              }
+            });
+          },
         ),
       ],
+    );
+  }
+
+  Widget _buildClearChip() {
+    final theme = Theme.of(context);
+    return ActionChip(
+      avatar: Icon(Icons.close, size: 16, color: theme.colorScheme.error),
+      label: Text(
+        'Clear',
+        style: TextStyle(
+          color: theme.colorScheme.error,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      backgroundColor: theme.colorScheme.error.withValues(alpha: 0.1),
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      onPressed: () {
+        setState(() {
+          _search = '';
+          _typeFilter = _EntryTypeFilter.all;
+          _yearFilter = 'All Years';
+          _semesterFilter = 'All Semesters';
+          _categoryFilter = 'All Categories';
+          _syncFilter = _SyncFilter.all;
+          _activeFilter = _ActiveFilter.all;
+        });
+        _loadEntries();
+      },
     );
   }
 
@@ -2221,89 +2363,154 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
         ? const Color(0xFF94A3B8)
         : const Color(0xFF64748B);
 
-    return Row(
-      children: [
-        if (_canManage) ...[
-          Expanded(
-            child: InkWell(
-              onTap: () => _openHolidaySheet(),
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: holidayBg,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add_circle, color: holidayFg, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Add Holiday',
-                      style: TextStyle(
-                        color: holidayFg,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: InkWell(
-              onTap: () => _openAcademicSheet(),
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: academicBg,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add_circle, color: academicFg, size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Academic Entry',
-                      style: TextStyle(
-                        color: academicFg,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-        ],
-        Container(
-          decoration: BoxDecoration(
+    Widget buildRefresh({required bool compact}) {
+      final size = compact ? 42.0 : 46.0;
+
+      return Tooltip(
+        message: 'Refresh',
+        child: SizedBox.square(
+          dimension: size,
+          child: Material(
             color: isDark ? const Color(0xFF1E293B) : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(
+                color: isDark
+                    ? const Color(0xFF334155)
+                    : const Color(0xFFE2E8F0),
+              ),
             ),
-          ),
-          child: IconButton(
-            onPressed: _loadEntries,
-            icon: Icon(Icons.refresh_rounded, color: iconColor),
-            tooltip: 'Refresh',
+            child: InkWell(
+              onTap: _loadEntries,
+              borderRadius: BorderRadius.circular(16),
+              child: Icon(
+                Icons.refresh_rounded,
+                color: iconColor,
+                size: compact ? 20 : 22,
+              ),
+            ),
           ),
         ),
-      ],
+      );
+    }
+
+    Widget buildHolidayButton({required bool compact}) {
+      return InkWell(
+        onTap: () => _openHolidaySheet(),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            vertical: compact ? 11 : 12,
+            horizontal: compact ? 10 : 12,
+          ),
+          decoration: BoxDecoration(
+            color: holidayBg,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add_circle, color: holidayFg, size: compact ? 18 : 20),
+              SizedBox(width: compact ? 6 : 8),
+              Flexible(
+                child: Text(
+                  compact ? 'Holiday' : 'Add Holiday',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: holidayFg,
+                    fontWeight: FontWeight.bold,
+                    fontSize: compact ? 13 : 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget buildAcademicButton({required bool compact}) {
+      return InkWell(
+        onTap: () => _openAcademicSheet(),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            vertical: compact ? 11 : 12,
+            horizontal: compact ? 10 : 12,
+          ),
+          decoration: BoxDecoration(
+            color: academicBg,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.add_circle,
+                color: academicFg,
+                size: compact ? 18 : 20,
+              ),
+              SizedBox(width: compact ? 6 : 8),
+              Flexible(
+                child: Text(
+                  compact ? 'Academic' : 'Academic Entry',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: academicFg,
+                    fontWeight: FontWeight.bold,
+                    fontSize: compact ? 13 : 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 340;
+        final isCompact = constraints.maxWidth < 430;
+        final gap = isCompact ? 8.0 : 12.0;
+
+        if (!_canManage) {
+          return Align(
+            alignment: Alignment.centerLeft,
+            child: buildRefresh(compact: isCompact),
+          );
+        }
+
+        if (isNarrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              buildHolidayButton(compact: false),
+              const SizedBox(height: 12),
+              buildAcademicButton(compact: false),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: buildRefresh(compact: false),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: buildHolidayButton(compact: isCompact)),
+            SizedBox(width: gap),
+            Expanded(child: buildAcademicButton(compact: isCompact)),
+            SizedBox(width: gap),
+            buildRefresh(compact: isCompact),
+          ],
+        );
+      },
     );
   }
 }

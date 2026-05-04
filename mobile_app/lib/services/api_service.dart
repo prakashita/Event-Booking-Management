@@ -125,6 +125,20 @@ class ApiService {
     return parser != null ? parser(resp.data) : resp.data as T;
   }
 
+  Future<T> put<T>(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? headers,
+    T Function(dynamic)? parser,
+  }) async {
+    final resp = await _dio.put(
+      path,
+      data: data,
+      options: headers == null ? null : Options(headers: headers),
+    );
+    return parser != null ? parser(resp.data) : resp.data as T;
+  }
+
   Future<T> delete<T>(
     String path, {
     dynamic data,

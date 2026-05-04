@@ -28,15 +28,7 @@ class AppConstants {
     'transport',
   ];
 
-  static const List<String> iqacAllowedRoles = [
-    'iqac',
-    'faculty',
-    'admin',
-    'registrar',
-    'vice_chancellor',
-    'deputy_registrar',
-    'finance_team',
-  ];
+  static const List<String> iqacAllowedRoles = ['iqac'];
   static const List<String> adminRoles = [
     'admin',
     'registrar',

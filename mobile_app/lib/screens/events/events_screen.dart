@@ -2259,30 +2259,6 @@ class _EventCard extends StatelessWidget {
       default:
         return const Color(0xFFF8FAFC); // slate-50
     }
-    
-    class _SectionLabel extends StatelessWidget {
-      const _SectionLabel({required this.icon, required this.label});
-      final IconData icon;
-      final String label;
-    
-      @override
-      Widget build(BuildContext context) {
-        final colorScheme = Theme.of(context).colorScheme;
-        return Row(
-          children: [
-            Icon(icon, size: 16, color: colorScheme.primary),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: colorScheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ],
-        );
-      }
-    }
   }
 
   Color _getStatusBorderColor(String status) {
@@ -2305,6 +2281,31 @@ class _EventCard extends StatelessWidget {
       default:
         return const Color(0xFFF1F5F9); // slate-100
     }
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: colorScheme.primary),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: colorScheme.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
   }
 }
 

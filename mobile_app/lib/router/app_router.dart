@@ -42,18 +42,18 @@ class AppRouter {
         final currentPath = state.matchedLocation;
 
         final isAdmin = roleKey == 'admin';
-         final isRegistrarDashboard =
-             roleKey == 'registrar' ||
-             roleKey == 'vice_chancellor' ||
-             roleKey == 'deputy_registrar' ||
-             roleKey == 'finance_team';
-         final canAccessApprovals = isRegistrarDashboard;
+        final isRegistrarDashboard =
+            roleKey == 'registrar' ||
+            roleKey == 'vice_chancellor' ||
+            roleKey == 'deputy_registrar' ||
+            roleKey == 'finance_team';
+        final canAccessApprovals = isRegistrarDashboard;
         final canAccessRequirements =
             roleKey == 'facility_manager' ||
             roleKey == 'marketing' ||
             roleKey == 'it' ||
             roleKey == 'transport';
-        final canAccessCalendarUpdates = isAdmin || isRegistrarDashboard;
+        final canAccessCalendarUpdates = isAdmin;
         final canAccessIqac = AppConstants.iqacAllowedRoles.contains(roleKey);
         final canAccessUserApprovals = isAdmin;
         final canAccessAdminConsole = isAdmin;
