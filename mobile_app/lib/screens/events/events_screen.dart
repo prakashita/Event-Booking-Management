@@ -6,8 +6,11 @@ import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../constants/app_constants.dart';
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../requirements/requirements_wizard_dialog.dart';
@@ -119,6 +122,7 @@ class _EventsScreenState extends State<EventsScreen>
   }
 
   bool _canViewReport(Event event) {
+    if (event.status.trim().toLowerCase() != 'closed') return false;
     return (event.reportWebViewLink?.trim().isNotEmpty ?? false) ||
         (event.reportFileId?.trim().isNotEmpty ?? false);
   }
@@ -819,485 +823,1055 @@ class _EventsScreenState extends State<EventsScreen>
     final outcomesLearningsCtrl = TextEditingController();
     final followUpCtrl = TextEditingController();
     final appendixCtrl = TextEditingController();
+    final iqacDescriptionCtrl = TextEditingController();
     String? attendancePath;
     String? attendanceName;
+    final appendixPhotos = <PlatformFile>[];
     var attendanceNotApplicable = false;
     var submitting = false;
     final expectedName = _expectedReportFilename(event);
     final hasExistingReport = event.reportFileId?.trim().isNotEmpty ?? false;
+    final role = context.read<AuthProvider>().user?.roleKey ?? '';
+    final canFileIqac = AppConstants.canAccessIqac(role);
+    var iqacCriteria = <_ReportIqacCriterion>[];
+    var iqacCriteriaLoading = canFileIqac;
+    String? iqacCriteriaError;
+    String iqacCriterionId = '';
+    String iqacSubFolderId = '';
+    String iqacItemId = '';
+
+    if (canFileIqac) {
+      try {
+        final criteriaResp = await _api.get<dynamic>('/iqac/criteria');
+        final raw = criteriaResp is List ? criteriaResp : const <dynamic>[];
+        iqacCriteria = raw
+            .whereType<Map>()
+            .map(
+              (e) =>
+                  _ReportIqacCriterion.fromJson(Map<String, dynamic>.from(e)),
+            )
+            .toList();
+      } catch (e) {
+        iqacCriteriaError = _extractError(
+          e,
+          fallback: 'Could not load IQAC criteria.',
+        );
+      } finally {
+        iqacCriteriaLoading = false;
+      }
+    }
+    if (!mounted) return;
 
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) {
-          void closeDialog() {
-            FocusScope.of(ctx).unfocus();
+          Future<void> closeDialog() async {
+            FocusManager.instance.primaryFocus?.unfocus();
+            await Future<void>.delayed(Duration.zero);
             if (!ctx.mounted) return;
             Navigator.of(ctx).pop();
           }
 
-          final colorScheme = Theme.of(ctx).colorScheme;
-          return Dialog(
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ── Header ──
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(20, 20, 8, 12),
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.description_outlined,
-                        color: colorScheme.onPrimaryContainer,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          hasExistingReport
-                              ? 'Replace Report'
-                              : 'Submit Event Report',
-                          style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                            color: colorScheme.onPrimaryContainer,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: submitting ? null : closeDialog,
-                        icon: const Icon(Icons.close, size: 20),
-                        color: colorScheme.onPrimaryContainer,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
-                    ],
-                  ),
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          final surface = isDark ? const Color(0xFF1E293B) : Colors.white;
+          final fieldFill = isDark
+              ? const Color(0xFF0F172A)
+              : const Color(0xFFF8FAFC);
+          final borderColor = isDark
+              ? const Color(0xFF334155)
+              : const Color(0xFFE2E8F0);
+          final primaryText = isDark ? Colors.white : const Color(0xFF0F172A);
+          final mutedText = isDark
+              ? const Color(0xFF94A3B8)
+              : const Color(0xFF64748B);
+          const accent = Color(0xFF2563EB);
+          final screenSize = MediaQuery.sizeOf(ctx);
+          final dialogWidth = screenSize.width > 560
+              ? 500.0
+              : screenSize.width - 32;
+          final dialogHeight = screenSize.height * 0.9;
+
+          Widget reportTextField({
+            required TextEditingController controller,
+            required String label,
+            required IconData icon,
+            String? helperText,
+            String? hintText,
+            int lines = 1,
+          }) {
+            return TextField(
+              controller: controller,
+              minLines: 1,
+              maxLines: lines,
+              style: GoogleFonts.inter(fontSize: 14, color: primaryText),
+              decoration: InputDecoration(
+                labelText: label,
+                alignLabelWithHint: lines > 1,
+                labelStyle: GoogleFonts.inter(fontSize: 14, color: mutedText),
+                helperText: helperText,
+                hintText: hintText,
+                helperStyle: GoogleFonts.inter(fontSize: 12, color: mutedText),
+                hintStyle: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: mutedText.withValues(alpha: 0.75),
                 ),
-                // ── Scrollable form ──
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Cover details
-                        _SectionLabel(
-                          icon: Icons.event,
-                          label: 'Event Details',
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHighest
-                                .withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '${event.title} · ${DateFormat('yyyy-MM-dd').format(event.startTime)} · ${event.venueName.isEmpty ? '—' : event.venueName} · ${event.facilitator?.trim().isNotEmpty == true ? event.facilitator!.trim() : '—'}',
-                            style: Theme.of(ctx).textTheme.bodySmall,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
+                prefixIcon: Icon(icon, size: 20, color: mutedText),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 48,
+                  minHeight: 48,
+                ),
+                filled: true,
+                fillColor: fieldFill,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: borderColor),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: accent, width: 2),
+                ),
+              ),
+            );
+          }
 
-                        // Executive summary
-                        _SectionLabel(
-                          icon: Icons.summarize,
-                          label: 'Executive Summary *',
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: executiveSummaryCtrl,
-                          minLines: 3,
-                          maxLines: 5,
-                          decoration: const InputDecoration(
-                            labelText: 'Executive summary (required)',
-                            helperText:
-                                'Brief overview, goal, and main outcome',
-                            hintText:
-                                'e.g. The workshop aimed to… and achieved…',
-                          ),
-                        ),
-                        const SizedBox(height: 20),
+          Future<void> pickAttendanceFile() async {
+            final result = await FilePicker.platform.pickFiles(
+              type: FileType.custom,
+              allowedExtensions: const ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+            );
+            final picked = result?.files.single;
+            if (picked?.path == null) return;
+            if (picked!.size > 10 * 1024 * 1024) {
+              _showMessage(
+                'Attendance file must be 10 MB or smaller.',
+                isError: true,
+              );
+              return;
+            }
+            setLocal(() {
+              attendancePath = picked.path!;
+              attendanceName = picked.name;
+            });
+          }
 
-                        // Attendance
-                        _SectionLabel(
-                          icon: Icons.how_to_reg,
-                          label: 'Attendance',
+          Future<void> pickAppendixPhotos() async {
+            final result = await FilePicker.platform.pickFiles(
+              allowMultiple: true,
+              type: FileType.custom,
+              allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+            );
+            if (result == null) return;
+            setLocal(() => appendixPhotos.addAll(result.files));
+          }
+
+          _ReportIqacCriterion? selectedCriterion() {
+            for (final criterion in iqacCriteria) {
+              if (criterion.id.toString() == iqacCriterionId) return criterion;
+            }
+            return null;
+          }
+
+          _ReportIqacSubFolder? selectedSubFolder() {
+            final criterion = selectedCriterion();
+            if (criterion == null) return null;
+            for (final subFolder in criterion.subFolders) {
+              if (subFolder.id == iqacSubFolderId) return subFolder;
+            }
+            return null;
+          }
+
+          Future<void> submitReport() async {
+            final hasExistingAttendance =
+                event.attendanceFileId?.trim().isNotEmpty ?? false;
+            final executiveSummary = executiveSummaryCtrl.text.trim();
+            final programAgenda = programAgendaCtrl.text.trim();
+            final outcomesLearnings = outcomesLearningsCtrl.text.trim();
+            final iqacPartial =
+                iqacCriterionId.isNotEmpty ||
+                iqacSubFolderId.isNotEmpty ||
+                iqacItemId.isNotEmpty;
+            final missingLabel = executiveSummary.isEmpty
+                ? 'Executive summary'
+                : programAgenda.isEmpty
+                ? 'Program / agenda'
+                : outcomesLearnings.isEmpty
+                ? 'Outcomes and learnings'
+                : '';
+            if (missingLabel.isNotEmpty) {
+              _showMessage('Please fill in: $missingLabel', isError: true);
+              return;
+            }
+            if (!attendanceNotApplicable &&
+                attendancePath == null &&
+                !hasExistingAttendance) {
+              _showMessage(
+                'Upload an attendance file or mark it as not applicable.',
+                isError: true,
+              );
+              return;
+            }
+            if (iqacPartial &&
+                (iqacCriterionId.isEmpty ||
+                    iqacSubFolderId.isEmpty ||
+                    iqacItemId.isEmpty)) {
+              _showMessage(
+                'Select IQAC criterion, sub-criterion, and evidence item, or clear the IQAC dropdown to skip.',
+                isError: true,
+              );
+              return;
+            }
+            setLocal(() => submitting = true);
+            try {
+              final attendanceText = attendanceNotApplicable
+                  ? 'Not applicable.'
+                  : attendancePath != null
+                  ? 'Supporting attendance document uploaded with this submission: $attendanceName'
+                  : 'Supporting attendance document on file: ${event.attendanceFileName?.trim() ?? ''}';
+              final appendixText = [
+                appendixCtrl.text.trim(),
+                if (appendixPhotos.isNotEmpty)
+                  'Appendix photo references: ${appendixPhotos.map((file) => file.name).join(', ')}',
+              ].where((part) => part.trim().isNotEmpty).join('\n');
+              final reportBytes = _buildReportPdfBytes(
+                event: event,
+                executiveSummary: executiveSummary,
+                attendance: attendanceText,
+                programAgenda: programAgenda,
+                outcomesLearnings: outcomesLearnings,
+                followUp: followUpCtrl.text.trim(),
+                appendix: appendixText,
+              );
+              final payload = <String, dynamic>{
+                'file': MultipartFile.fromBytes(
+                  reportBytes,
+                  filename: expectedName,
+                  contentType: DioMediaType('application', 'pdf'),
+                ),
+              };
+              if (attendanceNotApplicable) {
+                payload['attendance_not_applicable'] = '1';
+              } else if (attendancePath != null) {
+                payload['attendance_file'] = await MultipartFile.fromFile(
+                  attendancePath!,
+                  filename: attendanceName,
+                );
+              }
+              if (iqacCriterionId.isNotEmpty &&
+                  iqacSubFolderId.isNotEmpty &&
+                  iqacItemId.isNotEmpty) {
+                payload['iqac_criterion'] = iqacCriterionId;
+                payload['iqac_sub_folder'] = iqacSubFolderId;
+                payload['iqac_item'] = iqacItemId;
+                final description = iqacDescriptionCtrl.text.trim();
+                if (description.isNotEmpty) {
+                  payload['iqac_description'] = description;
+                }
+              }
+              await _api.postMultipart<Map<String, dynamic>>(
+                '/events/${event.id}/report',
+                FormData.fromMap(payload),
+              );
+              FocusManager.instance.primaryFocus?.unfocus();
+              await Future<void>.delayed(Duration.zero);
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              if (!mounted) return;
+              await _refreshCurrentTab();
+              _showMessage(
+                'Report generated and uploaded successfully.',
+                isSuccess: true,
+              );
+            } catch (e) {
+              if (ctx.mounted) setLocal(() => submitting = false);
+              _showMessage(
+                _extractError(e, fallback: 'Unable to upload report.'),
+                isError: true,
+              );
+            }
+          }
+
+          return PopScope(
+            canPop: !submitting,
+            child: Dialog(
+              backgroundColor: surface,
+              clipBehavior: Clip.antiAlias,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 24,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: SizedBox(
+                width: dialogWidth,
+                height: dialogHeight,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 20,
+                      ),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                         ),
-                        const SizedBox(height: 8),
-                        CheckboxListTile(
-                          value: attendanceNotApplicable,
-                          onChanged: submitting
-                              ? null
-                              : (value) {
-                                  setLocal(() {
-                                    attendanceNotApplicable = value ?? false;
-                                    if (attendanceNotApplicable) {
-                                      attendancePath = null;
-                                      attendanceName = null;
-                                    }
-                                  });
-                                },
-                          contentPadding: EdgeInsets.zero,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          title: const Text('Not applicable'),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          attendanceNotApplicable
-                              ? 'No attendance document will be stored. Any previous file will be removed on submit.'
-                              : 'Upload a PDF, Word, or Excel file (max 10 MB), or tick Not applicable.',
-                          style: Theme.of(ctx).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 10),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: submitting || attendanceNotApplicable
-                                ? null
-                                : () async {
-                                    final result = await FilePicker.platform
-                                        .pickFiles(
-                                          type: FileType.custom,
-                                          allowedExtensions: const [
-                                            'pdf',
-                                            'doc',
-                                            'docx',
-                                            'xls',
-                                            'xlsx',
-                                          ],
-                                        );
-                                    final picked = result?.files.single;
-                                    if (picked?.path == null) return;
-                                    if (picked!.size > 10 * 1024 * 1024) {
-                                      _showMessage(
-                                        'Attendance file must be 10 MB or smaller.',
-                                        isError: true,
-                                      );
-                                      return;
-                                    }
-                                    setLocal(() {
-                                      attendancePath = picked.path!;
-                                      attendanceName = picked.name;
-                                    });
-                                  },
-                            icon: const Icon(Icons.attach_file),
-                            label: Text(
-                              attendanceName == null
-                                  ? ((event.attendanceFileName
-                                                ?.trim()
-                                                .isNotEmpty ??
-                                            false)
-                                        ? 'Replace attendance file'
-                                        : 'Choose attendance file')
-                                  : attendanceName!,
-                            ),
-                          ),
-                        ),
-                        if (attendanceName != null) ...[
-                          const SizedBox(height: 6),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: submitting
-                                  ? null
-                                  : () {
-                                      setLocal(() {
-                                        attendancePath = null;
-                                        attendanceName = null;
-                                      });
-                                    },
-                              child: const Text('Remove file'),
-                            ),
-                          ),
-                        ],
-                        if ((event.attendanceFileName?.trim().isNotEmpty ??
-                                false) &&
-                            attendanceName == null &&
-                            !attendanceNotApplicable) ...[
-                          const SizedBox(height: 8),
+                      ),
+                      child: Row(
+                        children: [
                           Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHighest
-                                  .withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(8),
+                              color: Colors.white.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
                             ),
+                            child: const Icon(
+                              Icons.analytics_rounded,
+                              color: Colors.white,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Current: ${event.attendanceFileName}',
-                                  style: Theme.of(ctx).textTheme.bodySmall,
-                                ),
-                                if (_canViewAttendance(event))
-                                  TextButton(
-                                    onPressed: () => _openExternalLink(
-                                      event.attendanceWebViewLink ?? '',
-                                      fallbackFileId: event.attendanceFileId,
-                                    ),
-                                    child: const Text(
-                                      'View current attendance',
-                                    ),
+                                  hasExistingReport
+                                      ? 'Replace Report'
+                                      : 'Submit Event Report',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
                                   ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  event.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    color: Colors.white.withValues(alpha: 0.82),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
-                        ],
-                        const SizedBox(height: 20),
-
-                        // Program / agenda
-                        _SectionLabel(
-                          icon: Icons.schedule,
-                          label: 'Program / Agenda *',
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: programAgendaCtrl,
-                          minLines: 4,
-                          maxLines: 7,
-                          decoration: const InputDecoration(
-                            labelText: 'Program / agenda (required)',
-                            helperText: 'Sessions or activities with times',
-                            hintText:
-                                'e.g. 10:00-10:30 Intro, 10:30-12:00 Session 1…',
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Outcomes
-                        _SectionLabel(
-                          icon: Icons.lightbulb_outline,
-                          label: 'Outcomes & Learnings *',
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: outcomesLearningsCtrl,
-                          minLines: 4,
-                          maxLines: 7,
-                          decoration: const InputDecoration(
-                            labelText: 'Outcomes and learnings (required)',
-                            helperText: 'Key takeaways and feedback highlights',
-                            hintText:
-                                'e.g. Participants reported… Next steps include…',
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Follow-up
-                        _SectionLabel(
-                          icon: Icons.follow_the_signs,
-                          label: 'Follow-up',
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: followUpCtrl,
-                          minLines: 2,
-                          maxLines: 4,
-                          decoration: const InputDecoration(
-                            labelText: 'Follow-up (optional)',
-                            helperText: 'Action items or next steps',
-                            hintText: 'e.g. Send follow-up survey by…',
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Appendix
-                        _SectionLabel(icon: Icons.note_add, label: 'Appendix'),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: appendixCtrl,
-                          minLines: 2,
-                          maxLines: 4,
-                          decoration: const InputDecoration(
-                            labelText: 'Appendix (optional)',
-                            helperText:
-                                'Any additional notes, photos summary, or supporting material',
-                            hintText:
-                                'e.g. Key photos uploaded separately; feedback quotes…',
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // PDF filename note
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: colorScheme.tertiaryContainer.withValues(
-                              alpha: 0.5,
+                          IconButton(
+                            onPressed: submitting ? null : () => closeDialog(),
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
                             ),
-                            borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.picture_as_pdf,
-                                size: 16,
-                                color: colorScheme.onTertiaryContainer,
+                        ],
+                      ),
+                    ),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: fieldFill,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: borderColor),
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Saved as: $expectedName',
-                                  style: Theme.of(ctx).textTheme.bodySmall
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        color: colorScheme.onTertiaryContainer,
-                                      ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Event (cover details)',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: primaryText,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${event.title.isEmpty ? 'Event' : event.title} · ${DateFormat('yyyy-MM-dd').format(event.startTime)} · ${event.venueName.isEmpty ? '—' : event.venueName} · ${event.facilitator?.trim().isNotEmpty == true ? event.facilitator!.trim() : '—'}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: mutedText,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 14),
+                            reportTextField(
+                              controller: executiveSummaryCtrl,
+                              label: 'Executive summary (required)',
+                              icon: Icons.summarize_rounded,
+                              helperText:
+                                  'Brief overview, goal, and main outcome',
+                              hintText:
+                                  'e.g. The workshop aimed to… and achieved…',
+                              lines: 3,
+                            ),
+                            const SizedBox(height: 12),
+                            reportTextField(
+                              controller: programAgendaCtrl,
+                              label: 'Program / agenda (required)',
+                              icon: Icons.view_timeline_rounded,
+                              helperText: 'Sessions or activities with times',
+                              hintText:
+                                  'e.g. 10:00–10:30 Intro, 10:30–12:00 Session 1…',
+                              lines: 3,
+                            ),
+                            const SizedBox(height: 12),
+                            reportTextField(
+                              controller: outcomesLearningsCtrl,
+                              label: 'Outcomes and learnings (required)',
+                              icon: Icons.lightbulb_rounded,
+                              helperText:
+                                  'Key takeaways and feedback highlights',
+                              hintText:
+                                  'e.g. Participants reported… Next steps include…',
+                              lines: 3,
+                            ),
+                            const SizedBox(height: 12),
+                            reportTextField(
+                              controller: followUpCtrl,
+                              label: 'Follow-up (optional)',
+                              icon: Icons.arrow_forward_rounded,
+                              helperText: 'Action items or next steps',
+                              hintText: 'e.g. Send follow-up survey by…',
+                              lines: 2,
+                            ),
+                            const SizedBox(height: 12),
+                            reportTextField(
+                              controller: appendixCtrl,
+                              label: 'Appendix (optional)',
+                              icon: Icons.attach_file_rounded,
+                              helperText:
+                                  'Any additional notes, photos summary, or supporting material',
+                              hintText:
+                                  'e.g. Key photos uploaded separately; feedback quotes…',
+                              lines: 2,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Upload photos to include in the report PDF',
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                color: mutedText,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            OutlinedButton.icon(
+                              onPressed: submitting ? null : pickAppendixPhotos,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: accent,
+                                side: BorderSide(
+                                  color: accent.withValues(alpha: 0.35),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 13,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
                                 ),
                               ),
+                              icon: const Icon(
+                                Icons.add_photo_alternate_rounded,
+                                size: 18,
+                              ),
+                              label: Text(
+                                appendixPhotos.isEmpty
+                                    ? 'Add appendix photos'
+                                    : '${appendixPhotos.length} appendix photo${appendixPhotos.length == 1 ? '' : 's'} selected',
+                                style: GoogleFonts.inter(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            if (appendixPhotos.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: List.generate(appendixPhotos.length, (
+                                  index,
+                                ) {
+                                  final photo = appendixPhotos[index];
+                                  return InputChip(
+                                    label: Text(
+                                      photo.name,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    avatar: const Icon(
+                                      Icons.image_rounded,
+                                      size: 16,
+                                    ),
+                                    onDeleted: submitting
+                                        ? null
+                                        : () => setLocal(
+                                            () =>
+                                                appendixPhotos.removeAt(index),
+                                          ),
+                                  );
+                                }),
+                              ),
                             ],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                    ),
-                  ),
-                ),
-                // ── Sticky action bar ──
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: submitting ? null : closeDialog,
-                        child: const Text('Cancel'),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: submitting
-                              ? null
-                              : () async {
-                                  final hasExistingAttendance =
-                                      event.attendanceFileId
-                                          ?.trim()
-                                          .isNotEmpty ??
-                                      false;
-                                  final executiveSummary = executiveSummaryCtrl
-                                      .text
-                                      .trim();
-                                  final programAgenda = programAgendaCtrl.text
-                                      .trim();
-                                  final outcomesLearnings =
-                                      outcomesLearningsCtrl.text.trim();
-                                  if (executiveSummary.isEmpty ||
-                                      programAgenda.isEmpty ||
-                                      outcomesLearnings.isEmpty) {
-                                    _showMessage(
-                                      'Executive summary, program / agenda, and outcomes are required.',
-                                      isError: true,
-                                    );
-                                    return;
-                                  }
-                                  if (!attendanceNotApplicable &&
-                                      attendancePath == null &&
-                                      !hasExistingAttendance) {
-                                    _showMessage(
-                                      'Upload an attendance file or mark it as not applicable.',
-                                      isError: true,
-                                    );
-                                    return;
-                                  }
-                                  setLocal(() => submitting = true);
-                                  try {
-                                    final attendanceText =
+                            const SizedBox(height: 18),
+                            Text(
+                              'Attendance',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: primaryText,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: fieldFill,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: borderColor),
+                              ),
+                              child: Column(
+                                children: [
+                                  CheckboxListTile(
+                                    value: attendanceNotApplicable,
+                                    onChanged: submitting
+                                        ? null
+                                        : (value) {
+                                            setLocal(() {
+                                              attendanceNotApplicable =
+                                                  value ?? false;
+                                              if (attendanceNotApplicable) {
+                                                attendancePath = null;
+                                                attendanceName = null;
+                                              }
+                                            });
+                                          },
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                    activeColor: accent,
+                                    title: Text(
+                                      'Not applicable',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: primaryText,
+                                      ),
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      0,
+                                      16,
+                                      12,
+                                    ),
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
                                         attendanceNotApplicable
-                                        ? 'Not applicable.'
-                                        : attendancePath != null
-                                        ? 'Supporting attendance document uploaded with this submission: $attendanceName'
-                                        : 'Supporting attendance document on file: ${event.attendanceFileName?.trim() ?? ''}';
-                                    final reportBytes = _buildReportPdfBytes(
-                                      event: event,
-                                      executiveSummary: executiveSummary,
-                                      attendance: attendanceText,
-                                      programAgenda: programAgenda,
-                                      outcomesLearnings: outcomesLearnings,
-                                      followUp: followUpCtrl.text.trim(),
-                                      appendix: appendixCtrl.text.trim(),
-                                    );
-                                    final payload = <String, dynamic>{
-                                      'file': MultipartFile.fromBytes(
-                                        reportBytes,
-                                        filename: expectedName,
-                                        contentType: DioMediaType(
-                                          'application',
-                                          'pdf',
+                                            ? 'No attendance document will be stored for this event. Any previous attendance file will be removed when you submit.'
+                                            : 'Upload a PDF, Word, or Excel file (max 10 MB), unless you tick Not applicable above.',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          color: mutedText,
                                         ),
                                       ),
-                                    };
-                                    if (attendanceNotApplicable) {
-                                      payload['attendance_not_applicable'] =
-                                          '1';
-                                    } else if (attendancePath != null) {
-                                      payload['attendance_file'] =
-                                          await MultipartFile.fromFile(
-                                            attendancePath!,
-                                            filename: attendanceName,
-                                          );
-                                    }
-                                    await _api
-                                        .postMultipart<Map<String, dynamic>>(
-                                          '/events/${event.id}/report',
-                                          FormData.fromMap(payload),
-                                        );
-                                    if (!mounted) return;
-                                    Navigator.of(
-                                      context,
-                                      rootNavigator: true,
-                                    ).pop();
-                                    await _refreshCurrentTab();
-                                    _showMessage(
-                                      'Report uploaded.',
-                                      isSuccess: true,
-                                    );
-                                  } catch (e) {
-                                    setLocal(() => submitting = false);
-                                    _showMessage(
-                                      _extractError(
-                                        e,
-                                        fallback: 'Unable to upload report.',
+                                    ),
+                                  ),
+                                  if (!attendanceNotApplicable) ...[
+                                    Divider(height: 1, color: borderColor),
+                                    Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: InkWell(
+                                        onTap: submitting
+                                            ? null
+                                            : pickAttendanceFile,
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 20,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: accent.withValues(
+                                              alpha: 0.06,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            border: Border.all(
+                                              color: accent.withValues(
+                                                alpha: 0.28,
+                                              ),
+                                            ),
+                                          ),
+                                          child: Column(
+                                            children: [
+                                              Icon(
+                                                attendanceName != null
+                                                    ? Icons.file_present_rounded
+                                                    : Icons
+                                                          .cloud_upload_rounded,
+                                                color: accent,
+                                                size: 32,
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                attendanceName ??
+                                                    ((event.attendanceFileName
+                                                                ?.trim()
+                                                                .isNotEmpty ??
+                                                            false)
+                                                        ? 'Replace attendance file'
+                                                        : 'Choose attendance file'),
+                                                textAlign: TextAlign.center,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: GoogleFonts.inter(
+                                                  fontWeight: FontWeight.w700,
+                                                  color: accent,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                'PDF, Word, or Excel file (max 10 MB)',
+                                                textAlign: TextAlign.center,
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 12,
+                                                  color: mutedText,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
-                                      isError: true,
-                                    );
-                                  }
-                                },
-                          child: Text(
-                            submitting
-                                ? 'Generating & uploading...'
-                                : 'Generate PDF & upload',
-                          ),
+                                    ),
+                                  ],
+                                  if (attendanceName != null)
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          16,
+                                          0,
+                                          16,
+                                          12,
+                                        ),
+                                        child: TextButton.icon(
+                                          onPressed: submitting
+                                              ? null
+                                              : () {
+                                                  setLocal(() {
+                                                    attendancePath = null;
+                                                    attendanceName = null;
+                                                  });
+                                                },
+                                          icon: const Icon(
+                                            Icons.close_rounded,
+                                            size: 16,
+                                          ),
+                                          label: const Text('Remove file'),
+                                        ),
+                                      ),
+                                    ),
+                                  if ((event.attendanceFileName
+                                              ?.trim()
+                                              .isNotEmpty ??
+                                          false) &&
+                                      attendanceName == null &&
+                                      !attendanceNotApplicable)
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        0,
+                                        16,
+                                        16,
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              'Current attendance file on record: ${event.attendanceFileName}',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.inter(
+                                                fontSize: 12,
+                                                color: mutedText,
+                                              ),
+                                            ),
+                                          ),
+                                          if (_canViewAttendance(event))
+                                            TextButton(
+                                              onPressed: () => _openExternalLink(
+                                                event.attendanceWebViewLink ??
+                                                    '',
+                                                fallbackFileId:
+                                                    event.attendanceFileId,
+                                              ),
+                                              child: const Text('View'),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            if (canFileIqac) ...[
+                              Text(
+                                'IQAC Data Collection',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: primaryText,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Choose criterion, then sub-criterion, then evidence item to store a copy of this report in IQAC Data Collection.',
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  color: mutedText,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              if (iqacCriteriaLoading)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: fieldFill,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: borderColor),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        'Loading IQAC structure…',
+                                        style: GoogleFonts.inter(
+                                          color: mutedText,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else if (iqacCriteriaError != null)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFFEF4444,
+                                    ).withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: const Color(
+                                        0xFFEF4444,
+                                      ).withValues(alpha: 0.18),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    iqacCriteriaError,
+                                    style: GoogleFonts.inter(
+                                      color: const Color(0xFFEF4444),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                )
+                              else ...[
+                                DropdownButtonFormField<String>(
+                                  key: ValueKey('report-iqac-$iqacCriterionId'),
+                                  initialValue: iqacCriterionId.isEmpty
+                                      ? null
+                                      : iqacCriterionId,
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                    labelText: 'Criterion',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  items: [
+                                    const DropdownMenuItem<String>(
+                                      value: '',
+                                      child: Text('— Do not file to IQAC —'),
+                                    ),
+                                    ...iqacCriteria.map(
+                                      (criterion) => DropdownMenuItem<String>(
+                                        value: criterion.id.toString(),
+                                        child: Text(
+                                          '${criterion.id}. ${criterion.title}',
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: submitting
+                                      ? null
+                                      : (value) {
+                                          setLocal(() {
+                                            iqacCriterionId = value ?? '';
+                                            iqacSubFolderId = '';
+                                            iqacItemId = '';
+                                            if (iqacCriterionId.isEmpty) {
+                                              iqacDescriptionCtrl.clear();
+                                            }
+                                          });
+                                        },
+                                ),
+                                const SizedBox(height: 10),
+                                DropdownButtonFormField<String>(
+                                  key: ValueKey(
+                                    'report-iqac-sub-$iqacCriterionId-$iqacSubFolderId',
+                                  ),
+                                  initialValue: iqacSubFolderId.isEmpty
+                                      ? null
+                                      : iqacSubFolderId,
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                    labelText: 'Sub-criterion',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  items:
+                                      (selectedCriterion()?.subFolders ??
+                                              const <_ReportIqacSubFolder>[])
+                                          .map(
+                                            (
+                                              subFolder,
+                                            ) => DropdownMenuItem<String>(
+                                              value: subFolder.id,
+                                              child: Text(
+                                                '${subFolder.id} ${subFolder.title}',
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                  onChanged:
+                                      submitting || selectedCriterion() == null
+                                      ? null
+                                      : (value) {
+                                          setLocal(() {
+                                            iqacSubFolderId = value ?? '';
+                                            iqacItemId = '';
+                                          });
+                                        },
+                                ),
+                                const SizedBox(height: 10),
+                                DropdownButtonFormField<String>(
+                                  key: ValueKey(
+                                    'report-iqac-item-$iqacSubFolderId-$iqacItemId',
+                                  ),
+                                  initialValue: iqacItemId.isEmpty
+                                      ? null
+                                      : iqacItemId,
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                    labelText: 'Evidence item',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                  items:
+                                      (selectedSubFolder()?.items ??
+                                              const <_ReportIqacItem>[])
+                                          .map(
+                                            (item) => DropdownMenuItem<String>(
+                                              value: item.id,
+                                              child: Text(
+                                                '${item.id} ${item.title}',
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                  onChanged:
+                                      submitting || selectedSubFolder() == null
+                                      ? null
+                                      : (value) => setLocal(
+                                          () => iqacItemId = value ?? '',
+                                        ),
+                                ),
+                                if (iqacCriterionId.isNotEmpty &&
+                                    iqacSubFolderId.isNotEmpty &&
+                                    iqacItemId.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  TextField(
+                                    controller: iqacDescriptionCtrl,
+                                    decoration: InputDecoration(
+                                      labelText: 'IQAC note (optional)',
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                              const SizedBox(height: 16),
+                            ],
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: accent.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: accent.withValues(alpha: 0.16),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.picture_as_pdf_rounded,
+                                    size: 18,
+                                    color: accent,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Report will be saved as PDF: $expectedName',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.inter(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: accent,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: surface,
+                        border: Border(top: BorderSide(color: borderColor)),
+                      ),
+                      child: SafeArea(
+                        top: false,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: submitting
+                                    ? null
+                                    : () => closeDialog(),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                ),
+                                child: Text(
+                                  'Cancel',
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              flex: 2,
+                              child: ElevatedButton.icon(
+                                onPressed: submitting ? null : submitReport,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: accent,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                icon: submitting
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.cloud_upload_rounded,
+                                        size: 20,
+                                      ),
+                                label: Text(
+                                  submitting
+                                      ? 'Generating & uploading...'
+                                      : 'Generate PDF & upload',
+                                  style: GoogleFonts.inter(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           );
         },
       ),
     );
 
+    await Future<void>.delayed(const Duration(milliseconds: 350));
     executiveSummaryCtrl.dispose();
     programAgendaCtrl.dispose();
     outcomesLearningsCtrl.dispose();
     followUpCtrl.dispose();
     appendixCtrl.dispose();
+    iqacDescriptionCtrl.dispose();
   }
 
   Future<void> _closeEvent(Event event) async {
@@ -2035,22 +2609,6 @@ class _EventCard extends StatelessWidget {
                       ),
                     ),
                   ],
-                  if (workflowBadges.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: workflowBadges
-                          .map(
-                            (badge) => _WorkflowBadge(
-                              label: badge.$1,
-                              value: badge.$2,
-                              color: badge.$3,
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
                   if (showForwardAction) ...[
                     const SizedBox(height: 14),
                     SizedBox(
@@ -2081,6 +2639,32 @@ class _EventCard extends StatelessWidget {
                   if (actions.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     Wrap(spacing: 8, runSpacing: 8, children: actions),
+                  ],
+                  if (workflowBadges.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Wrap(
+                        spacing: 16,
+                        runSpacing: 12,
+                        alignment: WrapAlignment.center,
+                        children: workflowBadges.map((badge) {
+                          return Tooltip(
+                            message: '${badge.$1}: ${badge.$2}',
+                            triggerMode: TooltipTriggerMode.tap,
+                            child: Icon(badge.$4, color: badge.$3, size: 22),
+                          );
+                        }).toList(),
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 16),
                   Container(
@@ -2154,12 +2738,12 @@ class _EventCard extends StatelessWidget {
     }
   }
 
-  List<(String, String, Color)> _workflowBadges(Event value) {
+  List<(String, String, Color, IconData)> _workflowBadges(Event value) {
     if (value.id.startsWith('approval-')) return const [];
 
-    final badges = <(String, String, Color)>[];
+    final badges = <(String, String, Color, IconData)>[];
 
-    void addBadge(String label, String? status, {bool teamChannel = false}) {
+    void addBadge(String label, String? status, IconData icon, {bool teamChannel = false}) {
       final normalized = status?.trim().toLowerCase() ?? '';
       if (normalized.isEmpty) return;
       badges.add((
@@ -2168,14 +2752,15 @@ class _EventCard extends StatelessWidget {
             ? 'Noted'
             : _formatWorkflowStatus(normalized),
         _workflowColor(normalized),
+        icon,
       ));
     }
 
-    addBadge('Approval', value.approvalStatus);
-    addBadge('Facility', value.facilityStatus, teamChannel: true);
-    addBadge('Marketing', value.marketingStatus, teamChannel: true);
-    addBadge('IT', value.itStatus, teamChannel: true);
-    addBadge('Transport', value.transportStatus, teamChannel: true);
+    addBadge('Approval', value.approvalStatus, Icons.verified_user_outlined);
+    addBadge('Facility', value.facilityStatus, Icons.domain_outlined, teamChannel: true);
+    addBadge('Marketing', value.marketingStatus, Icons.campaign_outlined, teamChannel: true);
+    addBadge('IT', value.itStatus, Icons.computer_outlined, teamChannel: true);
+    addBadge('Transport', value.transportStatus, Icons.directions_bus_outlined, teamChannel: true);
     return badges;
   }
 
@@ -2286,31 +2871,6 @@ class _EventCard extends StatelessWidget {
   }
 }
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: colorScheme.primary),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: colorScheme.primary,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _ActionChip extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -2356,6 +2916,70 @@ class _ActionChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ReportIqacCriterion {
+  final dynamic id;
+  final String title;
+  final List<_ReportIqacSubFolder> subFolders;
+
+  const _ReportIqacCriterion({
+    required this.id,
+    required this.title,
+    required this.subFolders,
+  });
+
+  factory _ReportIqacCriterion.fromJson(Map<String, dynamic> json) {
+    return _ReportIqacCriterion(
+      id: json['id'],
+      title: (json['title'] ?? '').toString(),
+      subFolders:
+          (json['subFolders'] is List ? json['subFolders'] as List : const [])
+              .whereType<Map>()
+              .map(
+                (e) =>
+                    _ReportIqacSubFolder.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList(),
+    );
+  }
+}
+
+class _ReportIqacSubFolder {
+  final String id;
+  final String title;
+  final List<_ReportIqacItem> items;
+
+  const _ReportIqacSubFolder({
+    required this.id,
+    required this.title,
+    required this.items,
+  });
+
+  factory _ReportIqacSubFolder.fromJson(Map<String, dynamic> json) {
+    return _ReportIqacSubFolder(
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      items: (json['items'] is List ? json['items'] as List : const [])
+          .whereType<Map>()
+          .map((e) => _ReportIqacItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+    );
+  }
+}
+
+class _ReportIqacItem {
+  final String id;
+  final String title;
+
+  const _ReportIqacItem({required this.id, required this.title});
+
+  factory _ReportIqacItem.fromJson(Map<String, dynamic> json) {
+    return _ReportIqacItem(
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
     );
   }
 }

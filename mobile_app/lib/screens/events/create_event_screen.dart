@@ -229,14 +229,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 20),
+                        width: 48,
+                        height: 5,
+                        margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
                           color: isDark
                               ? Colors.white.withOpacity(0.2)
                               : Colors.black.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(2),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
                       Row(
@@ -251,10 +251,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                               ),
                             ),
                           ),
-                          FilledButton.tonal(
+                          FilledButton(
                             style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF2563EB),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(100),
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                             onPressed: () {
@@ -277,6 +280,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         constraints: const BoxConstraints(maxHeight: 400),
                         child: ListView.separated(
                           shrinkWrap: true,
+                          physics: const BouncingScrollPhysics(),
                           itemCount: _audienceOptions.length,
                           separatorBuilder: (_, __) => Divider(
                             height: 1,
@@ -288,13 +292,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             return CheckboxListTile(
                               value: checked,
                               contentPadding: const EdgeInsets.symmetric(
-                                vertical: 4,
+                                vertical: 6,
+                                horizontal: 4,
                               ),
                               activeColor: const Color(0xFF2563EB),
                               title: Text(
                                 value,
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
+                                  color: theme.colorScheme.onSurface,
                                   fontWeight: checked
                                       ? FontWeight.w600
                                       : FontWeight.w400,
@@ -411,7 +417,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(message, style: GoogleFonts.inter()),
         backgroundColor: AppColors.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -472,7 +478,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: AppColors.error.withOpacity(0.1),
                         shape: BoxShape.circle,
@@ -480,7 +486,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                       child: const Icon(
                         LucideIcons.alertTriangle,
                         color: AppColors.error,
-                        size: 24,
+                        size: 28,
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -509,6 +515,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 250),
                   child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
                     child: Column(
                       children: conflicts.map((c) {
                         final conflict = c is Map<String, dynamic>
@@ -536,7 +543,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                   fontSize: 15,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 10),
                               Row(
                                 children: [
                                   const Icon(
@@ -544,7 +551,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                     size: 14,
                                     color: Color(0xFF64748B),
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       '${(conflict['start_date'] ?? '').toString()} • ${_formatConflictTime(conflict['start_time'])}',
@@ -557,7 +564,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 6),
                               Row(
                                 children: [
                                   const Icon(
@@ -565,7 +572,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                     size: 14,
                                     color: Color(0xFF64748B),
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       (conflict['venue_name'] ?? '').toString(),
@@ -629,9 +636,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           buttons[2],
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           buttons[1],
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           buttons[0],
                         ],
                       );
@@ -668,9 +675,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     if (isGhost) {
       return TextButton(
         style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(100),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
         onPressed: onPressed,
@@ -685,9 +692,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
 
     final bg = isSecondary
-        ? (isDark
-              ? theme.colorScheme.surfaceContainerHighest
-              : const Color(0xFFF1F5F9))
+        ? (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9))
         : AppColors.error;
     final fg = isSecondary ? theme.colorScheme.onSurface : Colors.white;
 
@@ -695,8 +700,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       style: FilledButton.styleFrom(
         backgroundColor: bg,
         foregroundColor: fg,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(100)),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 0,
       ),
       onPressed: onPressed,
@@ -708,24 +713,24 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     return Container(
-      margin: const EdgeInsets.only(bottom: 24),
-      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: isDark
                 ? Colors.black.withOpacity(0.3)
-                : const Color(0xFF94A3B8).withOpacity(0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+                : const Color(0xFF64748B).withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
         border: Border.all(
           color: isDark
               ? Colors.white.withOpacity(0.05)
-              : Colors.black.withOpacity(0.03),
+              : Colors.black.withOpacity(0.02),
         ),
       ),
       child: Column(
@@ -739,24 +744,24 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: isDark
-                  ? const Color(0xFF2563EB).withOpacity(0.2)
+                  ? const Color(0xFF3B82F6).withOpacity(0.15)
                   : const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, size: 20, color: const Color(0xFF2563EB)),
+            child: Icon(icon, size: 18, color: const Color(0xFF2563EB)),
           ),
           const SizedBox(width: 16),
           Text(
             title,
             style: GoogleFonts.poppins(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
               color: theme.colorScheme.onSurface,
             ),
@@ -772,12 +777,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8, left: 4),
       child: Text(
-        text,
+        text.toUpperCase(),
         style: GoogleFonts.inter(
-          fontSize: 13,
+          fontSize: 11,
           fontWeight: FontWeight.w600,
-          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
-          letterSpacing: 0.3,
+          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          letterSpacing: 0.8,
         ),
       ),
     );
@@ -786,11 +791,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   InputDecoration _inputDecoration(String hint, {IconData? prefixIcon}) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+
+    // Soft, premium filled inputs
     final fillColor = isDark
         ? const Color(0xFF0F172A)
-        : const Color(0xFFF8FAFC);
+        : const Color(0xFFF1F5F9);
     final hintColor = isDark
         ? const Color(0xFF475569)
+        : const Color(0xFF94A3B8);
+    final iconColor = isDark
+        ? const Color(0xFF64748B)
         : const Color(0xFF94A3B8);
 
     return InputDecoration(
@@ -802,11 +812,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       ),
       filled: true,
       fillColor: fillColor,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       prefixIcon: prefixIcon != null
           ? Padding(
-              padding: const EdgeInsets.only(left: 20, right: 12),
-              child: Icon(prefixIcon, size: 20, color: hintColor),
+              padding: const EdgeInsets.only(left: 16, right: 12),
+              child: Icon(prefixIcon, size: 18, color: iconColor),
             )
           : null,
       prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
@@ -816,15 +826,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(
-          color: isDark
-              ? Colors.white.withOpacity(0.05)
-              : Colors.black.withOpacity(0.03),
-        ),
+        borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
@@ -841,7 +847,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     // Premium subtle background
-    final pageBg = isDark ? const Color(0xFF020617) : const Color(0xFFF4F6F9);
+    final pageBg = isDark ? const Color(0xFF020617) : const Color(0xFFF8FAFC);
     final surface = theme.colorScheme.surface;
     final heading = theme.colorScheme.onSurface;
 
@@ -918,6 +924,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             children: [
               Expanded(
                 child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 20,
                     vertical: 24,
@@ -968,7 +975,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                                 ? 'Required'
                                                 : null,
                                             style: GoogleFonts.inter(
-                                              fontSize: 15,
+                                              fontSize: 14,
                                               fontWeight: FontWeight.w500,
                                               color: heading,
                                             ),
@@ -1010,7 +1017,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                                 ? 'Required'
                                                 : null,
                                             style: GoogleFonts.inter(
-                                              fontSize: 15,
+                                              fontSize: 14,
                                               fontWeight: FontWeight.w500,
                                               color: heading,
                                             ),
@@ -1062,7 +1069,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                                 ? 'Required'
                                                 : null,
                                             style: GoogleFonts.inter(
-                                              fontSize: 15,
+                                              fontSize: 14,
                                               fontWeight: FontWeight.w500,
                                               color: heading,
                                             ),
@@ -1104,7 +1111,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                                 ? 'Required'
                                                 : null,
                                             style: GoogleFonts.inter(
-                                              fontSize: 15,
+                                              fontSize: 14,
                                               fontWeight: FontWeight.w500,
                                               color: heading,
                                             ),
@@ -1122,7 +1129,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         // CARD 2: EVENT DETAILS
                         _buildCard(
                           children: [
-                            _buildCardHeader(LucideIcons.edit3, 'Details'),
+                            _buildCardHeader(LucideIcons.fileText, 'Details'),
                             _buildLabel('Event Name'),
                             TextFormField(
                               controller: _nameCtrl,
@@ -1133,7 +1140,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                   ? 'Required'
                                   : null,
                               style: GoogleFonts.inter(
-                                fontSize: 15,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w500,
                                 color: heading,
                               ),
@@ -1142,12 +1149,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             _buildLabel('Facilitator'),
                             TextFormField(
                               controller: _facilitatorCtrl,
-                              decoration: _inputDecoration('Facilitator Name'),
+                              decoration: _inputDecoration(
+                                'Facilitator Name',
+                                prefixIcon: LucideIcons.user,
+                              ),
                               validator: (v) => (v?.trim().isEmpty ?? true)
                                   ? 'Required'
                                   : null,
                               style: GoogleFonts.inter(
-                                fontSize: 15,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w500,
                                 color: heading,
                               ),
@@ -1174,6 +1184,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                     value: _selectedVenueName,
                                     decoration: _inputDecoration(
                                       'Select a Venue',
+                                      prefixIcon: LucideIcons.mapPin,
                                     ),
                                     icon: const Icon(
                                       LucideIcons.chevronDown,
@@ -1220,9 +1231,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                 decoration:
                                     _inputDecoration(
                                       'Select Audience (Multi)',
+                                      prefixIcon: LucideIcons.users,
                                     ).copyWith(
                                       suffixIcon: const Padding(
-                                        padding: EdgeInsets.only(right: 12),
+                                        padding: EdgeInsets.only(right: 16),
                                         child: Icon(
                                           LucideIcons.chevronDown,
                                           size: 20,
@@ -1234,11 +1246,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                   _selectedAudiences.isEmpty
                                       ? 'Select audience (multi)'
                                       : _selectedAudiences.join(', '),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.inter(
                                     fontSize: 15,
                                     fontWeight: _selectedAudiences.isEmpty
                                         ? FontWeight.w400
-                                        : FontWeight.w500,
+                                        : FontWeight.w600,
                                     color: _selectedAudiences.isEmpty
                                         ? (isDark
                                               ? const Color(0xFF475569)
@@ -1257,7 +1271,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                 ),
                                 style: GoogleFonts.inter(
                                   fontSize: 15,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                   color: heading,
                                 ),
                                 maxLength: 500,
@@ -1318,15 +1332,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                               decoration: _inputDecoration('e.g. 50000')
                                   .copyWith(
                                     prefixIcon: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 20,
+                                      padding: const EdgeInsets.only(
+                                        left: 20,
+                                        right: 8,
                                       ),
                                       child: Text(
                                         '₹',
                                         style: GoogleFonts.inter(
                                           fontSize: 18,
                                           fontWeight: FontWeight.w500,
-                                          color: const Color(0xFF94A3B8),
+                                          color: isDark
+                                              ? const Color(0xFF94A3B8)
+                                              : const Color(0xFF64748B),
                                         ),
                                       ),
                                     ),
@@ -1336,8 +1353,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                     ),
                                   ),
                               style: GoogleFonts.inter(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
                                 color: heading,
                               ),
                             ),
@@ -1348,7 +1365,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                   'Budget Breakdown PDF',
                                   style: GoogleFonts.inter(
                                     fontSize: 13,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w700,
                                     color: isDark
                                         ? const Color(0xFF94A3B8)
                                         : const Color(0xFF475569),
@@ -1358,18 +1375,19 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 8,
-                                    vertical: 2,
+                                    vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
                                     color: AppColors.error.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
-                                    'Required',
+                                    'REQUIRED',
                                     style: GoogleFonts.inter(
                                       fontSize: 10,
-                                      fontWeight: FontWeight.bold,
+                                      fontWeight: FontWeight.w800,
                                       color: AppColors.error,
+                                      letterSpacing: 0.5,
                                     ),
                                   ),
                                 ),
@@ -1387,31 +1405,31 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             const SizedBox(height: 16),
                             InkWell(
                               onTap: _pickPdf,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(20),
                               child: Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.symmetric(
-                                  vertical: 24,
+                                  vertical: 32,
                                   horizontal: 20,
                                 ),
                                 decoration: BoxDecoration(
                                   color: _budgetPdf == null
                                       ? (isDark
                                             ? const Color(0xFF0F172A)
-                                            : const Color(0xFFF8FAFC))
+                                            : const Color(0xFFF1F5F9))
                                       : (isDark
                                             ? const Color(
                                                 0xFF1E3A8A,
                                               ).withOpacity(0.3)
                                             : const Color(0xFFEFF6FF)),
-                                  borderRadius: BorderRadius.circular(16),
+                                  borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
                                     color: _budgetPdf == null
                                         ? (isDark
                                               ? Colors.white.withOpacity(0.1)
                                               : Colors.black.withOpacity(0.05))
                                         : const Color(0xFF3B82F6),
-                                    width: 1.5,
+                                    width: 2,
                                     style: BorderStyle.solid,
                                   ),
                                 ),
@@ -1422,12 +1440,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                       _budgetPdf == null
                                           ? LucideIcons.uploadCloud
                                           : LucideIcons.fileCheck,
-                                      size: 32,
+                                      size: 36,
                                       color: _budgetPdf == null
                                           ? const Color(0xFF94A3B8)
                                           : const Color(0xFF2563EB),
                                     ),
-                                    const SizedBox(height: 12),
+                                    const SizedBox(height: 16),
                                     Text(
                                       _budgetPdf == null
                                           ? 'Tap to upload PDF'
@@ -1435,7 +1453,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: GoogleFonts.inter(
-                                        fontSize: 14,
+                                        fontSize: 15,
                                         fontWeight: FontWeight.w600,
                                         color: _budgetPdf == null
                                             ? (isDark
@@ -1467,18 +1485,51 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   boxShadow: [
                     BoxShadow(
                       color: isDark
-                          ? Colors.black.withOpacity(0.5)
-                          : const Color(0xFF94A3B8).withOpacity(0.1),
-                      blurRadius: 20,
-                      offset: const Offset(0, -5),
+                          ? Colors.black.withOpacity(0.6)
+                          : const Color(0xFF94A3B8).withOpacity(0.15),
+                      blurRadius: 16,
+                      offset: const Offset(0, -8),
                     ),
                   ],
                 ),
                 child: SafeArea(
                   top: false,
-                  child: Row(
+                  child: Column(
                     children: [
-                      Expanded(
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _submit,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF2563EB),
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                LucideIcons.arrowRightCircle,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Continue to Approval',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
                         child: TextButton(
                           onPressed: () {
                             if (context.canPop()) {
@@ -1490,50 +1541,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           style: TextButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(100),
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                            backgroundColor: isDark
-                                ? const Color(0xFF1E293B)
-                                : const Color(0xFFF1F5F9),
                           ),
                           child: Text(
-                            'Cancel',
+                            'Cancel & Go Back',
                             style: GoogleFonts.inter(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               color: isDark
-                                  ? const Color(0xFFCBD5E1)
-                                  : const Color(0xFF475569),
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B),
                             ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 2,
-                        child: FilledButton(
-                          onPressed: _submit,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(100),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(LucideIcons.check, size: 20),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Create Event',
-                                style: GoogleFonts.inter(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
                           ),
                         ),
                       ),

@@ -42,6 +42,8 @@ const List<String> _campusTypeOptions = [
   'Hill',
 ];
 
+enum _SsrExportFormat { pdf, docx }
+
 class IQACScreen extends StatefulWidget {
   const IQACScreen({super.key});
 
@@ -62,9 +64,13 @@ class _IQACScreenState extends State<IQACScreen> {
   bool _loading = true;
   bool _templatesLoading = true;
   bool _ssrLoading = true;
+  bool _pdfExporting = false;
+  bool _docxExporting = false;
   String? _error;
   String? _templatesError;
   String? _ssrError;
+  String? _pdfExportError;
+  String? _docxExportError;
 
   bool get _canAccess {
     final role = (context.read<AuthProvider>().user?.roleKey ?? '')
@@ -182,6 +188,101 @@ class _IQACScreenState extends State<IQACScreen> {
 
   Future<void> _refreshAll() async {
     await Future.wait([_loadData(), _loadTemplates(), _loadSsrSections()]);
+  }
+
+  bool get _ssrExporting => _pdfExporting || _docxExporting;
+
+  Future<void> _exportSsrReport(_SsrExportFormat format) async {
+    if (_ssrExporting) return;
+
+    final isPdf = format == _SsrExportFormat.pdf;
+    setState(() {
+      if (isPdf) {
+        _pdfExporting = true;
+        _pdfExportError = null;
+      } else {
+        _docxExporting = true;
+        _docxExportError = null;
+      }
+    });
+
+    try {
+      final extension = isPdf ? 'pdf' : 'docx';
+      final bytes = await _api.getBytes(
+        '/iqac/ssr-export/$extension',
+        receiveTimeout: const Duration(minutes: 2),
+      );
+      final tempDir = await getApplicationDocumentsDirectory();
+      final now = DateTime.now();
+      final date =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final file = File(
+        '${tempDir.path}/IQAC_SSR_NAAC_Report_$date.$extension',
+      );
+      await file.writeAsBytes(bytes, flush: true);
+
+      if (!mounted) return;
+      final result = await OpenFile.open(file.path);
+      if (result.type != ResultType.done) {
+        throw Exception(result.message);
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isPdf
+                ? 'PDF report exported successfully'
+                : 'Word report exported successfully',
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+        ),
+      );
+    } catch (e) {
+      final message = _friendlySsrExportError(e, isPdf: isPdf);
+      if (!mounted) return;
+      setState(() {
+        if (isPdf) {
+          _pdfExportError = message;
+        } else {
+          _docxExportError = message;
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          if (isPdf) {
+            _pdfExporting = false;
+          } else {
+            _docxExporting = false;
+          }
+        });
+      }
+    }
+  }
+
+  String _friendlySsrExportError(Object error, {required bool isPdf}) {
+    final raw = error.toString().replaceFirst('Exception: ', '').trim();
+    final type = isPdf ? 'PDF' : 'Word';
+    if (raw.toLowerCase().contains('reportlab')) {
+      return '$type export is unavailable because the server is missing reportlab.';
+    }
+    if (raw.toLowerCase().contains('python-docx') ||
+        raw.toLowerCase().contains('no module named') ||
+        raw.toLowerCase().contains('docx')) {
+      return '$type export is unavailable because the server is missing python-docx.';
+    }
+    if (raw.toLowerCase().contains('500') ||
+        raw.toLowerCase().contains('failed to fulfill')) {
+      return '$type export failed on the server. Please try again after the backend is restarted.';
+    }
+    return '$type export failed. $raw';
   }
 
   int _subFolderCount(int criterionId, String subId) {
@@ -593,9 +694,6 @@ class _IQACScreenState extends State<IQACScreen> {
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final borderColor = isDark
-        ? theme.colorScheme.outline.withValues(alpha: 0.1)
-        : AppColors.border.withValues(alpha: 0.5);
 
     return Scaffold(
       backgroundColor: isDark ? theme.colorScheme.surface : _slate50,
@@ -760,64 +858,8 @@ class _IQACScreenState extends State<IQACScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  if (!_templatesLoading) ...[
-                    if (_templatesError != null) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.errorContainer,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.error_outline_rounded,
-                              color: Theme.of(context).colorScheme.error,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Error loading templates: $_templatesError',
-                                style: GoogleFonts.poppins(
-                                  color: Theme.of(context).colorScheme.error,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ] else if (_templates.isNotEmpty) ...[
-                      _buildIqacTemplateDownloadCard(),
-                      const SizedBox(height: 16),
-                    ] else ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest
-                              .withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: borderColor),
-                        ),
-                        child: const Text(
-                          'No IQAC templates available right now.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                  ] else ...[
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  ],
+                  _buildIqacTemplateDownloadCard(),
+                  const SizedBox(height: 16),
 
                   _buildSsrSection(),
                   const SizedBox(height: 32),
@@ -1154,13 +1196,22 @@ class _IQACScreenState extends State<IQACScreen> {
                   ),
                 ),
               ),
-              _Badge(
-                icon: Icons.fact_check_outlined,
-                text: 'Portal Only',
-                bgColor: _emerald50,
-                iconColor: _emerald600,
-                textColor: _emerald600,
-                borderColor: Colors.transparent,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _Badge(
+                    icon: Icons.fact_check_outlined,
+                    text: 'Portal Only',
+                    bgColor: _emerald50,
+                    iconColor: _emerald600,
+                    textColor: _emerald600,
+                    borderColor: Colors.transparent,
+                  ),
+                  _buildSsrExportMenu(compact: true),
+                ],
               ),
             ],
           ),
@@ -1173,6 +1224,23 @@ class _IQACScreenState extends State<IQACScreen> {
               color: _slate500,
             ),
           ),
+          if (_pdfExportError != null || _docxExportError != null) ...[
+            const SizedBox(height: 12),
+            if (_pdfExportError != null)
+              _InlineMessage(
+                icon: Icons.error_outline_rounded,
+                text: _pdfExportError!,
+                color: theme.colorScheme.error,
+              ),
+            if (_pdfExportError != null && _docxExportError != null)
+              const SizedBox(height: 8),
+            if (_docxExportError != null)
+              _InlineMessage(
+                icon: Icons.error_outline_rounded,
+                text: _docxExportError!,
+                color: theme.colorScheme.error,
+              ),
+          ],
           if (_ssrError != null) ...[
             const SizedBox(height: 16),
             _InlineMessage(
@@ -1204,6 +1272,70 @@ class _IQACScreenState extends State<IQACScreen> {
                   .toList(),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSsrExportMenu({required bool compact}) {
+    final exporting = _ssrExporting;
+    final size = compact ? 44.0 : 48.0;
+    return PopupMenuButton<_SsrExportFormat>(
+      enabled: !exporting && !_ssrLoading,
+      tooltip: 'Export full SSR report',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 0, minHeight: 0),
+      onSelected: _exportSsrReport,
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: _SsrExportFormat.pdf,
+          child: Row(
+            children: [
+              const Icon(Icons.picture_as_pdf_outlined, size: 18),
+              const SizedBox(width: 10),
+              Text(
+                'Export as PDF',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: _SsrExportFormat.docx,
+          child: Row(
+            children: [
+              const Icon(Icons.description_outlined, size: 18),
+              const SizedBox(width: 10),
+              Text(
+                'Export as Word (.docx)',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+      ],
+      child: _SsrIconActionShell(
+        icon: Icons.file_download_outlined,
+        size: size,
+        disabled: exporting || _ssrLoading,
+        busy: exporting,
+      ),
+    );
+  }
+
+  Widget _buildSsrHistoryAction(
+    VoidCallback onPressed, {
+    required bool compact,
+  }) {
+    final size = compact ? 44.0 : 48.0;
+    return Tooltip(
+      message: 'History',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: _SsrIconActionShell(icon: Icons.history_rounded, size: size),
+        ),
       ),
     );
   }
@@ -1825,18 +1957,15 @@ class _IQACScreenState extends State<IQACScreen> {
                               ],
                             ),
                           ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: _buildSsrExportMenu(compact: true),
+                          ),
+                          const SizedBox(width: 8),
                           // History button
-                          IconButton(
-                            onPressed: () => openHistoryWizard(),
-                            icon: Icon(
-                              Icons.history_rounded,
-                              size: isCompactScreen ? 20 : 22,
-                            ),
-                            color: _slate500,
-                            style: IconButton.styleFrom(
-                              backgroundColor: _slate100,
-                              fixedSize: const Size(44, 44),
-                            ),
+                          _buildSsrHistoryAction(
+                            openHistoryWizard,
+                            compact: true,
                           ),
                           const SizedBox(width: 8),
                           // Close button
@@ -1939,63 +2068,6 @@ class _IQACScreenState extends State<IQACScreen> {
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          Positioned(
-                            right: 0,
-                            top: -70,
-                            child: Row(
-                              children: [
-                                DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.12,
-                                        ),
-                                        blurRadius: 14,
-                                        offset: const Offset(0, 6),
-                                      ),
-                                    ],
-                                  ),
-                                  child: IconButton(
-                                    onPressed: openHistoryWizard,
-                                    tooltip: 'History',
-                                    icon: const Icon(
-                                      Icons.history_rounded,
-                                      size: 20,
-                                    ),
-                                    color: const Color(0xFF475569),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: _indigo600,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: _indigo600.withValues(
-                                          alpha: 0.28,
-                                        ),
-                                        blurRadius: 14,
-                                        offset: const Offset(0, 6),
-                                      ),
-                                    ],
-                                  ),
-                                  child: IconButton(
-                                    onPressed: openHistoryWizard,
-                                    tooltip: 'History',
-                                    icon: const Icon(
-                                      Icons.chat_bubble_outline_rounded,
-                                      size: 19,
-                                    ),
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                           Row(
                             children: [
                               Expanded(
@@ -2735,110 +2807,187 @@ class _IQACScreenState extends State<IQACScreen> {
   }
 
   Widget _buildIqacTemplateDownloadCard() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
+    final theme = Theme.of(context);
+    final primaryTemplate = _templates.isNotEmpty ? _templates.first : null;
+    final cardMeta = _templatesLoading
+        ? 'Checking available template documents...'
+        : _templatesError != null
+        ? 'Unable to load template documents.'
+        : _templates.isEmpty
+        ? 'No template documents are available yet.'
+        : _templates.length == 1
+        ? '${_templates.first.type.isEmpty ? 'Document' : _templates.first.type.toUpperCase()}${_templates.first.size > 0 ? ' • ${_formatBytes(_templates.first.size)}' : ''}'
+        : '${_templates.length} template documents available';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
                   Icons.description_outlined,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
+                  size: 22,
+                  color: theme.colorScheme.primary,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  'Data Templates',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'IQAC Data Templates',
+                      style: GoogleFonts.poppins(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.onSurface,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      cardMeta,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12.5,
+                        height: 1.35,
+                        fontWeight: FontWeight.w500,
+                        color: theme.colorScheme.onSurfaceVariant,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              FilledButton.icon(
+                onPressed: _templatesLoading || primaryTemplate == null
+                    ? null
+                    : () => _downloadIqacTemplate(primaryTemplate),
+                icon: _templatesLoading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.file_download_outlined, size: 18),
+                label: Text(
+                  _templatesLoading ? 'Checking' : 'Download',
                   style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    letterSpacing: -0.3,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _indigo600,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: _slate200,
+                  disabledForegroundColor: _slate500,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text(
-            '${_templates.length} template documents available for NAAC processing.',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+          if (_templatesError != null) ...[
+            const SizedBox(height: 14),
+            _InlineMessage(
+              icon: Icons.error_outline_rounded,
+              text: 'Error loading templates: $_templatesError',
+              color: theme.colorScheme.error,
             ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 90,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            itemCount: _templates.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              return _buildIqacTemplateCard(_templates[index]);
-            },
-          ),
-        ),
-      ],
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: _loadTemplates,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Retry'),
+              ),
+            ),
+          ] else if (!_templatesLoading && _templates.isEmpty) ...[
+            const SizedBox(height: 14),
+            _InlineMessage(
+              icon: Icons.info_outline_rounded,
+              text: 'Template documents will appear here once uploaded.',
+              color: _slate500,
+            ),
+          ] else if (_templates.length > 1) ...[
+            const SizedBox(height: 16),
+            for (var i = 0; i < _templates.length; i++) ...[
+              _buildIqacTemplateRow(_templates[i]),
+              if (i != _templates.length - 1) const SizedBox(height: 10),
+            ],
+          ],
+        ],
+      ),
     );
   }
 
-  Widget _buildIqacTemplateCard(IqacTemplate template) {
+  Widget _buildIqacTemplateRow(IqacTemplate template) {
+    final theme = Theme.of(context);
     return InkWell(
       onTap: () => _downloadIqacTemplate(template),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        width: 280,
-        padding: const EdgeInsets.all(16),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.22,
           ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          border: Border.all(
+            color: theme.colorScheme.outline.withValues(alpha: 0.1),
+          ),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(
-                  context,
-                ).colorScheme.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(14),
+                color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 Icons.file_download_outlined,
-                size: 24,
-                color: Theme.of(context).colorScheme.primary,
+                size: 20,
+                color: theme.colorScheme.primary,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     template.name,
@@ -2847,19 +2996,28 @@ class _IQACScreenState extends State<IQACScreen> {
                     style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      color: theme.colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${template.type.toUpperCase()} • ${_formatBytes(template.size)}',
+                    '${template.type.isEmpty ? 'Document' : template.type.toUpperCase()}${template.size > 0 ? ' • ${_formatBytes(template.size)}' : ''}',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Download',
+              style: GoogleFonts.poppins(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.primary,
               ),
             ),
           ],
@@ -2870,10 +3028,15 @@ class _IQACScreenState extends State<IQACScreen> {
 
   Future<void> _downloadIqacTemplate(IqacTemplate template) async {
     try {
-      final bytes = await _api.getBytes(template.downloadUrl);
-      final tempDir = await getTemporaryDirectory();
-      final safeName =
-          '${DateTime.now().millisecondsSinceEpoch}_${template.name}';
+      final bytes = await _api.getBytes(
+        template.downloadUrl,
+        receiveTimeout: const Duration(minutes: 2),
+      );
+      final tempDir = await getApplicationDocumentsDirectory();
+      final safeName = _downloadFileName(
+        template.fileName.isNotEmpty ? template.fileName : template.name,
+        fallbackExtension: template.type,
+      );
       final file = File('${tempDir.path}/$safeName');
       await file.writeAsBytes(bytes, flush: true);
 
@@ -2907,6 +3070,22 @@ class _IQACScreenState extends State<IQACScreen> {
         ),
       );
     }
+  }
+
+  String _downloadFileName(
+    String rawName, {
+    required String fallbackExtension,
+  }) {
+    final cleaned = rawName
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final baseName = cleaned.isEmpty ? 'IQAC_Data_Template' : cleaned;
+    if (baseName.contains('.') && !baseName.endsWith('.')) {
+      return '${DateTime.now().millisecondsSinceEpoch}_$baseName';
+    }
+    final ext = fallbackExtension.replaceAll('.', '').trim().toLowerCase();
+    return '${DateTime.now().millisecondsSinceEpoch}_$baseName.${ext.isEmpty ? 'docx' : ext}';
   }
 
   String _formatBytes(int n) {
@@ -3023,6 +3202,7 @@ class _IqacFileDoc {
 class IqacTemplate {
   final int id;
   final String name;
+  final String fileName;
   final String type;
   final String downloadUrl;
   final int size;
@@ -3030,6 +3210,7 @@ class IqacTemplate {
   const IqacTemplate({
     required this.id,
     required this.name,
+    required this.fileName,
     required this.type,
     required this.downloadUrl,
     required this.size,
@@ -3041,6 +3222,7 @@ class IqacTemplate {
           ? json['id'] as int
           : int.tryParse('${json['id']}') ?? 0,
       name: (json['name'] ?? '').toString(),
+      fileName: (json['fileName'] ?? json['file_name'] ?? '').toString(),
       type: (json['type'] ?? '').toString(),
       downloadUrl: (json['download_url'] ?? json['downloadUrl'] ?? '')
           .toString(),
@@ -3969,6 +4151,54 @@ class _SsrIconBubble extends StatelessWidget {
   }
 }
 
+class _SsrIconActionShell extends StatelessWidget {
+  const _SsrIconActionShell({
+    required this.icon,
+    required this.size,
+    this.disabled = false,
+    this.busy = false,
+  });
+
+  final IconData icon;
+  final double size;
+  final bool disabled;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: disabled ? 0.62 : 1,
+      child: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: _indigo50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _indigo100),
+          boxShadow: [
+            BoxShadow(
+              color: _indigo600.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: busy
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _indigo600,
+                ),
+              )
+            : Icon(icon, color: _indigo600, size: 21),
+      ),
+    );
+  }
+}
+
 class _InlineMessage extends StatelessWidget {
   const _InlineMessage({
     required this.icon,
@@ -4413,25 +4643,33 @@ class _ExecutiveSummaryFieldState extends State<_ExecutiveSummaryField> {
   }
 }
 
-class _UniversityProfileEditor extends StatelessWidget {
+class _UniversityProfileEditor extends StatefulWidget {
   const _UniversityProfileEditor({required this.data, required this.onChanged});
 
   final Map<String, dynamic> data;
   final _SsrDraftChanged<Map<String, dynamic>> onChanged;
 
+  @override
+  State<_UniversityProfileEditor> createState() =>
+      _UniversityProfileEditorState();
+}
+
+class _UniversityProfileEditorState extends State<_UniversityProfileEditor> {
+  int? _activeSectionIndex;
+
   void _update(String key, dynamic value, {bool rebuild = false}) {
-    final next = _deepCopyMap(data);
+    final next = _deepCopyMap(widget.data);
     next[key] = value;
-    onChanged(next, rebuild: rebuild);
+    widget.onChanged(next, rebuild: rebuild);
   }
 
   Map<String, dynamic> _mapFor(String key) {
-    final value = data[key];
+    final value = widget.data[key];
     return value is Map ? Map<String, dynamic>.from(value) : {};
   }
 
   List<dynamic> _listFor(String key) {
-    final value = data[key];
+    final value = widget.data[key];
     return value is List ? List<dynamic>.from(value) : <dynamic>[];
   }
 
@@ -4451,196 +4689,518 @@ class _UniversityProfileEditor extends StatelessWidget {
     _update('integrated_programmes', nextIntegrated, rebuild: rebuild);
   }
 
+  List<_ProfileSectionConfig> get _sections {
+    return [
+      _ProfileSectionConfig(
+        title: 'Basic Information',
+        icon: Icons.space_dashboard_outlined,
+        value: _mapFor('basic_information'),
+        onChanged: (value, {rebuild = false}) {
+          _update('basic_information', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Contacts',
+        icon: Icons.people_outline_rounded,
+        value: _listFor('contacts'),
+        onChanged: (value, {rebuild = false}) {
+          _update('contacts', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Nature and Status',
+        icon: Icons.business_outlined,
+        value: _mapFor('institution'),
+        onChanged: (value, {rebuild = false}) {
+          _update('institution', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Establishment Details',
+        icon: Icons.calendar_month_outlined,
+        value: _mapFor('establishment'),
+        onChanged: (value, {rebuild = false}) {
+          _update('establishment', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Recognition Details',
+        icon: Icons.workspace_premium_outlined,
+        value: {
+          ..._mapFor('recognition'),
+          'upe_recognized': widget.data['upe_recognized'] ?? '',
+        },
+        onChanged: (value, {rebuild = false}) {
+          final nextValue = Map<String, dynamic>.from(value as Map);
+          final recognition = Map<String, dynamic>.from(nextValue)
+            ..remove('upe_recognized');
+          final next = _deepCopyMap(widget.data);
+          next['recognition'] = recognition;
+          next['upe_recognized'] = nextValue['upe_recognized'] ?? '';
+          widget.onChanged(next, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Location, Area and Activity of Campus',
+        icon: Icons.location_on_outlined,
+        value: _listFor('campuses'),
+        onChanged: (value, {rebuild = false}) {
+          _update('campuses', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Affiliated Institutions to the University',
+        icon: Icons.local_library_outlined,
+        value: _academicValue('affiliated_institutions') ?? const [],
+        onChanged: (value, {rebuild = false}) {
+          _updateAcademic('affiliated_institutions', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Details of Colleges under University',
+        icon: Icons.menu_book_outlined,
+        value: _academicValue('college_details') ?? const [],
+        onChanged: (value, {rebuild = false}) {
+          _updateAcademic('college_details', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Statutory Regulatory Authority Recognition',
+        icon: Icons.verified_outlined,
+        value: {
+          'sra_recognized': _academicValue('sra_recognized') ?? '',
+          'sra_details': _academicValue('sra_details') ?? '',
+        },
+        onChanged: (value, {rebuild = false}) {
+          final nextValue = Map<String, dynamic>.from(value as Map);
+          final nextAcademic = _mapFor('academic_information');
+          nextAcademic['sra_recognized'] = nextValue['sra_recognized'] ?? '';
+          nextAcademic['sra_details'] = nextValue['sra_details'] ?? '';
+          _update('academic_information', nextAcademic, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Staff Details',
+        icon: Icons.school_outlined,
+        value: {
+          'staff': widget.data['staff'],
+          'qualification_details': widget.data['qualification_details'],
+        },
+        intro:
+            'Use the cards below to enter staff counts and teacher qualification details.',
+        onChanged: (value, {rebuild = false}) {
+          final grouped = Map<String, dynamic>.from(value as Map);
+          final next = _deepCopyMap(widget.data);
+          next['staff'] = grouped['staff'];
+          next['qualification_details'] = grouped['qualification_details'];
+          widget.onChanged(next, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Distinguished Academicians Appointed',
+        icon: Icons.workspace_premium_outlined,
+        value: _listFor('distinguished_academicians'),
+        onChanged: (value, {rebuild = false}) {
+          _update('distinguished_academicians', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Chairs Instituted by the University',
+        icon: Icons.event_seat_outlined,
+        value: _listFor('chairs'),
+        onChanged: (value, {rebuild = false}) {
+          _update('chairs', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Students Enrolled during the Current Academic Year',
+        icon: Icons.groups_outlined,
+        value: _listFor('student_enrolment'),
+        onChanged: (value, {rebuild = false}) {
+          _update('student_enrolment', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Integrated Programmes',
+        icon: Icons.menu_book_outlined,
+        value: {
+          'offered': _mapFor('integrated_programmes')['offered'] ?? '',
+          'total_programmes':
+              _mapFor('integrated_programmes')['total_programmes'] ?? '',
+        },
+        onChanged: (value, {rebuild = false}) {
+          final nextValue = Map<String, dynamic>.from(value as Map);
+          final nextIntegrated = _mapFor('integrated_programmes');
+          nextIntegrated['offered'] = nextValue['offered'] ?? '';
+          nextIntegrated['total_programmes'] =
+              nextValue['total_programmes'] ?? '';
+          _update('integrated_programmes', nextIntegrated, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Integrated Programme Enrolment',
+        icon: Icons.how_to_reg_outlined,
+        value: _mapFor('integrated_programmes')['enrolment'] ?? const [],
+        onChanged: (value, {rebuild = false}) {
+          _updateIntegrated('enrolment', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'UGC Human Resource Development Centre',
+        icon: Icons.business_center_outlined,
+        value: _mapFor('hrdc'),
+        onChanged: (value, {rebuild = false}) {
+          _update('hrdc', value, rebuild: rebuild);
+        },
+      ),
+      _ProfileSectionConfig(
+        title: 'Evaluative Report of the Departments',
+        icon: Icons.description_outlined,
+        value: _listFor('department_reports'),
+        onChanged: (value, {rebuild = false}) {
+          _update('department_reports', value, rebuild: rebuild);
+        },
+      ),
+    ];
+  }
+
+  void _openSection(int index) {
+    setState(() => _activeSectionIndex = index);
+    Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      alignment: 0,
+    );
+  }
+
+  void _moveSection(int direction) {
+    final index = _activeSectionIndex;
+    if (index == null) return;
+    final nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= _sections.length) return;
+    _openSection(nextIndex);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = _sections;
+    final activeIndex = _activeSectionIndex;
+
+    if (activeIndex != null && activeIndex < sections.length) {
+      final section = sections[activeIndex];
+      return _ProfileSectionPage(
+        section: section,
+        index: activeIndex,
+        total: sections.length,
+        onBack: () => setState(() => _activeSectionIndex = null),
+        onPrevious: activeIndex == 0 ? null : () => _moveSection(-1),
+        onNext: activeIndex == sections.length - 1
+            ? null
+            : () => _moveSection(1),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ProfileSectionIndex(sections: sections, onSelected: _openSection),
+      ],
+    );
+  }
+}
+
+class _ProfileSectionConfig {
+  const _ProfileSectionConfig({
+    required this.title,
+    required this.icon,
+    required this.value,
+    required this.onChanged,
+    this.intro,
+  });
+
+  final String title;
+  final IconData icon;
+  final dynamic value;
+  final String? intro;
+  final _SsrDraftChanged<dynamic> onChanged;
+}
+
+class _ProfileSectionIndex extends StatelessWidget {
+  const _ProfileSectionIndex({
+    required this.sections,
+    required this.onSelected,
+  });
+
+  final List<_ProfileSectionConfig> sections;
+  final ValueChanged<int> onSelected;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _ProfileAccordionCard(
-          title: 'Basic Information',
-          icon: Icons.space_dashboard_outlined,
-          value: _mapFor('basic_information'),
-          onChanged: (value, {rebuild = false}) {
-            _update('basic_information', value, rebuild: rebuild);
-          },
+        _ProfileShell(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _ProfileIcon(icon: Icons.dashboard_customize_rounded),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Profile Sections',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 17,
+                          color: _slate900,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Open one section at a time to edit the university profile.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12.5,
+                          height: 1.35,
+                          fontWeight: FontWeight.w500,
+                          color: _slate500,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 18),
-        _ProfileAccordionCard(
-          title: 'Contacts',
-          icon: Icons.people_outline_rounded,
-          value: _listFor('contacts'),
-          onChanged: (value, {rebuild = false}) {
-            _update('contacts', value, rebuild: rebuild);
-          },
+        const SizedBox(height: 14),
+        for (var i = 0; i < sections.length; i++) ...[
+          _ProfileSectionTile(
+            index: i,
+            section: sections[i],
+            onTap: () => onSelected(i),
+          ),
+          if (i != sections.length - 1) const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+}
+
+class _ProfileSectionTile extends StatelessWidget {
+  const _ProfileSectionTile({
+    required this.index,
+    required this.section,
+    required this.onTap,
+  });
+
+  final int index;
+  final _ProfileSectionConfig section;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _compactValuePreview(section.value);
+    final hasPreview = preview != 'Blank' && preview != 'No content yet';
+
+    return _ProfileShell(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+          child: Row(
+            children: [
+              _ProfileIcon(icon: section.icon),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${index + 1}. ${section.title}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14.5,
+                        height: 1.25,
+                        color: _slate900,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                    if (hasPreview) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        preview.replaceAll('\n', '  •  '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: _slate500,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: _indigo50,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _indigo100),
+                ),
+                child: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: _indigo600,
+                  size: 22,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfileSectionPage extends StatelessWidget {
+  const _ProfileSectionPage({
+    required this.section,
+    required this.index,
+    required this.total,
+    required this.onBack,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final _ProfileSectionConfig section;
+  final int index;
+  final int total;
+  final VoidCallback onBack;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _ProfileShell(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: onBack,
+                      tooltip: 'Back to sections',
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      color: _slate500,
+                      style: IconButton.styleFrom(
+                        backgroundColor: _slate100,
+                        fixedSize: const Size(42, 42),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'SECTION ${index + 1} OF $total',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: _indigo600,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ProfileIcon(icon: section.icon),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        section.title,
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          height: 1.15,
+                          color: _slate900,
+                          letterSpacing: 0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: onPrevious,
+                        icon: const Icon(Icons.chevron_left_rounded),
+                        label: const Text('Previous'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _slate800,
+                          disabledForegroundColor: _slate300,
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          side: const BorderSide(color: _slate200),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: onNext,
+                        icon: const Icon(Icons.chevron_right_rounded),
+                        label: Text(index == total - 1 ? 'Last' : 'Next'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _indigo600,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: _indigo600.withValues(
+                            alpha: 0.38,
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
         const SizedBox(height: 14),
         _ProfileAccordionCard(
-          title: 'Nature and Status',
-          icon: Icons.business_outlined,
-          value: _mapFor('institution'),
-          onChanged: (value, {rebuild = false}) {
-            _update('institution', value, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Establishment Details',
-          icon: Icons.calendar_month_outlined,
-          value: _mapFor('establishment'),
-          onChanged: (value, {rebuild = false}) {
-            _update('establishment', value, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Recognition Details',
-          icon: Icons.workspace_premium_outlined,
-          value: {
-            ..._mapFor('recognition'),
-            'upe_recognized': data['upe_recognized'] ?? '',
-          },
-          onChanged: (value, {rebuild = false}) {
-            final nextValue = Map<String, dynamic>.from(value as Map);
-            final recognition = Map<String, dynamic>.from(nextValue)
-              ..remove('upe_recognized');
-            final next = _deepCopyMap(data);
-            next['recognition'] = recognition;
-            next['upe_recognized'] = nextValue['upe_recognized'] ?? '';
-            onChanged(next, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Location, Area and Activity of Campus',
-          icon: Icons.location_on_outlined,
-          value: _listFor('campuses'),
-          onChanged: (value, {rebuild = false}) {
-            _update('campuses', value, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Affiliated Institutions to the University',
-          icon: Icons.local_library_outlined,
-          value: _academicValue('affiliated_institutions') ?? const [],
-          onChanged: (value, {rebuild = false}) {
-            _updateAcademic('affiliated_institutions', value, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Details of Colleges under University',
-          icon: Icons.menu_book_outlined,
-          value: _academicValue('college_details') ?? const [],
-          onChanged: (value, {rebuild = false}) {
-            _updateAcademic('college_details', value, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Statutory Regulatory Authority Recognition',
-          icon: Icons.verified_outlined,
-          value: {
-            'sra_recognized': _academicValue('sra_recognized') ?? '',
-            'sra_details': _academicValue('sra_details') ?? '',
-          },
-          onChanged: (value, {rebuild = false}) {
-            final nextValue = Map<String, dynamic>.from(value as Map);
-            final nextAcademic = _mapFor('academic_information');
-            nextAcademic['sra_recognized'] = nextValue['sra_recognized'] ?? '';
-            nextAcademic['sra_details'] = nextValue['sra_details'] ?? '';
-            _update('academic_information', nextAcademic, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Staff Details',
-          icon: Icons.school_outlined,
-          value: {
-            'staff': data['staff'],
-            'qualification_details': data['qualification_details'],
-          },
-          intro:
-              'Use the cards below to enter staff counts and teacher qualification details.',
-          onChanged: (value, {rebuild = false}) {
-            final grouped = Map<String, dynamic>.from(value as Map);
-            final next = _deepCopyMap(data);
-            next['staff'] = grouped['staff'];
-            next['qualification_details'] = grouped['qualification_details'];
-            onChanged(next, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Distinguished Academicians Appointed',
-          icon: Icons.workspace_premium_outlined,
-          value: _listFor('distinguished_academicians'),
-          onChanged: (value, {rebuild = false}) {
-            _update('distinguished_academicians', value, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Chairs Instituted by the University',
-          icon: Icons.event_seat_outlined,
-          value: _listFor('chairs'),
-          onChanged: (value, {rebuild = false}) {
-            _update('chairs', value, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Students Enrolled during the Current Academic Year',
-          icon: Icons.groups_outlined,
-          value: _listFor('student_enrolment'),
-          onChanged: (value, {rebuild = false}) {
-            _update('student_enrolment', value, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Integrated Programmes',
-          icon: Icons.menu_book_outlined,
-          value: {
-            'offered': _mapFor('integrated_programmes')['offered'] ?? '',
-            'total_programmes':
-                _mapFor('integrated_programmes')['total_programmes'] ?? '',
-          },
-          onChanged: (value, {rebuild = false}) {
-            final nextValue = Map<String, dynamic>.from(value as Map);
-            final nextIntegrated = _mapFor('integrated_programmes');
-            nextIntegrated['offered'] = nextValue['offered'] ?? '';
-            nextIntegrated['total_programmes'] =
-                nextValue['total_programmes'] ?? '';
-            _update('integrated_programmes', nextIntegrated, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Integrated Programme Enrolment',
-          icon: Icons.how_to_reg_outlined,
-          value: _mapFor('integrated_programmes')['enrolment'] ?? const [],
-          onChanged: (value, {rebuild = false}) {
-            _updateIntegrated('enrolment', value, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'UGC Human Resource Development Centre',
-          icon: Icons.business_center_outlined,
-          value: _mapFor('hrdc'),
-          onChanged: (value, {rebuild = false}) {
-            _update('hrdc', value, rebuild: rebuild);
-          },
-        ),
-        const SizedBox(height: 14),
-        _ProfileAccordionCard(
-          title: 'Evaluative Report of the Departments',
-          icon: Icons.description_outlined,
-          value: _listFor('department_reports'),
-          onChanged: (value, {rebuild = false}) {
-            _update('department_reports', value, rebuild: rebuild);
-          },
+          title: section.title,
+          icon: section.icon,
+          value: section.value,
+          intro: section.intro,
+          initiallyExpanded: true,
+          onChanged: section.onChanged,
         ),
       ],
     );
@@ -4654,12 +5214,14 @@ class _ProfileAccordionCard extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.intro,
+    this.initiallyExpanded = false,
   });
 
   final String title;
   final IconData icon;
   final dynamic value;
   final String? intro;
+  final bool initiallyExpanded;
   final _SsrDraftChanged<dynamic> onChanged;
 
   Widget _mapField(
@@ -4712,6 +5274,7 @@ class _ProfileAccordionCard extends StatelessWidget {
       child: _LazyExpansionCard(
         title: title,
         subtitle: '',
+        initiallyExpanded: initiallyExpanded,
         tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         childrenPadding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
         leading: _ProfileIcon(icon: icon),
@@ -5929,29 +6492,32 @@ class _SsrHistoryPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: 20),
           child: Text(
             'Edit History (Last 5 Days)',
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w800,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
             ),
           ),
         ),
         if (loading)
           const Center(
             child: Padding(
-              padding: EdgeInsets.all(16.0),
+              padding: EdgeInsets.all(32.0),
               child: CircularProgressIndicator(),
             ),
           )
         else if (history.isEmpty)
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerHighest.withValues(
                 alpha: 0.3,
@@ -5960,266 +6526,445 @@ class _SsrHistoryPanel extends StatelessWidget {
               border: Border.all(
                 color: theme.colorScheme.outline.withValues(alpha: 0.1),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.history_rounded,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'No edits in the last 5 days.',
-                  style: TextStyle(
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    Icons.history_rounded,
                     color: theme.colorScheme.onSurfaceVariant,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'No edits in the last 5 days.',
+                    style: GoogleFonts.poppins(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
             ),
           )
         else
-          Column(
+          Stack(
             children: [
-              for (final item in history)
-                Builder(
-                  builder: (context) {
-                    final isActive = activeHistoryId == item.id;
-                    final isDetailsLoading = detailLoadingId == item.id;
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(
-                          color: theme.colorScheme.outline.withValues(
-                            alpha: 0.1,
-                          ),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.02),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+              Positioned(
+                left: 23,
+                top: 24,
+                bottom: 24,
+                child: Container(
+                  width: 2,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        AppColors.primary.withValues(alpha: 0.5),
+                        AppColors.primary.withValues(alpha: 0.1),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Column(
+                children: [
+                  for (var i = 0; i < history.length; i++)
+                    Builder(
+                      builder: (context) {
+                        final item = history[i];
+                        final isActive = activeHistoryId == item.id;
+                        final isDetailsLoading = detailLoadingId == item.id;
+                        final isLast = i == history.length - 1;
+
+                        return Container(
+                          margin: EdgeInsets.only(bottom: isLast ? 0 : 24),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              CircleAvatar(
-                                radius: 20,
-                                backgroundColor: AppColors.primary.withValues(
-                                  alpha: 0.1,
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                    width: 3,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.15,
+                                      ),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
                                 ),
-                                child: const Icon(
-                                  Icons.person,
-                                  size: 20,
-                                  color: AppColors.primary,
+                                child: Center(
+                                  child: CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: AppColors.primary
+                                        .withValues(alpha: 0.1),
+                                    child: Text(
+                                      item.editorName.isNotEmpty
+                                          ? item.editorName[0].toUpperCase()
+                                          : '?',
+                                      style: GoogleFonts.poppins(
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 16),
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      item.editorName,
-                                      style: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      item.editedAt == null
-                                          ? 'Date unavailable'
-                                          : item.editedAt!
-                                                .toLocal()
-                                                .toString()
-                                                .split('.')[0],
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 13,
-                                        color:
-                                            theme.colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (item.changeSummary.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            Text(
-                              item.changeSummary,
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                          if (item.editorEmail.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              item.editorEmail,
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: item.changedFields
-                                .take(4)
-                                .map(
-                                  (field) => Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: theme
-                                          .colorScheme
-                                          .surfaceContainerHighest
-                                          .withValues(alpha: 0.3),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: theme.colorScheme.outline
-                                            .withValues(alpha: 0.1),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      _titleForKey(field),
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                          const SizedBox(height: 16),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              OutlinedButton.icon(
-                                onPressed: isDetailsLoading
-                                    ? null
-                                    : () => onToggleDetails(item),
-                                icon: Icon(
-                                  isActive
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  size: 16,
-                                ),
-                                label: Text(
-                                  isDetailsLoading
-                                      ? 'Loading...'
-                                      : isActive
-                                      ? 'Hide Details'
-                                      : 'View Details',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: restoringId == item.id
-                                    ? null
-                                    : () => onRestore(item),
-                                icon: const Icon(
-                                  Icons.restore_rounded,
-                                  size: 16,
-                                ),
-                                label: Text(
-                                  restoringId == item.id
-                                      ? 'Restoring...'
-                                      : 'Restore Version',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (isActive) ...[
-                            const SizedBox(height: 16),
-                            if (isDetailsLoading)
-                              const LinearProgressIndicator(minHeight: 2)
-                            else if (item.fieldDiffs.isEmpty)
-                              Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: theme
-                                      .colorScheme
-                                      .surfaceContainerHighest
-                                      .withValues(alpha: 0.3),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  'No individual field changes detected.',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              )
-                            else
-                              Column(
-                                children: [
-                                  for (final diffEntry
-                                      in item.fieldDiffs.entries)
-                                    _HistoryDiffBlock(
-                                      field: diffEntry.key,
-                                      diff: diffEntry.value is Map
-                                          ? Map<String, dynamic>.from(
-                                              diffEntry.value as Map,
+                                child: Container(
+                                  padding: const EdgeInsets.all(20),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.surface,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: isActive
+                                          ? AppColors.primary.withValues(
+                                              alpha: 0.3,
                                             )
-                                          : const {},
+                                          : theme.colorScheme.outline
+                                                .withValues(alpha: 0.1),
+                                      width: isActive ? 1.5 : 1,
                                     ),
-                                ],
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.03,
+                                        ),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  item.editorName,
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 15,
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : const Color(
+                                                            0xFF0F172A,
+                                                          ),
+                                                  ),
+                                                ),
+                                                if (item.editorEmail.isNotEmpty)
+                                                  Text(
+                                                    item.editorEmail,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 12,
+                                                      color: theme
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 4,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: theme
+                                                  .colorScheme
+                                                  .surfaceContainerHighest
+                                                  .withValues(alpha: 0.5),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              item.editedAt == null
+                                                  ? 'Unknown Date'
+                                                  : _formatRelativeTime(
+                                                      item.editedAt!,
+                                                    ),
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (item.changeSummary.isNotEmpty) ...[
+                                        const SizedBox(height: 14),
+                                        Text(
+                                          item.changeSummary,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 13,
+                                            height: 1.4,
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                      if (item.changedFields.isNotEmpty) ...[
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'Modified Fields:',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: item.changedFields
+                                              .take(5)
+                                              .map(
+                                                (field) => Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 4,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(
+                                                      0xFFEFF6FF,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          6,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: const Color(
+                                                        0xFFDBEAFE,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  child: Text(
+                                                    _titleForKey(field),
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: const Color(
+                                                        0xFF1E40AF,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              )
+                                              .toList(),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 16),
+                                      const Divider(height: 1),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: TextButton.icon(
+                                              onPressed: isDetailsLoading
+                                                  ? null
+                                                  : () => onToggleDetails(item),
+                                              icon: Icon(
+                                                isActive
+                                                    ? Icons.unfold_less_rounded
+                                                    : Icons.unfold_more_rounded,
+                                                size: 18,
+                                              ),
+                                              label: Text(
+                                                isDetailsLoading
+                                                    ? 'Loading...'
+                                                    : isActive
+                                                    ? 'Hide Diff'
+                                                    : 'View Diff',
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              style: TextButton.styleFrom(
+                                                foregroundColor: isActive
+                                                    ? AppColors.primary
+                                                    : theme
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 12,
+                                                    ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: FilledButton.tonalIcon(
+                                              onPressed: restoringId == item.id
+                                                  ? null
+                                                  : () => onRestore(item),
+                                              icon: const Icon(
+                                                Icons.restore_rounded,
+                                                size: 18,
+                                              ),
+                                              label: Text(
+                                                restoringId == item.id
+                                                    ? 'Restoring...'
+                                                    : 'Restore',
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              style: FilledButton.styleFrom(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 12,
+                                                    ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (isActive) ...[
+                                        const SizedBox(height: 16),
+                                        if (isDetailsLoading)
+                                          const LinearProgressIndicator(
+                                            minHeight: 2,
+                                            borderRadius: BorderRadius.all(
+                                              Radius.circular(2),
+                                            ),
+                                          )
+                                        else if (item.fieldDiffs.isEmpty)
+                                          Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              color: theme
+                                                  .colorScheme
+                                                  .surfaceContainerHighest
+                                                  .withValues(alpha: 0.3),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                            ),
+                                            child: Text(
+                                              'No individual field changes detected.',
+                                              textAlign: TextAlign.center,
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 13,
+                                                color: theme
+                                                    .colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                            ),
+                                          )
+                                        else
+                                          Column(
+                                            children: [
+                                              for (final diffEntry
+                                                  in item.fieldDiffs.entries)
+                                                _HistoryDiffBlock(
+                                                  field: diffEntry.key,
+                                                  diff: diffEntry.value is Map
+                                                      ? Map<
+                                                          String,
+                                                          dynamic
+                                                        >.from(
+                                                          diffEntry.value
+                                                              as Map,
+                                                        )
+                                                      : const {},
+                                                ),
+                                            ],
+                                          ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
                               ),
-                          ],
-                        ],
-                      ),
-                    );
-                  },
-                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
             ],
           ),
       ],
     );
+  }
+
+  String _formatRelativeTime(DateTime date) {
+    final local = date.toLocal();
+    final now = DateTime.now();
+    final difference = now.difference(local);
+
+    if (difference.inDays == 0) {
+      if (difference.inHours > 0) return '${difference.inHours}h ago';
+      if (difference.inMinutes > 0) return '${difference.inMinutes}m ago';
+      return 'Just now';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    }
+
+    return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 }
 
@@ -6232,40 +6977,87 @@ class _HistoryDiffBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.2),
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+          color: theme.colorScheme.outline.withValues(alpha: 0.15),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _titleForKey(field),
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 12),
-          _DiffLines(
-            label: 'Previous',
-            color: AppColors.error,
-            lines: _valueToLines(diff['previous']),
-          ),
-          const SizedBox(height: 10),
-          _DiffLines(
-            label: 'New',
-            color: const Color(0xFF047857),
-            lines: _valueToLines(diff['new']),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.3,
+                ),
+                border: Border(
+                  bottom: BorderSide(
+                    color: theme.colorScheme.outline.withValues(alpha: 0.1),
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.code_rounded,
+                    size: 16,
+                    color: Color(0xFF64748B),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _titleForKey(field),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.robotoMono(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  _DiffLines(
+                    label: 'Previous',
+                    color: const Color(0xFFEF4444),
+                    icon: Icons.remove,
+                    lines: _valueToLines(diff['previous']),
+                  ),
+                  const SizedBox(height: 8),
+                  _DiffLines(
+                    label: 'New',
+                    color: const Color(0xFF10B981),
+                    icon: Icons.add,
+                    lines: _valueToLines(diff['new']),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -6275,56 +7067,133 @@ class _DiffLines extends StatelessWidget {
   const _DiffLines({
     required this.label,
     required this.color,
+    required this.icon,
     required this.lines,
   });
 
   final String label;
   final Color color;
+  final IconData icon;
   final List<String> lines;
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark
+        ? color.withValues(alpha: 0.15)
+        : color.withValues(alpha: 0.05);
+    final borderColor = isDark
+        ? color.withValues(alpha: 0.3)
+        : color.withValues(alpha: 0.15);
+    final headerBgColor = isDark
+        ? color.withValues(alpha: 0.25)
+        : color.withValues(alpha: 0.1);
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
+        color: bgColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.16)),
+        border: Border.all(color: borderColor),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: color,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: headerBgColor,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(11),
+              ),
+              border: Border(bottom: BorderSide(color: borderColor)),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 14, color: color),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          for (final line in lines.take(12))
-            Text(
-              line,
-              style: GoogleFonts.robotoMono(
-                fontSize: 12,
-                height: 1.4,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-          if (lines.length > 12)
-            Padding(
-              padding: const EdgeInsets.only(top: 4.0),
-              child: Text(
-                '+${lines.length - 12} more lines',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 36,
+                  padding: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    border: Border(right: BorderSide(color: borderColor)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: List.generate(
+                      lines.take(12).length,
+                      (i) => Text(
+                        '${i + 1}',
+                        style: GoogleFonts.robotoMono(
+                          fontSize: 12,
+                          height: 1.5,
+                          color: color.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final line in lines.take(12))
+                          Text(
+                            line.isEmpty ? ' ' : line,
+                            style: GoogleFonts.robotoMono(
+                              fontSize: 12,
+                              height: 1.5,
+                              color: isDark
+                                  ? Colors.white70
+                                  : const Color(0xFF334155),
+                            ),
+                          ),
+                        if (lines.length > 12)
+                          Container(
+                            margin: const EdgeInsets.only(top: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              '+${lines.length - 12} more lines',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: color,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ),
         ],
       ),
     );

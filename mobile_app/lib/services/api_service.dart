@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/app_constants.dart';
@@ -156,14 +157,40 @@ class ApiService {
   Future<Uint8List> getBytes(
     String path, {
     Map<String, dynamic>? params,
+    Duration? receiveTimeout,
   }) async {
-    final resp = await _dio.get<List<int>>(
-      path,
-      queryParameters: params,
-      options: Options(responseType: ResponseType.bytes),
-    );
-    final data = resp.data ?? const <int>[];
-    return Uint8List.fromList(data);
+    try {
+      final resp = await _dio.get<dynamic>(
+        path,
+        queryParameters: params,
+        options: Options(
+          responseType: ResponseType.bytes,
+          receiveTimeout: receiveTimeout ?? const Duration(seconds: 90),
+        ),
+      );
+      final data = resp.data;
+      if (data is Uint8List) return data;
+      if (data is List<int>) return Uint8List.fromList(data);
+      return Uint8List(0);
+    } on DioException catch (e) {
+      final detail = _downloadErrorMessage(e.response?.data);
+      throw Exception(detail ?? e.message ?? 'Download failed');
+    }
+  }
+
+  String? _downloadErrorMessage(dynamic data) {
+    dynamic decoded = data;
+    if (data is List<int>) {
+      try {
+        decoded = jsonDecode(utf8.decode(data));
+      } catch (_) {
+        return null;
+      }
+    }
+    if (decoded is Map && decoded['detail'] != null) {
+      return decoded['detail'].toString();
+    }
+    return null;
   }
 
   Future<T> postMultipart<T>(
