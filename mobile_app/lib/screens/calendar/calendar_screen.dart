@@ -7,7 +7,6 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../constants/app_colors.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
-import '../../widgets/common/app_widgets.dart';
 
 enum _CalendarFilter { all, events, holidays, academic }
 
@@ -730,12 +729,14 @@ class _CalendarScreenState extends State<CalendarScreen>
           color: const Color(0xFF4299E1).withValues(alpha: 0.3),
           shape: BoxShape.circle,
         ),
-        markerDecoration: const BoxDecoration(
-          color: Color(0xFF4299E1),
-          shape: BoxShape.circle,
-        ),
+        markersMaxCount: 0,
         outsideDaysVisible: false,
         weekendTextStyle: const TextStyle(color: Color(0xFFE53E3E)),
+      ),
+      calendarBuilders: CalendarBuilders<_CalendarItem>(
+        markerBuilder: (context, day, events) {
+          return _buildCalendarMarkers(context, events);
+        },
       ),
       headerStyle: HeaderStyle(
         titleCentered: true,
@@ -755,6 +756,62 @@ class _CalendarScreenState extends State<CalendarScreen>
       daysOfWeekStyle: DaysOfWeekStyle(
         weekdayStyle: TextStyle(color: muted),
         weekendStyle: TextStyle(color: weekend),
+      ),
+    );
+  }
+
+  Widget _buildCalendarMarkers(
+    BuildContext context,
+    List<_CalendarItem> events,
+  ) {
+    if (events.isEmpty) return const SizedBox.shrink();
+
+    final visibleEvents = events.take(3).toList();
+    final extraCount = events.length - visibleEvents.length;
+
+    return Positioned(
+      bottom: 5,
+      left: 0,
+      right: 0,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (final event in visibleEvents)
+            Container(
+              width: 6,
+              height: 6,
+              margin: const EdgeInsets.symmetric(horizontal: 1.5),
+              decoration: BoxDecoration(
+                color: _calendarAccentColor(event),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: _calendarAccentColor(event).withValues(alpha: 0.3),
+                    blurRadius: 3,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+            ),
+          if (extraCount > 0)
+            Container(
+              margin: const EdgeInsets.only(left: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '+$extraCount',
+                style: TextStyle(
+                  fontSize: 7,
+                  fontWeight: FontWeight.w800,
+                  color: Theme.of(context).colorScheme.onSurface,
+                  height: 1,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -874,95 +931,286 @@ class _CalendarScreenState extends State<CalendarScreen>
   }
 
   void _openEventDetails(BuildContext context, _CalendarItem event) {
-    final tf = DateFormat('h:mm a');
-    final df = DateFormat('MMM d, yyyy');
-    final schedule =
-        '${df.format(event.startTime)} ${tf.format(event.startTime)} - ${df.format(event.endTime)} ${tf.format(event.endTime)}';
-    final typeLabel = event.sourceType == 'institution_calendar'
-        ? (event.entryType == 'holiday'
-              ? 'Institution Holiday'
-              : 'Institution Academic')
-        : 'Event Booking';
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF0F172A) : Colors.white;
+    final handleColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFCBD5E1);
+    final cardBgColor = isDark
+        ? const Color(0xFF1E293B)
+        : const Color(0xFFFAFBFC);
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0);
+    final titleColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final labelColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
+    final valueColor = isDark
+        ? const Color(0xFFF1F5F9)
+        : const Color(0xFF1E293B);
+    final accentColor = _calendarAccentColor(event);
+    final schedule = _calendarDetailSchedule(event);
+    final typeLabel = _calendarTypeLabel(event);
 
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
+        return Container(
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 20,
+                offset: const Offset(0, -5),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.88,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: handleColor,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(
+                              alpha: isDark ? 0.2 : 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            _calendarIcon(event),
+                            color: accentColor,
+                            size: 19,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Event Details',
+                            style: TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                              color: titleColor,
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          style: IconButton.styleFrom(
+                            backgroundColor: isDark
+                                ? const Color(0xFF1E293B)
+                                : const Color(0xFFF1F5F9),
+                            foregroundColor: labelColor,
+                            fixedSize: const Size(36, 36),
+                          ),
+                          tooltip: 'Close',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFCBD5E1),
-                        borderRadius: BorderRadius.circular(2),
+                        color: cardBgColor,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark ? borderColor : const Color(0xFFE2E8F0),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(
+                              alpha: isDark ? 0.16 : 0.035,
+                            ),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    event.title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _detailRow('Type', typeLabel),
-                  _detailRow('Schedule', schedule),
-                  if (event.dayLabel.trim().isNotEmpty)
-                    _detailRow('Day', event.dayLabel),
-                  if (event.category.trim().isNotEmpty)
-                    _detailRow('Category', event.category),
-                  if (event.academicYear.trim().isNotEmpty)
-                    _detailRow('Academic Year', event.academicYear),
-                  if (event.semesterType.trim().isNotEmpty ||
-                      event.semester.trim().isNotEmpty)
-                    _detailRow(
-                      'Semester',
-                      [
-                        event.semesterType,
-                        event.semester,
-                      ].where((v) => v.trim().isNotEmpty).join(' | '),
-                    ),
-                  if (event.location.trim().isNotEmpty)
-                    _detailRow('Venue', event.location),
-                  if ((event.description ?? '').trim().isNotEmpty)
-                    _detailRow('Notes', event.description!.trim()),
-                  const SizedBox(height: 16),
-                  if ((event.url ?? '').trim().isNotEmpty)
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: () async {
-                          final uri = Uri.tryParse(event.url!);
-                          if (uri == null) return;
-                          final launched = await launchUrl(
-                            uri,
-                            mode: LaunchMode.externalApplication,
-                          );
-                          if (!launched && context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Could not open calendar link.'),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              _buildSheetTypePill(
+                                _calendarChipLabel(event),
+                                accentColor,
+                                isDark,
                               ),
-                            );
-                          }
-                        },
-                        child: const Text('Open in Google Calendar'),
+                              const Spacer(),
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: accentColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ],
+                          ),
+                          _buildDivider(borderColor),
+                          _buildPremiumDetailRow(
+                            'Title',
+                            event.title,
+                            labelColor,
+                            valueColor,
+                          ),
+                          _buildDivider(borderColor),
+                          _buildPremiumDetailRow(
+                            'Type',
+                            typeLabel,
+                            labelColor,
+                            valueColor,
+                          ),
+                          if (event.category.trim().isNotEmpty) ...[
+                            _buildDivider(borderColor),
+                            _buildPremiumDetailRow(
+                              'Category',
+                              event.category,
+                              labelColor,
+                              valueColor,
+                            ),
+                          ],
+                          if (event.academicYear.trim().isNotEmpty) ...[
+                            _buildDivider(borderColor),
+                            _buildPremiumDetailRow(
+                              'Academic Year',
+                              event.academicYear,
+                              labelColor,
+                              valueColor,
+                            ),
+                          ],
+                          if (event.semesterType.trim().isNotEmpty ||
+                              event.semester.trim().isNotEmpty) ...[
+                            _buildDivider(borderColor),
+                            _buildPremiumDetailRow(
+                              'Semester',
+                              [
+                                event.semesterType,
+                                event.semester,
+                              ].where((v) => v.trim().isNotEmpty).join(' | '),
+                              labelColor,
+                              valueColor,
+                            ),
+                          ],
+                          _buildDivider(borderColor),
+                          _buildPremiumDetailRow(
+                            'Schedule',
+                            schedule,
+                            labelColor,
+                            valueColor,
+                          ),
+                          if (event.dayLabel.trim().isNotEmpty) ...[
+                            _buildDivider(borderColor),
+                            _buildPremiumDetailRow(
+                              'Day',
+                              event.dayLabel,
+                              labelColor,
+                              valueColor,
+                            ),
+                          ],
+                          if (event.location.trim().isNotEmpty) ...[
+                            _buildDivider(borderColor),
+                            _buildPremiumDetailRow(
+                              'Venue',
+                              event.location,
+                              labelColor,
+                              valueColor,
+                            ),
+                          ],
+                          if ((event.description ?? '').trim().isNotEmpty) ...[
+                            _buildDivider(borderColor),
+                            _buildPremiumDetailRow(
+                              'Notes',
+                              event.description!.trim(),
+                              labelColor,
+                              valueColor,
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                ],
+                    if ((event.url ?? '').trim().isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: FilledButton.icon(
+                          icon: const FaIcon(FontAwesomeIcons.google, size: 15),
+                          label: const Text(
+                            'Open in Google Calendar',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.1,
+                            ),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: accentColor,
+                            foregroundColor: Colors.white,
+                            elevation: 3,
+                            shadowColor: accentColor.withValues(alpha: 0.28),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () async {
+                            final uri = Uri.tryParse(event.url!);
+                            if (uri == null) return;
+                            final launched = await launchUrl(
+                              uri,
+                              mode: LaunchMode.externalApplication,
+                            );
+                            if (!launched && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Could not open Google Calendar link.',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        height: MediaQuery.of(context).padding.bottom + 64,
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -971,32 +1219,155 @@ class _CalendarScreenState extends State<CalendarScreen>
     );
   }
 
-  Widget _detailRow(String label, String value) {
+  String _calendarDetailSchedule(_CalendarItem event) {
+    final rawLabel = event.dateRangeLabel.trim();
+    if (rawLabel.isNotEmpty) {
+      final formatted = _formatRawDateRangeLabel(rawLabel);
+      if (formatted != null) return formatted;
+    }
+    return _formatCalendarDateRange(event.startTime, event.endTime);
+  }
+
+  String _formatCalendarDateRange(DateTime start, DateTime end) {
+    final dateFormatter = DateFormat('EEEE, d MMMM y');
+    final timeFormatter = DateFormat('h:mm a');
+    final sameDay =
+        start.year == end.year &&
+        start.month == end.month &&
+        start.day == end.day;
+    if (sameDay) {
+      return '${dateFormatter.format(start)}, ${timeFormatter.format(start)} - ${timeFormatter.format(end)}';
+    }
+    return '${dateFormatter.format(start)} - ${dateFormatter.format(end)}';
+  }
+
+  String? _formatRawDateRangeLabel(String label) {
+    final match = RegExp(
+      r'^(\d{4}-\d{2}-\d{2})(?:\s+\d{2}:\d{2})?(?:\s+to\s+(\d{4}-\d{2}-\d{2})(?:\s+\d{2}:\d{2})?)?$',
+    ).firstMatch(label);
+    if (match == null) return null;
+
+    final formatter = DateFormat('EEEE, d MMMM y');
+    final start = DateTime.tryParse(match.group(1)!);
+    final endRaw = match.group(2);
+    final end = endRaw == null ? null : DateTime.tryParse(endRaw);
+    if (start == null) return null;
+    if (end == null || _isSameDate(start, end)) return formatter.format(start);
+    return '${formatter.format(start)} - ${formatter.format(end)}';
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  Widget _buildPremiumDetailRow(
+    String label,
+    String value,
+    Color labelColor,
+    Color valueColor,
+  ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 110,
+            width: 86,
             child: Text(
-              label,
-              style: const TextStyle(
-                color: Color(0xFF64748B),
-                fontWeight: FontWeight.w600,
+              label.toUpperCase(),
+              style: TextStyle(
+                color: labelColor,
+                fontWeight: FontWeight.w700,
+                fontSize: 10,
+                letterSpacing: 0.7,
+                height: 1.35,
               ),
             ),
           ),
+          const SizedBox(width: 14),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontWeight: FontWeight.w500),
+              style: TextStyle(
+                color: valueColor,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                height: 1.35,
+              ),
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildDivider(Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Divider(height: 1, thickness: 1, color: color),
+    );
+  }
+
+  Widget _buildSheetTypePill(String label, Color color, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: isDark ? 0.16 : 0.1),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Color _calendarAccentColor(_CalendarItem event) {
+  final raw = event.color;
+  if (raw != null && raw.isNotEmpty) {
+    try {
+      return Color(int.parse(raw.replaceFirst('#', '0xFF')));
+    } catch (_) {
+      // Fall back to status color if the backend sends an unexpected color.
+    }
+  }
+  return AppColors.statusColor(event.status);
+}
+
+String _calendarTypeLabel(_CalendarItem event) {
+  if (event.sourceType != 'institution_calendar') return 'Event Booking';
+  return event.entryType == 'holiday'
+      ? 'Institution Holiday'
+      : 'Institution Academic';
+}
+
+String _calendarChipLabel(_CalendarItem event) {
+  if (event.sourceType != 'institution_calendar') return 'Event Booking';
+  return event.entryType == 'holiday' ? 'Holiday' : 'Academic';
+}
+
+IconData _calendarIcon(_CalendarItem event) {
+  if (event.entryType == 'holiday') return Icons.celebration_rounded;
+  if (event.sourceType == 'institution_calendar') return Icons.school_rounded;
+  return Icons.event_note_rounded;
 }
 
 class _CalendarEventCard extends StatelessWidget {
@@ -1007,64 +1378,212 @@ class _CalendarEventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final tf = DateFormat('h:mm a');
+    final accentColor = _calendarAccentColor(event);
+    final cardColor = isDark
+        ? const Color(0xFF1E293B)
+        : const Color(0xFFFAFBFC);
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : accentColor.withValues(alpha: 0.16);
+    final titleColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final iconColor = isDark
+        ? const Color(0xFF64748B)
+        : const Color(0xFF94A3B8);
+    final textColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
+    final shadowColor = isDark
+        ? Colors.black.withValues(alpha: 0.3)
+        : const Color(0xFFE2E8F0).withValues(alpha: 0.6);
 
-    Color stripeColor() {
-      final raw = event.color;
-      if (raw != null && raw.isNotEmpty) {
-        try {
-          return Color(int.parse(raw.replaceFirst('#', '0xFF')));
-        } catch (_) {
-          // Fallback for unexpected color format.
-        }
-      }
-      return AppColors.statusColor(event.status);
-    }
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border(left: BorderSide(color: stripeColor(), width: 4)),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x06000000),
-              blurRadius: 8,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor,
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            splashColor: accentColor.withValues(alpha: 0.1),
+            highlightColor: accentColor.withValues(alpha: 0.05),
+            child: Stack(
               children: [
-                Expanded(
-                  child: Text(
-                    event.title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: Container(width: 5, color: accentColor),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(19, 14, 14, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: 30,
+                                  height: 30,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  decoration: BoxDecoration(
+                                    color: accentColor.withValues(
+                                      alpha: isDark ? 0.2 : 0.12,
+                                    ),
+                                    borderRadius: BorderRadius.circular(9),
+                                  ),
+                                  child: Icon(
+                                    _calendarIcon(event),
+                                    color: accentColor,
+                                    size: 16,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    event.title,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w800,
+                                      color: titleColor,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          _buildPremiumBadge(event.status, isDark),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _buildPremiumInfoRow(
+                        Icons.access_time_filled_rounded,
+                        '${tf.format(event.startTime)} - ${tf.format(event.endTime)}',
+                        iconColor,
+                        textColor,
+                      ),
+                      if (event.location.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        _buildPremiumInfoRow(
+                          Icons.location_on_rounded,
+                          event.location,
+                          iconColor,
+                          textColor,
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          _buildChip(_calendarChipLabel(event), accentColor),
+                          if (event.category.trim().isNotEmpty)
+                            _buildChip(event.category, iconColor),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                StatusBadge(event.status),
               ],
             ),
-            const SizedBox(height: 8),
-            InfoRow(
-              icon: Icons.schedule,
-              text:
-                  '${tf.format(event.startTime)} - ${tf.format(event.endTime)}',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumBadge(String status, bool isDark) {
+    final isApproved = status.toLowerCase() == 'approved';
+    final Color bgColor;
+    final Color textColor;
+
+    if (isApproved) {
+      bgColor = isDark ? const Color(0xFF064E3B) : const Color(0xFFDCFCE7);
+      textColor = isDark ? const Color(0xFF34D399) : const Color(0xFF166534);
+    } else {
+      bgColor = isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9);
+      textColor = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          color: textColor,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPremiumInfoRow(
+    IconData icon,
+    String text,
+    Color iconColor,
+    Color textColor,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, size: 16, color: iconColor),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: textColor,
             ),
-            const SizedBox(height: 4),
-            InfoRow(icon: Icons.location_on_outlined, text: event.location),
-          ],
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChip(String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: color,
+          letterSpacing: 0.5,
         ),
       ),
     );

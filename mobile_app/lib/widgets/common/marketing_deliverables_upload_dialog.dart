@@ -23,7 +23,7 @@ Future<void> showMarketingDeliverablesUploadDialog({
   required MarketingDeliverablesUpload onUpload,
   required Future<void> Function() onConnectGoogle,
   required String Function(Object error) extractErrorMessage,
-  String title = 'Upload Marketing Deliverables',
+  String title = 'Upload Deliverables',
   String eventTitle = '',
 }) {
   final naByType = Map<String, bool>.from(initialNaByType);
@@ -106,22 +106,22 @@ Future<void> showMarketingDeliverablesUploadDialog({
 
         return AlertDialog(
           insetPadding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 28,
+            horizontal: 16,
+            vertical: 18,
           ),
-          contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-          actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 10, 24, 24),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(26),
           ),
-          titlePadding: const EdgeInsets.fromLTRB(20, 20, 16, 0),
+          titlePadding: const EdgeInsets.fromLTRB(24, 24, 18, 0),
           title: Row(
             children: [
               Expanded(
                 child: Text(
                   title,
                   style: GoogleFonts.poppins(
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: FontWeight.w700,
                     color: onSurface,
                   ),
@@ -137,33 +137,62 @@ Future<void> showMarketingDeliverablesUploadDialog({
             ],
           ),
           content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 460),
+            constraints: const BoxConstraints(maxWidth: 520),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (eventTitle.trim().isNotEmpty) ...[
-                    Text(
-                      eventTitle.trim(),
-                      style: GoogleFonts.inter(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: onSurface,
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF172033)
+                            : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: border),
+                      ),
+                      child: Text(
+                        eventTitle.trim(),
+                        style: GoogleFonts.inter(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: onSurface,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
                   ],
-                  Text(
-                    'Upload pre-event items (poster, pre-event social) before the event starts. Post-event items (video upload, post social, post-event photos) after the event ends. Videography and on-site photography are handled during the event and do not use this form. You can save in multiple visits (max 25MB per file).',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      height: 1.45,
-                      color: muted,
-                      fontWeight: FontWeight.w500,
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF101A2A)
+                          : const Color(0xFFF7FAFF),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isDark
+                            ? border.withValues(alpha: 0.9)
+                            : const Color(0xFFD9E6FA),
+                      ),
+                    ),
+                    child: Text(
+                      'Upload pre-event items (poster, pre-event social) before the event starts. Post-event items (video upload, post social, post-event photos) after the event ends. Videography and on-site photography are handled during the event and do not use this form. You can save in multiple visits (max 25MB per file).',
+                      style: GoogleFonts.inter(
+                        fontSize: 13.5,
+                        height: 1.5,
+                        color: muted,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 22),
                   for (final opt in enabledOptions) ...[
                     Builder(
                       builder: (_) {
@@ -176,8 +205,8 @@ Future<void> showMarketingDeliverablesUploadDialog({
 
                         return Container(
                           width: double.infinity,
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: panel,
                             border: Border.all(
@@ -185,13 +214,13 @@ Future<void> showMarketingDeliverablesUploadDialog({
                                   ? border.withValues(alpha: 0.55)
                                   : border,
                             ),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               if (!isDark)
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.025),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
+                                  color: Colors.black.withValues(alpha: 0.03),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 5),
                                 ),
                             ],
                           ),
@@ -334,6 +363,10 @@ Future<void> showMarketingDeliverablesUploadDialog({
                   : () => Navigator.of(ctx).pop(),
               style: TextButton.styleFrom(
                 foregroundColor: blue,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 12,
+                ),
                 textStyle: GoogleFonts.inter(fontWeight: FontWeight.w700),
               ),
               child: const Text('Cancel'),
@@ -365,9 +398,9 @@ Future<void> showMarketingDeliverablesUploadDialog({
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: const Color(0xFFE5E7EB),
                 disabledForegroundColor: const Color(0xFF9CA3AF),
-                minimumSize: const Size(82, 48),
+                minimumSize: const Size(98, 50),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 textStyle: GoogleFonts.inter(fontWeight: FontWeight.w800),
               ),

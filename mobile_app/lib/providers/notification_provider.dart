@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../services/api_service.dart';
+import '../models/models.dart';
 import '../services/notification_service.dart';
 import 'auth_provider.dart';
 
@@ -26,8 +27,12 @@ class NotificationProvider extends ChangeNotifier {
   bool get isConnected => _notificationService.isConnected;
   int get totalUnread => _notificationService.totalUnread;
   bool get isInitialized => _isInitialized;
-  List<AppNotificationItem> get notifications => _notificationService.notifications;
-  int get unreadNotificationCount => _notificationService.unreadNotificationCount;
+  List<ChatConversation> get unreadConversations =>
+      _notificationService.unreadConversations;
+  List<AppNotificationItem> get notifications =>
+      _notificationService.notifications;
+  int get unreadNotificationCount =>
+      _notificationService.unreadNotificationCount;
 
   /// Initialize the notification service.
   /// Call this after auth is ready (e.g., after login).
@@ -75,16 +80,16 @@ class NotificationProvider extends ChangeNotifier {
     _notificationService.markNotificationAsRead(id);
   }
 
-  void markAllNotificationsAsRead() {
-    _notificationService.markAllNotificationsAsRead();
+  Future<void> markAllNotificationsAsRead() async {
+    await _notificationService.markAllNotificationsAsRead();
   }
 
   void dismissNotification(String id) {
     _notificationService.dismissNotification(id);
   }
 
-  void clearNotifications() {
-    _notificationService.clearNotifications();
+  Future<void> clearNotifications() async {
+    await _notificationService.clearNotifications();
   }
 
   /// Set the currently active chat conversation (to suppress notifications)

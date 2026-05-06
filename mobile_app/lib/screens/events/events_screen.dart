@@ -2422,7 +2422,6 @@ class _EventCard extends StatelessWidget {
     final statusBorderColor = _getStatusBorderColor(event.status);
     final statusLabel = _statusLabel(event);
     final pipelineText = _approvalPipelineText(event);
-    final workflowBadges = _workflowBadges(event);
     final showForwardAction = approvalForwardLabel.trim().isNotEmpty;
     final actions = <Widget>[
       if (canCloseEvent && onCloseEvent != null)
@@ -2640,36 +2639,6 @@ class _EventCard extends StatelessWidget {
                     const SizedBox(height: 14),
                     Wrap(spacing: 8, runSpacing: 8, children: actions),
                   ],
-                  if (workflowBadges.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xFF1E293B)
-                            : const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: isDark
-                              ? const Color(0xFF334155)
-                              : const Color(0xFFE2E8F0),
-                        ),
-                      ),
-                      child: Wrap(
-                        spacing: 16,
-                        runSpacing: 12,
-                        alignment: WrapAlignment.center,
-                        children: workflowBadges.map((badge) {
-                          return Tooltip(
-                            message: '${badge.$1}: ${badge.$2}',
-                            triggerMode: TooltipTriggerMode.tap,
-                            child: Icon(badge.$4, color: badge.$3, size: 22),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 16),
                   Container(
                     width: double.infinity,
@@ -2739,76 +2708,6 @@ class _EventCard extends StatelessWidget {
         return 'Final approval completed';
       default:
         return 'Awaiting approval';
-    }
-  }
-
-  List<(String, String, Color, IconData)> _workflowBadges(Event value) {
-    if (value.id.startsWith('approval-')) return const [];
-
-    final badges = <(String, String, Color, IconData)>[];
-
-    void addBadge(
-      String label,
-      String? status,
-      IconData icon, {
-      bool teamChannel = false,
-    }) {
-      final normalized = status?.trim().toLowerCase() ?? '';
-      if (normalized.isEmpty) return;
-      badges.add((
-        label,
-        teamChannel && normalized == 'approved'
-            ? 'Noted'
-            : _formatWorkflowStatus(normalized),
-        _workflowColor(normalized),
-        icon,
-      ));
-    }
-
-    addBadge('Approval', value.approvalStatus, Icons.verified_user_outlined);
-    addBadge(
-      'Facility',
-      value.facilityStatus,
-      Icons.domain_outlined,
-      teamChannel: true,
-    );
-    addBadge(
-      'Marketing',
-      value.marketingStatus,
-      Icons.campaign_outlined,
-      teamChannel: true,
-    );
-    addBadge('IT', value.itStatus, Icons.computer_outlined, teamChannel: true);
-    addBadge(
-      'Transport',
-      value.transportStatus,
-      Icons.directions_bus_outlined,
-      teamChannel: true,
-    );
-    return badges;
-  }
-
-  String _formatWorkflowStatus(String value) {
-    return value
-        .split('_')
-        .where((part) => part.isNotEmpty)
-        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-        .join(' ');
-  }
-
-  Color _workflowColor(String value) {
-    switch (value) {
-      case 'approved':
-        return const Color(0xFF059669);
-      case 'rejected':
-        return const Color(0xFFDC2626);
-      case 'clarification':
-      case 'clarification_requested':
-        return const Color(0xFF7C3AED);
-      case 'pending':
-        return const Color(0xFFD97706);
-      default:
-        return const Color(0xFF475569);
     }
   }
 
@@ -3077,46 +2976,6 @@ class _EventMetaTile extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _WorkflowBadge extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-
-  const _WorkflowBadge({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
-      ),
-      child: RichText(
-        text: TextSpan(
-          style: DefaultTextStyle.of(context).style.copyWith(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: color,
-          ),
-          children: [
-            TextSpan(text: '$label: '),
-            TextSpan(
-              text: value,
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -205,7 +205,6 @@ class _RequirementsScreenState extends State<RequirementsScreen>
     String type,
     MarketingRequest request,
   ) {
-    // Matching website functionality: uploads are never locked by date.
     return (locked: false, hint: '');
   }
 
@@ -373,18 +372,35 @@ class _RequirementsScreenState extends State<RequirementsScreen>
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => AlertDialog(
-          title: Text('Update $_channelLabel request'),
-          content: SingleChildScrollView(
+        builder: (ctx, setLocal) => Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  'Update $_channelLabel request',
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 24),
                 DropdownButtonFormField<String>(
                   initialValue: selected,
-                  decoration: const InputDecoration(
+                  icon: const Icon(LucideIcons.chevronDown, size: 20),
+                  decoration: InputDecoration(
                     labelText: 'Decision',
-                    border: OutlineInputBorder(),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                   items: const [
                     DropdownMenuItem(value: 'approved', child: Text('Noted')),
@@ -398,7 +414,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                     setLocal(() => selected = value ?? 'approved');
                   },
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 TextField(
                   controller: commentCtrl,
                   minLines: 3,
@@ -407,36 +423,78 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                     labelText: selected == 'approved'
                         ? 'Comment (optional)'
                         : 'Comment (required)',
-                    border: const OutlineInputBorder(),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
+                ),
+                const SizedBox(height: 32),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final comment = commentCtrl.text.trim();
+                        if (selected != 'approved' && comment.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Comment is required for reject/clarification.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                        Navigator.of(ctx).pop();
+                        await _decide(_itemId(item), selected, comment);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 14,
+                        ),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Submit',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final comment = commentCtrl.text.trim();
-                if (selected != 'approved' && comment.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Comment is required for reject/clarification.',
-                      ),
-                    ),
-                  );
-                  return;
-                }
-                Navigator.of(ctx).pop();
-                await _decide(_itemId(item), selected, comment);
-              },
-              child: const Text('Submit'),
-            ),
-          ],
         ),
       ),
     );
@@ -445,12 +503,50 @@ class _RequirementsScreenState extends State<RequirementsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(
+        0xFFF4F6F8,
+      ), // Softer, more modern background
       appBar: AppBar(
-        title: const Text('Requirements'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [Tab(text: _channelLabel)],
+        elevation: 0,
+        backgroundColor: Colors.white,
+        centerTitle: false,
+        title: Text(
+          'Requirements',
+          style: GoogleFonts.poppins(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: const Color(0xFF1E293B), // Slate 800
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: false,
+              labelColor: Theme.of(context).primaryColor,
+              unselectedLabelColor: Colors.grey.shade500,
+              labelStyle: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
+              unselectedLabelStyle: GoogleFonts.inter(
+                fontWeight: FontWeight.w500,
+                fontSize: 15,
+              ),
+              indicator: UnderlineTabIndicator(
+                borderSide: BorderSide(
+                  width: 3.0,
+                  color: Theme.of(context).primaryColor,
+                ),
+                insets: const EdgeInsets.symmetric(horizontal: 16.0),
+              ),
+              dividerColor: Colors.transparent,
+              tabs: [Tab(text: _channelLabel)],
+            ),
+          ),
         ),
       ),
       body: TabBarView(
@@ -458,7 +554,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
         children: [
           if (!_showInbox)
             const EmptyState(
-              icon: Icons.lock_outline,
+              icon: LucideIcons.lock,
               title: 'No access',
               message:
                   'Requirements inbox is available for Facility, IT, Marketing, and Transport roles.',
@@ -472,17 +568,40 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.error_outline, color: AppColors.error),
-                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        LucideIcons.alertTriangle,
+                        color: Colors.red.shade400,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     Text(
                       _errorInbox!,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: AppColors.error),
+                      style: GoogleFonts.inter(
+                        color: Colors.red.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
                       onPressed: _loadInbox,
-                      child: const Text('Retry'),
+                      icon: const Icon(LucideIcons.refreshCw, size: 16),
+                      label: const Text('Retry'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.grey.shade800,
+                        elevation: 1,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -490,16 +609,18 @@ class _RequirementsScreenState extends State<RequirementsScreen>
             )
           else if (_inboxItems.isEmpty)
             const EmptyState(
-              icon: Icons.check_circle_outline,
+              icon: LucideIcons.checkCircle,
               title: 'All caught up',
               message: 'No requirement requests in your inbox.',
             )
           else
             RefreshIndicator(
               onRefresh: _loadInbox,
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              color: Theme.of(context).primaryColor,
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 40),
                 itemCount: _inboxItems.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 16),
                 itemBuilder: (ctx, i) {
                   final item = _inboxItems[i];
                   final eventId = _itemEventId(item);
@@ -539,24 +660,21 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                     }
                   }
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _RequestCard(
-                      item: item,
-                      canTakeAction: canTakeAction,
-                      onDetails: eventId == null
-                          ? null
-                          : () => context.push('/events/$eventId'),
-                      onUpdate: () => _openDecisionDialog(item),
-                      showUpload: showUpload,
-                      uploadEnabled: uploadEnabled,
-                      uploadHint: uploadHint,
-                      onUpload: showUpload
-                          ? () => _openMarketingUploadDialog(
-                              item as MarketingRequest,
-                            )
-                          : null,
-                    ),
+                  return _RequestCard(
+                    item: item,
+                    canTakeAction: canTakeAction,
+                    onDetails: eventId == null
+                        ? null
+                        : () => context.push('/events/$eventId'),
+                    onUpdate: () => _openDecisionDialog(item),
+                    showUpload: showUpload,
+                    uploadEnabled: uploadEnabled,
+                    uploadHint: uploadHint,
+                    onUpload: showUpload
+                        ? () => _openMarketingUploadDialog(
+                            item as MarketingRequest,
+                          )
+                        : null,
                   );
                 },
               ),
@@ -595,13 +713,20 @@ class _RequirementsScreenState extends State<RequirementsScreen>
       padding: const EdgeInsets.all(16),
       itemCount: 5,
       itemBuilder: (_, i) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.only(bottom: 16),
         child: Container(
-          height: 110,
+          height: 180,
           decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.grey.shade100),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
         ),
       ),
@@ -630,272 +755,392 @@ class _RequestCard extends StatelessWidget {
     this.onUpload,
   });
 
+  String _getInitials(String email) {
+    if (email.isEmpty) return '?';
+    final parts = email.split('@')[0].split('.');
+    if (parts.length > 1) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return email.substring(0, 1).toUpperCase();
+  }
+
+  String _getId(dynamic item) {
+    if (item is FacilityRequest) return item.id;
+    if (item is MarketingRequest) return item.id;
+    if (item is ITRequest) return item.id;
+    if (item is TransportRequest) return item.id;
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     String title = '';
     String status = '';
     String requestedBy = '';
     String details = '';
+    IconData categoryIcon = LucideIcons.layoutTemplate;
+    Color categoryColor = Theme.of(context).primaryColor;
 
     if (item is FacilityRequest) {
       final r = item as FacilityRequest;
       title = r.eventTitle;
       status = r.status;
       requestedBy = r.requestedBy;
+      categoryIcon = LucideIcons.building2;
+      categoryColor = const Color(0xFF0284C7); // Light Blue
       details = [
         if (r.setupDetails != null) 'Setup: ${r.setupDetails}',
         if (r.refreshmentDetails != null)
           'Refreshments: ${r.refreshmentDetails}',
-      ].join('\n');
+      ].join(' • ');
     } else if (item is ITRequest) {
       final r = item as ITRequest;
       title = r.eventTitle;
       status = r.status;
       requestedBy = r.requestedBy;
+      categoryIcon = LucideIcons.monitor;
+      categoryColor = const Color(0xFF7C3AED); // Purple
       details =
-          'Mode: ${r.mode.toUpperCase()}${r.paSystem ? ' · Audio System' : ''}${r.projection ? ' · Projection' : ''}';
+          'Mode: ${r.mode.toUpperCase()}${r.paSystem ? ' • Audio' : ''}${r.projection ? ' • Projection' : ''}';
     } else if (item is MarketingRequest) {
       final r = item as MarketingRequest;
       title = r.eventTitle;
       status = r.status;
       requestedBy = r.requestedBy;
+      categoryIcon = LucideIcons.megaphone;
+      categoryColor = const Color(0xFFDB2777); // Pink
       details = r.items.join(', ');
     } else if (item is TransportRequest) {
       final r = item as TransportRequest;
       title = r.eventTitle;
       status = r.status;
       requestedBy = r.requestedBy;
-      details = 'Type: ${r.transportType.replaceAll('_', ' ')}';
+      categoryIcon = LucideIcons.car;
+      categoryColor = const Color(0xFFEA580C); // Orange
+      details = r.transportType.replaceAll('_', ' ').toUpperCase();
     }
 
     final normalizedStatus = status.trim().toLowerCase();
-    final badgeBg = normalizedStatus == 'pending'
-        ? const Color(0xFFFEF3C7)
-        : normalizedStatus == 'approved'
-        ? const Color(0xFFDCFCE7)
-        : normalizedStatus == 'rejected'
-        ? const Color(0xFFFEE2E2)
-        : normalizedStatus == 'clarification' ||
-              normalizedStatus == 'clarification_requested'
-        ? const Color(0xFFFEE2E2)
-        : const Color(0xFFE2E8F0);
-    final badgeFg = normalizedStatus == 'pending'
-        ? const Color(0xFF92400E)
-        : normalizedStatus == 'approved'
-        ? const Color(0xFF166534)
-        : normalizedStatus == 'rejected'
-        ? const Color(0xFF991B1B)
-        : normalizedStatus == 'clarification' ||
-              normalizedStatus == 'clarification_requested'
-        ? const Color(0xFF9F1239)
-        : const Color(0xFF334155);
+
+    // Modern badge coloring
+    final Color badgeBg;
+    final Color badgeFg;
+
+    if (normalizedStatus == 'pending') {
+      badgeBg = const Color(0xFFFFFBEB);
+      badgeFg = const Color(0xFFD97706);
+    } else if (normalizedStatus == 'approved') {
+      badgeBg = const Color(0xFFF0FDF4);
+      badgeFg = const Color(0xFF16A34A);
+    } else if (normalizedStatus == 'rejected') {
+      badgeBg = const Color(0xFFFEF2F2);
+      badgeFg = const Color(0xFFDC2626);
+    } else if (normalizedStatus == 'clarification' ||
+        normalizedStatus == 'clarification_requested') {
+      badgeBg = const Color(0xFFFEF2F2);
+      badgeFg = const Color(0xFFE11D48);
+    } else {
+      badgeBg = const Color(0xFFF8FAFC);
+      badgeFg = const Color(0xFF64748B);
+    }
 
     return Container(
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
-        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
+        border: Border.all(color: Colors.grey.shade100, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: badgeBg,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  (normalizedStatus == 'clarification' ||
-                          normalizedStatus == 'clarification_requested')
-                      ? 'CLARIFICATION'
-                      : normalizedStatus == 'approved'
-                      ? 'NOTED'
-                      : normalizedStatus.replaceAll('_', ' ').toUpperCase(),
-                  style: GoogleFonts.inter(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: badgeFg,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(
-                LucideIcons.user,
-                size: 16,
-                color: AppColors.textSecondary,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  requestedBy,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          if (details.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Row(
+          // Header section
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.only(top: 2),
-                  child: Icon(
-                    LucideIcons.info,
-                    size: 16,
-                    color: AppColors.textSecondary,
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: categoryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(categoryIcon, size: 20, color: categoryColor),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: GoogleFonts.poppins(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF0F172A),
+                          height: 1.3,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Request ID: ${_getId(item).substring(0, 8)}...',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    details,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                      height: 1.4,
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: badgeBg,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: badgeFg.withOpacity(0.2),
+                      width: 1,
                     ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
+                  ),
+                  child: Text(
+                    (normalizedStatus == 'clarification' ||
+                            normalizedStatus == 'clarification_requested')
+                        ? 'CLARIFICATION'
+                        : normalizedStatus == 'approved'
+                        ? 'NOTED'
+                        : normalizedStatus.toUpperCase(),
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: badgeFg,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
               ],
             ),
-          ],
+          ),
+
+          // Metadata section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC), // Slate 50
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFF1F5F9)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).primaryColor.withOpacity(0.15),
+                        child: Text(
+                          _getInitials(requestedBy),
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          requestedBy,
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: const Color(0xFF475569),
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (details.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          LucideIcons.list,
+                          size: 16,
+                          color: Color(0xFF94A3B8),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            details,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: const Color(0xFF334155),
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          // Upload Warning
+          if (showUpload && !uploadEnabled && uploadHint.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF7ED), // Orange 50
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFFFEDD5),
+                  ), // Orange 100
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      LucideIcons.info,
+                      size: 16,
+                      color: Color(0xFFEA580C),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        uploadHint,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: const Color(0xFFC2410C),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              if (showUpload)
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: OutlinedButton.icon(
-                      onPressed: uploadEnabled ? onUpload : null,
-                      icon: const Icon(LucideIcons.uploadCloud, size: 16),
-                      label: Text('Upload', style: GoogleFonts.inter()),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+
+          // Actions section
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              children: [
+                if (showUpload)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: OutlinedButton.icon(
+                        onPressed: uploadEnabled ? onUpload : null,
+                        icon: const Icon(LucideIcons.uploadCloud, size: 16),
+                        label: Text(
+                          'Upload',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF334155),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onDetails,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: Text(
-                    'Details',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ),
-              if (canTakeAction) ...[
-                const SizedBox(width: 12),
                 Expanded(
-                  child: ElevatedButton(
-                    onPressed: onUpdate,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: OutlinedButton(
+                    onPressed: onDetails,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF334155),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Color(0xFFCBD5E1)),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
                     child: Text(
-                      'Action',
+                      'Details',
                       style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                     ),
                   ),
                 ),
-              ] else ...[
-                Padding(
-                  padding: const EdgeInsets.only(left: 12),
-                  child: Text(
-                    'No action',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
+                if (canTakeAction) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: onUpdate,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        'Action',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ],
-          ),
-          if (showUpload && !uploadEnabled && uploadHint.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.amber.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    LucideIcons.alertCircle,
-                    size: 16,
-                    color: Colors.amber,
-                  ),
-                  const SizedBox(width: 8),
+                ] else ...[
                   Expanded(
-                    child: Text(
-                      uploadHint,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: Colors.amber.shade900,
-                        fontWeight: FontWeight.w500,
+                    child: Container(
+                      alignment: Alignment.center,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            LucideIcons.checkCircle2,
+                            size: 16,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Processed',
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: Colors.grey.shade500,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../screens/chat/chat_list_screen.dart';
@@ -120,7 +121,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
 
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final notificationProvider = Provider.of<NotificationProvider>(
       context,
       listen: false,
@@ -132,8 +132,6 @@ class _HomeScreenState extends State<HomeScreen> {
     await notificationProvider.refreshUnreadCount();
     if (!mounted) return;
 
-    final totalUnread = notificationProvider.totalUnread;
-
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: theme.colorScheme.surface,
@@ -144,10 +142,16 @@ class _HomeScreenState extends State<HomeScreen> {
         return Consumer<NotificationProvider>(
           builder: (context, provider, _) {
             final notifications = provider.notifications;
+            final unreadConversations = provider.unreadConversations;
             final unreadNotifications = provider.unreadNotificationCount;
-            final badgeCount = unreadNotifications > totalUnread
+            final currentTotalUnread = provider.totalUnread;
+            final hasUnreadItems =
+                unreadNotifications > 0 || unreadConversations.isNotEmpty;
+            final hasVisibleItems =
+                notifications.isNotEmpty || unreadConversations.isNotEmpty;
+            final badgeCount = unreadNotifications > currentTotalUnread
                 ? unreadNotifications
-                : totalUnread;
+                : currentTotalUnread;
 
             return SafeArea(
               top: false,
@@ -185,101 +189,31 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: notifications.isEmpty
-                                  ? null
-                                  : provider.markAllNotificationsAsRead,
+                              onPressed: hasUnreadItems
+                                  ? () async {
+                                      await provider
+                                          .markAllNotificationsAsRead();
+                                    }
+                                  : null,
                               child: const Text('Mark All Read'),
                             ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: notifications.isEmpty
-                                  ? null
-                                  : provider.clearNotifications,
+                              onPressed: hasVisibleItems
+                                  ? () async {
+                                      await provider.clearNotifications();
+                                    }
+                                  : null,
                               child: const Text('Clear All'),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      if (totalUnread > 0)
-                        InkWell(
-                          onTap: () {
-                            Navigator.of(sheetContext).pop();
-                            context.push('/chat');
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? theme.colorScheme.surfaceContainerHigh
-                                  : const Color(0xFFF8FAFC),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isDark
-                                    ? theme.colorScheme.outline.withValues(
-                                        alpha: 0.35,
-                                      )
-                                    : const Color(0xFFE2E8F0),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.message_outlined, size: 18),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Unread Messages',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: theme.colorScheme.onSurface,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '$totalUnread unread in chats and discussions',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: theme
-                                              .colorScheme
-                                              .onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF2563EB),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    totalUnread > 99 ? '99+' : '$totalUnread',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 12),
                       Expanded(
-                        child: notifications.isEmpty
+                        child: !hasVisibleItems
                             ? Center(
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -289,20 +223,36 @@ class _HomeScreenState extends State<HomeScreen> {
                                     "You're all caught up",
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: theme
-                                          .colorScheme
-                                          .onSurfaceVariant,
+                                      color: theme.colorScheme.onSurfaceVariant,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ),
                               )
                             : ListView.separated(
-                                itemCount: notifications.length,
+                                itemCount:
+                                    unreadConversations.length +
+                                    notifications.length,
                                 separatorBuilder: (_, _) =>
                                     const SizedBox(height: 10),
                                 itemBuilder: (context, index) {
-                                  final item = notifications[index];
+                                  if (index < unreadConversations.length) {
+                                    final conversation =
+                                        unreadConversations[index];
+                                    return _UnreadConversationTile(
+                                      conversation: conversation,
+                                      onOpen: () {
+                                        Navigator.of(sheetContext).pop();
+                                        context.push(
+                                          '/chat/${conversation.id}',
+                                        );
+                                      },
+                                    );
+                                  }
+
+                                  final item =
+                                      notifications[index -
+                                          unreadConversations.length];
                                   return _NotificationListTile(
                                     item: item,
                                     onOpen: () {
@@ -817,9 +767,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                             onPressed: () {
                                               context.push('/chat');
                                             },
-                                            backgroundColor: const Color(0xFF2563EB),
+                                            backgroundColor: const Color(
+                                              0xFF2563EB,
+                                            ),
                                             shape: RoundedRectangleBorder(
-                                              borderRadius: BorderRadius.circular(16),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
                                             ),
                                             child: const Icon(
                                               LucideIcons.messageSquare,
@@ -831,19 +784,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                               right: -2,
                                               top: -2,
                                               child: Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 5,
-                                                  vertical: 1,
-                                                ),
-                                                constraints: const BoxConstraints(
-                                                  minWidth: 18,
-                                                  minHeight: 16,
-                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 5,
+                                                      vertical: 1,
+                                                    ),
+                                                constraints:
+                                                    const BoxConstraints(
+                                                      minWidth: 18,
+                                                      minHeight: 16,
+                                                    ),
                                                 decoration: BoxDecoration(
-                                                  color: const Color(0xFFDC2626),
-                                                  borderRadius: BorderRadius.circular(
-                                                    999,
+                                                  color: const Color(
+                                                    0xFFDC2626,
                                                   ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        999,
+                                                      ),
                                                   border: Border.all(
                                                     color: Colors.white,
                                                     width: 1.5,
@@ -1002,9 +960,7 @@ class _NotificationPopupBannerState extends State<_NotificationPopupBanner>
     _slide = Tween<Offset>(
       begin: const Offset(0, -0.15),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward();
   }
 
@@ -1247,10 +1203,7 @@ class _NotificationListTile extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      TextButton(
-                        onPressed: onOpen,
-                        child: const Text('Open'),
-                      ),
+                      TextButton(onPressed: onOpen, child: const Text('Open')),
                       if (!item.isRead)
                         TextButton(
                           onPressed: onMarkRead,
@@ -1263,6 +1216,180 @@ class _NotificationListTile extends StatelessWidget {
                     ],
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UnreadConversationTile extends StatelessWidget {
+  final ChatConversation conversation;
+  final VoidCallback onOpen;
+
+  const _UnreadConversationTile({
+    required this.conversation,
+    required this.onOpen,
+  });
+
+  String _relativeTime(DateTime timestamp) {
+    final diff = DateTime.now().difference(timestamp);
+    if (diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hr ago';
+    return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
+  }
+
+  String get _title {
+    final eventTitle = conversation.eventTitle?.trim() ?? '';
+    if (eventTitle.isNotEmpty) return eventTitle;
+
+    final otherUser = conversation.otherUserName?.trim() ?? '';
+    if (otherUser.isNotEmpty) return otherUser;
+
+    final participants = conversation.participantNames
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
+    if (participants.isNotEmpty) return participants.join(', ');
+
+    return 'Chat conversation';
+  }
+
+  String get _contextLabel {
+    final department = conversation.departmentLabel?.trim() ?? '';
+    if (department.isNotEmpty) return department;
+
+    switch (conversation.kind) {
+      case 'approval_thread':
+        return 'Workflow discussion';
+      case 'event':
+        return 'Event chat';
+      default:
+        return 'Chat';
+    }
+  }
+
+  String get _messagePreview {
+    final message = conversation.lastMessage?.trim() ?? '';
+    if (message.isNotEmpty) return message;
+    return 'Open this conversation to view unread messages.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final unreadCount = conversation.unreadCount;
+
+    return InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDark
+              ? theme.colorScheme.surfaceContainerHigh
+              : const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isDark
+                ? theme.colorScheme.outline.withValues(alpha: 0.35)
+                : const Color(0xFFBFDBFE),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFFDBEAFE),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.mark_chat_unread_outlined,
+                color: Color(0xFF1D4ED8),
+                size: 21,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                      ),
+                      if (conversation.lastMessageAt != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          _relativeTime(conversation.lastMessageAt!),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _contextLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF2563EB),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    _messagePreview,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.35,
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              constraints: const BoxConstraints(minWidth: 28),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2563EB),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                unreadCount > 99 ? '99+' : '$unreadCount',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],

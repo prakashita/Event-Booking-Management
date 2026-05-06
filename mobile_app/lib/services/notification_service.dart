@@ -88,6 +88,7 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
   static const Duration _reconnectDelay = Duration(seconds: 3);
 
   int _totalUnread = 0;
+  List<ChatConversation> _unreadConversations = <ChatConversation>[];
   final List<AppNotificationItem> _notifications = <AppNotificationItem>[];
   static const int _maxStoredNotifications = 50;
   String?
@@ -116,6 +117,8 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
 
   bool get isConnected => _isConnected;
   int get totalUnread => _totalUnread;
+  List<ChatConversation> get unreadConversations =>
+      List<ChatConversation>.unmodifiable(_unreadConversations);
   List<AppNotificationItem> get notifications =>
       List<AppNotificationItem>.unmodifiable(_notifications);
   int get unreadNotificationCount =>
@@ -136,6 +139,7 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
       _isConnecting = false;
       _reconnectAttempts = 0;
       _totalUnread = 0;
+      _unreadConversations = <ChatConversation>[];
       _notifications.clear();
       _activeChatConversationId = null;
       _registeredPushToken = null;
@@ -697,7 +701,7 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  void markAllNotificationsAsRead() {
+  Future<void> markAllNotificationsAsRead() async {
     var changed = false;
     for (var i = 0; i < _notifications.length; i++) {
       final item = _notifications[i];
@@ -706,7 +710,31 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
         changed = true;
       }
     }
+
+    final unreadConversationIds = _unreadConversations
+        .where((conversation) => conversation.unreadCount > 0)
+        .map((conversation) => conversation.id)
+        .where((id) => id.trim().isNotEmpty)
+        .toList();
+
+    if (unreadConversationIds.isNotEmpty) {
+      for (final id in unreadConversationIds) {
+        try {
+          await _api.post<dynamic>('/chat/read/$id');
+        } catch (e) {
+          if (kDebugMode) {
+            print('Error marking conversation read: $e');
+          }
+        }
+      }
+      _totalUnread = 0;
+      _unreadConversations = <ChatConversation>[];
+      _notifyUnreadCountListeners();
+      changed = true;
+    }
+
     if (changed) notifyListeners();
+    await _refreshUnreadCount();
   }
 
   void dismissNotification(String id) {
@@ -717,10 +745,12 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  void clearNotifications() {
-    if (_notifications.isEmpty) return;
+  Future<void> clearNotifications() async {
+    final hadVisibleItems =
+        _notifications.isNotEmpty || _unreadConversations.isNotEmpty;
+    await markAllNotificationsAsRead();
     _notifications.clear();
-    notifyListeners();
+    if (hadVisibleItems) notifyListeners();
   }
 
   /// Refresh unread count from API.
@@ -732,14 +762,23 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
           : (data is Map<String, dynamic>
                 ? (data['items'] as List? ?? [])
                 : []);
-      final unread = items
+      final conversations = items
           .whereType<Map<String, dynamic>>()
           .map(ChatConversation.fromJson)
-          .fold<int>(0, (sum, c) => sum + c.unreadCount);
+          .toList();
+      final unreadConversations = conversations
+          .where((conversation) => conversation.unreadCount > 0)
+          .toList();
+      final unread = unreadConversations.fold<int>(
+        0,
+        (sum, c) => sum + c.unreadCount,
+      );
 
-      if (_totalUnread != unread) {
-        _totalUnread = unread;
-        notifyListeners();
+      final unreadChanged = _totalUnread != unread;
+      _totalUnread = unread;
+      _unreadConversations = unreadConversations;
+      notifyListeners();
+      if (unreadChanged) {
         _notifyUnreadCountListeners();
       }
     } catch (e) {
