@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -7,10 +6,10 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
-import 'package:file_picker/file_picker.dart';
 import '../../services/api_service.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/common/marketing_deliverables_upload_dialog.dart';
 import '../requirements/requirements_wizard_dialog.dart';
 
 const List<({String value, String label})> _discussionDepartmentOptions = [
@@ -1135,338 +1134,29 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       for (final opt in enabledOptions)
         opt['type']!: existingByType[opt['type']]?.isNa ?? false,
     };
-    final filesByType = <String, MultipartFile?>{
-      for (final opt in enabledOptions) opt['type']!: null,
-    };
     final fileNameByType = <String, String>{
       for (final opt in enabledOptions)
         if (existingByType[opt['type']]?.isNa != true &&
             (existingByType[opt['type']]?.link ?? '').isNotEmpty)
           opt['type']!: existingByType[opt['type']]!.link!,
     };
-    var submitStatus = 'idle';
-    var submitError = '';
-
-    await showDialog(
+    await showMarketingDeliverablesUploadDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          final hasSelection = enabledOptions.any((opt) {
-            final type = opt['type']!;
-            final lock = _marketingDeliverableRowLock(type, request);
-            if (lock.locked) return false;
-            return naByType[type] == true || filesByType[type] != null;
-          });
-
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: Text(
-              'Upload Marketing Deliverables',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final opt in enabledOptions) ...[
-                    Builder(
-                      builder: (_) {
-                        final type = opt['type']!;
-                        final lock = _marketingDeliverableRowLock(
-                          type,
-                          request,
-                        );
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: _panel,
-                            border: Border.all(
-                              color: _border.withValues(alpha: 0.5),
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                opt['label']!,
-                                style: GoogleFonts.inter(
-                                  fontWeight: FontWeight.w600,
-                                  color: _onSurface,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              if (lock.locked) ...[
-                                const SizedBox(height: 6),
-                                Text(
-                                  lock.hint,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color: _muted,
-                                  ),
-                                ),
-                              ] else ...[
-                                const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 10,
-                                  runSpacing: 10,
-                                  children: [
-                                    OutlinedButton.icon(
-                                      onPressed: naByType[type] == true
-                                          ? null
-                                          : () async {
-                                              final result = await FilePicker
-                                                  .platform
-                                                  .pickFiles(
-                                                    withData: kIsWeb,
-                                                    withReadStream: !kIsWeb,
-                                                    type: FileType.custom,
-                                                    allowedExtensions: [
-                                                      'pdf',
-                                                      'png',
-                                                      'jpg',
-                                                      'jpeg',
-                                                      'webp',
-                                                    ],
-                                                  );
-                                              final picked =
-                                                  result?.files.single;
-                                              if (picked == null) return;
-                                              MultipartFile? multipart;
-                                              if (picked.path != null &&
-                                                  picked.path!
-                                                      .trim()
-                                                      .isNotEmpty) {
-                                                multipart =
-                                                    await MultipartFile.fromFile(
-                                                      picked.path!,
-                                                      filename: picked.name,
-                                                    );
-                                              } else if (picked.bytes != null) {
-                                                multipart =
-                                                    MultipartFile.fromBytes(
-                                                      picked.bytes!,
-                                                      filename: picked.name,
-                                                    );
-                                              } else if (picked.readStream !=
-                                                  null) {
-                                                multipart =
-                                                    MultipartFile.fromStream(
-                                                      () => picked.readStream!,
-                                                      picked.size,
-                                                      filename: picked.name,
-                                                    );
-                                              }
-                                              if (multipart == null) {
-                                                if (!ctx.mounted) return;
-                                                ScaffoldMessenger.of(
-                                                  ctx,
-                                                ).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      'Unable to read selected file.',
-                                                      style:
-                                                          GoogleFonts.inter(),
-                                                    ),
-                                                  ),
-                                                );
-                                                return;
-                                              }
-                                              setLocal(() {
-                                                filesByType[type] = multipart;
-                                                fileNameByType[type] =
-                                                    picked.name;
-                                              });
-                                            },
-                                      icon: const Icon(
-                                        LucideIcons.uploadCloud,
-                                        size: 18,
-                                      ),
-                                      style: OutlinedButton.styleFrom(
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        foregroundColor: const Color(
-                                          0xFF2563EB,
-                                        ),
-                                        side: BorderSide(
-                                          color: naByType[type] == true
-                                              ? _border
-                                              : const Color(0xFF2563EB),
-                                        ),
-                                      ),
-                                      label: Text(
-                                        fileNameByType[type]?.isNotEmpty == true
-                                            ? 'Replace file'
-                                            : 'Choose file',
-                                        style: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                    FilterChip(
-                                      label: Text(
-                                        'Mark N/A',
-                                        style: GoogleFonts.inter(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      selected: naByType[type] == true,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      selectedColor: const Color(0xFFF1F5F9),
-                                      checkmarkColor: _muted,
-                                      onSelected: (value) {
-                                        setLocal(() {
-                                          naByType[type] = value;
-                                          if (value) {
-                                            filesByType[type] = null;
-                                          }
-                                        });
-                                      },
-                                    ),
-                                  ],
-                                ),
-                                if ((fileNameByType[type] ?? '')
-                                    .isNotEmpty) ...[
-                                  const SizedBox(height: 10),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 8,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _surface,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: _border),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          LucideIcons.fileText,
-                                          size: 14,
-                                          color: _muted,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Flexible(
-                                          child: Text(
-                                            fileNameByType[type]!,
-                                            style: GoogleFonts.inter(
-                                              fontSize: 13,
-                                              color: _onSurface,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                  if (submitStatus == 'error') ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            submitError,
-                            style: GoogleFonts.inter(
-                              color: const Color(0xFFDC2626),
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        if (submitError == 'Google not connected') ...[
-                          const SizedBox(width: 12),
-                          FilledButton.tonal(
-                            onPressed: () async {
-                              try {
-                                await _connectGoogle();
-                              } catch (e) {
-                                if (!ctx.mounted) return;
-                                setLocal(() {
-                                  submitError = _extractApiErrorMessage(e);
-                                });
-                              }
-                            },
-                            style: FilledButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: const Text('Connect Google'),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actionsPadding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 16,
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                style: TextButton.styleFrom(
-                  foregroundColor: _muted,
-                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                ),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: submitStatus == 'loading' || !hasSelection
-                    ? null
-                    : () async {
-                        setLocal(() {
-                          submitStatus = 'loading';
-                          submitError = '';
-                        });
-                        final error = await _uploadMarketingDeliverablesBatch(
-                          requestId: requestId,
-                          naByType: naByType,
-                          filesByType: filesByType,
-                        );
-                        if (!ctx.mounted) return;
-                        if (error == null) {
-                          Navigator.of(ctx).pop();
-                          return;
-                        }
-                        setLocal(() {
-                          submitStatus = 'error';
-                          submitError = error;
-                        });
-                      },
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                ),
-                child: Text(submitStatus == 'loading' ? 'Saving...' : 'Save'),
-              ),
-            ],
-          );
-        },
+      enabledOptions: enabledOptions,
+      initialNaByType: naByType,
+      initialFileNameByType: fileNameByType,
+      rowLock: (type) => _marketingDeliverableRowLock(type, request),
+      onUpload: ({required naByType, required filesByType}) =>
+          _uploadMarketingDeliverablesBatch(
+            requestId: requestId,
+            naByType: naByType,
+            filesByType: filesByType,
+          ),
+      onConnectGoogle: _connectGoogle,
+      extractErrorMessage: _extractApiErrorMessage,
+      eventTitle: _s(
+        request['event_name'],
+        fallback: _s(request['event_title'], fallback: _s(_event['name'])),
       ),
     );
   }
@@ -1618,17 +1308,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     return !parsed.isAfter(DateTime.now());
   }
 
-  bool _requestHasEnded(Map<String, dynamic> request) {
-    final endDate = _s(request['end_date'], fallback: '');
-    final endTime = _s(request['end_time'], fallback: '');
-    if (endDate.isEmpty) return false;
-    final parsed = DateTime.tryParse(
-      '$endDate ${endTime.isEmpty ? '23:59' : endTime}',
-    );
-    if (parsed == null) return false;
-    return !parsed.isAfter(DateTime.now());
-  }
-
   bool _canDepartmentTakeAction(Map<String, dynamic> request) {
     final status = _s(request['status'], fallback: '').toLowerCase();
     return (status == 'pending' ||
@@ -1741,63 +1420,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     String type,
     Map<String, dynamic> request,
   ) {
-    final started = _requestHasStarted(request);
-    final ended = _requestHasEnded(request);
-
-    if (type == 'poster') {
-      return started
-          ? (locked: true, hint: 'Upload before the event starts.')
-          : (locked: false, hint: '');
-    }
-    if (type == 'linkedin') {
-      final normalized = _normalizeMarketingRequirementsFromMap(request);
-      final preSocial =
-          normalized['pre_event']['social_media'] as bool? ?? false;
-      final postSocial =
-          normalized['post_event']['social_media'] as bool? ?? false;
-
-      if (preSocial && !postSocial) {
-        return started
-            ? (
-                locked: true,
-                hint: 'Pre-event social posts: upload before the event starts.',
-              )
-            : (locked: false, hint: '');
-      }
-      if (postSocial && !preSocial) {
-        return !ended
-            ? (
-                locked: true,
-                hint:
-                    'Post-event social posts: upload after the event has ended.',
-              )
-            : (locked: false, hint: '');
-      }
-      // Both pre and post
-      return (started && !ended)
-          ? (
-              locked: true,
-              hint:
-                  'Upload before the event starts or after it ends (not during).',
-            )
-          : (locked: false, hint: '');
-    }
-    if (type == 'recording') {
-      return !ended
-          ? (
-              locked: true,
-              hint: 'Post-event video: upload after the event has ended.',
-            )
-          : (locked: false, hint: '');
-    }
-    if (type == 'photography') {
-      return !ended
-          ? (
-              locked: true,
-              hint: 'Post-event photo: upload after the event has ended.',
-            )
-          : (locked: false, hint: '');
-    }
+    // Matching website functionality: uploads are never locked by date.
     return (locked: false, hint: '');
   }
 

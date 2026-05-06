@@ -1,6 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +13,7 @@ import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/approval_widgets.dart';
 import '../../widgets/common/app_widgets.dart';
+import '../../widgets/common/marketing_deliverables_upload_dialog.dart';
 
 enum _DecisionAction { approve, reject, clarify }
 
@@ -637,229 +636,28 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
       for (final opt in enabledOptions)
         opt['type']!: existingByType[opt['type']]?.isNa ?? false,
     };
-    final filesByType = <String, MultipartFile?>{
-      for (final opt in enabledOptions) opt['type']!: null,
-    };
     final fileNameByType = <String, String>{
       for (final opt in enabledOptions)
         if (existingByType[opt['type']]?.isNa != true &&
             (existingByType[opt['type']]?.link ?? '').isNotEmpty)
           opt['type']!: existingByType[opt['type']]!.link!,
     };
-    var submitStatus = 'idle';
-    var submitError = '';
-
-    await showDialog<void>(
+    await showMarketingDeliverablesUploadDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          final hasSelection = enabledOptions.any((opt) {
-            final type = opt['type']!;
-            final lock = _marketingDeliverableRowLock(type, request);
-            if (lock.locked) return false;
-            return naByType[type] == true || filesByType[type] != null;
-          });
-
-          return AlertDialog(
-            title: const Text('Upload Deliverables'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final opt in enabledOptions) ...[
-                    Builder(
-                      builder: (_) {
-                        final type = opt['type']!;
-                        final lock = _marketingDeliverableRowLock(
-                          type,
-                          request,
-                        );
-                        final fileName = fileNameByType[type];
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.border),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                opt['label']!,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              if (lock.locked) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  lock.hint,
-                                  style: const TextStyle(
-                                    color: AppColors.error,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed:
-                                          lock.locked || naByType[type] == true
-                                          ? null
-                                          : () async {
-                                              final pick = await FilePicker
-                                                  .platform
-                                                  .pickFiles(
-                                                    withData: kIsWeb,
-                                                    withReadStream: !kIsWeb,
-                                                  );
-                                              final file = pick?.files.first;
-                                              if (file == null) return;
-
-                                              MultipartFile? multipart;
-                                              if (file.path != null &&
-                                                  file.path!
-                                                      .trim()
-                                                      .isNotEmpty) {
-                                                multipart =
-                                                    await MultipartFile.fromFile(
-                                                      file.path!,
-                                                      filename: file.name,
-                                                    );
-                                              } else if (file.bytes != null) {
-                                                multipart =
-                                                    MultipartFile.fromBytes(
-                                                      file.bytes!,
-                                                      filename: file.name,
-                                                    );
-                                              } else if (file.readStream !=
-                                                  null) {
-                                                multipart =
-                                                    MultipartFile.fromStream(
-                                                      () => file.readStream!,
-                                                      file.size,
-                                                      filename: file.name,
-                                                    );
-                                              }
-                                              if (multipart == null) return;
-                                              setLocal(() {
-                                                filesByType[type] = multipart;
-                                                fileNameByType[type] =
-                                                    file.name;
-                                                naByType[type] = false;
-                                              });
-                                            },
-                                      icon: const Icon(Icons.upload_file),
-                                      label: Text(
-                                        fileName == null || fileName.isEmpty
-                                            ? 'Choose file'
-                                            : fileName,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Row(
-                                    children: [
-                                      Checkbox(
-                                        value: naByType[type] == true,
-                                        onChanged: lock.locked
-                                            ? null
-                                            : (value) {
-                                                setLocal(() {
-                                                  naByType[type] =
-                                                      value == true;
-                                                  if (value == true) {
-                                                    filesByType[type] = null;
-                                                    fileNameByType[type] =
-                                                        'N/A';
-                                                  } else if (fileNameByType[type] ==
-                                                      'N/A') {
-                                                    fileNameByType.remove(type);
-                                                  }
-                                                });
-                                              },
-                                      ),
-                                      const Text('N/A'),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                  if (submitStatus == 'error') ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      submitError,
-                      style: const TextStyle(
-                        color: AppColors.error,
-                        fontSize: 12,
-                      ),
-                    ),
-                    if (submitError == 'Google not connected') ...[
-                      const SizedBox(height: 8),
-                      OutlinedButton(
-                        onPressed: () async {
-                          try {
-                            await _connectGoogle();
-                          } catch (e) {
-                            if (!ctx.mounted) return;
-                            setLocal(() {
-                              submitError = _extractApiErrorMessage(e);
-                            });
-                          }
-                        },
-                        child: const Text('Connect Google'),
-                      ),
-                    ],
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: submitStatus == 'loading' || !hasSelection
-                    ? null
-                    : () async {
-                        setLocal(() {
-                          submitStatus = 'loading';
-                          submitError = '';
-                        });
-                        final error = await _uploadMarketingDeliverablesBatch(
-                          requestId: request.id,
-                          naByType: naByType,
-                          filesByType: filesByType,
-                        );
-                        if (!ctx.mounted) return;
-                        if (error == null) {
-                          Navigator.of(ctx).pop();
-                          return;
-                        }
-                        setLocal(() {
-                          submitStatus = 'error';
-                          submitError = error;
-                        });
-                      },
-                child: Text(submitStatus == 'loading' ? 'Saving...' : 'Save'),
-              ),
-            ],
-          );
-        },
-      ),
+      enabledOptions: enabledOptions,
+      initialNaByType: naByType,
+      initialFileNameByType: fileNameByType,
+      rowLock: (type) => _marketingDeliverableRowLock(type, request),
+      onUpload: ({required naByType, required filesByType}) =>
+          _uploadMarketingDeliverablesBatch(
+            requestId: request.id,
+            naByType: naByType,
+            filesByType: filesByType,
+          ),
+      onConnectGoogle: _connectGoogle,
+      extractErrorMessage: _extractApiErrorMessage,
+      title: 'Upload Deliverables',
+      eventTitle: request.eventTitle,
     );
   }
 

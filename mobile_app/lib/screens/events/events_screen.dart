@@ -2646,10 +2646,14 @@ class _EventCard extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                        color: isDark
+                            ? const Color(0xFF1E293B)
+                            : const Color(0xFFF8FAFC),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                          color: isDark
+                              ? const Color(0xFF334155)
+                              : const Color(0xFFE2E8F0),
                         ),
                       ),
                       child: Wrap(
@@ -2743,7 +2747,12 @@ class _EventCard extends StatelessWidget {
 
     final badges = <(String, String, Color, IconData)>[];
 
-    void addBadge(String label, String? status, IconData icon, {bool teamChannel = false}) {
+    void addBadge(
+      String label,
+      String? status,
+      IconData icon, {
+      bool teamChannel = false,
+    }) {
       final normalized = status?.trim().toLowerCase() ?? '';
       if (normalized.isEmpty) return;
       badges.add((
@@ -2757,10 +2766,25 @@ class _EventCard extends StatelessWidget {
     }
 
     addBadge('Approval', value.approvalStatus, Icons.verified_user_outlined);
-    addBadge('Facility', value.facilityStatus, Icons.domain_outlined, teamChannel: true);
-    addBadge('Marketing', value.marketingStatus, Icons.campaign_outlined, teamChannel: true);
+    addBadge(
+      'Facility',
+      value.facilityStatus,
+      Icons.domain_outlined,
+      teamChannel: true,
+    );
+    addBadge(
+      'Marketing',
+      value.marketingStatus,
+      Icons.campaign_outlined,
+      teamChannel: true,
+    );
     addBadge('IT', value.itStatus, Icons.computer_outlined, teamChannel: true);
-    addBadge('Transport', value.transportStatus, Icons.directions_bus_outlined, teamChannel: true);
+    addBadge(
+      'Transport',
+      value.transportStatus,
+      Icons.directions_bus_outlined,
+      teamChannel: true,
+    );
     return badges;
   }
 
@@ -2889,12 +2913,12 @@ class _ActionChip extends StatelessWidget {
     final disabled = onTap == null;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: color.withValues(alpha: disabled ? 0.08 : 0.12),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: color.withValues(alpha: disabled ? 0.12 : 0.28),
           ),

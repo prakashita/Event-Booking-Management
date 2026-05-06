@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:dio/dio.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -10,6 +10,7 @@ import '../../constants/app_constants.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/common/app_widgets.dart';
+import '../../widgets/common/marketing_deliverables_upload_dialog.dart';
 import '../../services/api_service.dart';
 
 class RequirementsScreen extends StatefulWidget {
@@ -155,30 +156,6 @@ class _RequirementsScreenState extends State<RequirementsScreen>
     return !parsed.isAfter(DateTime.now());
   }
 
-  bool _eventHasEnded(dynamic item) {
-    String? endDate;
-    String? endTime;
-    if (item is FacilityRequest) {
-      endDate = item.endDate;
-      endTime = item.endTime;
-    } else if (item is MarketingRequest) {
-      endDate = item.endDate;
-      endTime = item.endTime;
-    } else if (item is ITRequest) {
-      endDate = item.endDate;
-      endTime = item.endTime;
-    } else if (item is TransportRequest) {
-      endDate = item.endDate;
-      endTime = item.endTime;
-    }
-    final date = (endDate ?? '').trim();
-    final time = (endTime ?? '').trim();
-    if (date.isEmpty) return false;
-    final parsed = DateTime.tryParse('$date ${time.isEmpty ? '23:59' : time}');
-    if (parsed == null) return false;
-    return !parsed.isAfter(DateTime.now());
-  }
-
   Map<String, dynamic> _normalizeMarketingRequirements(
     MarketingRequest request,
   ) {
@@ -228,66 +205,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
     String type,
     MarketingRequest request,
   ) {
-    final startDate = (request.startDate ?? '').trim();
-    if (startDate.isEmpty) {
-      return (locked: true, hint: 'Event schedule unavailable.');
-    }
-
-    final req = _normalizeMarketingRequirements(request);
-    final pre = req['pre_event'] as Map<String, dynamic>;
-    final post = req['post_event'] as Map<String, dynamic>;
-    final started = _eventHasStarted(request);
-    final ended = _eventHasEnded(request);
-    final preSocial = pre['social_media'] == true;
-    final postSocial = post['social_media'] == true;
-
-    if (type == 'poster') {
-      return started
-          ? (locked: true, hint: 'Upload before the event starts.')
-          : (locked: false, hint: '');
-    }
-    if (type == 'linkedin') {
-      if (preSocial && !postSocial) {
-        return started
-            ? (
-                locked: true,
-                hint: 'Pre-event social posts: upload before the event starts.',
-              )
-            : (locked: false, hint: '');
-      }
-      if (postSocial && !preSocial) {
-        return !ended
-            ? (
-                locked: true,
-                hint:
-                    'Post-event social posts: upload after the event has ended.',
-              )
-            : (locked: false, hint: '');
-      }
-      return started && !ended
-          ? (
-              locked: true,
-              hint:
-                  'Upload before the event starts or after it ends (not during).',
-            )
-          : (locked: false, hint: '');
-    }
-    if (type == 'recording') {
-      return !ended
-          ? (
-              locked: true,
-              hint: 'Post-event video: upload after the event has ended.',
-            )
-          : (locked: false, hint: '');
-    }
-    if (type == 'photography') {
-      return !ended
-          ? (
-              locked: true,
-              hint: 'Post-event photo: upload after the event has ended.',
-            )
-          : (locked: false, hint: '');
-    }
+    // Matching website functionality: uploads are never locked by date.
     return (locked: false, hint: '');
   }
 
@@ -391,262 +309,27 @@ class _RequirementsScreenState extends State<RequirementsScreen>
       for (final opt in enabledOptions)
         opt['type']!: existingByType[opt['type']]?.isNa ?? false,
     };
-    final filesByType = <String, MultipartFile?>{
-      for (final opt in enabledOptions) opt['type']!: null,
-    };
     final fileNameByType = <String, String>{
       for (final opt in enabledOptions)
         if (existingByType[opt['type']]?.isNa != true &&
             (existingByType[opt['type']]?.link ?? '').isNotEmpty)
           opt['type']!: existingByType[opt['type']]!.link!,
     };
-    var submitStatus = 'idle';
-    var submitError = '';
-
-    await showDialog(
+    await showMarketingDeliverablesUploadDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) {
-          final hasSelection = enabledOptions.any((opt) {
-            final type = opt['type']!;
-            final lock = _marketingDeliverableRowLock(type, request);
-            if (lock.locked) return false;
-            return naByType[type] == true || filesByType[type] != null;
-          });
-
-          return AlertDialog(
-            title: const Text('Upload Marketing Deliverables'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final opt in enabledOptions) ...[
-                    Builder(
-                      builder: (_) {
-                        final type = opt['type']!;
-                        final lock = _marketingDeliverableRowLock(
-                          type,
-                          request,
-                        );
-                        final fileName = fileNameByType[type];
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.border),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                opt['label']!,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              if (lock.locked) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  lock.hint,
-                                  style: const TextStyle(
-                                    color: AppColors.error,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed:
-                                          lock.locked || naByType[type] == true
-                                          ? null
-                                          : () async {
-                                              final pick = await FilePicker
-                                                  .platform
-                                                  .pickFiles(
-                                                    withData: kIsWeb,
-                                                    withReadStream: !kIsWeb,
-                                                  );
-                                              final file = pick?.files.first;
-                                              if (file == null) {
-                                                if (!mounted) return;
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'Unable to read selected file.',
-                                                    ),
-                                                  ),
-                                                );
-                                                return;
-                                              }
-                                              MultipartFile? multipart;
-                                              if (file.path != null &&
-                                                  file.path!
-                                                      .trim()
-                                                      .isNotEmpty) {
-                                                multipart =
-                                                    await MultipartFile.fromFile(
-                                                      file.path!,
-                                                      filename: file.name,
-                                                    );
-                                              } else if (file.bytes != null) {
-                                                multipart =
-                                                    MultipartFile.fromBytes(
-                                                      file.bytes!,
-                                                      filename: file.name,
-                                                    );
-                                              } else if (file.readStream !=
-                                                  null) {
-                                                multipart =
-                                                    MultipartFile.fromStream(
-                                                      () => file.readStream!,
-                                                      file.size,
-                                                      filename: file.name,
-                                                    );
-                                              }
-                                              if (multipart == null) {
-                                                if (!mounted) return;
-                                                ScaffoldMessenger.of(
-                                                  context,
-                                                ).showSnackBar(
-                                                  const SnackBar(
-                                                    content: Text(
-                                                      'Unable to read selected file.',
-                                                    ),
-                                                  ),
-                                                );
-                                                return;
-                                              }
-                                              setLocal(() {
-                                                filesByType[type] = multipart;
-                                                fileNameByType[type] =
-                                                    file.name;
-                                                naByType[type] = false;
-                                              });
-                                            },
-                                      icon: const Icon(Icons.upload_file),
-                                      label: Text(
-                                        fileName == null || fileName.isEmpty
-                                            ? 'Choose file'
-                                            : fileName,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Row(
-                                    children: [
-                                      Checkbox(
-                                        value: naByType[type] == true,
-                                        onChanged: lock.locked
-                                            ? null
-                                            : (value) {
-                                                setLocal(() {
-                                                  naByType[type] =
-                                                      value == true;
-                                                  if (value == true) {
-                                                    filesByType[type] = null;
-                                                    fileNameByType[type] =
-                                                        'N/A';
-                                                  } else {
-                                                    if (fileNameByType[type] ==
-                                                        'N/A') {
-                                                      fileNameByType.remove(
-                                                        type,
-                                                      );
-                                                    }
-                                                  }
-                                                });
-                                              },
-                                      ),
-                                      const Text('N/A'),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                  if (submitStatus == 'error') ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            submitError,
-                            style: const TextStyle(
-                              color: AppColors.error,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        if (submitError == 'Google not connected') ...[
-                          const SizedBox(width: 8),
-                          OutlinedButton(
-                            onPressed: () async {
-                              try {
-                                await _connectGoogle();
-                              } catch (e) {
-                                if (!ctx.mounted) return;
-                                setLocal(() {
-                                  submitError = _extractApiErrorMessage(e);
-                                });
-                              }
-                            },
-                            child: const Text('Connect Google'),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: submitStatus == 'loading' || !hasSelection
-                    ? null
-                    : () async {
-                        setLocal(() {
-                          submitStatus = 'loading';
-                          submitError = '';
-                        });
-                        final error = await _uploadMarketingDeliverablesBatch(
-                          requestId: request.id,
-                          naByType: naByType,
-                          filesByType: filesByType,
-                        );
-                        if (!ctx.mounted) return;
-                        if (error == null) {
-                          Navigator.of(ctx).pop();
-                          return;
-                        }
-                        setLocal(() {
-                          submitStatus = 'error';
-                          submitError = error;
-                        });
-                      },
-                child: Text(submitStatus == 'loading' ? 'Saving...' : 'Save'),
-              ),
-            ],
-          );
-        },
-      ),
+      enabledOptions: enabledOptions,
+      initialNaByType: naByType,
+      initialFileNameByType: fileNameByType,
+      rowLock: (type) => _marketingDeliverableRowLock(type, request),
+      onUpload: ({required naByType, required filesByType}) =>
+          _uploadMarketingDeliverablesBatch(
+            requestId: request.id,
+            naByType: naByType,
+            filesByType: filesByType,
+          ),
+      onConnectGoogle: _connectGoogle,
+      extractErrorMessage: _extractApiErrorMessage,
+      eventTitle: request.eventTitle,
     );
   }
 
@@ -1008,11 +691,18 @@ class _RequestCard extends StatelessWidget {
         : const Color(0xFF334155);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: AppColors.border.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1022,8 +712,8 @@ class _RequestCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 15,
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
                   ),
@@ -1032,11 +722,11 @@ class _RequestCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
-                  vertical: 4,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
                   color: badgeBg,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   (normalizedStatus == 'clarification' ||
@@ -1045,29 +735,30 @@ class _RequestCard extends StatelessWidget {
                       : normalizedStatus == 'approved'
                       ? 'NOTED'
                       : normalizedStatus.replaceAll('_', ' ').toUpperCase(),
-                  style: TextStyle(
+                  style: GoogleFonts.inter(
                     fontSize: 10,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.bold,
                     color: badgeFg,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Row(
             children: [
               const Icon(
-                Icons.person_outline,
+                LucideIcons.user,
                 size: 16,
                 color: AppColors.textSecondary,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   requestedBy,
-                  style: const TextStyle(
-                    fontSize: 13,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
                     color: AppColors.textSecondary,
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -1076,52 +767,132 @@ class _RequestCard extends StatelessWidget {
             ],
           ),
           if (details.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              details,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton(
-                onPressed: onDetails,
-                child: const Text('Details'),
-              ),
-              if (showUpload)
-                OutlinedButton(
-                  onPressed: uploadEnabled ? onUpload : null,
-                  child: const Text('Upload'),
-                ),
-              if (canTakeAction)
-                ElevatedButton(onPressed: onUpdate, child: const Text('Action'))
-              else
-                const Text(
-                  'No action',
-                  style: TextStyle(
-                    fontSize: 12,
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Icon(
+                    LucideIcons.info,
+                    size: 16,
                     color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    details,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                      height: 1.4,
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (showUpload)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: OutlinedButton.icon(
+                      onPressed: uploadEnabled ? onUpload : null,
+                      icon: const Icon(LucideIcons.uploadCloud, size: 16),
+                      label: Text('Upload', style: GoogleFonts.inter()),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onDetails,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    'Details',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+              if (canTakeAction) ...[
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: onUpdate,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text(
+                      'Action',
+                      style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+              ] else ...[
+                Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Text(
+                    'No action',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
           if (showUpload && !uploadEnabled && uploadHint.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              uploadHint,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    LucideIcons.alertCircle,
+                    size: 16,
+                    color: Colors.amber,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      uploadHint,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.amber.shade900,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
