@@ -22,18 +22,25 @@ class ApprovalCardShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       clipBehavior: Clip.antiAlias,
       padding: padding,
       decoration: BoxDecoration(
-        color: backgroundColor ?? ApprovalUi.surface,
+        color:
+            backgroundColor ??
+            (isDark ? const Color(0xFF172033) : ApprovalUi.surface),
         borderRadius: borderRadius ?? BorderRadius.circular(24),
-        border: Border.all(color: borderColor ?? ApprovalUi.border),
+        border: Border.all(
+          color:
+              borderColor ??
+              (isDark ? const Color(0xFF334155) : ApprovalUi.border),
+        ),
         boxShadow:
             boxShadow ??
-            const [
+            [
               BoxShadow(
-                color: Color(0x0A0F172A),
+                color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.04),
                 blurRadius: 24,
                 offset: Offset(0, 12),
               ),
@@ -62,12 +69,19 @@ class ApprovalPanelBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: backgroundColor ?? ApprovalUi.panel,
+        color:
+            backgroundColor ??
+            (isDark ? const Color(0xFF0F172A) : ApprovalUi.panel),
         borderRadius: borderRadius ?? BorderRadius.circular(18),
-        border: Border.all(color: borderColor ?? ApprovalUi.border),
+        border: Border.all(
+          color:
+              borderColor ??
+              (isDark ? const Color(0xFF334155) : ApprovalUi.border),
+        ),
       ),
       child: child,
     );
@@ -94,16 +108,23 @@ class ApprovalIconTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: backgroundColor ?? ApprovalUi.accentSoft,
+        color:
+            backgroundColor ??
+            (isDark
+                ? ApprovalUi.accent.withValues(alpha: 0.16)
+                : ApprovalUi.accentSoft),
         borderRadius: borderRadius ?? BorderRadius.circular(14),
       ),
       child: Icon(
         icon,
-        color: foregroundColor ?? ApprovalUi.accent,
+        color:
+            foregroundColor ??
+            (isDark ? const Color(0xFFA5B4FC) : ApprovalUi.accent),
         size: iconSize,
       ),
     );

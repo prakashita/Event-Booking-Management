@@ -597,21 +597,34 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final controller = TextEditingController();
     final isApprove = action == _ApprovalDecisionAction.approve;
     final isReject = action == _ApprovalDecisionAction.reject;
+    final isDark = _isDark;
     final accent = isApprove
-        ? const Color(0xFF16A34A)
+        ? (isDark ? const Color(0xFF86EFAC) : const Color(0xFF16A34A))
         : isReject
-        ? const Color(0xFFDC2626)
-        : const Color(0xFFD97706);
+        ? (isDark ? const Color(0xFFFCA5A5) : const Color(0xFFDC2626))
+        : (isDark ? const Color(0xFFFCD34D) : const Color(0xFFD97706));
     final soft = isApprove
-        ? const Color(0xFFECFDF5)
+        ? (isDark
+              ? const Color(0xFF16A34A).withValues(alpha: 0.14)
+              : const Color(0xFFECFDF5))
         : isReject
-        ? const Color(0xFFFEF2F2)
-        : const Color(0xFFFFFBEB);
+        ? (isDark
+              ? const Color(0xFFDC2626).withValues(alpha: 0.14)
+              : const Color(0xFFFEF2F2))
+        : (isDark
+              ? const Color(0xFFD97706).withValues(alpha: 0.14)
+              : const Color(0xFFFFFBEB));
     final border = isApprove
-        ? const Color(0xFFA7F3D0)
+        ? (isDark
+              ? const Color(0xFF16A34A).withValues(alpha: 0.34)
+              : const Color(0xFFA7F3D0))
         : isReject
-        ? const Color(0xFFFECACA)
-        : const Color(0xFFFDE68A);
+        ? (isDark
+              ? const Color(0xFFDC2626).withValues(alpha: 0.34)
+              : const Color(0xFFFECACA))
+        : (isDark
+              ? const Color(0xFFD97706).withValues(alpha: 0.34)
+              : const Color(0xFFFDE68A));
     final icon = isApprove
         ? LucideIcons.checkCircle2
         : isReject
@@ -623,6 +636,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       builder: (dialogContext) {
         return Dialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 22),
+          backgroundColor: _surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(26),
           ),
@@ -717,7 +731,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         : 'Optional message sent with the approval.',
                     helperStyle: GoogleFonts.inter(color: _muted, fontSize: 12),
                   ),
-                  style: GoogleFonts.inter(),
+                  style: GoogleFonts.inter(color: _onSurface),
                 ),
                 const SizedBox(height: 22),
                 Row(
@@ -885,14 +899,32 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Map<String, Color> _threadStatusColor(String status) {
     switch (status.trim().toLowerCase()) {
       case 'waiting_for_faculty':
-        return {'bg': const Color(0xFFFFF7ED), 'fg': const Color(0xFFC2410C)};
+        return {
+          'bg': _isDark
+              ? const Color(0xFFD97706).withValues(alpha: 0.18)
+              : const Color(0xFFFFF7ED),
+          'fg': _isDark ? const Color(0xFFFCD34D) : const Color(0xFFC2410C),
+        };
       case 'waiting_for_department':
-        return {'bg': const Color(0xFFEEF2FF), 'fg': const Color(0xFF4338CA)};
+        return {
+          'bg': _isDark
+              ? const Color(0xFF2563EB).withValues(alpha: 0.18)
+              : const Color(0xFFEEF2FF),
+          'fg': _isDark ? const Color(0xFF93C5FD) : const Color(0xFF4338CA),
+        };
       case 'resolved':
       case 'closed':
-        return {'bg': const Color(0xFFF1F5F9), 'fg': const Color(0xFF475569)};
+        return {
+          'bg': _isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+          'fg': _isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+        };
       default:
-        return {'bg': const Color(0xFFECFDF5), 'fg': const Color(0xFF047857)};
+        return {
+          'bg': _isDark
+              ? const Color(0xFF16A34A).withValues(alpha: 0.18)
+              : const Color(0xFFECFDF5),
+          'fg': _isDark ? const Color(0xFF86EFAC) : const Color(0xFF047857),
+        };
     }
   }
 
@@ -954,13 +986,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         builder: (ctx, setLocal) {
           final screenWidth = MediaQuery.of(ctx).size.width;
           final dialogWidth = screenWidth < 420 ? screenWidth - 32 : 388.0;
+          final isDark = _isDark;
+          final dialogBg = _surface;
           final isApprove = selected == 'approved';
           final isReject = selected == 'rejected';
           final accent = isApprove
-              ? const Color(0xFF16A34A)
+              ? (isDark ? const Color(0xFF86EFAC) : const Color(0xFF16A34A))
               : isReject
-              ? const Color(0xFFDC2626)
-              : const Color(0xFFD97706);
+              ? (isDark ? const Color(0xFFFCA5A5) : const Color(0xFFDC2626))
+              : (isDark ? const Color(0xFFFCD34D) : const Color(0xFFD97706));
           final title = _s(
             request['event_title'] ?? request['event_name'] ?? request['name'],
             fallback: 'Requirement request',
@@ -976,6 +1010,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               horizontal: 16,
               vertical: 24,
             ),
+            backgroundColor: dialogBg,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(26),
             ),
@@ -1040,9 +1075,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       icon: LucideIcons.checkCircle2,
                       label: 'Noted',
                       subtitle: 'Mark this request as handled.',
-                      foreground: const Color(0xFF166534),
-                      background: const Color(0xFFECFDF5),
-                      border: const Color(0xFFA7F3D0),
+                      foreground: isDark
+                          ? const Color(0xFF86EFAC)
+                          : const Color(0xFF166534),
+                      background: isDark
+                          ? const Color(0xFF16A34A).withValues(alpha: 0.14)
+                          : const Color(0xFFECFDF5),
+                      border: isDark
+                          ? const Color(0xFF16A34A).withValues(alpha: 0.34)
+                          : const Color(0xFFA7F3D0),
                       onTap: () => setLocal(() => selected = 'approved'),
                     ),
                     const SizedBox(height: 10),
@@ -1051,9 +1092,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       icon: LucideIcons.helpCircle,
                       label: 'Clarification',
                       subtitle: 'Ask the requester for more information.',
-                      foreground: const Color(0xFFB45309),
-                      background: const Color(0xFFFFFBEB),
-                      border: const Color(0xFFFDE68A),
+                      foreground: isDark
+                          ? const Color(0xFFFCD34D)
+                          : const Color(0xFFB45309),
+                      background: isDark
+                          ? const Color(0xFFD97706).withValues(alpha: 0.14)
+                          : const Color(0xFFFFFBEB),
+                      border: isDark
+                          ? const Color(0xFFD97706).withValues(alpha: 0.34)
+                          : const Color(0xFFFDE68A),
                       onTap: () =>
                           setLocal(() => selected = 'clarification_requested'),
                     ),
@@ -1063,9 +1110,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       icon: LucideIcons.xCircle,
                       label: 'Reject',
                       subtitle: 'Decline this request with a reason.',
-                      foreground: const Color(0xFFB91C1C),
-                      background: const Color(0xFFFEF2F2),
-                      border: const Color(0xFFFECACA),
+                      foreground: isDark
+                          ? const Color(0xFFFCA5A5)
+                          : const Color(0xFFB91C1C),
+                      background: isDark
+                          ? const Color(0xFFDC2626).withValues(alpha: 0.14)
+                          : const Color(0xFFFEF2F2),
+                      border: isDark
+                          ? const Color(0xFFDC2626).withValues(alpha: 0.34)
+                          : const Color(0xFFFECACA),
                       onTap: () => setLocal(() => selected = 'rejected'),
                     ),
                     const SizedBox(height: 16),
@@ -1073,7 +1126,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       controller: commentCtrl,
                       minLines: 4,
                       maxLines: 6,
-                      style: GoogleFonts.inter(),
+                      style: GoogleFonts.inter(color: _onSurface),
                       textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
                         hintText: isApprove
@@ -1660,12 +1713,18 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                             Container(
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFEE2E2),
+                                color: _isDark
+                                    ? const Color(
+                                        0xFFDC2626,
+                                      ).withValues(alpha: 0.16)
+                                    : const Color(0xFFFEE2E2),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 LucideIcons.alertCircle,
-                                color: Color(0xFFDC2626),
+                                color: _isDark
+                                    ? const Color(0xFFFCA5A5)
+                                    : const Color(0xFFDC2626),
                                 size: 32,
                               ),
                             ),
@@ -1725,7 +1784,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                             const SizedBox(height: 24),
                             _buildNotesAndDescription(),
                           ],
-                          const SizedBox(height: 40), // Bottom padding
+                          const SizedBox(height: 88), // Clears footer/FAB.
                         ],
                       ),
                     ),
@@ -1875,10 +1934,18 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEFF6FF),
+                  color: _isDark
+                      ? const Color(0xFF2563EB).withValues(alpha: 0.16)
+                      : const Color(0xFFEFF6FF),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: const Color(0xFF2563EB), size: 18),
+                child: Icon(
+                  icon,
+                  color: _isDark
+                      ? const Color(0xFF93C5FD)
+                      : const Color(0xFF2563EB),
+                  size: 18,
+                ),
               ),
               const SizedBox(width: 14),
               Text(
@@ -1967,6 +2034,21 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         : (budgetFileId.isNotEmpty
               ? 'https://drive.google.com/file/d/$budgetFileId/view'
               : '');
+    final eventStatusColors = _getRequirementStatusColor(status);
+    final approvalStatusColors = _getRequirementStatusColor(approvalStatus);
+    final budgetChipBg = hasBudgetFile
+        ? (_isDark
+              ? const Color(0xFF2563EB).withValues(alpha: 0.16)
+              : const Color(0xFFEFF6FF))
+        : _panel;
+    final budgetChipBorder = hasBudgetFile
+        ? (_isDark
+              ? const Color(0xFF60A5FA).withValues(alpha: 0.34)
+              : const Color(0xFFBFDBFE))
+        : _border;
+    final budgetChipText = hasBudgetFile
+        ? (_isDark ? const Color(0xFF93C5FD) : const Color(0xFF2563EB))
+        : _muted;
 
     return _buildCard(
       icon: LucideIcons.fileText,
@@ -2069,15 +2151,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: hasBudgetFile
-                              ? const Color(0xFFEFF6FF)
-                              : _panel,
+                          color: budgetChipBg,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: hasBudgetFile
-                                ? const Color(0xFFBFDBFE)
-                                : _border,
-                          ),
+                          border: Border.all(color: budgetChipBorder),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -2087,9 +2163,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                   ? LucideIcons.fileText
                                   : LucideIcons.fileMinus,
                               size: 14,
-                              color: hasBudgetFile
-                                  ? const Color(0xFF2563EB)
-                                  : _muted,
+                              color: budgetChipText,
                             ),
                             const SizedBox(width: 8),
                             Flexible(
@@ -2105,9 +2179,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                 style: GoogleFonts.inter(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: hasBudgetFile
-                                      ? const Color(0xFF2563EB)
-                                      : _muted,
+                                  color: budgetChipText,
                                 ),
                               ),
                             ),
@@ -2135,7 +2207,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFEF3C7),
+                          color: approvalStatusColors['bg'] as Color,
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -2143,7 +2215,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           style: GoogleFonts.inter(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFFD97706),
+                            color: approvalStatusColors['fg'] as Color,
                             letterSpacing: 0.5,
                           ),
                         ),
@@ -2166,7 +2238,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF3F4F6),
+                              color: eventStatusColors['bg'] as Color,
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: Text(
@@ -2174,7 +2246,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               style: GoogleFonts.inter(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: const Color(0xFF4B5563),
+                                color: eventStatusColors['fg'] as Color,
                                 letterSpacing: 0.5,
                               ),
                             ),
@@ -2189,7 +2261,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFEF3C7),
+                      color: eventStatusColors['bg'] as Color,
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
@@ -2197,7 +2269,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFFD97706),
+                        color: eventStatusColors['fg'] as Color,
                         letterSpacing: 0.5,
                       ),
                     ),
@@ -2288,6 +2360,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final approval = _approval;
     final status = _s(approval['status'], fallback: 'Pending');
     final statusValue = status.toLowerCase().replaceAll('_', ' ');
+    final statusColors = _getRequirementStatusColor(status);
     final discussionStatus = _s(approval['discussion_status'], fallback: '');
     final pipelineStage = _s(
       approval['pipeline_stage'],
@@ -2348,13 +2421,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: statusValue.contains('approved')
-                              ? const Color(0xFFDCFCE7)
-                              : statusValue.contains('reject')
-                              ? const Color(0xFFFEE2E2)
-                              : statusValue.contains('clarification')
-                              ? const Color(0xFFE0E7FF)
-                              : const Color(0xFFFEF3C7),
+                          color: statusColors['bg'] as Color,
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -2362,13 +2429,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: statusValue.contains('approved')
-                                ? const Color(0xFF166534)
-                                : statusValue.contains('reject')
-                                ? const Color(0xFF991B1B)
-                                : statusValue.contains('clarification')
-                                ? const Color(0xFF3730A3)
-                                : const Color(0xFFB45309),
+                            color: statusColors['fg'] as Color,
                           ),
                         ),
                       ),
@@ -2552,12 +2613,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         width: 38,
                         height: 38,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEFF6FF),
+                          color: _isDark
+                              ? const Color(0xFF2563EB).withValues(alpha: 0.16)
+                              : const Color(0xFFEFF6FF),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           LucideIcons.clipboardCheck,
-                          color: Color(0xFF2563EB),
+                          color: _isDark
+                              ? const Color(0xFF93C5FD)
+                              : const Color(0xFF2563EB),
                           size: 20,
                         ),
                       ),
@@ -2765,9 +2830,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: _isDark
+                  ? const Color(0xFF2563EB).withValues(alpha: 0.16)
+                  : const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: const Color(0xFFBFDBFE)),
+              border: Border.all(
+                color: _isDark
+                    ? const Color(0xFF60A5FA).withValues(alpha: 0.34)
+                    : const Color(0xFFBFDBFE),
+              ),
             ),
             child: Text(
               trimmedRole,
@@ -2776,7 +2847,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFF1D4ED8),
+                color: _isDark
+                    ? const Color(0xFF93C5FD)
+                    : const Color(0xFF1D4ED8),
               ),
             ),
           ),
@@ -3100,6 +3173,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     required VoidCallback onTap,
   }) {
     final disabled = _decisionSubmitting;
+    final effectiveForeground = _isDark
+        ? (foreground == const Color(0xFF166534)
+              ? const Color(0xFF86EFAC)
+              : foreground == const Color(0xFFDC2626)
+              ? const Color(0xFFFCA5A5)
+              : const Color(0xFFFCD34D))
+        : foreground;
+    final effectiveBackground = _isDark
+        ? effectiveForeground.withValues(alpha: 0.14)
+        : background;
+    final effectiveBorder = _isDark
+        ? effectiveForeground.withValues(alpha: 0.30)
+        : border;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -3109,9 +3196,12 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: disabled ? _surface : background,
+            color: disabled ? _surface : effectiveBackground,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: disabled ? _border : border, width: 1.2),
+            border: Border.all(
+              color: disabled ? _border : effectiveBorder,
+              width: 1.2,
+            ),
           ),
           child: Row(
             children: [
@@ -3122,7 +3212,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   color: _surface.withValues(alpha: _isDark ? 0.16 : 0.82),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: foreground, size: 22),
+                child: Icon(icon, color: effectiveForeground, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -3134,7 +3224,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       style: GoogleFonts.inter(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: disabled ? _muted : foreground,
+                        color: disabled ? _muted : effectiveForeground,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -3149,7 +3239,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   ],
                 ),
               ),
-              Icon(LucideIcons.chevronRight, color: foreground, size: 18),
+              Icon(
+                LucideIcons.chevronRight,
+                color: effectiveForeground,
+                size: 18,
+              ),
             ],
           ),
         ),
@@ -3243,38 +3337,42 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onPressed,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         child: Ink(
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: border),
           ),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 24,
+                height: 24,
                 decoration: BoxDecoration(
                   color: _surface.withValues(alpha: _isDark ? 0.16 : 0.76),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, size: 16, color: foreground),
+                child: Icon(icon, size: 14, color: foreground),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  label,
-                  style: GoogleFonts.inter(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
-                    color: foreground,
+              const SizedBox(width: 7),
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    style: GoogleFonts.inter(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: foreground,
+                    ),
                   ),
                 ),
               ),
-              Icon(LucideIcons.chevronRight, size: 16, color: foreground),
             ],
           ),
         ),
@@ -3283,31 +3381,57 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   Widget _buildThreadDecisionActions(ApprovalThreadInfo thread) {
+    final notedFg = _isDark ? const Color(0xFF86EFAC) : const Color(0xFF16A34A);
+    final notedBg = _isDark
+        ? const Color(0xFF16A34A).withValues(alpha: 0.14)
+        : const Color(0xFFECFDF5);
+    final notedBorder = _isDark
+        ? const Color(0xFF16A34A).withValues(alpha: 0.30)
+        : const Color(0xFFA7F3D0);
+    final rejectFg = _isDark
+        ? const Color(0xFFFCA5A5)
+        : const Color(0xFFDC2626);
+    final rejectBg = _isDark
+        ? const Color(0xFFDC2626).withValues(alpha: 0.14)
+        : const Color(0xFFFEF2F2);
+    final rejectBorder = _isDark
+        ? const Color(0xFFDC2626).withValues(alpha: 0.30)
+        : const Color(0xFFFECACA);
+    final clarifyFg = _isDark
+        ? const Color(0xFFFCD34D)
+        : const Color(0xFFD97706);
+    final clarifyBg = _isDark
+        ? const Color(0xFFD97706).withValues(alpha: 0.14)
+        : const Color(0xFFFFFBEB);
+    final clarifyBorder = _isDark
+        ? const Color(0xFFD97706).withValues(alpha: 0.30)
+        : const Color(0xFFFDE68A);
+
     final actions = [
       _buildThreadDecisionButton(
         label: 'Noted',
         icon: LucideIcons.checkCircle2,
-        foreground: const Color(0xFF16A34A),
-        background: const Color(0xFFECFDF5),
-        border: const Color(0xFFA7F3D0),
+        foreground: notedFg,
+        background: notedBg,
+        border: notedBorder,
         onPressed: () =>
             _openTakeActionFromThread(thread, initialDecision: 'approved'),
       ),
       _buildThreadDecisionButton(
         label: 'Reject',
         icon: LucideIcons.xCircle,
-        foreground: const Color(0xFFDC2626),
-        background: const Color(0xFFFEF2F2),
-        border: const Color(0xFFFECACA),
+        foreground: rejectFg,
+        background: rejectBg,
+        border: rejectBorder,
         onPressed: () =>
             _openTakeActionFromThread(thread, initialDecision: 'rejected'),
       ),
       _buildThreadDecisionButton(
-        label: 'Clarification',
+        label: 'Clarify',
         icon: LucideIcons.helpCircle,
-        foreground: const Color(0xFFD97706),
-        background: const Color(0xFFFFFBEB),
-        border: const Color(0xFFFDE68A),
+        foreground: clarifyFg,
+        background: clarifyBg,
+        border: clarifyBorder,
         onPressed: () => _openTakeActionFromThread(
           thread,
           initialDecision: 'clarification_requested',
@@ -3317,30 +3441,40 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: _panel,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Update request',
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: _muted,
-              letterSpacing: 0.4,
-            ),
+          Row(
+            children: [
+              Icon(LucideIcons.workflow, size: 14, color: _muted),
+              const SizedBox(width: 6),
+              Text(
+                'Update request',
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: _muted,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          actions[0],
-          const SizedBox(height: 10),
-          actions[1],
-          const SizedBox(height: 10),
-          actions[2],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: actions[0]),
+              const SizedBox(width: 8),
+              Expanded(child: actions[1]),
+              const SizedBox(width: 8),
+              Expanded(child: actions[2]),
+            ],
+          ),
         ],
       ),
     );
@@ -3364,12 +3498,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
+                color: _isDark
+                    ? const Color(0xFF2563EB).withValues(alpha: 0.16)
+                    : const Color(0xFFEFF6FF),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(
+              child: Icon(
                 LucideIcons.messageSquare,
-                color: Color(0xFF2563EB),
+                color: _isDark
+                    ? const Color(0xFF93C5FD)
+                    : const Color(0xFF2563EB),
                 size: 18,
               ),
             ),
@@ -3442,16 +3580,24 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFFEE2E2),
+              color: _isDark
+                  ? const Color(0xFFDC2626).withValues(alpha: 0.16)
+                  : const Color(0xFFFEE2E2),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFECACA)),
+              border: Border.all(
+                color: _isDark
+                    ? const Color(0xFFDC2626).withValues(alpha: 0.34)
+                    : const Color(0xFFFECACA),
+              ),
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   LucideIcons.alertCircle,
                   size: 18,
-                  color: Color(0xFFDC2626),
+                  color: _isDark
+                      ? const Color(0xFFFCA5A5)
+                      : const Color(0xFFDC2626),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -3748,6 +3894,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                   final comment = log['comment']?.toString() ?? '';
                   final createdAt = log['created_at']?.toString();
                   final actorName = log['actor_name']?.toString() ?? '';
+                  final actionColors = _getRequirementStatusColor(
+                    actionType.toLowerCase().contains('reject')
+                        ? 'rejected'
+                        : actionType.toLowerCase().contains('clarification')
+                        ? 'clarification'
+                        : actionType.toLowerCase().contains('approve') ||
+                              actionType.toLowerCase().contains('noted')
+                        ? 'approved'
+                        : 'pending',
+                  );
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -3768,13 +3924,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: actionType.contains('Approved')
-                                    ? const Color(0xFFDCFCE7)
-                                    : actionType.contains('Rejected')
-                                    ? const Color(0xFFFEE2E2)
-                                    : actionType.contains('clarification')
-                                    ? const Color(0xFFE0E7FF)
-                                    : const Color(0xFFF1F5F9),
+                                color: actionColors['bg'] as Color,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
@@ -3782,13 +3932,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                 style: GoogleFonts.inter(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  color: actionType.contains('Approved')
-                                      ? const Color(0xFF166534)
-                                      : actionType.contains('Rejected')
-                                      ? const Color(0xFF991B1B)
-                                      : actionType.contains('clarification')
-                                      ? const Color(0xFF3730A3)
-                                      : const Color(0xFF475569),
+                                  color: actionColors['fg'] as Color,
                                 ),
                               ),
                             ),
@@ -3915,7 +4059,11 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
+                            color: _isDark
+                                ? const Color(
+                                    0xFF2563EB,
+                                  ).withValues(alpha: 0.16)
+                                : const Color(0xFFEFF6FF),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -3923,7 +4071,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
-                              color: const Color(0xFF1D4ED8),
+                              color: _isDark
+                                  ? const Color(0xFF93C5FD)
+                                  : const Color(0xFF1D4ED8),
                               letterSpacing: 0.5,
                             ),
                           ),
@@ -4500,12 +4650,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
+                color: _isDark
+                    ? const Color(0xFF2563EB).withValues(alpha: 0.16)
+                    : const Color(0xFFEFF6FF),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(
+              child: Icon(
                 LucideIcons.layers,
-                color: Color(0xFF2563EB),
+                color: _isDark
+                    ? const Color(0xFF93C5FD)
+                    : const Color(0xFF2563EB),
                 size: 18,
               ),
             ),
@@ -4608,13 +4762,19 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFEFF6FF),
+                                  color: _isDark
+                                      ? const Color(
+                                          0xFF2563EB,
+                                        ).withValues(alpha: 0.16)
+                                      : const Color(0xFFEFF6FF),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Icon(
                                   deptIcon,
                                   size: 16,
-                                  color: const Color(0xFF2563EB),
+                                  color: _isDark
+                                      ? const Color(0xFF93C5FD)
+                                      : const Color(0xFF2563EB),
                                 ),
                               ),
                               const SizedBox(width: 14),
@@ -4670,10 +4830,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(
-                                        (item.status.replaceAll(
-                                          '_',
-                                          ' ',
-                                        )).toUpperCase(),
+                                        item.key == 'iqac' &&
+                                                item.status
+                                                        .trim()
+                                                        .toLowerCase() ==
+                                                    'approved'
+                                            ? 'NOTED'
+                                            : (item.status.replaceAll(
+                                                '_',
+                                                ' ',
+                                              )).toUpperCase(),
                                         style: GoogleFonts.inter(
                                           fontSize: 10,
                                           fontWeight: FontWeight.w700,
@@ -4726,6 +4892,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                   ? _buildRequirementPhases(
                                       item.key,
                                       const <String, dynamic>{},
+                                      reportLink: _eventReportLink,
+                                      reportName: _eventReportName,
                                     )
                                   : fallbackLines.isNotEmpty
                                   ? _buildRequirementPhaseSection(
@@ -4836,13 +5004,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                       .whereType<Map<String, dynamic>>()
                                       .toList();
                               final reportLink = item.key == 'iqac'
-                                  ? _s(
-                                      _event['report_web_view_link'],
-                                      fallback: '',
-                                    )
+                                  ? _eventReportLink
                                   : '';
                               final reportName = item.key == 'iqac'
-                                  ? _s(_event['report_file_name'], fallback: '')
+                                  ? _eventReportName
                                   : '';
 
                               return Container(
@@ -4932,20 +5097,30 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                       Container(
                                         padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFFFFBEB),
+                                          color: _isDark
+                                              ? const Color(
+                                                  0xFFD97706,
+                                                ).withValues(alpha: 0.16)
+                                              : const Color(0xFFFFFBEB),
                                           borderRadius: BorderRadius.circular(
                                             8,
                                           ),
                                           border: Border.all(
-                                            color: const Color(0xFFFDE68A),
+                                            color: _isDark
+                                                ? const Color(
+                                                    0xFFD97706,
+                                                  ).withValues(alpha: 0.34)
+                                                : const Color(0xFFFDE68A),
                                           ),
                                         ),
                                         child: Row(
                                           children: [
-                                            const Icon(
+                                            Icon(
                                               LucideIcons.alertTriangle,
                                               size: 16,
-                                              color: Color(0xFFD97706),
+                                              color: _isDark
+                                                  ? const Color(0xFFFCD34D)
+                                                  : const Color(0xFFD97706),
                                             ),
                                             const SizedBox(width: 10),
                                             Expanded(
@@ -4954,9 +5129,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                                 style: GoogleFonts.inter(
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w600,
-                                                  color: const Color(
-                                                    0xFFB45309,
-                                                  ),
+                                                  color: _isDark
+                                                      ? const Color(0xFFFCD34D)
+                                                      : const Color(0xFFB45309),
                                                 ),
                                               ),
                                             ),
@@ -5081,22 +5256,54 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     return _viewerDepartmentKey == key.toLowerCase();
   }
 
+  String get _eventReportLink {
+    final webLink = _s(_event['report_web_view_link'], fallback: '');
+    if (webLink.isNotEmpty) return webLink;
+    final fileId = _s(_event['report_file_id'], fallback: '');
+    if (fileId.isEmpty) return '';
+    return 'https://drive.google.com/file/d/$fileId/view';
+  }
+
+  String get _eventReportName {
+    final fileName = _s(_event['report_file_name'], fallback: '');
+    return fileName.isEmpty ? 'Event Report.pdf' : fileName;
+  }
+
   Map<String, Color> _getRequirementStatusColor(String status) {
     final normalized = status.trim().toLowerCase();
     switch (normalized) {
       case 'approved':
       case 'accepted':
-        return {'bg': const Color(0xFFDCFCE7), 'fg': const Color(0xFF166534)};
+        return {
+          'bg': _isDark
+              ? const Color(0xFF16A34A).withValues(alpha: 0.18)
+              : const Color(0xFFDCFCE7),
+          'fg': _isDark ? const Color(0xFF86EFAC) : const Color(0xFF166534),
+        };
       case 'rejected':
       case 'declined':
-        return {'bg': const Color(0xFFFEE2E2), 'fg': const Color(0xFF991B1B)};
+        return {
+          'bg': _isDark
+              ? const Color(0xFFDC2626).withValues(alpha: 0.18)
+              : const Color(0xFFFEE2E2),
+          'fg': _isDark ? const Color(0xFFFCA5A5) : const Color(0xFF991B1B),
+        };
       case 'clarification':
       case 'clarification_requested':
       case 'clarification_needed':
-        return {'bg': const Color(0xFFFEF3C7), 'fg': const Color(0xFFB45309)};
+      case 'upcoming':
+        return {
+          'bg': _isDark
+              ? const Color(0xFFD97706).withValues(alpha: 0.18)
+              : const Color(0xFFFEF3C7),
+          'fg': _isDark ? const Color(0xFFFCD34D) : const Color(0xFFB45309),
+        };
       case 'pending':
       default:
-        return {'bg': const Color(0xFFF1F5F9), 'fg': const Color(0xFF475569)};
+        return {
+          'bg': _isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+          'fg': _isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+        };
     }
   }
 
@@ -5207,9 +5414,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         if (departmentKey == 'iqac') ...[
           if (reportLink.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _buildRequirementLinkSection('Uploaded Deliverables', [
+            _buildRequirementLinkSection('Report Download', [
               (
-                label: reportName.isEmpty ? 'View Event Report' : reportName,
+                label: reportName.isEmpty ? _eventReportName : reportName,
                 link: reportLink,
               ),
             ]),
@@ -5342,8 +5549,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       case 'iqac':
         if (phase != 'post') return const [];
         return [
-          _s(_event['report_web_view_link'], fallback: '').isNotEmpty
-              ? 'Event report uploaded'
+          _eventReportLink.isNotEmpty
+              ? 'Event report submitted'
               : 'Event report not uploaded yet',
         ];
       default:
@@ -5457,40 +5664,52 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         ? null
                         : () => _openExternalLink(item.link),
                     borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _pageBg,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _border),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            item.link.isEmpty
-                                ? LucideIcons.fileMinus
-                                : LucideIcons.fileText,
-                            size: 14,
-                            color: item.link.isEmpty
-                                ? _muted
-                                : const Color(0xFF2563EB),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            item.label,
-                            style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 280),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _pageBg,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _border),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              item.link.isEmpty
+                                  ? LucideIcons.fileMinus
+                                  : LucideIcons.fileText,
+                              size: 14,
                               color: item.link.isEmpty
                                   ? _muted
-                                  : const Color(0xFF2563EB),
+                                  : (_isDark
+                                        ? const Color(0xFF93C5FD)
+                                        : const Color(0xFF2563EB)),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                item.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                softWrap: false,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: item.link.isEmpty
+                                      ? _muted
+                                      : (_isDark
+                                            ? const Color(0xFF93C5FD)
+                                            : const Color(0xFF2563EB)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

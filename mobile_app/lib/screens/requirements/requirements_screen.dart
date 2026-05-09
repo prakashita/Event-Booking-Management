@@ -375,13 +375,20 @@ class _RequirementsScreenState extends State<RequirementsScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) {
+          final theme = Theme.of(ctx);
+          final isDark = theme.brightness == Brightness.dark;
+          final dialogBg = isDark ? const Color(0xFF111827) : Colors.white;
+          final panel = isDark ? const Color(0xFF0F172A) : ApprovalUi.panel;
+          final border = isDark ? const Color(0xFF334155) : ApprovalUi.border;
+          final heading = isDark ? const Color(0xFFE2E8F0) : ApprovalUi.heading;
+          final muted = isDark ? const Color(0xFF94A3B8) : ApprovalUi.muted;
           final isApprove = selected == 'approved';
           final isReject = selected == 'rejected';
           final accent = isApprove
-              ? const Color(0xFF16A34A)
+              ? (isDark ? const Color(0xFF86EFAC) : const Color(0xFF16A34A))
               : isReject
-              ? const Color(0xFFDC2626)
-              : const Color(0xFFB45309);
+              ? (isDark ? const Color(0xFFFCA5A5) : const Color(0xFFDC2626))
+              : (isDark ? const Color(0xFFFCD34D) : const Color(0xFFB45309));
           final actionLabel = isApprove
               ? 'Noted'
               : isReject
@@ -390,6 +397,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
 
           return Dialog(
             insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+            backgroundColor: dialogBg,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(26),
             ),
@@ -428,7 +436,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                               style: GoogleFonts.poppins(
                                 fontSize: 19,
                                 fontWeight: FontWeight.w700,
-                                color: ApprovalUi.heading,
+                                color: heading,
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -437,7 +445,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.inter(
-                                color: ApprovalUi.muted,
+                                color: muted,
                                 fontSize: 13,
                               ),
                             ),
@@ -485,6 +493,9 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                     controller: commentCtrl,
                     minLines: 4,
                     maxLines: 6,
+                    style: GoogleFonts.inter(
+                      color: theme.colorScheme.onSurface,
+                    ),
                     textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(
                       hintText: isApprove
@@ -496,18 +507,18 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                           ? 'Optional message sent with the update.'
                           : 'A message is required for this action.',
                       helperStyle: GoogleFonts.inter(
-                        color: ApprovalUi.muted,
+                        color: muted,
                         fontSize: 12,
                       ),
                       filled: true,
-                      fillColor: ApprovalUi.panel,
+                      fillColor: panel,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: ApprovalUi.border),
+                        borderSide: BorderSide(color: border),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: ApprovalUi.border),
+                        borderSide: BorderSide(color: border),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -583,20 +594,30 @@ class _RequirementsScreenState extends State<RequirementsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final pageBg = isDark
+        ? theme.scaffoldBackgroundColor
+        : const Color(0xFFF4F6F8);
+    final appBarBg = isDark ? theme.colorScheme.surface : Colors.white;
+    final headingColor = isDark
+        ? const Color(0xFFE2E8F0)
+        : const Color(0xFF1E293B);
+    final tabInactive = isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500;
+
     return Scaffold(
-      backgroundColor: const Color(
-        0xFFF4F6F8,
-      ), // Softer, more modern background
+      backgroundColor: pageBg,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: appBarBg,
+        surfaceTintColor: Colors.transparent,
         centerTitle: false,
         title: Text(
           'Requirements',
           style: GoogleFonts.poppins(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: const Color(0xFF1E293B), // Slate 800
+            color: headingColor,
           ),
         ),
         bottom: PreferredSize(
@@ -607,8 +628,8 @@ class _RequirementsScreenState extends State<RequirementsScreen>
             child: TabBar(
               controller: _tabController,
               isScrollable: false,
-              labelColor: Theme.of(context).primaryColor,
-              unselectedLabelColor: Colors.grey.shade500,
+              labelColor: theme.colorScheme.primary,
+              unselectedLabelColor: tabInactive,
               labelStyle: GoogleFonts.inter(
                 fontWeight: FontWeight.w600,
                 fontSize: 15,
@@ -620,7 +641,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
               indicator: UnderlineTabIndicator(
                 borderSide: BorderSide(
                   width: 3.0,
-                  color: Theme.of(context).primaryColor,
+                  color: theme.colorScheme.primary,
                 ),
                 insets: const EdgeInsets.symmetric(horizontal: 16.0),
               ),
@@ -652,7 +673,9 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.red.shade50,
+                        color: isDark
+                            ? AppColors.error.withValues(alpha: 0.16)
+                            : Colors.red.shade50,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -666,7 +689,9 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                       _errorInbox!,
                       textAlign: TextAlign.center,
                       style: GoogleFonts.inter(
-                        color: Colors.red.shade700,
+                        color: isDark
+                            ? const Color(0xFFFCA5A5)
+                            : Colors.red.shade700,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -676,8 +701,12 @@ class _RequirementsScreenState extends State<RequirementsScreen>
                       icon: const Icon(LucideIcons.refreshCw, size: 16),
                       label: const Text('Retry'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.grey.shade800,
+                        backgroundColor: isDark
+                            ? const Color(0xFF1F2937)
+                            : Colors.white,
+                        foregroundColor: isDark
+                            ? const Color(0xFFE2E8F0)
+                            : Colors.grey.shade800,
                         elevation: 1,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -846,6 +875,27 @@ class _RequirementDecisionOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final Color darkForeground = switch (label) {
+      'Noted' => const Color(0xFF86EFAC),
+      'Reject' => const Color(0xFFFCA5A5),
+      _ => const Color(0xFFFCD34D),
+    };
+    final effectiveForeground = isDark ? darkForeground : foreground;
+    final optionBg = selected
+        ? (isDark ? effectiveForeground.withValues(alpha: 0.14) : background)
+        : (isDark ? const Color(0xFF0F172A) : ApprovalUi.panel);
+    final optionBorder = selected
+        ? (isDark ? effectiveForeground.withValues(alpha: 0.34) : border)
+        : (isDark ? const Color(0xFF334155) : ApprovalUi.border);
+    final iconBg = selected
+        ? (isDark
+              ? effectiveForeground.withValues(alpha: 0.12)
+              : Colors.white.withValues(alpha: 0.78))
+        : (isDark ? const Color(0xFF111827) : Colors.white);
+    final subtitleColor = isDark ? const Color(0xFFCBD5E1) : ApprovalUi.text;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -855,12 +905,9 @@ class _RequirementDecisionOption extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: selected ? background : ApprovalUi.panel,
+            color: optionBg,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected ? border : ApprovalUi.border,
-              width: selected ? 1.5 : 1,
-            ),
+            border: Border.all(color: optionBorder, width: selected ? 1.5 : 1),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -869,12 +916,10 @@ class _RequirementDecisionOption extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: selected
-                      ? Colors.white.withValues(alpha: 0.78)
-                      : Colors.white,
+                  color: iconBg,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: foreground, size: 23),
+                child: Icon(icon, color: effectiveForeground, size: 23),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -886,7 +931,7 @@ class _RequirementDecisionOption extends StatelessWidget {
                       style: GoogleFonts.inter(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
-                        color: foreground,
+                        color: effectiveForeground,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -894,7 +939,7 @@ class _RequirementDecisionOption extends StatelessWidget {
                       subtitle,
                       style: GoogleFonts.inter(
                         fontSize: 12.5,
-                        color: ApprovalUi.text,
+                        color: subtitleColor,
                         height: 1.35,
                       ),
                     ),
@@ -903,7 +948,7 @@ class _RequirementDecisionOption extends StatelessWidget {
               ),
               if (selected) ...[
                 const SizedBox(width: 8),
-                Icon(LucideIcons.check, color: foreground, size: 18),
+                Icon(LucideIcons.check, color: effectiveForeground, size: 18),
               ],
             ],
           ),
@@ -953,6 +998,33 @@ class _RequestCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF172033) : Colors.white;
+    final cardBorder = isDark ? const Color(0xFF334155) : Colors.grey.shade100;
+    final titleColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final muted = isDark ? const Color(0xFF94A3B8) : Colors.grey.shade500;
+    final metaBg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+    final metaBorder = isDark
+        ? const Color(0xFF273449)
+        : const Color(0xFFF1F5F9);
+    final metaText = isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569);
+    final detailText = isDark
+        ? const Color(0xFFE2E8F0)
+        : const Color(0xFF334155);
+    final dividerColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFF1F5F9);
+    final warningBg = isDark
+        ? const Color(0xFFEA580C).withValues(alpha: 0.14)
+        : const Color(0xFFFFF7ED);
+    final warningBorder = isDark
+        ? const Color(0xFFEA580C).withValues(alpha: 0.28)
+        : const Color(0xFFFFEDD5);
+    final warningText = isDark
+        ? const Color(0xFFFDBA74)
+        : const Color(0xFFC2410C);
+
     String title = '';
     String status = '';
     String requestedBy = '';
@@ -1006,35 +1078,43 @@ class _RequestCard extends StatelessWidget {
     final Color badgeFg;
 
     if (normalizedStatus == 'pending') {
-      badgeBg = const Color(0xFFFFFBEB);
+      badgeBg = isDark
+          ? const Color(0xFFD97706).withValues(alpha: 0.16)
+          : const Color(0xFFFFFBEB);
       badgeFg = const Color(0xFFD97706);
     } else if (normalizedStatus == 'approved') {
-      badgeBg = const Color(0xFFF0FDF4);
+      badgeBg = isDark
+          ? const Color(0xFF16A34A).withValues(alpha: 0.16)
+          : const Color(0xFFF0FDF4);
       badgeFg = const Color(0xFF16A34A);
     } else if (normalizedStatus == 'rejected') {
-      badgeBg = const Color(0xFFFEF2F2);
+      badgeBg = isDark
+          ? const Color(0xFFDC2626).withValues(alpha: 0.16)
+          : const Color(0xFFFEF2F2);
       badgeFg = const Color(0xFFDC2626);
     } else if (normalizedStatus == 'clarification' ||
         normalizedStatus == 'clarification_requested') {
-      badgeBg = const Color(0xFFFEF2F2);
+      badgeBg = isDark
+          ? const Color(0xFFE11D48).withValues(alpha: 0.16)
+          : const Color(0xFFFEF2F2);
       badgeFg = const Color(0xFFE11D48);
     } else {
-      badgeBg = const Color(0xFFF8FAFC);
-      badgeFg = const Color(0xFF64748B);
+      badgeBg = metaBg;
+      badgeFg = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
     }
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.03),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
         ],
-        border: Border.all(color: Colors.grey.shade100, width: 1.5),
+        border: Border.all(color: cardBorder, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1063,7 +1143,7 @@ class _RequestCard extends StatelessWidget {
                         style: GoogleFonts.poppins(
                           fontSize: 17,
                           fontWeight: FontWeight.w600,
-                          color: const Color(0xFF0F172A),
+                          color: titleColor,
                           height: 1.3,
                         ),
                       ),
@@ -1072,7 +1152,7 @@ class _RequestCard extends StatelessWidget {
                         'Request ID: ${_getId(item).substring(0, 8)}...',
                         style: GoogleFonts.inter(
                           fontSize: 12,
-                          color: Colors.grey.shade500,
+                          color: muted,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -1118,9 +1198,9 @@ class _RequestCard extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC), // Slate 50
+                color: metaBg,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFF1F5F9)),
+                border: Border.all(color: metaBorder),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1147,7 +1227,7 @@ class _RequestCard extends StatelessWidget {
                           requestedBy,
                           style: GoogleFonts.inter(
                             fontSize: 13,
-                            color: const Color(0xFF475569),
+                            color: metaText,
                             fontWeight: FontWeight.w500,
                           ),
                           overflow: TextOverflow.ellipsis,
@@ -1156,25 +1236,21 @@ class _RequestCard extends StatelessWidget {
                     ],
                   ),
                   if (details.isNotEmpty) ...[
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10),
-                      child: Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Divider(height: 1, color: dividerColor),
                     ),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
-                          LucideIcons.list,
-                          size: 16,
-                          color: Color(0xFF94A3B8),
-                        ),
+                        Icon(LucideIcons.list, size: 16, color: muted),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             details,
                             style: GoogleFonts.inter(
                               fontSize: 13,
-                              color: const Color(0xFF334155),
+                              color: detailText,
                               height: 1.4,
                             ),
                           ),
@@ -1194,26 +1270,20 @@ class _RequestCard extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF7ED), // Orange 50
+                  color: warningBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFFFFEDD5),
-                  ), // Orange 100
+                  border: Border.all(color: warningBorder),
                 ),
                 child: Row(
                   children: [
-                    const Icon(
-                      LucideIcons.info,
-                      size: 16,
-                      color: Color(0xFFEA580C),
-                    ),
+                    Icon(LucideIcons.info, size: 16, color: warningText),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         uploadHint,
                         style: GoogleFonts.inter(
                           fontSize: 12,
-                          color: const Color(0xFFC2410C),
+                          color: warningText,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -1224,7 +1294,7 @@ class _RequestCard extends StatelessWidget {
             ),
 
           const SizedBox(height: 20),
-          const Divider(height: 1, color: Color(0xFFF1F5F9)),
+          Divider(height: 1, color: dividerColor),
 
           // Actions section
           Padding(
@@ -1243,9 +1313,13 @@ class _RequestCard extends StatelessWidget {
                           style: GoogleFonts.inter(fontWeight: FontWeight.w600),
                         ),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF334155),
+                          foregroundColor: detailText,
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: const BorderSide(color: Color(0xFFCBD5E1)),
+                          side: BorderSide(
+                            color: isDark
+                                ? const Color(0xFF475569)
+                                : const Color(0xFFCBD5E1),
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -1257,9 +1331,13 @@ class _RequestCard extends StatelessWidget {
                   child: OutlinedButton(
                     onPressed: onDetails,
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF334155),
+                      foregroundColor: detailText,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: const BorderSide(color: Color(0xFFCBD5E1)),
+                      side: BorderSide(
+                        color: isDark
+                            ? const Color(0xFF475569)
+                            : const Color(0xFFCBD5E1),
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
@@ -1276,7 +1354,9 @@ class _RequestCard extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: onUpdate,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).primaryColor,
+                        backgroundColor: isDark
+                            ? const Color(0xFF2563EB)
+                            : Theme.of(context).colorScheme.primary,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(vertical: 14),

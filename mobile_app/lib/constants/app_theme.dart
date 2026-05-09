@@ -16,7 +16,7 @@ class AppTheme {
         surface: AppColors.surface,
         error: AppColors.error,
       ),
-      scaffoldBackgroundColor: Colors.transparent,
+      scaffoldBackgroundColor: AppColors.background,
       textTheme: GoogleFonts.poppinsTextTheme().copyWith(
         displayLarge: GoogleFonts.poppins(
           fontSize: 32,
@@ -173,7 +173,10 @@ class AppTheme {
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.error),
         ),
-        hintStyle: GoogleFonts.poppins(color: AppColors.textMuted, fontSize: 14),
+        hintStyle: GoogleFonts.poppins(
+          color: AppColors.textMuted,
+          fontSize: 14,
+        ),
         labelStyle: GoogleFonts.poppins(
           color: AppColors.textSecondary,
           fontSize: 14,
@@ -304,7 +307,10 @@ class AppTheme {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         backgroundColor: AppColors.textPrimary,
-        contentTextStyle: GoogleFonts.poppins(color: Colors.white, fontSize: 14),
+        contentTextStyle: GoogleFonts.poppins(
+          color: Colors.white,
+          fontSize: 14,
+        ),
       ),
       tabBarTheme: TabBarThemeData(
         labelColor: AppColors.primary,
@@ -349,7 +355,8 @@ class AppTheme {
     ).apply(bodyColor: Colors.white, displayColor: Colors.white);
 
     return base.copyWith(
-      scaffoldBackgroundColor: Colors.transparent,
+      scaffoldBackgroundColor: const Color(0xFF0F172A),
+      canvasColor: const Color(0xFF0F172A),
       textTheme: textTheme,
       appBarTheme: base.appBarTheme.copyWith(
         backgroundColor: darkSurface,

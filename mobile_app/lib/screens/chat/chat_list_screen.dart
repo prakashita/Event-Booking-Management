@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import '../../constants/app_colors.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
@@ -36,6 +37,24 @@ class _ChatListScreenState extends State<ChatListScreen>
   Timer? _reconnectTimer;
 
   String _activeTab = 'Chats';
+
+  int get _messagesUnreadCount => _conversations
+      .where(
+        (conversation) =>
+            conversation.kind == 'event' ||
+            conversation.kind == 'event_group' ||
+            conversation.kind == 'direct',
+      )
+      .fold<int>(0, (sum, conversation) => sum + conversation.unreadCount);
+
+  int get _workflowUnreadCount => _conversations
+      .where((conversation) => conversation.kind == 'approval_thread')
+      .fold<int>(0, (sum, conversation) => sum + conversation.unreadCount);
+
+  int get _totalUnreadCount => _conversations.fold<int>(
+    0,
+    (sum, conversation) => sum + conversation.unreadCount,
+  );
 
   @override
   void initState() {
@@ -274,7 +293,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       final updated = existing.copyWith(
         lastMessage: preview,
         lastMessageAt: createdAt ?? existing.lastMessageAt ?? DateTime.now(),
-        unreadCount: isIncoming ? existing.unreadCount + 1 : existing.unreadCount,
+        unreadCount: isIncoming
+            ? existing.unreadCount + 1
+            : existing.unreadCount,
       );
 
       _conversations = List<ChatConversation>.from(_conversations)
@@ -366,7 +387,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   String _buildConversationPreview(Map<String, dynamic> message) {
-    final content = (message['content'] ?? message['text'] ?? '').toString().trim();
+    final content = (message['content'] ?? message['text'] ?? '')
+        .toString()
+        .trim();
     if (content.isNotEmpty) {
       return content.length > 120 ? '${content.substring(0, 120)}...' : content;
     }
@@ -435,7 +458,9 @@ class _ChatListScreenState extends State<ChatListScreen>
   ) async {
     try {
       if (action == 'clear') {
-        await _api.post<dynamic>('/chat/conversations/${conversation.id}/clear');
+        await _api.post<dynamic>(
+          '/chat/conversations/${conversation.id}/clear',
+        );
         if (!mounted) return;
         setState(() {
           _conversations = _conversations.map((item) {
@@ -451,7 +476,9 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
 
       if (action == 'purge') {
-        await _api.post<dynamic>('/chat/conversations/${conversation.id}/purge');
+        await _api.post<dynamic>(
+          '/chat/conversations/${conversation.id}/purge',
+        );
       } else if (action == 'hide') {
         await _api.delete<dynamic>('/chat/conversation/${conversation.id}');
       }
@@ -464,10 +491,45 @@ class _ChatListScreenState extends State<ChatListScreen>
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not update chat: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not update chat: $e')));
     }
+  }
+
+  String _conversationTitle(ChatConversation conversation) {
+    final title =
+        conversation.eventTitle ??
+        conversation.otherUserName ??
+        conversation.participantNames.join(', ');
+    return title.trim().isEmpty ? 'Unknown conversation' : title.trim();
+  }
+
+  bool _matchesConversation(ChatConversation conversation, String query) {
+    if (query.isEmpty) return true;
+    final haystack = [
+      _conversationTitle(conversation),
+      conversation.departmentLabel ?? '',
+      conversation.department ?? '',
+      conversation.lastMessage ?? '',
+      conversation.participantNames.join(' '),
+    ].join(' ').toLowerCase();
+    return haystack.contains(query);
+  }
+
+  void _openConversation(ChatConversation conversation) {
+    if (conversation.unreadCount > 0) {
+      setState(() {
+        _conversations = _conversations
+            .map(
+              (item) => item.id == conversation.id
+                  ? item.copyWith(unreadCount: 0)
+                  : item,
+            )
+            .toList();
+      });
+    }
+    context.push('/chat/${conversation.id}');
   }
 
   String _getInitials(String name) {
@@ -496,126 +558,168 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final pageBg = isDark
+        ? theme.scaffoldBackgroundColor
+        : AppColors.background;
+    final surface = isDark ? const Color(0xFF111827) : AppColors.surface;
+    final panel = isDark ? const Color(0xFF1E293B) : AppColors.surfaceVariant;
+    final border = isDark ? const Color(0xFF334155) : AppColors.border;
+    final heading = theme.colorScheme.onSurface;
+    final muted = theme.colorScheme.onSurfaceVariant;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9), // slate-100/50
+      backgroundColor: pageBg,
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              color: surface,
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'Messages',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900, // extabold
-                          color: Color(0xFF0F172A),
-                          letterSpacing: -0.5,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'MESSAGES',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: muted,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    'Chat',
+                                    style: TextStyle(
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w800,
+                                      color: heading,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                ),
+                                if (_totalUnreadCount > 0) ...[
+                                  const SizedBox(width: 10),
+                                  _HeaderUnreadPill(count: _totalUnreadCount),
+                                ],
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      SizedBox(height: 6),
-                      Text(
-                        'Chats & Conversations',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF94A3B8),
-                        ),
+                      const SizedBox(width: 12),
+                      Row(
+                        children: [
+                          _HeaderActionButton(
+                            tooltip: 'Refresh conversations',
+                            onPressed: _isLoading ? null : _loadConversations,
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.refresh_rounded,
+                                    size: 18,
+                                    color: muted,
+                                  ),
+                          ),
+                          const SizedBox(width: 8),
+                          _HeaderActionButton(
+                            tooltip: 'Close chat',
+                            onPressed: () {
+                              if (context.canPop()) {
+                                context.pop();
+                              } else {
+                                context.go('/dashboard');
+                              }
+                            },
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 18,
+                              color: muted,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: _isLoading ? null : _loadConversations,
-                        icon: _isLoading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Color(0xFF7C3AED),
-                                ),
-                              )
-                            : const Icon(
-                                Icons.refresh_rounded,
-                                size: 20,
-                                color: Color(0xFF94A3B8),
-                              ),
-                        splashRadius: 24,
+                  const SizedBox(height: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 340),
+                    child: Text(
+                      'Conversations, workflow discussions, and people',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.35,
+                        fontWeight: FontWeight.w500,
+                        color: muted,
                       ),
-                      IconButton(
-                        onPressed: () {
-                          if (context.canPop()) {
-                            context.pop();
-                          } else {
-                            context.go('/dashboard');
-                          }
-                        },
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          size: 20,
-                          color: Color(0xFF94A3B8),
-                        ),
-                        splashRadius: 24,
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // Search Bar
             Container(
-              color: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: surface,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  color: panel,
+                  border: Border.all(color: border),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: TextField(
                   controller: _searchCtrl,
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    hintText: 'Search conversations...',
+                  decoration: InputDecoration(
+                    hintText: _activeTab == 'People'
+                        ? 'Search people...'
+                        : 'Search conversations...',
                     hintStyle: TextStyle(
-                      color: Color(0xFF94A3B8),
+                      color: muted,
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
-                    prefixIcon: Icon(
-                      Icons.search,
-                      size: 16,
-                      color: Color(0xFF94A3B8),
-                    ),
+                    prefixIcon: Icon(Icons.search, size: 16, color: muted),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 12,
                     ),
                     isDense: true,
                   ),
-                  style: const TextStyle(fontSize: 14),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: theme.colorScheme.onSurface,
+                  ),
                 ),
               ),
             ),
 
-            // Tabs
             Container(
-              color: Colors.white,
+              color: surface,
               child: Container(
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: border)),
                 ),
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -625,6 +729,13 @@ class _ChatListScreenState extends State<ChatListScreen>
                       tab,
                     ) {
                       final isActive = _activeTab == tab;
+                      final count = tab == 'Chats'
+                          ? _messagesUnreadCount
+                          : tab == 'Workflow'
+                          ? _workflowUnreadCount
+                          : tab == 'Unread'
+                          ? _totalUnreadCount
+                          : 0;
                       return GestureDetector(
                         onTap: () => setState(() => _activeTab = tab),
                         child: Container(
@@ -636,21 +747,27 @@ class _ChatListScreenState extends State<ChatListScreen>
                             border: Border(
                               bottom: BorderSide(
                                 color: isActive
-                                    ? const Color(0xFF7C3AED)
-                                    : Colors.transparent, // violet-600
+                                    ? AppColors.primary
+                                    : Colors.transparent,
                                 width: 2,
                               ),
                             ),
                           ),
-                          child: Text(
-                            tab,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: isActive
-                                  ? const Color(0xFF7C3AED)
-                                  : const Color(0xFF64748B),
-                            ),
+                          child: Row(
+                            children: [
+                              Text(
+                                tab,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: isActive ? AppColors.primary : muted,
+                                ),
+                              ),
+                              if (count > 0) ...[
+                                const SizedBox(width: 6),
+                                _UnreadBadge(count: count, compact: true),
+                              ],
+                            ],
                           ),
                         ),
                       );
@@ -660,7 +777,6 @@ class _ChatListScreenState extends State<ChatListScreen>
               ),
             ),
 
-            // Content
             Expanded(child: _buildContent()),
           ],
         ),
@@ -681,17 +797,22 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (_activeTab == 'People') {
       List<User> filteredUsers = _users;
       if (query.isNotEmpty) {
-        filteredUsers = filteredUsers
-            .where((u) => u.name.toLowerCase().contains(query))
-            .toList();
+        filteredUsers = filteredUsers.where((user) {
+          final haystack = [
+            user.name,
+            user.email,
+            user.department ?? '',
+            user.roleLabel,
+          ].join(' ').toLowerCase();
+          return haystack.contains(query);
+        }).toList();
       }
       if (_isLoadingUsers && filteredUsers.isEmpty) return _buildLoading();
       if (filteredUsers.isEmpty) {
-        return const Center(
-          child: Text(
-            'No users found',
-            style: TextStyle(color: Color(0xFF94A3B8)),
-          ),
+        return const EmptyState(
+          icon: Icons.person_search_outlined,
+          title: 'No people found',
+          message: 'Try another name, email, department, or role.',
         );
       }
 
@@ -718,12 +839,9 @@ class _ChatListScreenState extends State<ChatListScreen>
 
     List<ChatConversation> targetConversations = _conversations;
     if (query.isNotEmpty) {
-      targetConversations = targetConversations.where((c) {
-        final title =
-            (c.eventTitle ?? c.otherUserName ?? c.participantNames.join(', '))
-                .toLowerCase();
-        return title.contains(query);
-      }).toList();
+      targetConversations = targetConversations
+          .where((conversation) => _matchesConversation(conversation, query))
+          .toList();
     }
     if (unreadOnly) {
       targetConversations = targetConversations
@@ -733,16 +851,118 @@ class _ChatListScreenState extends State<ChatListScreen>
 
     final isWorkflowTab = _activeTab == 'Workflow';
 
+    if (unreadOnly) {
+      final unreadWorkflowThreads = targetConversations
+          .where((c) => c.kind == 'approval_thread')
+          .toList();
+      final unreadEventChats = targetConversations
+          .where((c) => c.kind == 'event' || c.kind == 'event_group')
+          .toList();
+      final unreadDirectChats = targetConversations
+          .where((c) => c.kind == 'direct')
+          .toList();
+
+      if (targetConversations.isEmpty) {
+        return EmptyState(
+          icon: Icons.mark_chat_read_outlined,
+          title: query.isEmpty ? 'All caught up' : 'No unread matches',
+          message: query.isEmpty
+              ? 'Unread messages from chats and workflow threads will appear here.'
+              : 'Try a different search to find unread conversations.',
+        );
+      }
+
+      return RefreshIndicator(
+        onRefresh: _loadConversations,
+        child: ListView(
+          padding: const EdgeInsets.all(8),
+          children: [
+            if (unreadWorkflowThreads.isNotEmpty) ...[
+              _buildSectionHeader('Unread Workflow'),
+              ...unreadWorkflowThreads.map((conv) {
+                final title = conv.eventTitle ?? 'Event Discussion';
+                final dept =
+                    conv.departmentLabel ?? conv.department ?? 'Workflow';
+                return _buildChatItem(
+                  name: title,
+                  subtitle1: dept,
+                  subtitle2: conv.lastMessage ?? 'No messages yet',
+                  initials: dept.isNotEmpty ? dept[0].toUpperCase() : 'W',
+                  avatarBg: const Color(0xFFFFF7ED),
+                  avatarFg: const Color(0xFFC2410C),
+                  date: conv.lastMessageAt != null
+                      ? _formatTime(conv.lastMessageAt!)
+                      : null,
+                  unreadCount: conv.unreadCount,
+                  onActionSelected: (value) =>
+                      _handleConversationAction(conv, value),
+                  onTap: () => _openConversation(conv),
+                );
+              }),
+              const SizedBox(height: 16),
+            ],
+            if (unreadEventChats.isNotEmpty) ...[
+              _buildSectionHeader('Unread Event Chats'),
+              ...unreadEventChats.map((conv) {
+                final title = conv.eventTitle ?? 'Event Group';
+                final nMembers = conv.participantCount > 0
+                    ? conv.participantCount
+                    : conv.participants.length;
+                return _buildChatItem(
+                  name: title,
+                  subtitle1: '$nMembers members',
+                  subtitle2: conv.lastMessage ?? 'No messages yet',
+                  initials: title.isNotEmpty ? title[0].toUpperCase() : 'E',
+                  avatarBg: AppColors.primaryContainer,
+                  avatarFg: AppColors.primary,
+                  date: conv.lastMessageAt != null
+                      ? _formatTime(conv.lastMessageAt!)
+                      : null,
+                  unreadCount: conv.unreadCount,
+                  onActionSelected: (value) =>
+                      _handleConversationAction(conv, value),
+                  onTap: () => _openConversation(conv),
+                );
+              }),
+              const SizedBox(height: 16),
+            ],
+            if (unreadDirectChats.isNotEmpty) ...[
+              _buildSectionHeader('Unread Direct Messages'),
+              ...unreadDirectChats.map((conv) {
+                final title =
+                    conv.otherUserName ?? conv.participantNames.join(', ');
+                final color = _getAvatarThemeColor(title);
+                return _buildChatItem(
+                  name: title.isEmpty ? 'Unknown' : title,
+                  subtitle2: conv.lastMessage,
+                  initials: _getInitials(title.isEmpty ? 'U' : title),
+                  avatarBg: color.withValues(alpha: 0.12),
+                  avatarFg: color,
+                  isOnline: conv.otherUserOnline,
+                  date: conv.lastMessageAt != null
+                      ? _formatTime(conv.lastMessageAt!)
+                      : null,
+                  unreadCount: conv.unreadCount,
+                  onActionSelected: (value) =>
+                      _handleConversationAction(conv, value),
+                  onTap: () => _openConversation(conv),
+                );
+              }),
+            ],
+          ],
+        ),
+      );
+    }
+
     if (isWorkflowTab) {
       final workflowThreads = targetConversations
           .where((c) => c.kind == 'approval_thread')
           .toList();
       if (workflowThreads.isEmpty) {
-        return const Center(
-          child: Text(
-            'No workflow discussions',
-            style: TextStyle(color: Color(0xFF94A3B8)),
-          ),
+        return const EmptyState(
+          icon: Icons.account_tree_outlined,
+          title: 'No workflow discussions',
+          message: 'Approval threads will appear here when they are active.',
         );
       }
       return ListView(
@@ -763,8 +983,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                   ? _formatTime(conv.lastMessageAt!)
                   : null,
               unreadCount: conv.unreadCount,
-              onActionSelected: (value) => _handleConversationAction(conv, value),
-              onTap: () => context.push('/chat/${conv.id}'),
+              onActionSelected: (value) =>
+                  _handleConversationAction(conv, value),
+              onTap: () => _openConversation(conv),
             );
           }),
         ],
@@ -780,11 +1001,14 @@ class _ChatListScreenState extends State<ChatListScreen>
         .toList();
 
     if (eventChats.isEmpty && directChats.isEmpty) {
-      return const Center(
-        child: Text(
-          'No matching conversations.',
-          style: TextStyle(color: Color(0xFF94A3B8)),
-        ),
+      return EmptyState(
+        icon: Icons.chat_bubble_outline,
+        title: query.isEmpty && !unreadOnly
+            ? 'No conversations yet'
+            : 'No matching conversations',
+        message: unreadOnly
+            ? 'You are all caught up.'
+            : 'Start a direct chat from People or open an event discussion.',
       );
     }
 
@@ -805,16 +1029,15 @@ class _ChatListScreenState extends State<ChatListScreen>
                 subtitle1: '$nMembers members',
                 subtitle2: conv.lastMessage ?? 'No messages yet',
                 initials: title.isNotEmpty ? title[0].toUpperCase() : 'E',
-                avatarBg: const Color(
-                  0xFFEDE9FE,
-                ), // violet-100 equivalent, keeping consistent
-                avatarFg: const Color(0xFF6D28D9), // violet-700
+                avatarBg: AppColors.primaryContainer,
+                avatarFg: AppColors.primary,
                 date: conv.lastMessageAt != null
                     ? _formatTime(conv.lastMessageAt!)
                     : null,
                 unreadCount: conv.unreadCount,
-                onActionSelected: (value) => _handleConversationAction(conv, value),
-                onTap: () => context.push('/chat/${conv.id}'),
+                onActionSelected: (value) =>
+                    _handleConversationAction(conv, value),
+                onTap: () => _openConversation(conv),
               );
             }),
             const SizedBox(height: 16),
@@ -836,8 +1059,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                     ? _formatTime(conv.lastMessageAt!)
                     : null,
                 unreadCount: conv.unreadCount,
-                onActionSelected: (value) => _handleConversationAction(conv, value),
-                onTap: () => context.push('/chat/${conv.id}'),
+                onActionSelected: (value) =>
+                    _handleConversationAction(conv, value),
+                onTap: () => _openConversation(conv),
               );
             }),
           ],
@@ -874,6 +1098,28 @@ class _ChatListScreenState extends State<ChatListScreen>
     ValueChanged<String>? onActionSelected,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final titleColor = isDark
+        ? const Color(0xFFE2E8F0)
+        : const Color(0xFF0F172A);
+    final subtitleColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
+    final mutedColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF94A3B8);
+    final unreadBg = isDark
+        ? const Color(0xFF1E293B).withValues(alpha: 0.72)
+        : const Color(0xFFF8FAFC);
+    final unreadText = isDark
+        ? const Color(0xFFE2E8F0)
+        : const Color(0xFF1E293B);
+    final avatarBackground = isDark
+        ? avatarFg.withValues(alpha: 0.18)
+        : avatarBg;
+    final onlineBorder = isDark ? const Color(0xFF0F172A) : Colors.white;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -881,7 +1127,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          color: unreadCount > 0 ? const Color(0xFFF8FAFC) : Colors.transparent,
+          color: unreadCount > 0 ? unreadBg : Colors.transparent,
         ),
         child: Row(
           children: [
@@ -892,7 +1138,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: avatarBg,
+                    color: avatarBackground,
                     shape: BoxShape.circle,
                   ),
                   alignment: Alignment.center,
@@ -913,9 +1159,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                       width: 12,
                       height: 12,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFD1D5DB), // slate-300
+                        color: AppColors.success,
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                        border: Border.all(color: onlineBorder, width: 2),
                       ),
                     ),
                   ),
@@ -937,7 +1183,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             fontWeight: unreadCount > 0
                                 ? FontWeight.w800
                                 : FontWeight.bold,
-                            color: const Color(0xFF0F172A),
+                            color: titleColor,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -952,8 +1198,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                                 ? FontWeight.w700
                                 : FontWeight.w500,
                             color: unreadCount > 0
-                                ? const Color(0xFF7C3AED)
-                                : const Color(0xFF94A3B8),
+                                ? AppColors.primary
+                                : mutedColor,
                           ),
                         ),
                     ],
@@ -962,10 +1208,10 @@ class _ChatListScreenState extends State<ChatListScreen>
                   if (subtitle1 != null) ...[
                     Text(
                       subtitle1,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFF64748B),
+                        color: subtitleColor,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -980,9 +1226,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                             subtitle2,
                             style: TextStyle(
                               fontSize: 12,
-                              color: unreadCount > 0
-                                  ? const Color(0xFF1E293B)
-                                  : const Color(0xFF94A3B8),
+                              color: unreadCount > 0 ? unreadText : mutedColor,
                               fontWeight: unreadCount > 0
                                   ? FontWeight.w600
                                   : FontWeight.w400,
@@ -999,7 +1243,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF7C3AED),
+                              color: AppColors.primary,
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
@@ -1018,6 +1262,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             ),
             if (onActionSelected != null)
               PopupMenuButton<String>(
+                iconColor: isDark ? const Color(0xFFE2E8F0) : null,
                 onSelected: onActionSelected,
                 itemBuilder: (context) => const [
                   PopupMenuItem(value: 'clear', child: Text('Clear messages')),
@@ -1067,5 +1312,97 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
     if (diff.inDays < 7) return DateFormat('EEE').format(dt);
     return DateFormat('d MMM').format(dt);
+  }
+}
+
+class _HeaderActionButton extends StatelessWidget {
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final Widget child;
+
+  const _HeaderActionButton({
+    required this.tooltip,
+    required this.onPressed,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: isDark ? const Color(0xFF1E293B) : AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(width: 38, height: 38, child: Center(child: child)),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderUnreadPill extends StatelessWidget {
+  final int count;
+
+  const _HeaderUnreadPill({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : '$count';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.primaryContainer,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.16)),
+      ),
+      child: Text(
+        '$label unread',
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _UnreadBadge extends StatelessWidget {
+  final int count;
+  final bool compact;
+
+  const _UnreadBadge({required this.count, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = count > 99 ? '99+' : '$count';
+    return Container(
+      constraints: BoxConstraints(
+        minWidth: compact ? 18 : 22,
+        minHeight: compact ? 18 : 22,
+      ),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 5 : 7,
+        vertical: compact ? 1 : 3,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: compact ? 10 : 11,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
+        ),
+      ),
+    );
   }
 }

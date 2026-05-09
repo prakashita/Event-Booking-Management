@@ -23,13 +23,19 @@ class StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bg = AppColors.statusBgColor(status);
+    final fg = AppColors.statusColor(status);
+
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 150),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: AppColors.statusBgColor(status),
+          color: isDark ? fg.withValues(alpha: 0.16) : bg,
           borderRadius: BorderRadius.circular(100),
+          border: Border.all(color: fg.withValues(alpha: isDark ? 0.24 : 0.1)),
         ),
         child: Text(
           _label,
@@ -39,12 +45,20 @@ class StatusBadge extends StatelessWidget {
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: AppColors.statusColor(status),
+            color: isDark ? _darkStatusText(fg) : fg,
             letterSpacing: 0.5,
           ),
         ),
       ),
     );
+  }
+
+  Color _darkStatusText(Color color) {
+    if (color == AppColors.error) return const Color(0xFFFCA5A5);
+    if (color == AppColors.warning) return const Color(0xFFFCD34D);
+    if (color == AppColors.success) return const Color(0xFF86EFAC);
+    if (color == AppColors.primary) return const Color(0xFF93C5FD);
+    return const Color(0xFFCBD5E1);
   }
 }
 
@@ -63,6 +77,9 @@ class SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final muted = isDark ? const Color(0xFF94A3B8) : AppColors.textSecondary;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
       child: Row(
@@ -74,7 +91,7 @@ class SectionHeader extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: AppColors.textSecondary,
+                color: muted,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -118,17 +135,20 @@ class InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final muted = isDark ? const Color(0xFF94A3B8) : AppColors.textMuted;
+    final textColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
     return Row(
       children: [
-        Icon(icon, size: 14, color: iconColor ?? AppColors.textMuted),
+        Icon(icon, size: 14, color: iconColor ?? muted),
         const SizedBox(width: 6),
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-            ),
+            style: TextStyle(fontSize: 13, color: textColor),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -201,6 +221,13 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final iconBg = isDark ? const Color(0xFF1E293B) : AppColors.surfaceVariant;
+    final muted = isDark ? const Color(0xFF94A3B8) : AppColors.textMuted;
+    final messageColor = isDark
+        ? const Color(0xFF94A3B8)
+        : AppColors.textSecondary;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -211,10 +238,10 @@ class EmptyState extends StatelessWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: AppColors.surfaceVariant,
+                color: iconBg,
                 borderRadius: BorderRadius.circular(40),
               ),
-              child: Icon(icon, size: 36, color: AppColors.textMuted),
+              child: Icon(icon, size: 36, color: muted),
             ),
             const SizedBox(height: 16),
             Text(
@@ -226,9 +253,9 @@ class EmptyState extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 message!,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: messageColor),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -253,6 +280,14 @@ class ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final errorBg = isDark
+        ? AppColors.error.withValues(alpha: 0.16)
+        : AppColors.errorLight;
+    final messageColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -263,7 +298,7 @@ class ErrorState extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: AppColors.errorLight,
+                color: errorBg,
                 borderRadius: BorderRadius.circular(36),
               ),
               child: const Icon(
@@ -282,7 +317,7 @@ class ErrorState extends StatelessWidget {
               message,
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+              ).textTheme.bodyMedium?.copyWith(color: messageColor),
               textAlign: TextAlign.center,
             ),
             if (onRetry != null) ...[
@@ -344,6 +379,12 @@ class _ShimmerBoxState extends State<ShimmerBox>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final base = isDark ? const Color(0xFF1E293B) : const Color(0xFFECEFF1);
+    final highlight = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE0E0E0);
+
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, _) => Container(
@@ -354,11 +395,7 @@ class _ShimmerBoxState extends State<ShimmerBox>
           gradient: LinearGradient(
             begin: Alignment(_animation.value - 1, 0),
             end: Alignment(_animation.value, 0),
-            colors: const [
-              Color(0xFFECEFF1),
-              Color(0xFFE0E0E0),
-              Color(0xFFECEFF1),
-            ],
+            colors: [base, highlight, base],
           ),
         ),
       ),
@@ -416,15 +453,22 @@ class StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF1F2937) : AppColors.surface;
+    final border = isDark ? const Color(0xFF334155) : AppColors.border;
+    final labelColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-        boxShadow: const [
+        border: Border.all(color: border),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x0A000000),
+            color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.04),
             blurRadius: 8,
             offset: Offset(0, 2),
           ),
@@ -458,10 +502,10 @@ class StatCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: AppColors.textSecondary,
+              color: labelColor,
             ),
           ),
         ],
@@ -478,17 +522,25 @@ class EventListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF1F2937) : AppColors.surface;
+    final border = isDark ? const Color(0xFF334155) : AppColors.border;
+    final dateBg = isDark
+        ? const Color(0xFF1E3A5F)
+        : AppColors.primaryContainer;
+    final titleColor = isDark ? const Color(0xFFE2E8F0) : AppColors.textPrimary;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
-          boxShadow: const [
+          border: Border.all(color: border),
+          boxShadow: [
             BoxShadow(
-              color: Color(0x08000000),
+              color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.03),
               blurRadius: 8,
               offset: Offset(0, 2),
             ),
@@ -500,7 +552,7 @@ class EventListItem extends StatelessWidget {
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                color: AppColors.primaryContainer,
+                color: dateBg,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Column(
@@ -532,10 +584,10 @@ class EventListItem extends StatelessWidget {
                 children: [
                   Text(
                     event.title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: titleColor,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

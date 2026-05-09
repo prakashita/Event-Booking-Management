@@ -2417,9 +2417,12 @@ class _EventCard extends StatelessWidget {
     final df = DateFormat('MMM d, yyyy');
     final tf = DateFormat('h:mm a');
 
-    final statusColor = _getStatusColor(event.status);
-    final statusBgColor = _getStatusBgColor(event.status);
-    final statusBorderColor = _getStatusBorderColor(event.status);
+    final statusColor = _getStatusColor(event.status, isDark: isDark);
+    final statusBgColor = _getStatusBgColor(event.status, isDark: isDark);
+    final statusBorderColor = _getStatusBorderColor(
+      event.status,
+      isDark: isDark,
+    );
     final statusLabel = _statusLabel(event);
     final pipelineText = _approvalPipelineText(event);
     final showForwardAction = approvalForwardLabel.trim().isNotEmpty;
@@ -2727,69 +2730,109 @@ class _EventCard extends StatelessWidget {
     return normalized.toUpperCase().replaceAll('_', ' ');
   }
 
-  Color _getStatusColor(String status) {
+  Color _getStatusColor(String status, {required bool isDark}) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return const Color(0xFFD97706); // amber-600
+        return isDark
+            ? const Color(0xFFFCD34D)
+            : const Color(0xFFD97706); // amber-600
       case 'clarification':
       case 'clarification_requested':
-        return const Color(0xFF7C3AED); // violet-600
+        return isDark
+            ? const Color(0xFFC4B5FD)
+            : const Color(0xFF7C3AED); // violet-600
       case 'rejected':
-        return const Color(0xFFDC2626); // red-600
+        return isDark
+            ? const Color(0xFFFCA5A5)
+            : const Color(0xFFDC2626); // red-600
       case 'upcoming':
-        return const Color(0xFF2563EB); // blue-600
+        return isDark
+            ? const Color(0xFF93C5FD)
+            : const Color(0xFF2563EB); // blue-600
       case 'ongoing':
-        return const Color(0xFF4F46E5); // indigo-600
+        return isDark
+            ? const Color(0xFFA5B4FC)
+            : const Color(0xFF4F46E5); // indigo-600
       case 'completed':
-        return const Color(0xFF059669); // emerald-600
+        return isDark
+            ? const Color(0xFF86EFAC)
+            : const Color(0xFF059669); // emerald-600
       case 'closed':
-        return const Color(0xFF475569); // slate-600
+        return isDark
+            ? const Color(0xFFCBD5E1)
+            : const Color(0xFF475569); // slate-600
       default:
-        return const Color(0xFF475569); // slate-600
+        return isDark
+            ? const Color(0xFFCBD5E1)
+            : const Color(0xFF475569); // slate-600
     }
   }
 
-  Color _getStatusBgColor(String status) {
+  Color _getStatusBgColor(String status, {required bool isDark}) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return const Color(0xFFFFFBEB); // amber-50
+        return isDark
+            ? const Color(0xFFD97706).withValues(alpha: 0.16)
+            : const Color(0xFFFFFBEB); // amber-50
       case 'clarification':
       case 'clarification_requested':
-        return const Color(0xFFF5F3FF); // violet-50
+        return isDark
+            ? const Color(0xFF7C3AED).withValues(alpha: 0.16)
+            : const Color(0xFFF5F3FF); // violet-50
       case 'rejected':
-        return const Color(0xFFFEF2F2); // red-50
+        return isDark
+            ? const Color(0xFFDC2626).withValues(alpha: 0.16)
+            : const Color(0xFFFEF2F2); // red-50
       case 'upcoming':
-        return const Color(0xFFEFF6FF); // blue-50
+        return isDark
+            ? const Color(0xFF2563EB).withValues(alpha: 0.16)
+            : const Color(0xFFEFF6FF); // blue-50
       case 'ongoing':
-        return const Color(0xFFEEF2FF); // indigo-50
+        return isDark
+            ? const Color(0xFF4F46E5).withValues(alpha: 0.16)
+            : const Color(0xFFEEF2FF); // indigo-50
       case 'completed':
-        return const Color(0xFFECFDF5); // emerald-50
+        return isDark
+            ? const Color(0xFF16A34A).withValues(alpha: 0.16)
+            : const Color(0xFFECFDF5); // emerald-50
       case 'closed':
-        return const Color(0xFFF8FAFC); // slate-50
+        return isDark ? const Color(0xFF334155) : const Color(0xFFF8FAFC);
       default:
-        return const Color(0xFFF8FAFC); // slate-50
+        return isDark ? const Color(0xFF334155) : const Color(0xFFF8FAFC);
     }
   }
 
-  Color _getStatusBorderColor(String status) {
+  Color _getStatusBorderColor(String status, {required bool isDark}) {
     switch (status.toLowerCase()) {
       case 'pending':
-        return const Color(0xFFFEF3C7); // amber-100
+        return isDark
+            ? const Color(0xFFD97706).withValues(alpha: 0.34)
+            : const Color(0xFFFEF3C7); // amber-100
       case 'clarification':
       case 'clarification_requested':
-        return const Color(0xFFDDD6FE); // violet-200
+        return isDark
+            ? const Color(0xFF7C3AED).withValues(alpha: 0.34)
+            : const Color(0xFFDDD6FE); // violet-200
       case 'rejected':
-        return const Color(0xFFFECACA); // red-200
+        return isDark
+            ? const Color(0xFFDC2626).withValues(alpha: 0.34)
+            : const Color(0xFFFECACA); // red-200
       case 'upcoming':
-        return const Color(0xFFDBEAFE); // blue-100
+        return isDark
+            ? const Color(0xFF2563EB).withValues(alpha: 0.34)
+            : const Color(0xFFDBEAFE); // blue-100
       case 'ongoing':
-        return const Color(0xFFE0E7FF); // indigo-100
+        return isDark
+            ? const Color(0xFF4F46E5).withValues(alpha: 0.34)
+            : const Color(0xFFE0E7FF); // indigo-100
       case 'completed':
-        return const Color(0xFFD1FAE5); // emerald-100
+        return isDark
+            ? const Color(0xFF16A34A).withValues(alpha: 0.34)
+            : const Color(0xFFD1FAE5); // emerald-100
       case 'closed':
-        return const Color(0xFFE2E8F0); // slate-200
+        return isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0);
       default:
-        return const Color(0xFFF1F5F9); // slate-100
+        return isDark ? const Color(0xFF475569) : const Color(0xFFF1F5F9);
     }
   }
 }

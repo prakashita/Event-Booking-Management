@@ -2459,10 +2459,16 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
   Widget build(BuildContext context) {
     final isCompact = _isCompactLayout;
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final dialogBg = isDark ? const Color(0xFF111827) : Colors.white;
+    final headerBg = isDark ? const Color(0xFF111827) : Colors.white;
+    final titleColor = isDark ? const Color(0xFFE2E8F0) : Colors.grey[900]!;
+    final mutedColor = isDark ? const Color(0xFF94A3B8) : Colors.black87;
 
     if (_departments.isEmpty) {
       return Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        backgroundColor: dialogBg,
         child: Padding(
           padding: EdgeInsets.all(isCompact ? 24 : 32),
           child: Column(
@@ -2482,7 +2488,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                 style: TextStyle(
                   fontSize: isCompact ? 13 : 14,
                   height: 1.5,
-                  color: Colors.black87,
+                  color: mutedColor,
                 ),
               ),
               const SizedBox(height: 32),
@@ -2523,7 +2529,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       elevation: 24,
-      backgroundColor: Colors.white,
+      backgroundColor: dialogBg,
       insetPadding: EdgeInsets.symmetric(
         horizontal: isCompact ? 16 : 32,
         vertical: isCompact ? 24 : 40,
@@ -2542,7 +2548,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                     horizontal: isCompact ? 20 : 28,
                     vertical: isCompact ? 16 : 22,
                   ),
-                  color: Colors.white,
+                  color: headerBg,
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -2556,7 +2562,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
                             style: GoogleFonts.poppins(
                               fontSize: isCompact ? 16 : 20,
                               fontWeight: FontWeight.w600,
-                              color: Colors.grey[900],
+                              color: titleColor,
                               letterSpacing: -0.5,
                             ),
                           ),

@@ -915,6 +915,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                       notificationProvider.totalUnread
                                   ? notificationProvider.unreadNotificationCount
                                   : notificationProvider.totalUnread;
+                              final bellBg = isDark
+                                  ? const Color(0xFF1E293B)
+                                  : totalUnread > 0
+                                  ? _eventActionBlueSoft
+                                  : _eventActionBlueSoft.withValues(
+                                      alpha: 0.58,
+                                    );
+                              final bellBorder = isDark
+                                  ? const Color(0xFF334155)
+                                  : totalUnread > 0
+                                  ? _eventActionBlue.withValues(alpha: 0.24)
+                                  : _eventActionBlue.withValues(alpha: 0.12);
+                              final bellIconColor = isDark
+                                  ? const Color(0xFF93C5FD)
+                                  : _eventActionBlue;
                               return SizedBox(
                                 width: 48,
                                 height: 42,
@@ -932,33 +947,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                             width: 42,
                                             height: 42,
                                             decoration: BoxDecoration(
-                                              color: totalUnread > 0
-                                                  ? _eventActionBlueSoft
-                                                  : _eventActionBlueSoft
-                                                        .withValues(
-                                                          alpha: 0.58,
-                                                        ),
+                                              color: bellBg,
                                               borderRadius:
                                                   BorderRadius.circular(16),
                                               border: Border.all(
-                                                color: totalUnread > 0
-                                                    ? _eventActionBlue
-                                                          .withValues(
-                                                            alpha: 0.24,
-                                                          )
-                                                    : _eventActionBlue
-                                                          .withValues(
-                                                            alpha: 0.12,
-                                                          ),
+                                                color: bellBorder,
                                               ),
                                             ),
                                             child: Icon(
                                               totalUnread > 0
                                                   ? LucideIcons.bellRing
                                                   : LucideIcons.bell,
-                                              color: totalUnread > 0
-                                                  ? _eventActionBlue
-                                                  : _eventActionBlue,
+                                              color: bellIconColor,
                                               size: 19,
                                             ),
                                           ),
@@ -1049,7 +1049,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               final hasPageLevelActions =
                                   currentRoute == '/requirements' ||
                                   currentRoute == '/admin' ||
-                                  currentRoute == '/events/create';
+                                  currentRoute == '/events/create' ||
+                                  currentRoute.startsWith('/events/') ||
+                                  currentRoute.startsWith('/approval-details/');
 
                               final baseBottomOffset = hasPageLevelActions
                                   ? 96.0

@@ -404,16 +404,28 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
     final controller = TextEditingController();
     final isApprove = action == _DecisionAction.approve;
     final isReject = action == _DecisionAction.reject;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final accent = isApprove
-        ? const Color(0xFF16A34A)
+        ? (isDark ? const Color(0xFF86EFAC) : const Color(0xFF16A34A))
         : isReject
-        ? const Color(0xFFDC2626)
-        : const Color(0xFFB45309);
+        ? (isDark ? const Color(0xFFFCA5A5) : const Color(0xFFDC2626))
+        : (isDark ? const Color(0xFFFCD34D) : const Color(0xFFB45309));
     final soft = isApprove
-        ? const Color(0xFFECFDF5)
+        ? (isDark
+              ? const Color(0xFF16A34A).withValues(alpha: 0.14)
+              : const Color(0xFFECFDF5))
         : isReject
-        ? const Color(0xFFFEF2F2)
-        : const Color(0xFFFFFBEB);
+        ? (isDark
+              ? const Color(0xFFDC2626).withValues(alpha: 0.14)
+              : const Color(0xFFFEF2F2))
+        : (isDark
+              ? const Color(0xFFD97706).withValues(alpha: 0.14)
+              : const Color(0xFFFFFBEB));
+    final dialogBg = isDark ? const Color(0xFF172033) : Colors.white;
+    final panel = isDark ? const Color(0xFF0F172A) : ApprovalUi.panel;
+    final border = isDark ? const Color(0xFF334155) : ApprovalUi.border;
+    final heading = isDark ? const Color(0xFFE2E8F0) : ApprovalUi.heading;
+    final muted = isDark ? const Color(0xFF94A3B8) : ApprovalUi.muted;
     final icon = isApprove
         ? Icons.check_circle_rounded
         : isReject
@@ -425,6 +437,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
       builder: (dialogContext) {
         return Dialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          backgroundColor: dialogBg,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(26),
           ),
@@ -449,10 +462,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
                     Expanded(
                       child: Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 19,
                           fontWeight: FontWeight.w800,
-                          color: ApprovalUi.heading,
+                          color: heading,
                         ),
                       ),
                     ),
@@ -463,11 +476,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
                   isApprove
                       ? 'Approve "$eventTitle" and add a message if needed.'
                       : '${_decisionLabel(action)} "$eventTitle" with a message for the requester.',
-                  style: const TextStyle(
-                    color: ApprovalUi.muted,
-                    fontSize: 14,
-                    height: 1.45,
-                  ),
+                  style: TextStyle(color: muted, fontSize: 14, height: 1.45),
                 ),
                 const SizedBox(height: 18),
                 TextField(
@@ -480,22 +489,23 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
                     helperText: requiredComment
                         ? 'A message is required for this action.'
                         : 'Optional message sent with the approval.',
-                    helperStyle: const TextStyle(color: ApprovalUi.muted),
+                    helperStyle: TextStyle(color: muted),
                     filled: true,
-                    fillColor: ApprovalUi.panel,
+                    fillColor: panel,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: ApprovalUi.border),
+                      borderSide: BorderSide(color: border),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: ApprovalUi.border),
+                      borderSide: BorderSide(color: border),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(color: accent, width: 1.5),
                     ),
                   ),
+                  style: TextStyle(color: heading),
                 ),
                 const SizedBox(height: 22),
                 Row(
@@ -1039,35 +1049,45 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
     }
 
     final tabIndex = _tabController.index;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final pageBg = isDark
+        ? theme.scaffoldBackgroundColor
+        : const Color(0xFFF8FAFC);
+    final surface = isDark ? const Color(0xFF111827) : Colors.white;
+    final panel = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final border = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+    final heading = isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: pageBg,
       body: SafeArea(
         child: Column(
           children: [
             Container(
-              color: Colors.white,
+              color: surface,
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Approvals',
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w900,
-                            color: Color(0xFF0F172A),
+                            color: heading,
                           ),
                         ),
                       ),
                       IconButton(
                         onPressed: _refreshing ? null : _refreshActiveTab,
                         style: IconButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          side: const BorderSide(color: Color(0xFFE2E8F0)),
+                          backgroundColor: panel,
+                          foregroundColor: theme.colorScheme.onSurface,
+                          side: BorderSide(color: border),
                         ),
                         icon: AnimatedRotation(
                           turns: _refreshing ? 0.35 : 0,
@@ -1088,14 +1108,14 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
                       prefixIcon: const Icon(Icons.search, size: 18),
                       isDense: true,
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: panel,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        borderSide: BorderSide(color: border),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        borderSide: BorderSide(color: border),
                       ),
                     ),
                   ),
@@ -1115,18 +1135,14 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
                               labelText: 'Status',
                               isDense: true,
                               filled: true,
-                              fillColor: Colors.white,
+                              fillColor: panel,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFE2E8F0),
-                                ),
+                                borderSide: BorderSide(color: border),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFE2E8F0),
-                                ),
+                                borderSide: BorderSide(color: border),
                               ),
                             ),
                             items: const [
@@ -1181,18 +1197,14 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
                               labelText: 'View',
                               isDense: true,
                               filled: true,
-                              fillColor: Colors.white,
+                              fillColor: panel,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFE2E8F0),
-                                ),
+                                borderSide: BorderSide(color: border),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(14),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFE2E8F0),
-                                ),
+                                borderSide: BorderSide(color: border),
                               ),
                             ),
                             items: const [
@@ -1240,9 +1252,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
                   const SizedBox(height: 12),
                   TabBar(
                     controller: _tabController,
-                    indicatorColor: const Color(0xFF4F46E5),
-                    labelColor: const Color(0xFF4F46E5),
-                    unselectedLabelColor: const Color(0xFF64748B),
+                    indicatorColor: theme.colorScheme.primary,
+                    labelColor: theme.colorScheme.primary,
+                    unselectedLabelColor: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
                     isScrollable: !_isApproverRole,
                     tabs: [
                       Tab(
@@ -1470,6 +1484,11 @@ class _ApprovalCard extends StatelessWidget {
 
   Future<void> _openActionSheet(BuildContext context) async {
     if (onDecision == null) return;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF172033) : ApprovalUi.surface;
+    final heading = isDark ? const Color(0xFFE2E8F0) : ApprovalUi.heading;
+    final muted = isDark ? const Color(0xFF94A3B8) : ApprovalUi.muted;
     final selected = await showModalBottomSheet<_DecisionAction>(
       context: context,
       isScrollControlled: true,
@@ -1485,7 +1504,7 @@ class _ApprovalCard extends StatelessWidget {
             child: Container(
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               decoration: BoxDecoration(
-                color: ApprovalUi.surface,
+                color: surface,
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: const [
                   BoxShadow(
@@ -1507,15 +1526,15 @@ class _ApprovalCard extends StatelessWidget {
                         'Take Action',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: ApprovalUi.heading,
+                          color: heading,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         'Choose how you want to handle "${request.eventTitle}".',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: ApprovalUi.muted,
+                          color: muted,
                           height: 1.4,
                         ),
                       ),
@@ -1589,8 +1608,24 @@ class _ApprovalCard extends StatelessWidget {
     final df = DateFormat('MMM d, yyyy');
     final tf = DateFormat('h:mm a');
     final screenWidth = MediaQuery.of(context).size.width;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isCompact = screenWidth < 430;
     final isHistorical = !request.isActionable;
+    final heading = isDark ? const Color(0xFFE2E8F0) : ApprovalUi.heading;
+    final muted = isDark ? const Color(0xFF94A3B8) : ApprovalUi.muted;
+    final reviewedBg = isDark
+        ? const Color(0xFF16A34A).withValues(alpha: 0.16)
+        : const Color(0xFFECFDF5);
+    final reviewedBorder = isDark
+        ? const Color(0xFF16A34A).withValues(alpha: 0.34)
+        : const Color(0xFFA7F3D0);
+    final reviewedText = isDark
+        ? const Color(0xFF86EFAC)
+        : const Color(0xFF166534);
+    final stageBg = isDark
+        ? ApprovalUi.accent.withValues(alpha: 0.16)
+        : ApprovalUi.accentSoft;
+    final stageAccent = isDark ? const Color(0xFFA5B4FC) : ApprovalUi.accent;
     final stageText = request.currentStageLabel?.trim().isNotEmpty == true
         ? request.currentStageLabel!.trim()
         : _pipelineStageLabel(request.pipelineStage);
@@ -1614,7 +1649,7 @@ class _ApprovalCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: isCompact ? 17 : 18,
                     fontWeight: FontWeight.w800,
-                    color: ApprovalUi.heading,
+                    color: heading,
                     height: 1.2,
                   ),
                 ),
@@ -1635,16 +1670,16 @@ class _ApprovalCard extends StatelessWidget {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFECFDF5),
+                    color: reviewedBg,
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: const Color(0xFFA7F3D0)),
+                    border: Border.all(color: reviewedBorder),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Reviewed',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      color: Color(0xFF166534),
+                      color: reviewedText,
                     ),
                   ),
                 ),
@@ -1668,7 +1703,7 @@ class _ApprovalCard extends StatelessWidget {
               request.description!,
               style: TextStyle(
                 fontSize: isCompact ? 12.5 : 13,
-                color: ApprovalUi.muted,
+                color: muted,
                 height: 1.4,
               ),
               maxLines: 2,
@@ -1706,13 +1741,13 @@ class _ApprovalCard extends StatelessWidget {
                 horizontal: isCompact ? 12 : 14,
                 vertical: isCompact ? 10 : 12,
               ),
-              backgroundColor: ApprovalUi.accentSoft,
+              backgroundColor: stageBg,
               borderColor: Colors.transparent,
               borderRadius: BorderRadius.circular(14),
               child: InfoRow(
                 icon: Icons.route_outlined,
                 text: stageText,
-                iconColor: ApprovalUi.accent,
+                iconColor: stageAccent,
               ),
             ),
           ],
@@ -1781,9 +1816,9 @@ class _ApprovalCard extends StatelessWidget {
                   padding: const EdgeInsets.only(left: 12),
                   child: Text(
                     isHistorical ? 'History item' : 'No action',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: ApprovalUi.muted,
+                      color: muted,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1817,6 +1852,25 @@ class _DecisionSheetOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final effectiveForeground = isDark
+        ? (foreground == const Color(0xFF166534)
+              ? const Color(0xFF86EFAC)
+              : foreground == const Color(0xFFB91C1C)
+              ? const Color(0xFFFCA5A5)
+              : const Color(0xFFFCD34D))
+        : foreground;
+    final effectiveBackground = isDark
+        ? effectiveForeground.withValues(alpha: 0.14)
+        : background;
+    final effectiveBorder = isDark
+        ? effectiveForeground.withValues(alpha: 0.30)
+        : border;
+    final iconBg = isDark
+        ? effectiveForeground.withValues(alpha: 0.12)
+        : Colors.white.withValues(alpha: 0.75);
+    final subtitleColor = isDark ? const Color(0xFFCBD5E1) : ApprovalUi.text;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1826,9 +1880,9 @@ class _DecisionSheetOption extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: background,
+            color: effectiveBackground,
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: border),
+            border: Border.all(color: effectiveBorder),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1837,10 +1891,10 @@ class _DecisionSheetOption extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.75),
+                  color: iconBg,
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(icon, color: foreground, size: 24),
+                child: Icon(icon, color: effectiveForeground, size: 24),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -1852,15 +1906,15 @@ class _DecisionSheetOption extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
-                        color: foreground,
+                        color: effectiveForeground,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: ApprovalUi.text,
+                        color: subtitleColor,
                         height: 1.4,
                       ),
                     ),
@@ -1883,24 +1937,29 @@ class _HistoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+    final border = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+    final textColor = isDark ? const Color(0xFFCBD5E1) : ApprovalUi.muted;
+
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 220),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
+          color: bg,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(color: border),
         ),
         child: Text(
           '$label: $value',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           softWrap: false,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,
-            color: ApprovalUi.muted,
+            color: textColor,
           ),
         ),
       ),
@@ -1940,7 +1999,10 @@ class _DepartmentApprovalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isCompact = screenWidth < 430;
+    final heading = isDark ? const Color(0xFFE2E8F0) : ApprovalUi.heading;
+    final muted = isDark ? const Color(0xFF94A3B8) : ApprovalUi.muted;
 
     return ApprovalCardShell(
       padding: EdgeInsets.all(isCompact ? 18 : 22),
@@ -1961,7 +2023,7 @@ class _DepartmentApprovalCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: isCompact ? 17 : 18,
                     fontWeight: FontWeight.w800,
-                    color: ApprovalUi.heading,
+                    color: heading,
                     height: 1.2,
                   ),
                 ),
@@ -1992,7 +2054,7 @@ class _DepartmentApprovalCard extends StatelessWidget {
                     details,
                     style: TextStyle(
                       fontSize: isCompact ? 12.5 : 13,
-                      color: ApprovalUi.muted,
+                      color: muted,
                       height: 1.4,
                     ),
                   ),
@@ -2047,13 +2109,13 @@ class _DepartmentApprovalCard extends StatelessWidget {
                   child: const Text('Action'),
                 )
               else
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text(
                     'No action',
                     style: TextStyle(
                       fontSize: 12,
-                      color: ApprovalUi.muted,
+                      color: muted,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
