@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../constants/app_colors.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
@@ -17,6 +19,9 @@ import '../../services/notification_service.dart';
 import '../../widgets/common/side_nav_bar.dart';
 import '../../widgets/dashboard/profile_dropdown.dart';
 
+const Color _eventActionBlue = Color(0xFF1A73E8);
+const Color _eventActionBlueSoft = Color(0xFFE8F0FE);
+
 class HomeScreen extends StatefulWidget {
   final Widget child;
   const HomeScreen({super.key, required this.child});
@@ -26,6 +31,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  // Increase this to make the in-app notification banner larger everywhere.
+  // Example: 1.15 gives the popup bar more height, padding, and larger text.
+  static const double _notificationPopupScale = 1.0;
+
   String _searchQuery = '';
   final ValueNotifier<bool> _chatFabVisible = ValueNotifier<bool>(true);
   Offset? _fabPos;
@@ -82,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _notificationBanner = OverlayEntry(
       builder: (context) => _NotificationPopupStack(
         events: List<NotificationPopupEvent>.unmodifiable(_activePopupEvents),
+        bannerScale: _notificationPopupScale,
         onOpen: (popup) {
           _notificationProvider?.markNotificationAsRead(popup.id);
           _dismissPopupById(popup.id);
@@ -120,7 +130,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openNotificationsPanel() async {
     if (!mounted) return;
 
-    final theme = Theme.of(context);
     final notificationProvider = Provider.of<NotificationProvider>(
       context,
       listen: false,
@@ -134,146 +143,432 @@ class _HomeScreenState extends State<HomeScreen> {
 
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: theme.colorScheme.surface,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       builder: (sheetContext) {
-        return Consumer<NotificationProvider>(
-          builder: (context, provider, _) {
-            final notifications = provider.notifications;
-            final unreadConversations = provider.unreadConversations;
-            final unreadNotifications = provider.unreadNotificationCount;
-            final currentTotalUnread = provider.totalUnread;
-            final hasUnreadItems =
-                unreadNotifications > 0 || unreadConversations.isNotEmpty;
-            final hasVisibleItems =
-                notifications.isNotEmpty || unreadConversations.isNotEmpty;
-            final badgeCount = unreadNotifications > currentTotalUnread
-                ? unreadNotifications
-                : currentTotalUnread;
+        var showUnreadOnly = false;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Consumer<NotificationProvider>(
+              builder: (context, provider, _) {
+                final allNotifications = provider.notifications;
+                final notifications = showUnreadOnly
+                    ? allNotifications.where((item) => !item.isRead).toList()
+                    : allNotifications;
+                final unreadConversations = provider.unreadConversations;
+                final visibleConversations = unreadConversations;
+                final unreadNotifications = provider.unreadNotificationCount;
+                final currentTotalUnread = provider.totalUnread;
+                final visibleConversationRoutes = visibleConversations
+                    .map((conversation) => '/chat/${conversation.id}')
+                    .toSet();
+                final hasUnreadItems =
+                    unreadNotifications > 0 || unreadConversations.isNotEmpty;
+                final hasVisibleItems =
+                    visibleConversations.isNotEmpty || notifications.isNotEmpty;
+                final hasAnyItems =
+                    unreadConversations.isNotEmpty ||
+                    allNotifications.isNotEmpty;
+                final badgeCount = unreadNotifications > currentTotalUnread
+                    ? unreadNotifications
+                    : currentTotalUnread;
+                final today = DateTime.now();
+                final yesterday = today.subtract(const Duration(days: 1));
+                final groupedTiles = <String, List<Widget>>{
+                  'Today': <Widget>[],
+                  'Yesterday': <Widget>[],
+                  'Older': <Widget>[],
+                };
 
-            return SafeArea(
-              top: false,
-              child: SizedBox(
-                height: MediaQuery.of(sheetContext).size.height * 0.62,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Notifications',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: theme.colorScheme.onSurface,
-                            ),
+                String dateGroup(DateTime timestamp) {
+                  final local = timestamp.toLocal();
+                  if (DateUtils.isSameDay(local, today)) return 'Today';
+                  if (DateUtils.isSameDay(local, yesterday)) return 'Yesterday';
+                  return 'Older';
+                }
+
+                void addTile(DateTime timestamp, Widget tile) {
+                  groupedTiles[dateGroup(timestamp)]!.add(tile);
+                }
+
+                for (final conversation in visibleConversations) {
+                  addTile(
+                    conversation.lastMessageAt ?? today,
+                    _UnreadConversationTile(
+                      conversation: conversation,
+                      onOpen: () {
+                        Navigator.of(sheetContext).pop();
+                        if (mounted) {
+                          this.context.push('/chat/${conversation.id}');
+                        }
+                      },
+                      onDismiss: () {
+                        provider.markConversationAsRead(conversation.id);
+                        ScaffoldMessenger.maybeOf(sheetContext)?.showSnackBar(
+                          const SnackBar(
+                            content: Text('Chat notification removed'),
                           ),
-                          if (badgeCount > 0)
-                            Text(
-                              '$badgeCount unread',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: theme.colorScheme.onSurfaceVariant,
+                        );
+                      },
+                    ),
+                  );
+                }
+
+                for (final item in notifications) {
+                  if (visibleConversationRoutes.contains(item.route)) {
+                    continue;
+                  }
+                  addTile(
+                    item.createdAt,
+                    _NotificationListTile(
+                      item: item,
+                      onOpen: () {
+                        provider.markNotificationAsRead(item.id);
+                        Navigator.of(sheetContext).pop();
+                        if (mounted) {
+                          this.context.go(item.route);
+                        }
+                      },
+                      onDismiss: () {
+                        provider.dismissNotification(item.id);
+                        ScaffoldMessenger.maybeOf(sheetContext)?.showSnackBar(
+                          const SnackBar(content: Text('Notification removed')),
+                        );
+                      },
+                      onMarkRead: () {
+                        provider.markNotificationAsRead(item.id);
+                      },
+                    ),
+                  );
+                }
+
+                return DraggableScrollableSheet(
+                  initialChildSize: 0.74,
+                  minChildSize: 0.36,
+                  maxChildSize: 0.88,
+                  expand: false,
+                  snap: true,
+                  snapSizes: const [0.36, 0.74, 0.88],
+                  builder: (context, scrollController) {
+                    final theme = Theme.of(context);
+                    final isDark = theme.brightness == Brightness.dark;
+                    final sheetColor = isDark
+                        ? theme.scaffoldBackgroundColor
+                        : const Color(0xFFF4F7FE);
+                    final sheetBorder = isDark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFE2E8F0);
+                    final elevatedSurface = isDark
+                        ? const Color(0xFF1E293B)
+                        : Colors.white;
+
+                    return SafeArea(
+                      top: false,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: sheetColor,
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(24),
+                          ),
+                          border: Border(top: BorderSide(color: sheetBorder)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(
+                                alpha: isDark ? 0.32 : 0.14,
+                              ),
+                              blurRadius: 24,
+                              offset: const Offset(0, -8),
+                            ),
+                          ],
+                        ),
+                        child: CustomScrollView(
+                          controller: scrollController,
+                          physics: const ClampingScrollPhysics(),
+                          slivers: [
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  18,
+                                  10,
+                                  18,
+                                  0,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Center(
+                                      child: Container(
+                                        width: 44,
+                                        height: 4,
+                                        decoration: BoxDecoration(
+                                          color: isDark
+                                              ? const Color(0xFF334155)
+                                              : _eventActionBlue.withValues(
+                                                  alpha: 0.24,
+                                                ),
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        Expanded(
+                                          child: Row(
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  'Notifications',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 24,
+                                                    height: 1,
+                                                    fontWeight: FontWeight.w800,
+                                                    letterSpacing: 0,
+                                                    color: isDark
+                                                        ? Colors.white
+                                                        : AppColors.textPrimary,
+                                                  ),
+                                                ),
+                                              ),
+                                              if (badgeCount > 0) ...[
+                                                const SizedBox(width: 10),
+                                                Container(
+                                                  width: 24,
+                                                  height: 24,
+                                                  decoration: BoxDecoration(
+                                                    color: _eventActionBlue,
+                                                    shape: BoxShape.circle,
+                                                    boxShadow: [
+                                                      BoxShadow(
+                                                        color: _eventActionBlue
+                                                            .withValues(
+                                                              alpha: 0.22,
+                                                            ),
+                                                        blurRadius: 8,
+                                                        offset: const Offset(
+                                                          0,
+                                                          3,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  alignment: Alignment.center,
+                                                  child: Text(
+                                                    badgeCount > 99
+                                                        ? '99+'
+                                                        : '$badgeCount',
+                                                    style: const TextStyle(
+                                                      color:
+                                                          AppColors.onPrimary,
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                        Tooltip(
+                                          message: 'Close',
+                                          child: IconButton(
+                                            onPressed: () => Navigator.of(
+                                              sheetContext,
+                                            ).pop(),
+                                            icon: const Icon(
+                                              Icons.close_rounded,
+                                              size: 18,
+                                            ),
+                                            style: IconButton.styleFrom(
+                                              backgroundColor: elevatedSurface,
+                                              foregroundColor: isDark
+                                                  ? const Color(0xFFCBD5E1)
+                                                  : const Color(0xFF64748B),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                side: BorderSide(
+                                                  color: sheetBorder,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: [
+                                        _NotificationFilterButton(
+                                          label: 'All',
+                                          selected: !showUnreadOnly,
+                                          onTap: () {
+                                            setSheetState(() {
+                                              showUnreadOnly = false;
+                                            });
+                                          },
+                                        ),
+                                        const SizedBox(width: 10),
+                                        _NotificationFilterButton(
+                                          label: 'Unread',
+                                          selected: showUnreadOnly,
+                                          onTap: () {
+                                            setSheetState(() {
+                                              showUnreadOnly = true;
+                                            });
+                                          },
+                                        ),
+                                        const Spacer(),
+                                        SizedBox(
+                                          width: 38,
+                                          height: 38,
+                                          child: Tooltip(
+                                            message: 'Mark all read',
+                                            child: IconButton(
+                                              onPressed: hasUnreadItems
+                                                  ? () async {
+                                                      await provider
+                                                          .markAllNotificationsAsRead();
+                                                    }
+                                                  : null,
+                                              icon: const Icon(
+                                                LucideIcons.checkCheck,
+                                                size: 18,
+                                              ),
+                                              style: IconButton.styleFrom(
+                                                backgroundColor: hasUnreadItems
+                                                    ? _eventActionBlue
+                                                    : elevatedSurface,
+                                                foregroundColor: hasUnreadItems
+                                                    ? Colors.white
+                                                    : _eventActionBlue,
+                                                disabledForegroundColor:
+                                                    AppColors.textMuted,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  side: BorderSide(
+                                                    color: hasUnreadItems
+                                                        ? _eventActionBlue
+                                                        : sheetBorder,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        SizedBox(
+                                          width: 38,
+                                          height: 38,
+                                          child: Tooltip(
+                                            message: 'Clear notifications',
+                                            child: IconButton(
+                                              onPressed: hasAnyItems
+                                                  ? () async {
+                                                      await provider
+                                                          .clearNotifications();
+                                                    }
+                                                  : null,
+                                              icon: const Icon(
+                                                LucideIcons.trash2,
+                                                size: 17,
+                                              ),
+                                              style: IconButton.styleFrom(
+                                                backgroundColor:
+                                                    elevatedSurface,
+                                                foregroundColor:
+                                                    AppColors.textMuted,
+                                                disabledForegroundColor:
+                                                    AppColors.textMuted
+                                                        .withValues(alpha: 0.5),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  side: BorderSide(
+                                                    color: sheetBorder,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                ),
                               ),
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: hasUnreadItems
-                                  ? () async {
-                                      await provider
-                                          .markAllNotificationsAsRead();
-                                    }
-                                  : null,
-                              child: const Text('Mark All Read'),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: hasVisibleItems
-                                  ? () async {
-                                      await provider.clearNotifications();
-                                    }
-                                  : null,
-                              child: const Text('Clear All'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: !hasVisibleItems
-                            ? Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 18,
-                                  ),
-                                  child: Text(
-                                    "You're all caught up",
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
+                            if (!hasVisibleItems)
+                              SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: _NotificationsEmptyState(
+                                  showUnreadOnly: showUnreadOnly,
                                 ),
                               )
-                            : ListView.separated(
-                                itemCount:
-                                    unreadConversations.length +
-                                    notifications.length,
-                                separatorBuilder: (_, _) =>
-                                    const SizedBox(height: 10),
-                                itemBuilder: (context, index) {
-                                  if (index < unreadConversations.length) {
-                                    final conversation =
-                                        unreadConversations[index];
-                                    return _UnreadConversationTile(
-                                      conversation: conversation,
-                                      onOpen: () {
-                                        Navigator.of(sheetContext).pop();
-                                        context.push(
-                                          '/chat/${conversation.id}',
-                                        );
-                                      },
-                                    );
-                                  }
-
-                                  final item =
-                                      notifications[index -
-                                          unreadConversations.length];
-                                  return _NotificationListTile(
-                                    item: item,
-                                    onOpen: () {
-                                      provider.markNotificationAsRead(item.id);
-                                      Navigator.of(sheetContext).pop();
-                                      context.go(item.route);
-                                    },
-                                    onDismiss: () {
-                                      provider.dismissNotification(item.id);
-                                    },
-                                    onMarkRead: () {
-                                      provider.markNotificationAsRead(item.id);
-                                    },
-                                  );
-                                },
+                            else
+                              SliverToBoxAdapter(
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    18,
+                                    0,
+                                    18,
+                                    28,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      for (final group in groupedTiles.entries)
+                                        if (group.value.isNotEmpty) ...[
+                                          Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                              12,
+                                              8,
+                                              8,
+                                              8,
+                                            ),
+                                            child: Text(
+                                              group.key.toUpperCase(),
+                                              style: const TextStyle(
+                                                color: _eventActionBlue,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: 0.9,
+                                              ),
+                                            ),
+                                          ),
+                                          ...group.value.expand(
+                                            (tile) => <Widget>[
+                                              tile,
+                                              const SizedBox(height: 6),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                        ],
+                                    ],
+                                  ),
+                                ),
                               ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
+                    );
+                  },
+                );
+              },
             );
           },
         );
@@ -612,7 +907,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 16),
+                          const SizedBox(width: 12),
                           Consumer<NotificationProvider>(
                             builder: (context, notificationProvider, _) {
                               final totalUnread =
@@ -620,53 +915,98 @@ class _HomeScreenState extends State<HomeScreen> {
                                       notificationProvider.totalUnread
                                   ? notificationProvider.unreadNotificationCount
                                   : notificationProvider.totalUnread;
-                              return Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  IconButton(
-                                    tooltip: 'Notifications',
-                                    onPressed: _openNotificationsPanel,
-                                    icon: const Icon(
-                                      LucideIcons.bell,
-                                      size: 18,
+                              return SizedBox(
+                                width: 48,
+                                height: 42,
+                                child: Tooltip(
+                                  message: 'Notifications',
+                                  child: InkWell(
+                                    onTap: _openNotificationsPanel,
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Container(
+                                            width: 42,
+                                            height: 42,
+                                            decoration: BoxDecoration(
+                                              color: totalUnread > 0
+                                                  ? _eventActionBlueSoft
+                                                  : _eventActionBlueSoft
+                                                        .withValues(
+                                                          alpha: 0.58,
+                                                        ),
+                                              borderRadius:
+                                                  BorderRadius.circular(16),
+                                              border: Border.all(
+                                                color: totalUnread > 0
+                                                    ? _eventActionBlue
+                                                          .withValues(
+                                                            alpha: 0.24,
+                                                          )
+                                                    : _eventActionBlue
+                                                          .withValues(
+                                                            alpha: 0.12,
+                                                          ),
+                                              ),
+                                            ),
+                                            child: Icon(
+                                              totalUnread > 0
+                                                  ? LucideIcons.bellRing
+                                                  : LucideIcons.bell,
+                                              color: totalUnread > 0
+                                                  ? _eventActionBlue
+                                                  : _eventActionBlue,
+                                              size: 19,
+                                            ),
+                                          ),
+                                        ),
+                                        if (totalUnread > 0)
+                                          Positioned(
+                                            right: 0,
+                                            top: -3,
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                                  ),
+                                              constraints: const BoxConstraints(
+                                                minWidth: 18,
+                                                minHeight: 18,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFDC2626),
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
+                                                border: Border.all(
+                                                  color: headerBg,
+                                                  width: 2,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                totalUnread > 99
+                                                    ? '99+'
+                                                    : '$totalUnread',
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
-                                  if (totalUnread > 0)
-                                    Positioned(
-                                      right: 6,
-                                      top: 6,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 5,
-                                          vertical: 1,
-                                        ),
-                                        constraints: const BoxConstraints(
-                                          minWidth: 16,
-                                          minHeight: 14,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFDC2626),
-                                          borderRadius: BorderRadius.circular(
-                                            999,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          totalUnread > 99
-                                              ? '99+'
-                                              : '$totalUnread',
-                                          textAlign: TextAlign.center,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                                ),
                               );
                             },
                           ),
+                          const SizedBox(width: 8),
                           if (user != null)
                             ProfileDropdown(user: user)
                           else
@@ -884,11 +1224,13 @@ class DashboardSearchScope extends InheritedWidget {
 
 class _NotificationPopupStack extends StatelessWidget {
   final List<NotificationPopupEvent> events;
+  final double bannerScale;
   final void Function(NotificationPopupEvent event) onOpen;
   final void Function(NotificationPopupEvent event) onDismiss;
 
   const _NotificationPopupStack({
     required this.events,
+    this.bannerScale = 1.0,
     required this.onOpen,
     required this.onDismiss,
   });
@@ -896,9 +1238,10 @@ class _NotificationPopupStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final topPadding = MediaQuery.of(context).padding.top;
+    final scale = bannerScale.clamp(0.9, 1.35);
 
     return Positioned(
-      top: topPadding + 10,
+      top: topPadding + (10 * scale),
       left: 12,
       right: 12,
       child: IgnorePointer(
@@ -910,10 +1253,11 @@ class _NotificationPopupStack extends StatelessWidget {
             child: Column(
               children: [
                 for (var i = 0; i < events.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
+                  if (i > 0) SizedBox(height: 8 * scale),
                   _NotificationPopupBanner(
                     event: events[i],
                     stackIndex: i,
+                    sizeScale: scale,
                     onOpen: () => onOpen(events[i]),
                     onDismiss: () => onDismiss(events[i]),
                   ),
@@ -930,12 +1274,14 @@ class _NotificationPopupStack extends StatelessWidget {
 class _NotificationPopupBanner extends StatefulWidget {
   final NotificationPopupEvent event;
   final int stackIndex;
+  final double sizeScale;
   final VoidCallback onOpen;
   final VoidCallback onDismiss;
 
   const _NotificationPopupBanner({
     required this.event,
     required this.stackIndex,
+    this.sizeScale = 1.0,
     required this.onOpen,
     required this.onDismiss,
   });
@@ -981,112 +1327,238 @@ class _NotificationPopupBannerState extends State<_NotificationPopupBanner>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scale = widget.sizeScale.clamp(0.9, 1.35);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Transform.translate(
-      offset: Offset(0, widget.stackIndex * 2),
+      offset: Offset(0, widget.stackIndex * 2 * scale),
       child: SlideTransition(
         position: _slide,
         child: Dismissible(
           key: ValueKey(widget.event.id),
           direction: DismissDirection.up,
           onDismissed: (_) => widget.onDismiss(),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.14),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-              border: Border.all(
-                color: theme.colorScheme.outline.withValues(alpha: 0.14),
+          child: InkWell(
+            onTap: widget.onOpen,
+            borderRadius: BorderRadius.circular(24 * scale),
+            child: Container(
+              constraints: BoxConstraints(minHeight: 86 * scale),
+              padding: EdgeInsets.fromLTRB(
+                14 * scale,
+                14 * scale,
+                10 * scale,
+                14 * scale,
               ),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFDBEAFE),
-                    borderRadius: BorderRadius.circular(14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(24 * scale),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.14),
+                    blurRadius: 26 * scale,
+                    offset: Offset(0, 12 * scale),
                   ),
-                  child: const Icon(
-                    Icons.message_rounded,
-                    color: Color(0xFF1D4ED8),
-                  ),
+                ],
+                border: Border.all(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.14),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              widget.event.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurface,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44 * scale,
+                    height: 44 * scale,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(15 * scale),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Icon(
+                      LucideIcons.bellRing,
+                      color: const Color(0xFF2563EB),
+                      size: 22 * scale,
+                    ),
+                  ),
+                  SizedBox(width: 12 * scale),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                widget.event.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: theme.colorScheme.onSurface,
+                                  fontSize: 14.5 * scale,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _relativeTime(widget.event.createdAt),
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
+                            SizedBox(width: 8 * scale),
+                            Container(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 8 * scale,
+                                vertical: 4 * scale,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.surfaceContainerHighest
+                                    .withValues(alpha: isDark ? 0.35 : 0.75),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                _relativeTime(widget.event.createdAt),
+                                style: TextStyle(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 10.5 * scale,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        widget.event.body,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 13,
-                          height: 1.3,
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          TextButton(
-                            onPressed: widget.onOpen,
-                            child: const Text('Open'),
+                        SizedBox(height: 5 * scale),
+                        Text(
+                          widget.event.body,
+                          maxLines: scale > 1.12 ? 3 : 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 13 * scale,
+                            height: 1.35,
                           ),
-                          const SizedBox(width: 8),
-                          TextButton(
-                            onPressed: widget.onDismiss,
-                            child: const Text('Dismiss'),
-                          ),
-                        ],
-                      ),
-                    ],
+                        ),
+                        SizedBox(height: 10 * scale),
+                        Row(
+                          children: [
+                            FilledButton(
+                              onPressed: widget.onOpen,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF2563EB),
+                                foregroundColor: Colors.white,
+                                minimumSize: Size(0, 34 * scale),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 14 * scale,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    12 * scale,
+                                  ),
+                                ),
+                                textStyle: TextStyle(
+                                  fontSize: 12.5 * scale,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              child: const Text('Open'),
+                            ),
+                            SizedBox(width: 8 * scale),
+                            TextButton(
+                              onPressed: widget.onDismiss,
+                              style: TextButton.styleFrom(
+                                minimumSize: Size(0, 34 * scale),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 12 * scale,
+                                ),
+                                textStyle: TextStyle(
+                                  fontSize: 12.5 * scale,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              child: const Text('Dismiss'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  onPressed: widget.onDismiss,
-                  icon: const Icon(Icons.close_rounded, size: 18),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
+                  SizedBox(width: 6 * scale),
+                  IconButton(
+                    onPressed: widget.onDismiss,
+                    icon: Icon(Icons.close_rounded, size: 18 * scale),
+                    visualDensity: VisualDensity.compact,
+                    style: IconButton.styleFrom(
+                      backgroundColor: theme.colorScheme.surfaceContainerHighest
+                          .withValues(alpha: isDark ? 0.2 : 0.55),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12 * scale),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationFilterButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _NotificationFilterButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final inactiveBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final inactiveBorder = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0);
+    final inactiveText = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF64748B);
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.center,
+          height: 38,
+          constraints: const BoxConstraints(minWidth: 74),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFF2563EB) : inactiveBg,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: selected ? const Color(0xFF2563EB) : inactiveBorder,
+              width: 1.5,
+            ),
+            boxShadow: selected
+                ? const [
+                    BoxShadow(
+                      color: Color(0x332563EB),
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? Colors.white : inactiveText,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
@@ -1108,114 +1580,308 @@ class _NotificationListTile extends StatelessWidget {
     required this.onMarkRead,
   });
 
-  String _relativeTime(DateTime timestamp) {
-    final diff = DateTime.now().difference(timestamp);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
-    if (diff.inHours < 24) return '${diff.inHours} hr ago';
-    return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
+  String _displayTime(DateTime timestamp) {
+    final local = timestamp.toLocal();
+    if (DateUtils.isSameDay(local, DateTime.now())) {
+      return DateFormat('hh:mm a').format(local);
+    }
+    return DateFormat('MMM d').format(local);
+  }
+
+  String get _headline {
+    final title = item.title.trim();
+    if (title.isNotEmpty) return title;
+    return 'Notification';
+  }
+
+  String get _contextLabel {
+    final category = item.category.trim();
+    final normalized = category.toLowerCase();
+    if (normalized == 'message' || normalized == 'chat') return 'Chat';
+    if (normalized == 'approval_thread' || normalized == 'workflow') {
+      return 'Workflow discussion';
+    }
+    if (normalized == 'event') return 'Event chat';
+    if (category.isNotEmpty) return category;
+    return 'System update';
+  }
+
+  Color get _accentColor {
+    final source = '${_headline.toLowerCase()} ${_contextLabel.toLowerCase()}';
+    if (source.contains('marketing')) return AppColors.warning;
+    if (source.contains('finance')) return const Color(0xFF0E7490);
+    if (source.contains('facility')) return const Color(0xFF00897B);
+    if (source.contains('workflow') || source.contains('approval')) {
+      return AppColors.info;
+    }
+    if (source.contains('event')) return AppColors.primaryDark;
+    return AppColors.primary;
+  }
+
+  IconData get _contextIcon {
+    final label = _contextLabel.toLowerCase();
+    if (label.contains('workflow') || label.contains('approval')) {
+      return LucideIcons.gitBranch;
+    }
+    if (label.contains('event')) return LucideIcons.calendarDays;
+    if (label.contains('chat')) return LucideIcons.messageCircle;
+    return LucideIcons.bell;
+  }
+
+  Widget _dismissBackground(Alignment alignment) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEF4444),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      alignment: alignment,
+      child: const Icon(LucideIcons.trash2, color: Colors.white, size: 22),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final accentColor = _accentColor;
+    final cardBg = item.isRead
+        ? isDark
+              ? const Color(0xFF172033)
+              : Colors.white
+        : isDark
+        ? _eventActionBlue.withValues(alpha: 0.12)
+        : _eventActionBlueSoft.withValues(alpha: 0.82);
+    final borderColor = item.isRead
+        ? isDark
+              ? const Color(0xFF334155)
+              : const Color(0xFFE8EEF7)
+        : _eventActionBlue.withValues(alpha: isDark ? 0.32 : 0.22);
+    final primaryText = isDark ? Colors.white : const Color(0xFF172033);
+    final secondaryText = isDark
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
 
-    return InkWell(
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: item.isRead
-              ? (isDark
-                    ? theme.colorScheme.surfaceContainerLow
-                    : const Color(0xFFF8FAFC))
-              : const Color(0xFFEFF6FF),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: item.isRead
-                ? theme.colorScheme.outline.withValues(alpha: 0.2)
-                : const Color(0xFFBFDBFE),
+    return Dismissible(
+      key: ValueKey('notification-${item.id}'),
+      direction: DismissDirection.horizontal,
+      dismissThresholds: const {
+        DismissDirection.startToEnd: 0.18,
+        DismissDirection.endToStart: 0.18,
+      },
+      background: _dismissBackground(Alignment.centerLeft),
+      secondaryBackground: _dismissBackground(Alignment.centerRight),
+      confirmDismiss: (_) async {
+        onDismiss();
+        return false;
+      },
+      child: InkWell(
+        onTap: onOpen,
+        onDoubleTap: item.isRead ? null : onMarkRead,
+        onLongPress: onDismiss,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: borderColor),
+            boxShadow: [
+              if (!isDark)
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.035),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+            ],
           ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: item.isRead
-                    ? const Color(0xFFE2E8F0)
-                    : const Color(0xFFDBEAFE),
-                borderRadius: BorderRadius.circular(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (!item.isRead) ...[
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                    color: _eventActionBlue,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: accentColor.withValues(alpha: 0.1)),
+                ),
+                child: Icon(_contextIcon, color: accentColor, size: 20),
               ),
-              child: const Icon(
-                Icons.notifications_active_outlined,
-                color: Color(0xFF1D4ED8),
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: theme.colorScheme.onSurface,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _headline,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: item.isRead
+                                  ? FontWeight.w700
+                                  : FontWeight.w900,
+                              color: item.isRead ? secondaryText : primaryText,
+                              height: 1.2,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _relativeTime(item.createdAt),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurfaceVariant,
+                        const SizedBox(width: 8),
+                        Text(
+                          _displayTime(item.createdAt),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textMuted,
+                          ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _contextLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: item.isRead
+                            ? secondaryText
+                            : const Color(0xFF2563EB),
                       ),
-                    ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      item.body,
+                      maxLines: item.isRead ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color: secondaryText,
+                        height: 1.25,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              Tooltip(
+                message: item.isRead ? 'Dismiss' : 'Mark read',
+                child: IconButton(
+                  onPressed: item.isRead ? onDismiss : onMarkRead,
+                  icon: Icon(
+                    item.isRead ? LucideIcons.x : LucideIcons.check,
+                    size: 16,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: theme.colorScheme.onSurfaceVariant,
-                      height: 1.35,
+                  visualDensity: VisualDensity.compact,
+                  style: IconButton.styleFrom(
+                    foregroundColor: item.isRead
+                        ? AppColors.textMuted
+                        : const Color(0xFF16A34A),
+                    backgroundColor: item.isRead
+                        ? Colors.transparent
+                        : const Color(0xFF16A34A).withValues(alpha: 0.1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      TextButton(onPressed: onOpen, child: const Text('Open')),
-                      if (!item.isRead)
-                        TextButton(
-                          onPressed: onMarkRead,
-                          child: const Text('Mark Read'),
-                        ),
-                      TextButton(
-                        onPressed: onDismiss,
-                        child: const Text('Remove'),
-                      ),
-                    ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationsEmptyState extends StatelessWidget {
+  final bool showUnreadOnly;
+
+  const _NotificationsEmptyState({required this.showUnreadOnly});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final boxBg = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final boxBorder = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFF1F5F9);
+    final iconColor = isDark
+        ? const Color(0xFF64748B)
+        : const Color(0xFFCBD5E1);
+    final titleColor = isDark ? Colors.white : const Color(0xFF334155);
+    final subtitleColor = isDark
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF94A3B8);
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 20, 32, 52),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 96,
+              height: 96,
+              decoration: BoxDecoration(
+                color: boxBg,
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(color: boxBorder),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
                 ],
+              ),
+              child: Icon(
+                showUnreadOnly ? LucideIcons.checkCheck : LucideIcons.bell,
+                color: iconColor,
+                size: 40,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              showUnreadOnly
+                  ? 'No unread notifications'
+                  : "You're all caught up",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                color: titleColor,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              showUnreadOnly
+                  ? 'Everything visible here has already been handled.'
+                  : 'New updates will appear here.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: subtitleColor,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -1228,18 +1894,20 @@ class _NotificationListTile extends StatelessWidget {
 class _UnreadConversationTile extends StatelessWidget {
   final ChatConversation conversation;
   final VoidCallback onOpen;
+  final VoidCallback onDismiss;
 
   const _UnreadConversationTile({
     required this.conversation,
     required this.onOpen,
+    required this.onDismiss,
   });
 
-  String _relativeTime(DateTime timestamp) {
-    final diff = DateTime.now().difference(timestamp);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
-    if (diff.inHours < 24) return '${diff.inHours} hr ago';
-    return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
+  String _displayTime(DateTime timestamp) {
+    final local = timestamp.toLocal();
+    if (DateUtils.isSameDay(local, DateTime.now())) {
+      return DateFormat('hh:mm a').format(local);
+    }
+    return DateFormat('MMM d').format(local);
   }
 
   String get _title {
@@ -1272,6 +1940,37 @@ class _UnreadConversationTile extends StatelessWidget {
     }
   }
 
+  String get _initials {
+    final source = _title.trim().isNotEmpty ? _title : _contextLabel;
+    final parts = source.split(RegExp(r'\s+|_|-|–')).where((part) {
+      final trimmed = part.trim();
+      if (trimmed.isEmpty) return false;
+      return RegExp(r'[A-Za-z0-9]').hasMatch(trimmed);
+    }).toList();
+    if (parts.isEmpty) return 'CH';
+    if (parts.length == 1) {
+      final text = parts.first.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+      if (text.isEmpty) return 'CH';
+      return text.substring(0, text.length >= 2 ? 2 : 1).toUpperCase();
+    }
+    return '${parts.first[0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  Color get _avatarColor {
+    final source = '${_title.toLowerCase()} ${_contextLabel.toLowerCase()}';
+    if (source.contains('marketing')) return AppColors.warning;
+    if (source.contains('finance')) return const Color(0xFF0E7490);
+    if (source.contains('facility')) return const Color(0xFF00897B);
+    if (source.contains('it ') || source.contains('system')) {
+      return AppColors.primary;
+    }
+    if (source.contains('approval') || source.contains('workflow')) {
+      return AppColors.info;
+    }
+    if (source.contains('event')) return AppColors.primaryDark;
+    return AppColors.primary;
+  }
+
   String get _messagePreview {
     final message = conversation.lastMessage?.trim() ?? '';
     if (message.isNotEmpty) return message;
@@ -1283,118 +1982,294 @@ class _UnreadConversationTile extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final unreadCount = conversation.unreadCount;
+    final isWorkflow = conversation.kind == 'approval_thread';
+    final isEvent = conversation.kind == 'event';
+    final tileColor = isDark ? const Color(0xFF172033) : Colors.white;
+    final borderColor = _eventActionBlue.withValues(
+      alpha: isDark ? 0.32 : 0.22,
+    );
+    final primaryText = isDark
+        ? const Color(0xFFF8FAFC)
+        : AppColors.textPrimary;
+    final secondaryText = isDark
+        ? const Color(0xFFCBD5E1)
+        : AppColors.textSecondary;
 
-    return InkWell(
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isDark
-              ? theme.colorScheme.surfaceContainerHigh
-              : const Color(0xFFEFF6FF),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isDark
-                ? theme.colorScheme.outline.withValues(alpha: 0.35)
-                : const Color(0xFFBFDBFE),
+    return Dismissible(
+      key: ValueKey('conversation-notification-${conversation.id}'),
+      direction: DismissDirection.horizontal,
+      dismissThresholds: const {
+        DismissDirection.startToEnd: 0.18,
+        DismissDirection.endToStart: 0.18,
+      },
+      background: _conversationDismissBackground(Alignment.centerLeft),
+      secondaryBackground: _conversationDismissBackground(
+        Alignment.centerRight,
+      ),
+      confirmDismiss: (_) async {
+        onDismiss();
+        return false;
+      },
+      child: InkWell(
+        onTap: onOpen,
+        onLongPress: onDismiss,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+          decoration: BoxDecoration(
+            color: tileColor,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: borderColor),
+            boxShadow: [
+              if (!isDark)
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.035),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+            ],
           ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: const Color(0xFFDBEAFE),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(
-                Icons.mark_chat_unread_outlined,
-                color: Color(0xFF1D4ED8),
-                size: 21,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                      ),
-                      if (conversation.lastMessageAt != null) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          _relativeTime(conversation.lastMessageAt!),
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _contextLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF2563EB),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Positioned(
+                left: -8,
+                top: 18,
+                child: SizedBox(
+                  width: 7,
+                  height: 7,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: _eventActionBlue,
+                      shape: BoxShape.circle,
                     ),
                   ),
-                  const SizedBox(height: 5),
-                  Text(
-                    _messagePreview,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.35,
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Container(
-              constraints: const BoxConstraints(minWidth: 28),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2563EB),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                unreadCount > 99 ? '99+' : '$unreadCount',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
                 ),
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: _avatarColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _avatarColor.withValues(alpha: 0.10),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Center(
+                            child: Text(
+                              _initials,
+                              style: TextStyle(
+                                color: _avatarColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            right: -2,
+                            bottom: -2,
+                            child: Container(
+                              width: 16,
+                              height: 16,
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0xFF0F172A)
+                                    : AppColors.surface,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _avatarColor.withValues(alpha: 0.16),
+                                ),
+                              ),
+                              child: Icon(
+                                isWorkflow
+                                    ? LucideIcons.gitBranch
+                                    : isEvent
+                                    ? LucideIcons.calendarDays
+                                    : LucideIcons.messageCircle,
+                                size: 10,
+                                color: _avatarColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              height: 1.18,
+                              fontWeight: FontWeight.w800,
+                              color: primaryText,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  _contextLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    height: 1.2,
+                                    fontWeight: FontWeight.w800,
+                                    color: primaryText,
+                                  ),
+                                ),
+                              ),
+                              if (isWorkflow) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.infoLight,
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    _workflowStatusLabel,
+                                    style: const TextStyle(
+                                      color: AppColors.info,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _messagePreview,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              height: 1.25,
+                              color: secondaryText,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    SizedBox(
+                      width: 60,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (conversation.lastMessageAt != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0xFF0F172A)
+                                    : const Color(0xFFF8FAFC),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: isDark
+                                      ? const Color(0xFF273449)
+                                      : const Color(0xFFE6EDF5),
+                                ),
+                              ),
+                              child: Text(
+                                _displayTime(conversation.lastMessageAt!),
+                                maxLines: 1,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 6),
+                          if (unreadCount > 0)
+                            Container(
+                              constraints: const BoxConstraints(
+                                minWidth: 28,
+                                minHeight: 28,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _eventActionBlue,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                unreadCount > 99 ? '99+' : '$unreadCount',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  String get _workflowStatusLabel {
+    switch ((conversation.threadStatus ?? '').toLowerCase()) {
+      case 'waiting_for_faculty':
+        return 'Faculty';
+      case 'waiting_for_department':
+        return 'Dept';
+      case 'resolved':
+        return 'Resolved';
+      case 'closed':
+        return 'Closed';
+      default:
+        return 'Thread';
+    }
+  }
+
+  Widget _conversationDismissBackground(Alignment alignment) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEF4444),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      alignment: alignment,
+      child: const Icon(LucideIcons.trash2, color: Colors.white, size: 22),
     );
   }
 }

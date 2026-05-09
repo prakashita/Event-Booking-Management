@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
-import '../../../providers/auth_provider.dart';
+import '../../screens/auth/sign_out_screen.dart';
 import '../../screens/settings/settings_screen.dart';
+
+const Color _eventActionBlue = Color(0xFF1A73E8);
 
 class ProfileDropdown extends StatefulWidget {
   final User user;
@@ -39,6 +39,13 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
     final avatarIcon = isDark
         ? const Color(0xFFDBEAFE)
         : theme.colorScheme.primary;
+    final triggerBg = isDark
+        ? const Color(0xFF1E293B)
+        : const Color(0xFFE8F0FE);
+    final triggerBorder = isDark
+        ? const Color(0xFF334155)
+        : _eventActionBlue.withValues(alpha: 0.14);
+    final triggerIcon = isDark ? const Color(0xFFBFDBFE) : _eventActionBlue;
 
     return GestureDetector(
       onTap: _tooltipController.toggle,
@@ -202,11 +209,8 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
                             icon: const Icon(LucideIcons.logOut, size: 16),
                             label: const Text('Log Out'),
                             onPressed: () {
-                              Provider.of<AuthProvider>(
-                                context,
-                                listen: false,
-                              ).signOut();
-                              context.go('/login');
+                              _tooltipController.hide();
+                              showSignOutDialog(context);
                             },
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.red,
@@ -227,32 +231,42 @@ class _ProfileDropdownState extends State<ProfileDropdown> {
             ],
           );
         },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: const Color(0xFF4F46E5), // Indigo matching React exact UI
-            borderRadius: BorderRadius.circular(30),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+        child: SizedBox(
+          width: 48,
+          height: 42,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  LucideIcons.user,
-                  color: Colors.white,
-                  size: 18,
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: triggerBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: triggerBorder),
+                  ),
+                  child: Icon(LucideIcons.user, color: triggerIcon, size: 19),
                 ),
               ),
-              const SizedBox(width: 8),
-              const Icon(
-                LucideIcons.chevronDown,
-                color: Colors.white,
-                size: 18,
+              Positioned(
+                right: 0,
+                bottom: -1,
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: _eventActionBlue,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: cardColor, width: 2),
+                  ),
+                  child: const Icon(
+                    LucideIcons.chevronDown,
+                    color: Colors.white,
+                    size: 12,
+                  ),
+                ),
               ),
             ],
           ),

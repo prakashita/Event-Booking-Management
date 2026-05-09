@@ -221,41 +221,34 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
     final isApprove = action == _DecisionAction.approve;
     final isReject = action == _DecisionAction.reject;
 
-    final confirmed = await showConfirmDialog(
-      context,
-      title: '${_decisionLabel(action)} Event',
-      message: isApprove
-          ? '${_decisionLabel(action)} "${req.eventTitle}"?'
-          : '${_decisionLabel(action)} "${req.eventTitle}"? Please provide a comment for the requester.',
-      confirmLabel: _decisionLabel(action),
-      isDestructive: isReject,
+    final comment = await _promptDecisionComment(
+      title: isApprove
+          ? 'Approve request'
+          : isReject
+          ? 'Reject request'
+          : 'Request clarification',
+      hint: isApprove
+          ? 'Add an optional message for the requester'
+          : isReject
+          ? 'Add rejection reason'
+          : 'Ask for clarification',
+      action: action,
+      eventTitle: req.eventTitle,
+      requiredComment: !isApprove,
     );
-    if (confirmed != true || !mounted) return;
-
-    String? comment;
-    if (!isApprove) {
-      comment = await _promptDecisionComment(
-        title: action == _DecisionAction.reject
-            ? 'Reject request'
-            : 'Request clarification',
-        hint: action == _DecisionAction.reject
-            ? 'Add rejection reason'
-            : 'Ask for clarification',
-      );
-      if (!mounted || comment == null) return;
-      if (comment.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              action == _DecisionAction.reject
-                  ? 'Comment is required when rejecting a request.'
-                  : 'Comment is required when requesting clarification.',
-            ),
-            backgroundColor: AppColors.error,
+    if (!mounted || comment == null) return;
+    if (!isApprove && comment.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isReject
+                ? 'Comment is required when rejecting a request.'
+                : 'Comment is required when requesting clarification.',
           ),
-        );
-        return;
-      }
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
     }
 
     try {
@@ -263,7 +256,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
         '/approvals/${req.id}',
         data: {
           'status': _decisionStatus(action),
-          if ((comment ?? '').trim().isNotEmpty) 'comment': comment!.trim(),
+          if (comment.trim().isNotEmpty) 'comment': comment.trim(),
         },
       );
 
@@ -404,34 +397,142 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
   Future<String?> _promptDecisionComment({
     required String title,
     required String hint,
+    required _DecisionAction action,
+    required String eventTitle,
+    required bool requiredComment,
   }) async {
     final controller = TextEditingController();
+    final isApprove = action == _DecisionAction.approve;
+    final isReject = action == _DecisionAction.reject;
+    final accent = isApprove
+        ? const Color(0xFF16A34A)
+        : isReject
+        ? const Color(0xFFDC2626)
+        : const Color(0xFFB45309);
+    final soft = isApprove
+        ? const Color(0xFFECFDF5)
+        : isReject
+        ? const Color(0xFFFEF2F2)
+        : const Color(0xFFFFFBEB);
+    final icon = isApprove
+        ? Icons.check_circle_rounded
+        : isReject
+        ? Icons.cancel_rounded
+        : Icons.help_center_rounded;
+
     final result = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(title),
-          content: TextField(
-            controller: controller,
-            maxLines: 4,
-            minLines: 3,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
-              hintText: hint,
-              border: const OutlineInputBorder(),
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(26),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: soft,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Icon(icon, color: accent, size: 26),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          color: ApprovalUi.heading,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  isApprove
+                      ? 'Approve "$eventTitle" and add a message if needed.'
+                      : '${_decisionLabel(action)} "$eventTitle" with a message for the requester.',
+                  style: const TextStyle(
+                    color: ApprovalUi.muted,
+                    fontSize: 14,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                TextField(
+                  controller: controller,
+                  maxLines: 5,
+                  minLines: 4,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: hint,
+                    helperText: requiredComment
+                        ? 'A message is required for this action.'
+                        : 'Optional message sent with the approval.',
+                    helperStyle: const TextStyle(color: ApprovalUi.muted),
+                    filled: true,
+                    fillColor: ApprovalUi.panel,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: ApprovalUi.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: ApprovalUi.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: accent, width: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(
+                          dialogContext,
+                        ).pop(controller.text.trim()),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: accent,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(_decisionLabel(action)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text.trim()),
-              child: const Text('Continue'),
-            ),
-          ],
         );
       },
     );
@@ -1643,32 +1744,41 @@ class _ApprovalCard extends StatelessWidget {
             ),
           ],
           SizedBox(height: isCompact ? 16 : 18),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
+          Row(
             children: [
-              OutlinedButton(
-                onPressed: onDetails,
-                style: OutlinedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isCompact ? 18 : 20,
-                    vertical: isCompact ? 13 : 14,
+              SizedBox(
+                height: 48,
+                child: OutlinedButton(
+                  onPressed: onDetails,
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isCompact ? 20 : 22,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                  child: const Text(
+                    'Details',
+                    style: TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
-                child: const Text('Details'),
               ),
               if (showActions)
-                InkWell(
-                  onTap: () => _openActionSheet(context),
-                  borderRadius: BorderRadius.circular(14),
-                  child: const ApprovalActionButton(label: 'Action'),
+                Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: SizedBox(
+                    height: 48,
+                    child: InkWell(
+                      onTap: () => _openActionSheet(context),
+                      borderRadius: BorderRadius.circular(14),
+                      child: const ApprovalActionButton(label: 'Action'),
+                    ),
+                  ),
                 )
               else
                 Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
+                  padding: const EdgeInsets.only(left: 12),
                   child: Text(
                     isHistorical ? 'History item' : 'No action',
                     style: const TextStyle(

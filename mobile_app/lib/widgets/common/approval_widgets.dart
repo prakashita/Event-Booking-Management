@@ -126,13 +126,14 @@ class ApprovalActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding:
-          padding ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding ?? const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         color: ApprovalUi.accent,
-        borderRadius: borderRadius ?? BorderRadius.circular(12),
+        borderRadius: borderRadius ?? BorderRadius.circular(14),
       ),
       child: Text(
         label,
+        textAlign: TextAlign.center,
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w700,

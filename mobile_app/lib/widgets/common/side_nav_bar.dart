@@ -3,8 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-import '../../providers/auth_provider.dart';
 import '../../constants/app_constants.dart';
+import '../../providers/auth_provider.dart';
+import '../../screens/auth/sign_out_screen.dart';
 
 class SideNavBar extends StatelessWidget {
   final String currentRoute;
@@ -226,7 +227,8 @@ class SideNavBar extends StatelessWidget {
     required String route,
   }) {
     final bool isSelected =
-        currentRoute == route || currentRoute.startsWith('$route/');
+        currentRoute == route ||
+        (route != '/dashboard' && currentRoute.startsWith('$route/'));
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -287,19 +289,26 @@ class SideNavBar extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          Provider.of<AuthProvider>(context, listen: false).signOut();
-          context.go('/login');
+          showSignOutDialog(context);
         },
         borderRadius: BorderRadius.circular(8),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: const Row(
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
             children: [
-              Icon(LucideIcons.logOut, size: 20, color: Color(0xFFA0AEC0)),
-              SizedBox(width: 16),
+              Icon(
+                LucideIcons.logOut,
+                size: 20,
+                color: const Color(0xFFA0AEC0),
+              ),
+              const SizedBox(width: 16),
               Text(
-                'Logout',
-                style: TextStyle(
+                'Sign out',
+                style: const TextStyle(
                   color: Color(0xFFA0AEC0),
                   fontWeight: FontWeight.w500,
                   fontSize: 14,

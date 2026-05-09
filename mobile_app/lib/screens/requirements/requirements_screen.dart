@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/app_constants.dart';
+import '../../constants/approval_ui.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/common/app_widgets.dart';
@@ -368,136 +369,216 @@ class _RequirementsScreenState extends State<RequirementsScreen>
 
     String selected = 'approved';
     final commentCtrl = TextEditingController();
+    final title = _itemTitle(item);
 
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Update $_channelLabel request',
-                  style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                DropdownButtonFormField<String>(
-                  initialValue: selected,
-                  icon: const Icon(LucideIcons.chevronDown, size: 20),
-                  decoration: InputDecoration(
-                    labelText: 'Decision',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'approved', child: Text('Noted')),
-                    DropdownMenuItem(value: 'rejected', child: Text('Reject')),
-                    DropdownMenuItem(
-                      value: 'clarification_requested',
-                      child: Text('Clarification'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setLocal(() => selected = value ?? 'approved');
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: commentCtrl,
-                  minLines: 3,
-                  maxLines: 5,
-                  decoration: InputDecoration(
-                    labelText: selected == 'approved'
-                        ? 'Comment (optional)'
-                        : 'Comment (required)',
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 14,
+        builder: (ctx, setLocal) {
+          final isApprove = selected == 'approved';
+          final isReject = selected == 'rejected';
+          final accent = isApprove
+              ? const Color(0xFF16A34A)
+              : isReject
+              ? const Color(0xFFDC2626)
+              : const Color(0xFFB45309);
+          final actionLabel = isApprove
+              ? 'Noted'
+              : isReject
+              ? 'Reject'
+              : 'Clarification';
+
+          return Dialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(26),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                        child: Icon(
+                          isApprove
+                              ? LucideIcons.checkCircle2
+                              : isReject
+                              ? LucideIcons.xCircle
+                              : LucideIcons.helpCircle,
+                          color: accent,
+                          size: 25,
                         ),
                       ),
-                      child: Text(
-                        'Cancel',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: () async {
-                        final comment = commentCtrl.text.trim();
-                        if (selected != 'approved' && comment.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Comment is required for reject/clarification.',
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Update $_channelLabel request',
+                              style: GoogleFonts.poppins(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w700,
+                                color: ApprovalUi.heading,
                               ),
                             ),
-                          );
-                          return;
-                        }
-                        Navigator.of(ctx).pop();
-                        await _decide(_itemId(item), selected, comment);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).primaryColor,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 14,
-                        ),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                            const SizedBox(height: 3),
+                            Text(
+                              title.isEmpty ? 'Choose an action' : title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.inter(
+                                color: ApprovalUi.muted,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: const Text(
-                        'Submit',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  _RequirementDecisionOption(
+                    selected: selected == 'approved',
+                    icon: LucideIcons.checkCircle2,
+                    label: 'Noted',
+                    subtitle: 'Mark this requirement as handled.',
+                    foreground: const Color(0xFF166534),
+                    background: const Color(0xFFECFDF5),
+                    border: const Color(0xFFA7F3D0),
+                    onTap: () => setLocal(() => selected = 'approved'),
+                  ),
+                  const SizedBox(height: 10),
+                  _RequirementDecisionOption(
+                    selected: selected == 'clarification_requested',
+                    icon: LucideIcons.helpCircle,
+                    label: 'Clarification',
+                    subtitle: 'Ask the requester for more information.',
+                    foreground: const Color(0xFFB45309),
+                    background: const Color(0xFFFFFBEB),
+                    border: const Color(0xFFFDE68A),
+                    onTap: () =>
+                        setLocal(() => selected = 'clarification_requested'),
+                  ),
+                  const SizedBox(height: 10),
+                  _RequirementDecisionOption(
+                    selected: selected == 'rejected',
+                    icon: LucideIcons.xCircle,
+                    label: 'Reject',
+                    subtitle: 'Decline this request with a reason.',
+                    foreground: const Color(0xFFB91C1C),
+                    background: const Color(0xFFFEF2F2),
+                    border: const Color(0xFFFECACA),
+                    onTap: () => setLocal(() => selected = 'rejected'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: commentCtrl,
+                    minLines: 4,
+                    maxLines: 6,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      hintText: isApprove
+                          ? 'Add an optional message'
+                          : isReject
+                          ? 'Add rejection reason'
+                          : 'Ask for clarification',
+                      helperText: isApprove
+                          ? 'Optional message sent with the update.'
+                          : 'A message is required for this action.',
+                      helperStyle: GoogleFonts.inter(
+                        color: ApprovalUi.muted,
+                        fontSize: 12,
+                      ),
+                      filled: true,
+                      fillColor: ApprovalUi.panel,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: ApprovalUi.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: ApprovalUi.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: accent, width: 1.5),
                       ),
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            'Cancel',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () async {
+                            final comment = commentCtrl.text.trim();
+                            if (selected != 'approved' && comment.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Comment is required for reject/clarification.',
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
+                            Navigator.of(ctx).pop();
+                            await _decide(_itemId(item), selected, comment);
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: accent,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Text(
+                            actionLabel,
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
+    commentCtrl.dispose();
   }
 
   @override
@@ -620,7 +701,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
               child: ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 24, 16, 40),
                 itemCount: _inboxItems.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 16),
+                separatorBuilder: (_, index) => const SizedBox(height: 16),
                 itemBuilder: (ctx, i) {
                   final item = _inboxItems[i];
                   final eventId = _itemEventId(item);
@@ -700,6 +781,14 @@ class _RequirementsScreenState extends State<RequirementsScreen>
     return null;
   }
 
+  String _itemTitle(dynamic item) {
+    if (item is FacilityRequest) return item.eventTitle;
+    if (item is MarketingRequest) return item.eventTitle;
+    if (item is ITRequest) return item.eventTitle;
+    if (item is TransportRequest) return item.eventTitle;
+    return '';
+  }
+
   String _itemStatus(dynamic item) {
     if (item is FacilityRequest) return item.status;
     if (item is MarketingRequest) return item.status;
@@ -722,10 +811,100 @@ class _RequirementsScreenState extends State<RequirementsScreen>
             border: Border.all(color: Colors.grey.shade100),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.02),
+                color: Colors.black.withValues(alpha: 0.02),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RequirementDecisionOption extends StatelessWidget {
+  final bool selected;
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final Color foreground;
+  final Color background;
+  final Color border;
+  final VoidCallback onTap;
+
+  const _RequirementDecisionOption({
+    required this.selected,
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.foreground,
+    required this.background,
+    required this.border,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: selected ? background : ApprovalUi.panel,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? border : ApprovalUi.border,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? Colors.white.withValues(alpha: 0.78)
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: foreground, size: 23),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: foreground,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        color: ApprovalUi.text,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected) ...[
+                const SizedBox(width: 8),
+                Icon(LucideIcons.check, color: foreground, size: 18),
+              ],
             ],
           ),
         ),
@@ -850,7 +1029,7 @@ class _RequestCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -869,7 +1048,7 @@ class _RequestCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: categoryColor.withOpacity(0.1),
+                    color: categoryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(categoryIcon, size: 20, color: categoryColor),
@@ -910,7 +1089,7 @@ class _RequestCard extends StatelessWidget {
                     color: badgeBg,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: badgeFg.withOpacity(0.2),
+                      color: badgeFg.withValues(alpha: 0.2),
                       width: 1,
                     ),
                   ),
@@ -952,7 +1131,7 @@ class _RequestCard extends StatelessWidget {
                         radius: 14,
                         backgroundColor: Theme.of(
                           context,
-                        ).primaryColor.withOpacity(0.15),
+                        ).primaryColor.withValues(alpha: 0.15),
                         child: Text(
                           _getInitials(requestedBy),
                           style: GoogleFonts.inter(

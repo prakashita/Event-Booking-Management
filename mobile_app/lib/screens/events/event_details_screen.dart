@@ -590,73 +590,178 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   Future<String?> _promptDecisionComment({
     required String title,
     required String hint,
+    required _ApprovalDecisionAction action,
+    required String eventTitle,
     required bool requiredComment,
   }) async {
     final controller = TextEditingController();
+    final isApprove = action == _ApprovalDecisionAction.approve;
+    final isReject = action == _ApprovalDecisionAction.reject;
+    final accent = isApprove
+        ? const Color(0xFF16A34A)
+        : isReject
+        ? const Color(0xFFDC2626)
+        : const Color(0xFFD97706);
+    final soft = isApprove
+        ? const Color(0xFFECFDF5)
+        : isReject
+        ? const Color(0xFFFEF2F2)
+        : const Color(0xFFFFFBEB);
+    final border = isApprove
+        ? const Color(0xFFA7F3D0)
+        : isReject
+        ? const Color(0xFFFECACA)
+        : const Color(0xFFFDE68A);
+    final icon = isApprove
+        ? LucideIcons.checkCircle2
+        : isReject
+        ? LucideIcons.xCircle
+        : LucideIcons.messageCircle;
+
     final result = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 22),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(26),
           ),
-          title: Text(
-            title,
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-          ),
-          content: TextField(
-            controller: controller,
-            minLines: 3,
-            maxLines: 6,
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: GoogleFonts.inter(color: _muted),
-              filled: true,
-              fillColor: _panel,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                  color: Color(0xFF2563EB),
-                  width: 1.5,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: soft,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: border),
+                      ),
+                      child: Icon(icon, color: accent, size: 26),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: GoogleFonts.poppins(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w700,
+                              color: _onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            eventTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: _muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              helperText: requiredComment
-                  ? 'Comment is required for this action.'
-                  : 'Comment is optional.',
-              helperStyle: GoogleFonts.inter(color: _muted, fontSize: 12),
-            ),
-            style: GoogleFonts.inter(),
-          ),
-          actionsPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 16,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(null),
-              style: TextButton.styleFrom(
-                foregroundColor: _muted,
-                textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-              ),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.of(dialogContext).pop(controller.text.trim()),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 14),
+                Text(
+                  isApprove
+                      ? 'Approve this request and add a message if needed.'
+                      : isReject
+                      ? 'Add a reason before rejecting this request.'
+                      : 'Ask the requester what needs to be clarified.',
+                  style: GoogleFonts.inter(
+                    color: _muted,
+                    fontSize: 14,
+                    height: 1.45,
+                  ),
                 ),
-                textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-              ),
-              child: const Text('Continue'),
+                const SizedBox(height: 18),
+                TextField(
+                  controller: controller,
+                  minLines: 4,
+                  maxLines: 6,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: hint,
+                    hintStyle: GoogleFonts.inter(color: _muted),
+                    filled: true,
+                    fillColor: _panel,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: _border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: _border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: accent, width: 1.5),
+                    ),
+                    helperText: requiredComment
+                        ? 'A message is required for this action.'
+                        : 'Optional message sent with the approval.',
+                    helperStyle: GoogleFonts.inter(color: _muted, fontSize: 12),
+                  ),
+                  style: GoogleFonts.inter(),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(dialogContext).pop(null),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _muted,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          textStyle: GoogleFonts.inter(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(
+                          dialogContext,
+                        ).pop(controller.text.trim()),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: accent,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          textStyle: GoogleFonts.inter(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        child: Text(_decisionLabel(action)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         );
       },
     );
@@ -673,69 +778,20 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final isApprove = action == _ApprovalDecisionAction.approve;
     final isReject = action == _ApprovalDecisionAction.reject;
     final requiresComment = !isApprove;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            '${_decisionLabel(action)} Event',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-          ),
-          content: Text(
-            isApprove
-                ? 'Do you want to approve "${_s(_approval['event_name'], fallback: _s(_event['name'], fallback: 'this event'))}"?'
-                : 'Do you want to ${_decisionLabel(action).toLowerCase()} "${_s(_approval['event_name'], fallback: _s(_event['name'], fallback: 'this event'))}"?',
-            style: GoogleFonts.inter(color: _onSurface, fontSize: 15),
-          ),
-          actionsPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 16,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              style: TextButton.styleFrom(
-                foregroundColor: _muted,
-                textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-              ),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              style: FilledButton.styleFrom(
-                backgroundColor: isApprove
-                    ? const Color(0xFF16A34A)
-                    : const Color(0xFFDC2626),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-              ),
-              child: Text(_decisionLabel(action)),
-            ),
-          ],
-        );
-      },
+    final eventTitle = _s(
+      _approval['event_name'],
+      fallback: _s(_event['name'], fallback: 'this event'),
     );
-
-    if (confirmed != true || !mounted) return;
-
-    // Avoid opening a second dialog while the confirmation route is still
-    // finishing its exit animation.
-    await Future<void>.delayed(const Duration(milliseconds: 150));
-    if (!mounted) return;
 
     final comment = await _promptDecisionComment(
       title: isApprove
-          ? 'Optional approval message'
+          ? 'Approve request'
           : (isReject ? 'Reject request' : 'Request clarification'),
       hint: isApprove
           ? 'Add an optional message for the requester'
           : (isReject ? 'Add rejection reason' : 'Ask for clarification'),
+      action: action,
+      eventTitle: eventTitle,
       requiredComment: requiresComment,
     );
 
@@ -898,143 +954,223 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         builder: (ctx, setLocal) {
           final screenWidth = MediaQuery.of(ctx).size.width;
           final dialogWidth = screenWidth < 420 ? screenWidth - 32 : 388.0;
+          final isApprove = selected == 'approved';
+          final isReject = selected == 'rejected';
+          final accent = isApprove
+              ? const Color(0xFF16A34A)
+              : isReject
+              ? const Color(0xFFDC2626)
+              : const Color(0xFFD97706);
+          final title = _s(
+            request['event_title'] ?? request['event_name'] ?? request['name'],
+            fallback: 'Requirement request',
+          );
+          final actionLabel = isApprove
+              ? 'Noted'
+              : isReject
+              ? 'Reject'
+              : 'Clarification';
 
-          return AlertDialog(
+          return Dialog(
             insetPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 24,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(26),
             ),
-            titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-            contentPadding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
-            title: Text(
-              'Update ${key.toUpperCase()} request',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-                fontSize: 18,
-              ),
-            ),
-            content: SizedBox(
+            child: SizedBox(
               width: dialogWidth,
-              child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: selected,
-                      decoration: InputDecoration(
-                        labelText: 'Decision',
-                        labelStyle: GoogleFonts.inter(color: _muted),
-                        filled: true,
-                        fillColor: _panel,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 18,
+                    Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Icon(
+                            isApprove
+                                ? LucideIcons.checkCircle2
+                                : isReject
+                                ? LucideIcons.xCircle
+                                : LucideIcons.helpCircle,
+                            color: accent,
+                            size: 25,
+                          ),
                         ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      items: [
-                        DropdownMenuItem(
-                          value: 'approved',
-                          child: Text('Noted', style: GoogleFonts.inter()),
-                        ),
-                        DropdownMenuItem(
-                          value: 'rejected',
-                          child: Text('Reject', style: GoogleFonts.inter()),
-                        ),
-                        DropdownMenuItem(
-                          value: 'clarification_requested',
-                          child: Text(
-                            'Clarification',
-                            style: GoogleFonts.inter(),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Update ${key.toUpperCase()} request',
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 18,
+                                  color: _onSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  color: _muted,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
-                      onChanged: (value) {
-                        setLocal(() => selected = value ?? 'approved');
-                      },
                     ),
                     const SizedBox(height: 18),
+                    _buildDepartmentDecisionOption(
+                      selected: selected == 'approved',
+                      icon: LucideIcons.checkCircle2,
+                      label: 'Noted',
+                      subtitle: 'Mark this request as handled.',
+                      foreground: const Color(0xFF166534),
+                      background: const Color(0xFFECFDF5),
+                      border: const Color(0xFFA7F3D0),
+                      onTap: () => setLocal(() => selected = 'approved'),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildDepartmentDecisionOption(
+                      selected: selected == 'clarification_requested',
+                      icon: LucideIcons.helpCircle,
+                      label: 'Clarification',
+                      subtitle: 'Ask the requester for more information.',
+                      foreground: const Color(0xFFB45309),
+                      background: const Color(0xFFFFFBEB),
+                      border: const Color(0xFFFDE68A),
+                      onTap: () =>
+                          setLocal(() => selected = 'clarification_requested'),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildDepartmentDecisionOption(
+                      selected: selected == 'rejected',
+                      icon: LucideIcons.xCircle,
+                      label: 'Reject',
+                      subtitle: 'Decline this request with a reason.',
+                      foreground: const Color(0xFFB91C1C),
+                      background: const Color(0xFFFEF2F2),
+                      border: const Color(0xFFFECACA),
+                      onTap: () => setLocal(() => selected = 'rejected'),
+                    ),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: commentCtrl,
                       minLines: 4,
                       maxLines: 6,
                       style: GoogleFonts.inter(),
+                      textCapitalization: TextCapitalization.sentences,
                       decoration: InputDecoration(
-                        labelText: selected == 'approved'
-                            ? 'Comment (optional)'
-                            : 'Comment (required)',
-                        labelStyle: GoogleFonts.inter(color: _muted),
-                        alignLabelWithHint: true,
+                        hintText: isApprove
+                            ? 'Add an optional message'
+                            : isReject
+                            ? 'Add rejection reason'
+                            : 'Ask for clarification',
+                        helperText: isApprove
+                            ? 'Optional message sent with the update.'
+                            : 'A message is required for this action.',
+                        helperStyle: GoogleFonts.inter(
+                          color: _muted,
+                          fontSize: 12,
+                        ),
                         filled: true,
                         fillColor: _panel,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
-                          vertical: 18,
+                          vertical: 16,
                         ),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: _border),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: _border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: accent, width: 1.5),
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.of(ctx).pop(),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _muted,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              textStyle: GoogleFonts.inter(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () {
+                              final comment = commentCtrl.text.trim();
+                              if (selected != 'approved' && comment.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Comment is required for reject/clarification.',
+                                      style: GoogleFonts.inter(),
+                                    ),
+                                    backgroundColor: const Color(0xFFDC2626),
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+                              Navigator.of(
+                                ctx,
+                              ).pop({'decision': selected, 'comment': comment});
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: accent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              textStyle: GoogleFonts.inter(
+                                fontWeight: FontWeight.w800,
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: Text(actionLabel),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ),
-            actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                style: TextButton.styleFrom(
-                  foregroundColor: _muted,
-                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                ),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final comment = commentCtrl.text.trim();
-                  if (selected != 'approved' && comment.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Comment is required for reject/clarification.',
-                          style: GoogleFonts.inter(),
-                        ),
-                        backgroundColor: const Color(0xFFDC2626),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    );
-                    return;
-                  }
-                  Navigator.of(
-                    ctx,
-                  ).pop({'decision': selected, 'comment': comment});
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
-                  ),
-                ),
-                child: const Text('Submit'),
-              ),
-            ],
           );
         },
       ),
@@ -2401,53 +2537,89 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           if (_showApprovalActions) ...[
             const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 color: _panel,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: _border),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'YOUR ACTION REQUIRED',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: _muted,
-                      letterSpacing: 0.5,
-                    ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          LucideIcons.clipboardCheck,
+                          color: Color(0xFF2563EB),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Your action required',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: _onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Choose the next step for this approval.',
+                              style: GoogleFonts.inter(
+                                fontSize: 12.5,
+                                color: _muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
+                  Column(
                     children: [
-                      _buildDecisionButton(
+                      _buildDecisionActionTile(
                         label: 'Approve',
-                        icon: LucideIcons.checkCircle,
-                        background: const Color(0xFF16A34A),
-                        foreground: Colors.white,
+                        subtitle: 'Move this approval to the next stage.',
+                        icon: LucideIcons.checkCircle2,
+                        foreground: const Color(0xFF166534),
+                        background: const Color(0xFFECFDF5),
+                        border: const Color(0xFFA7F3D0),
                         onTap: () => _handleApprovalDecision(
                           _ApprovalDecisionAction.approve,
                         ),
                       ),
-                      _buildDecisionButton(
+                      const SizedBox(height: 10),
+                      _buildDecisionActionTile(
                         label: 'Clarification',
+                        subtitle: 'Ask the requester for more information.',
                         icon: LucideIcons.messageCircle,
-                        background: _surface,
-                        foreground: const Color(0xFF4338CA),
-                        border: const Color(0xFFC7D2FE),
+                        foreground: const Color(0xFFD97706),
+                        background: const Color(0xFFFFFBEB),
+                        border: const Color(0xFFFDE68A),
                         onTap: () => _handleApprovalDecision(
                           _ApprovalDecisionAction.clarify,
                         ),
                       ),
-                      _buildDecisionButton(
+                      const SizedBox(height: 10),
+                      _buildDecisionActionTile(
                         label: 'Reject',
+                        subtitle: 'Decline this request with a reason.',
                         icon: LucideIcons.xCircle,
-                        background: _surface,
                         foreground: const Color(0xFFDC2626),
+                        background: const Color(0xFFFEF2F2),
                         border: const Color(0xFFFECACA),
                         onTap: () => _handleApprovalDecision(
                           _ApprovalDecisionAction.reject,
@@ -2455,9 +2627,9 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
                   Text(
-                    'Approve can include an optional message. Reject and clarification require a comment to maintain workflow clarity.',
+                    'Approve can include an optional message. Reject and clarification require a comment.',
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -2918,42 +3090,258 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     );
   }
 
-  Widget _buildDecisionButton({
+  Widget _buildDecisionActionTile({
     required String label,
+    required String subtitle,
     required IconData icon,
-    required Color background,
     required Color foreground,
-    Color? border,
+    required Color background,
+    required Color border,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: _decisionSubmitting ? null : onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: border ?? Colors.transparent,
-            width: border != null ? 1 : 0,
+    final disabled = _decisionSubmitting;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: disabled ? null : onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: disabled ? _surface : background,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: disabled ? _border : border, width: 1.2),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _surface.withValues(alpha: _isDark ? 0.16 : 0.82),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: foreground, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      disabled ? 'Working...' : label,
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: disabled ? _muted : foreground,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        color: _muted,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(LucideIcons.chevronRight, color: foreground, size: 18),
+            ],
           ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: foreground),
-            const SizedBox(width: 8),
-            Text(
-              _decisionSubmitting ? 'Working...' : label,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: foreground,
-              ),
+      ),
+    );
+  }
+
+  Widget _buildDepartmentDecisionOption({
+    required bool selected,
+    required IconData icon,
+    required String label,
+    required String subtitle,
+    required Color foreground,
+    required Color background,
+    required Color border,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: selected ? background : _panel,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected ? border : _border,
+              width: selected ? 1.4 : 1,
             ),
-          ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: _surface.withValues(alpha: _isDark ? 0.16 : 0.82),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(icon, color: foreground, size: 21),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: GoogleFonts.inter(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        color: foreground,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        color: _muted,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected) ...[
+                const SizedBox(width: 8),
+                Icon(LucideIcons.check, color: foreground, size: 18),
+              ],
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildThreadDecisionButton({
+    required String label,
+    required IconData icon,
+    required Color foreground,
+    required Color background,
+    required Color border,
+    required VoidCallback onPressed,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: _surface.withValues(alpha: _isDark ? 0.16 : 0.76),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 16, color: foreground),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: foreground,
+                  ),
+                ),
+              ),
+              Icon(LucideIcons.chevronRight, size: 16, color: foreground),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThreadDecisionActions(ApprovalThreadInfo thread) {
+    final actions = [
+      _buildThreadDecisionButton(
+        label: 'Noted',
+        icon: LucideIcons.checkCircle2,
+        foreground: const Color(0xFF16A34A),
+        background: const Color(0xFFECFDF5),
+        border: const Color(0xFFA7F3D0),
+        onPressed: () =>
+            _openTakeActionFromThread(thread, initialDecision: 'approved'),
+      ),
+      _buildThreadDecisionButton(
+        label: 'Reject',
+        icon: LucideIcons.xCircle,
+        foreground: const Color(0xFFDC2626),
+        background: const Color(0xFFFEF2F2),
+        border: const Color(0xFFFECACA),
+        onPressed: () =>
+            _openTakeActionFromThread(thread, initialDecision: 'rejected'),
+      ),
+      _buildThreadDecisionButton(
+        label: 'Clarification',
+        icon: LucideIcons.helpCircle,
+        foreground: const Color(0xFFD97706),
+        background: const Color(0xFFFFFBEB),
+        border: const Color(0xFFFDE68A),
+        onPressed: () => _openTakeActionFromThread(
+          thread,
+          initialDecision: 'clarification_requested',
+        ),
+      ),
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _panel,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Update request',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: _muted,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          actions[0],
+          const SizedBox(height: 10),
+          actions[1],
+          const SizedBox(height: 10),
+          actions[2],
+        ],
       ),
     );
   }
@@ -3775,198 +4163,40 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Flexible(
-                          child: Wrap(
-                            alignment: WrapAlignment.end,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              if (canTakeThreadAction) ...[
-                                OutlinedButton(
-                                  onPressed: () => _openTakeActionFromThread(
-                                    thread,
-                                    initialDecision: 'approved',
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFF16A34A),
-                                    side: const BorderSide(
-                                      color: Color(0xFF16A34A),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 10,
-                                    ),
-                                    textStyle: GoogleFonts.inter(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  child: const Text('Noted'),
-                                ),
-                                OutlinedButton(
-                                  onPressed: () => _openTakeActionFromThread(
-                                    thread,
-                                    initialDecision: 'rejected',
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFFDC2626),
-                                    side: const BorderSide(
-                                      color: Color(0xFFDC2626),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 10,
-                                    ),
-                                    textStyle: GoogleFonts.inter(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  child: const Text('Reject'),
-                                ),
-                                OutlinedButton(
-                                  onPressed: () => _openTakeActionFromThread(
-                                    thread,
-                                    initialDecision: 'clarification_requested',
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: const Color(0xFFD97706),
-                                    side: const BorderSide(
-                                      color: Color(0xFFD97706),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                      vertical: 10,
-                                    ),
-                                    textStyle: GoogleFonts.inter(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  child: const Text('Clarification'),
-                                ),
-                              ],
-                              FilledButton.icon(
-                                onPressed:
-                                    _submittingReplyThreads.contains(thread.id)
-                                    ? null
-                                    : () => _submitThreadReply(thread),
-                                icon: const Icon(LucideIcons.send, size: 14),
-                                label: Text(
-                                  _submittingReplyThreads.contains(thread.id)
-                                      ? 'Posting...'
-                                      : 'Post Reply',
-                                ),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF2563EB),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 10,
-                                  ),
-                                  textStyle: GoogleFonts.inter(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ],
+                    const SizedBox(height: 14),
+                    if (canTakeThreadAction) ...[
+                      _buildThreadDecisionActions(thread),
+                      const SizedBox(height: 12),
+                    ],
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: FilledButton.icon(
+                        onPressed: _submittingReplyThreads.contains(thread.id)
+                            ? null
+                            : () => _submitThreadReply(thread),
+                        icon: const Icon(LucideIcons.send, size: 16),
+                        label: Text(
+                          _submittingReplyThreads.contains(thread.id)
+                              ? 'Posting...'
+                              : 'Post Reply',
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          textStyle: GoogleFonts.inter(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
                           ),
                         ),
-                      ],
+                      ),
                     ),
                   ],
                   if (!canReply && canTakeThreadAction) ...[
                     const SizedBox(height: 12),
-                    Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        OutlinedButton(
-                          onPressed: () => _openTakeActionFromThread(
-                            thread,
-                            initialDecision: 'approved',
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF16A34A),
-                            side: const BorderSide(color: Color(0xFF16A34A)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            textStyle: GoogleFonts.inter(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                          child: const Text('Noted'),
-                        ),
-                        OutlinedButton(
-                          onPressed: () => _openTakeActionFromThread(
-                            thread,
-                            initialDecision: 'rejected',
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFFDC2626),
-                            side: const BorderSide(color: Color(0xFFDC2626)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            textStyle: GoogleFonts.inter(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                          child: const Text('Reject'),
-                        ),
-                        OutlinedButton(
-                          onPressed: () => _openTakeActionFromThread(
-                            thread,
-                            initialDecision: 'clarification_requested',
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFFD97706),
-                            side: const BorderSide(color: Color(0xFFD97706)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            textStyle: GoogleFonts.inter(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                          child: const Text('Clarification'),
-                        ),
-                      ],
-                    ),
+                    _buildThreadDecisionActions(thread),
                   ],
                 ],
               ),

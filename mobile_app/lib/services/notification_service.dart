@@ -718,6 +718,9 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
         .toList();
 
     if (unreadConversationIds.isNotEmpty) {
+      for (final conversation in _unreadConversations) {
+        _rememberConversationAsNotification(conversation, isRead: true);
+      }
       for (final id in unreadConversationIds) {
         try {
           await _api.post<dynamic>('/chat/read/$id');
@@ -735,6 +738,112 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
 
     if (changed) notifyListeners();
     await _refreshUnreadCount();
+  }
+
+  Future<void> markConversationAsRead(String conversationId) async {
+    final id = conversationId.trim();
+    if (id.isEmpty) return;
+    ChatConversation? conversation;
+    for (final item in _unreadConversations) {
+      if (item.id == id) {
+        conversation = item;
+        break;
+      }
+    }
+    if (conversation != null) {
+      _rememberConversationAsNotification(conversation, isRead: true);
+    }
+
+    try {
+      await _api.post<dynamic>('/chat/read/$id');
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error marking conversation read: $e');
+      }
+    }
+
+    final before = _unreadConversations.length;
+    _unreadConversations = _unreadConversations
+        .where((conversation) => conversation.id != id)
+        .toList();
+    _totalUnread = _unreadConversations.fold<int>(
+      0,
+      (sum, conversation) => sum + conversation.unreadCount,
+    );
+    if (_unreadConversations.length != before) {
+      _notifyUnreadCountListeners();
+      notifyListeners();
+    }
+    await _refreshUnreadCount();
+  }
+
+  void _rememberConversationAsNotification(
+    ChatConversation conversation, {
+    required bool isRead,
+  }) {
+    final route = '/chat/${conversation.id}';
+    final existingIndex = _notifications.indexWhere(
+      (item) => item.route == route,
+    );
+    final existing = existingIndex >= 0 ? _notifications[existingIndex] : null;
+    final item = AppNotificationItem(
+      id: existing?.id ?? 'conversation-${conversation.id}',
+      title: _conversationNotificationTitle(conversation),
+      body: _conversationNotificationBody(conversation),
+      route: route,
+      createdAt:
+          conversation.lastMessageAt ?? existing?.createdAt ?? DateTime.now(),
+      isRead: isRead,
+      category: _conversationNotificationCategory(conversation),
+    );
+
+    if (existingIndex >= 0) {
+      _notifications[existingIndex] = item;
+    } else {
+      _notifications.insert(0, item);
+      if (_notifications.length > _maxStoredNotifications) {
+        _notifications.removeRange(
+          _maxStoredNotifications,
+          _notifications.length,
+        );
+      }
+    }
+  }
+
+  String _conversationNotificationTitle(ChatConversation conversation) {
+    final eventTitle = conversation.eventTitle?.trim() ?? '';
+    if (eventTitle.isNotEmpty) return eventTitle;
+
+    final otherUser = conversation.otherUserName?.trim() ?? '';
+    if (otherUser.isNotEmpty) return otherUser;
+
+    final participants = conversation.participantNames
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toList();
+    if (participants.isNotEmpty) return participants.join(', ');
+
+    return 'Chat conversation';
+  }
+
+  String _conversationNotificationCategory(ChatConversation conversation) {
+    final department = conversation.departmentLabel?.trim() ?? '';
+    if (department.isNotEmpty) return department;
+
+    switch (conversation.kind) {
+      case 'approval_thread':
+        return 'Workflow discussion';
+      case 'event':
+        return 'Event chat';
+      default:
+        return 'Chat';
+    }
+  }
+
+  String _conversationNotificationBody(ChatConversation conversation) {
+    final message = conversation.lastMessage?.trim() ?? '';
+    if (message.isNotEmpty) return message;
+    return 'Open this conversation to view recent messages.';
   }
 
   void dismissNotification(String id) {
@@ -773,6 +882,14 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
         0,
         (sum, c) => sum + c.unreadCount,
       );
+      final refreshedUnreadIds = unreadConversations
+          .map((conversation) => conversation.id)
+          .toSet();
+      for (final previous in _unreadConversations) {
+        if (!refreshedUnreadIds.contains(previous.id)) {
+          _rememberConversationAsNotification(previous, isRead: true);
+        }
+      }
 
       final unreadChanged = _totalUnread != unread;
       _totalUnread = unread;

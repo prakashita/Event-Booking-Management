@@ -169,7 +169,8 @@ class _ChatScreenState extends State<ChatScreen> {
       final data = await _api.get<dynamic>('/chat/conversations/me');
       final items = _extractItems(data);
       final match = items.whereType<Map<String, dynamic>>().firstWhere(
-        (item) => (item['id'] ?? item['_id'])?.toString() == widget.conversationId,
+        (item) =>
+            (item['id'] ?? item['_id'])?.toString() == widget.conversationId,
         orElse: () => <String, dynamic>{},
       );
       if (match.isEmpty || !mounted) return;
@@ -264,7 +265,8 @@ class _ChatScreenState extends State<ChatScreen> {
             if (hasMatch) {
               _messages = _messages
                   .map(
-                    (m) => (m.clientId == clientId || m.id == clientId) ? msg : m,
+                    (m) =>
+                        (m.clientId == clientId || m.id == clientId) ? msg : m,
                   )
                   .toList();
             } else {
@@ -443,8 +445,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _markConversationRead() async {
     try {
-      await _api.post<dynamic>('/chat/read/${widget.conversationId}');
-      await _notificationProvider?.refreshUnreadCount();
+      await _notificationProvider?.markConversationAsRead(
+        widget.conversationId,
+      );
     } catch (_) {
       // Keep chat usable even if unread counter sync fails.
     }
@@ -698,7 +701,9 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _showMessageActions(ChatMessage message) async {
     final isOwn = message.senderId == _currentUserId;
     final canEdit =
-        isOwn && !message.deletedForEveryone && message.content.trim().isNotEmpty;
+        isOwn &&
+        !message.deletedForEveryone &&
+        message.content.trim().isNotEmpty;
     final canReply = !_isThreadLocked && !message.deletedForEveryone;
 
     await showModalBottomSheet<void>(
@@ -859,7 +864,9 @@ class _ChatScreenState extends State<ChatScreen> {
       await _api.post<dynamic>('/chat/message/$messageId/delete-for-me');
       if (!mounted) return;
       setState(() {
-        _messages = _messages.where((message) => message.id != messageId).toList();
+        _messages = _messages
+            .where((message) => message.id != messageId)
+            .toList();
       });
     } catch (e) {
       _showErrorSnackBar('Could not delete message: $e');
@@ -875,7 +882,9 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       if (confirmed != true) return;
       try {
-        await _api.post<dynamic>('/chat/conversations/${widget.conversationId}/clear');
+        await _api.post<dynamic>(
+          '/chat/conversations/${widget.conversationId}/clear',
+        );
         if (!mounted) return;
         setState(() {
           _messages = [];
@@ -894,7 +903,9 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       if (confirmed != true) return;
       try {
-        await _api.post<dynamic>('/chat/conversations/${widget.conversationId}/purge');
+        await _api.post<dynamic>(
+          '/chat/conversations/${widget.conversationId}/purge',
+        );
         if (mounted) {
           Navigator.of(context).maybePop();
         }
@@ -906,7 +917,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (value == 'hide') {
       try {
-        await _api.delete<dynamic>('/chat/conversation/${widget.conversationId}');
+        await _api.delete<dynamic>(
+          '/chat/conversation/${widget.conversationId}',
+        );
         if (mounted) {
           Navigator.of(context).maybePop();
         }
@@ -1045,13 +1058,16 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final workflowDeptLabel =
         _conversation?.departmentLabel ?? _conversation?.department;
-    final threadStatus = (_conversation?.threadStatus ?? '').trim().toLowerCase();
+    final threadStatus = (_conversation?.threadStatus ?? '')
+        .trim()
+        .toLowerCase();
     final workflowStatusHint = threadStatus == 'waiting_for_faculty'
         ? 'Waiting for faculty'
         : threadStatus == 'waiting_for_department'
         ? 'Waiting for department'
         : null;
-    final participantLabel = _conversation != null &&
+    final participantLabel =
+        _conversation != null &&
             _conversation!.participantCount > 0 &&
             (_conversation!.kind == 'event' ||
                 _conversation!.kind == 'event_group' ||
@@ -1137,7 +1153,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           : _messages[idx].readBy.any(
                               (readerId) =>
                                   readerId != _currentUserId &&
-                                  (_conversation?.participants.contains(readerId) ??
+                                  (_conversation?.participants.contains(
+                                        readerId,
+                                      ) ??
                                       false),
                             );
                       return _ChatBubble(
@@ -1179,7 +1197,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   IconButton(
-                    onPressed: (_isSending || _isUploading) ? null : _pickAttachments,
+                    onPressed: (_isSending || _isUploading)
+                        ? null
+                        : _pickAttachments,
                     icon: _isUploading
                         ? const SizedBox(
                             width: 18,
@@ -1241,7 +1261,11 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ),
                               ),
                             )
-                          : const Icon(Icons.send, color: Colors.white, size: 20),
+                          : const Icon(
+                              Icons.send,
+                              color: Colors.white,
+                              size: 20,
+                            ),
                     ),
                   ),
                 ],
@@ -1295,167 +1319,162 @@ class _ChatBubble extends StatelessWidget {
           GestureDetector(
             onLongPress: onLongPress,
             child: Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.78,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isOwn
-                  ? AppColors.primary
-                  : (message.deletedForEveryone
-                        ? AppColors.surface.withValues(alpha: 0.9)
-                        : AppColors.surface),
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(18),
-                topRight: const Radius.circular(18),
-                bottomLeft: isOwn
-                    ? const Radius.circular(18)
-                    : const Radius.circular(4),
-                bottomRight: isOwn
-                    ? const Radius.circular(4)
-                    : const Radius.circular(18),
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.78,
               ),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x08000000),
-                  blurRadius: 4,
-                  offset: Offset(0, 1),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: isOwn
+                    ? AppColors.primary
+                    : (message.deletedForEveryone
+                          ? AppColors.surface.withValues(alpha: 0.9)
+                          : AppColors.surface),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: isOwn
+                      ? const Radius.circular(18)
+                      : const Radius.circular(4),
+                  bottomRight: isOwn
+                      ? const Radius.circular(4)
+                      : const Radius.circular(18),
                 ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (message.replyToSnapshot != null)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: isOwn
-                          ? Colors.white.withValues(alpha: 0.14)
-                          : AppColors.background,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          message.replyToSnapshot!.senderName,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: isOwn ? Colors.white : AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          message.replyToSnapshot!.contentPreview,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isOwn
-                                ? Colors.white.withValues(alpha: 0.9)
-                                : AppColors.textSecondary,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x08000000),
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
                   ),
-                if (message.content.isNotEmpty)
-                  Text(
-                    message.content,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: isOwn ? Colors.white : AppColors.textPrimary,
-                      height: 1.4,
-                      fontStyle: message.deletedForEveryone
-                          ? FontStyle.italic
-                          : FontStyle.normal,
-                    ),
-                  ),
-                if (message.attachments.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  ...message.attachments.whereType<Map<String, dynamic>>().map((attachment) {
-                    final contentType =
-                        attachment['content_type']?.toString() ?? '';
-                    final isImage = contentType.startsWith('image/');
-                    return GestureDetector(
-                      onTap: () => onAttachmentTap(attachment),
-                      child: Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: isOwn
-                              ? Colors.white.withValues(alpha: 0.12)
-                              : AppColors.background,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (isImage)
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.network(
-                                  resolveAttachmentUrl(
-                                    attachment['url']?.toString() ?? '',
-                                  ),
-                                  height: 180,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                                ),
-                              ),
-                            if (isImage) const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Icon(
-                                  isImage
-                                      ? Icons.image_outlined
-                                      : Icons.picture_as_pdf_outlined,
-                                  size: 18,
-                                  color: isOwn ? Colors.white : AppColors.primary,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    attachment['name']?.toString() ?? 'Attachment',
-                                    style: TextStyle(
-                                      color: isOwn
-                                          ? Colors.white
-                                          : AppColors.textPrimary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
                 ],
-                const SizedBox(height: 3),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _formatTime(message.createdAt),
-                      style: TextStyle(
-                        fontSize: 10,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (message.replyToSnapshot != null)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
                         color: isOwn
-                            ? Colors.white.withValues(alpha: 0.7)
-                            : AppColors.textMuted,
+                            ? Colors.white.withValues(alpha: 0.14)
+                            : AppColors.background,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            message.replyToSnapshot!.senderName,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isOwn ? Colors.white : AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            message.replyToSnapshot!.contentPreview,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isOwn
+                                  ? Colors.white.withValues(alpha: 0.9)
+                                  : AppColors.textSecondary,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
-                    if (message.edited) ...[
-                      const SizedBox(width: 6),
+                  if (message.content.isNotEmpty)
+                    Text(
+                      message.content,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isOwn ? Colors.white : AppColors.textPrimary,
+                        height: 1.4,
+                        fontStyle: message.deletedForEveryone
+                            ? FontStyle.italic
+                            : FontStyle.normal,
+                      ),
+                    ),
+                  if (message.attachments.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ...message.attachments
+                        .whereType<Map<String, dynamic>>()
+                        .map((attachment) {
+                          final contentType =
+                              attachment['content_type']?.toString() ?? '';
+                          final isImage = contentType.startsWith('image/');
+                          return GestureDetector(
+                            onTap: () => onAttachmentTap(attachment),
+                            child: Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: isOwn
+                                    ? Colors.white.withValues(alpha: 0.12)
+                                    : AppColors.background,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (isImage)
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.network(
+                                        resolveAttachmentUrl(
+                                          attachment['url']?.toString() ?? '',
+                                        ),
+                                        height: 180,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) =>
+                                            const SizedBox.shrink(),
+                                      ),
+                                    ),
+                                  if (isImage) const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        isImage
+                                            ? Icons.image_outlined
+                                            : Icons.picture_as_pdf_outlined,
+                                        size: 18,
+                                        color: isOwn
+                                            ? Colors.white
+                                            : AppColors.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          attachment['name']?.toString() ??
+                                              'Attachment',
+                                          style: TextStyle(
+                                            color: isOwn
+                                                ? Colors.white
+                                                : AppColors.textPrimary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                  ],
+                  const SizedBox(height: 3),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        '(edited)',
+                        _formatTime(message.createdAt),
                         style: TextStyle(
                           fontSize: 10,
                           color: isOwn
@@ -1463,24 +1482,35 @@ class _ChatBubble extends StatelessWidget {
                               : AppColors.textMuted,
                         ),
                       ),
-                    ],
-                    if (isOwn) ...[
-                      const SizedBox(width: 6),
-                      Text(
-                        isRead ? '✓✓' : '✓',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: isRead
-                              ? const Color(0xFF93C5FD)
-                              : Colors.white.withValues(alpha: 0.8),
+                      if (message.edited) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '(edited)',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isOwn
+                                ? Colors.white.withValues(alpha: 0.7)
+                                : AppColors.textMuted,
+                          ),
                         ),
-                      ),
+                      ],
+                      if (isOwn) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          isRead ? '✓✓' : '✓',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isRead
+                                ? const Color(0xFF93C5FD)
+                                : Colors.white.withValues(alpha: 0.8),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

@@ -84,6 +84,10 @@ class NotificationProvider extends ChangeNotifier {
     await _notificationService.markAllNotificationsAsRead();
   }
 
+  Future<void> markConversationAsRead(String conversationId) async {
+    await _notificationService.markConversationAsRead(conversationId);
+  }
+
   void dismissNotification(String id) {
     _notificationService.dismissNotification(id);
   }
