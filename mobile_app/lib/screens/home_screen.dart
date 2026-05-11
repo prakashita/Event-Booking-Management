@@ -832,6 +832,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final pageBg = theme.scaffoldBackgroundColor;
+
+    if (isChatRoute) {
+      return ChatFabVisibilityScope(
+        visibleNotifier: _chatFabVisible,
+        child: DashboardSearchScope(
+          searchQuery: _searchQuery,
+          child: widget.child,
+        ),
+      );
+    }
+
     final headerBg = theme.colorScheme.surface;
     final searchBg = isDark
         ? theme.colorScheme.surfaceContainerHighest
