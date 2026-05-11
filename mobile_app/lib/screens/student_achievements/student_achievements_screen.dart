@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../widgets/common/app_widgets.dart';
 
 class StudentAchievementsScreen extends StatefulWidget {
   const StudentAchievementsScreen({super.key});
@@ -229,6 +230,7 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(title: const Text('Student Achievements')),
       body: RefreshIndicator(
         onRefresh: () => _loadAll(refresh: true),
         child: ListView(
@@ -242,7 +244,7 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Students' Achievements",
+                        "Student Achievements",
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
@@ -258,10 +260,23 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
                     ],
                   ),
                 ),
-                FilledButton.icon(
-                  onPressed: () => _openForm(),
-                  icon: const Icon(LucideIcons.plus, size: 18),
-                  label: const Text('Submit'),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${_items.length}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -292,27 +307,19 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
                 ),
               )
             else if (_error != null)
-              _StateCard(
-                icon: LucideIcons.alertCircle,
-                title: 'Unable to load submissions',
+              ErrorState(
                 message: _error!,
-                actionLabel: 'Retry',
-                onAction: () => _loadAll(refresh: true),
+                onRetry: () => _loadAll(refresh: true),
               )
             else if (_items.isEmpty)
-              _StateCard(
-                icon: LucideIcons.star,
-                title: 'No student achievements found',
+              EmptyState(
+                icon: Icons.star_outline_rounded,
+                title: 'No achievements found',
                 message: 'Submit institutional publicity inputs from the app.',
                 actionLabel: 'Submit Achievement',
                 onAction: () => _openForm(),
               )
             else ...[
-              Text(
-                '${_items.length} record${_items.length == 1 ? '' : 's'}',
-                style: TextStyle(color: muted, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 10),
               ..._items.map(
                 (item) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -933,74 +940,124 @@ class _FilterPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.12)),
+    final isDark = theme.brightness == Brightness.dark;
+    final fieldFill = isDark
+        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45)
+        : theme.colorScheme.surface;
+    final fieldBorder = isDark
+        ? theme.colorScheme.outline.withValues(alpha: 0.5)
+        : AppColors.border;
+
+    InputDecoration filterInputDecoration(String hint) {
+      return InputDecoration(
+        hintText: hint,
+        filled: true,
+        fillColor: fieldFill,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: fieldBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: fieldBorder),
+        ),
+      );
+    }
+
+    final platformDropdown = DropdownButtonFormField<String>(
+      key: ValueKey('platform-$platform'),
+      initialValue: platform.isEmpty ? null : platform,
+      isExpanded: true,
+      decoration: filterInputDecoration('All platforms'),
+      items: [
+        const DropdownMenuItem(value: '', child: Text('All platforms')),
+        ...platforms.map(
+          (p) => DropdownMenuItem(
+            value: p,
+            child: Text(p, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ],
+      onChanged: (value) => onPlatformChanged(value ?? ''),
+    );
+
+    final criterionDropdown = DropdownButtonFormField<String>(
+      key: ValueKey('criterion-filter-$criterion'),
+      initialValue: criterion.isEmpty ? null : criterion,
+      isExpanded: true,
+      decoration: filterInputDecoration(
+        criteriaLoading ? 'Loading IQAC criteria...' : 'All IQAC criteria',
       ),
-      child: Column(
-        children: [
-          TextField(
-            controller: searchController,
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => onSearch(),
-            decoration: InputDecoration(
-              hintText: 'Search student, batch, course, description',
-              prefixIcon: const Icon(LucideIcons.search, size: 18),
-              suffixIcon: IconButton(
-                tooltip: 'Search',
-                onPressed: onSearch,
-                icon: const Icon(LucideIcons.arrowRight, size: 18),
-              ),
-              border: const OutlineInputBorder(),
+      items: [
+        const DropdownMenuItem(value: '', child: Text('All IQAC criteria')),
+        ...criteria.map(
+          (c) => DropdownMenuItem(
+            value: c.id.toString(),
+            child: Text('${c.id}. ${c.title}', overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ],
+      onChanged: (value) => onCriterionChanged(value ?? ''),
+    );
+
+    return Column(
+      children: [
+        TextField(
+          controller: searchController,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => onSearch(),
+          decoration: InputDecoration(
+            hintText: 'Search student, batch, course, description',
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: searchController.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear',
+                    onPressed: () {
+                      searchController.clear();
+                      onSearch();
+                    },
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+            filled: true,
+            fillColor: fieldFill,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: fieldBorder),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: fieldBorder),
             ),
           ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            key: ValueKey('platform-$platform'),
-            initialValue: platform.isEmpty ? null : platform,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Platform',
-              border: OutlineInputBorder(),
-            ),
-            items: [
-              const DropdownMenuItem(value: '', child: Text('All platforms')),
-              ...platforms.map(
-                (p) => DropdownMenuItem(value: p, child: Text(p)),
-              ),
-            ],
-            onChanged: (value) => onPlatformChanged(value ?? ''),
-          ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            key: ValueKey('criterion-filter-$criterion'),
-            initialValue: criterion.isEmpty ? null : criterion,
-            isExpanded: true,
-            decoration: InputDecoration(
-              labelText: criteriaLoading
-                  ? 'Loading IQAC criteria...'
-                  : 'IQAC criterion',
-              border: const OutlineInputBorder(),
-            ),
-            items: [
-              const DropdownMenuItem(
-                value: '',
-                child: Text('All IQAC criteria'),
-              ),
-              ...criteria.map(
-                (c) => DropdownMenuItem(
-                  value: c.id.toString(),
-                  child: Text('${c.id}. ${c.title}'),
-                ),
-              ),
-            ],
-            onChanged: (value) => onCriterionChanged(value ?? ''),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final stacked = constraints.maxWidth < 430;
+            if (stacked) {
+              return Column(
+                children: [
+                  platformDropdown,
+                  const SizedBox(height: 10),
+                  criterionDropdown,
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: platformDropdown),
+                const SizedBox(width: 10),
+                Expanded(child: criterionDropdown),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }
@@ -1250,49 +1307,6 @@ class _MetaChip extends StatelessWidget {
           Icon(icon, size: 14),
           const SizedBox(width: 6),
           Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
-        ],
-      ),
-    );
-  }
-}
-
-class _StateCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String message;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  const _StateCard({
-    required this.icon,
-    required this.title,
-    required this.message,
-    this.actionLabel,
-    this.onAction,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 42),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 6),
-          Text(message, textAlign: TextAlign.center),
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: 12),
-            FilledButton(onPressed: onAction, child: Text(actionLabel!)),
-          ],
         ],
       ),
     );

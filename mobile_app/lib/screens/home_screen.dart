@@ -12,8 +12,6 @@ import '../../constants/app_colors.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
-import '../../screens/chat/chat_list_screen.dart';
-import '../../screens/chat/chat_screen.dart';
 import '../../services/api_service.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/common/side_nav_bar.dart';
@@ -125,6 +123,11 @@ class _HomeScreenState extends State<HomeScreen> {
       _notificationBanner?.remove();
       _notificationBanner = null;
     }
+  }
+
+  void _openChat() {
+    context.read<NotificationProvider>().setChatUiOpen(true);
+    context.go('/chat');
   }
 
   Future<void> _openNotificationsPanel() async {
@@ -806,18 +809,21 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
-    final currentRoute = GoRouterState.of(context).matchedLocation;
-    final isChatChild =
-        widget.child is ChatListScreen || widget.child is ChatScreen;
+    final routerState = GoRouterState.of(context);
+    final currentRoute = routerState.matchedLocation;
+    final currentPath = routerState.uri.path;
     final isChatRoute =
-        isChatChild ||
         currentRoute == '/chat' ||
-        currentRoute.startsWith('/chat/');
+        currentRoute.startsWith('/chat/') ||
+        currentPath == '/chat' ||
+        currentPath.startsWith('/chat/');
+    final shouldShowChatFab = !isChatRoute;
     if (_lastChatUiOpen != isChatRoute) {
       _lastChatUiOpen = isChatRoute;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         context.read<NotificationProvider>().setChatUiOpen(isChatRoute);
+        _chatFabVisible.value = shouldShowChatFab;
       });
     }
     final isTopRoute = ModalRoute.of(context)?.isCurrent ?? true;
@@ -1037,139 +1043,144 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                           ),
-                          ValueListenableBuilder<bool>(
-                            valueListenable: _chatFabVisible,
-                            builder: (context, visible, _) {
-                              final showFab =
-                                  isTopRoute && visible && !isChatRoute;
+                          if (!isChatRoute)
+                            ValueListenableBuilder<bool>(
+                              valueListenable: _chatFabVisible,
+                              builder: (context, visible, _) {
+                                final showFab = isTopRoute && visible;
 
-                              if (!showFab) return const SizedBox.shrink();
+                                if (!showFab) return const SizedBox.shrink();
 
-                              // Keep logic for dynamically calculating the default position based on page
-                              final hasPageLevelActions =
-                                  currentRoute == '/requirements' ||
-                                  currentRoute == '/admin' ||
-                                  currentRoute == '/events/create' ||
-                                  currentRoute.startsWith('/events/') ||
-                                  currentRoute.startsWith('/approval-details/');
+                                // Keep logic for dynamically calculating the default position based on page
+                                final hasPageLevelActions =
+                                    currentRoute == '/requirements' ||
+                                    currentRoute == '/admin' ||
+                                    currentRoute == '/events/create' ||
+                                    currentRoute.startsWith('/events/') ||
+                                    currentRoute.startsWith(
+                                      '/approval-details/',
+                                    );
 
-                              final baseBottomOffset = hasPageLevelActions
-                                  ? 96.0
-                                  : 16.0;
-                              final defaultBottom = bottomInset > 0
-                                  ? bottomInset + 16.0
-                                  : baseBottomOffset;
-                              final defaultRight = 16.0;
+                                final baseBottomOffset = hasPageLevelActions
+                                    ? 96.0
+                                    : 16.0;
+                                final defaultBottom = bottomInset > 0
+                                    ? bottomInset + 16.0
+                                    : baseBottomOffset;
+                                final defaultRight = 16.0;
 
-                              return Positioned(
-                                left: _fabPos?.dx,
-                                top: _fabPos?.dy,
-                                right: _fabPos == null ? defaultRight : null,
-                                bottom: _fabPos == null ? defaultBottom : null,
-                                child: GestureDetector(
-                                  onPanUpdate: (details) {
-                                    setState(() {
-                                      double curX =
-                                          _fabPos?.dx ??
-                                          (constraints.maxWidth -
-                                              56 -
-                                              defaultRight);
-                                      double curY =
-                                          _fabPos?.dy ??
-                                          (constraints.maxHeight -
-                                              56 -
-                                              defaultBottom);
+                                return Positioned(
+                                  left: _fabPos?.dx,
+                                  top: _fabPos?.dy,
+                                  right: _fabPos == null ? defaultRight : null,
+                                  bottom: _fabPos == null
+                                      ? defaultBottom
+                                      : null,
+                                  child: GestureDetector(
+                                    onPanUpdate: (details) {
+                                      setState(() {
+                                        double curX =
+                                            _fabPos?.dx ??
+                                            (constraints.maxWidth -
+                                                56 -
+                                                defaultRight);
+                                        double curY =
+                                            _fabPos?.dy ??
+                                            (constraints.maxHeight -
+                                                56 -
+                                                defaultBottom);
 
-                                      double newX = curX + details.delta.dx;
-                                      double newY = curY + details.delta.dy;
+                                        double newX = curX + details.delta.dx;
+                                        double newY = curY + details.delta.dy;
 
-                                      newX = newX.clamp(
-                                        0.0,
-                                        constraints.maxWidth - 56.0,
-                                      );
-                                      newY = newY.clamp(
-                                        0.0,
-                                        constraints.maxHeight - 56.0,
-                                      );
+                                        newX = newX.clamp(
+                                          0.0,
+                                          constraints.maxWidth - 56.0,
+                                        );
+                                        newY = newY.clamp(
+                                          0.0,
+                                          constraints.maxHeight - 56.0,
+                                        );
 
-                                      _fabPos = Offset(newX, newY);
-                                    });
-                                  },
-                                  child: Consumer<NotificationProvider>(
-                                    builder: (context, notificationProvider, _) {
-                                      final totalUnread =
-                                          notificationProvider.totalUnread;
-                                      return Stack(
-                                        clipBehavior: Clip.none,
-                                        children: [
-                                          FloatingActionButton(
-                                            key: const ValueKey<String>(
-                                              'chat_fab_visible',
+                                        _fabPos = Offset(newX, newY);
+                                      });
+                                    },
+                                    child: Consumer<NotificationProvider>(
+                                      builder: (context, notificationProvider, _) {
+                                        final totalUnread =
+                                            notificationProvider.totalUnread;
+                                        return Stack(
+                                          clipBehavior: Clip.none,
+                                          children: [
+                                            FloatingActionButton(
+                                              key: const ValueKey<String>(
+                                                'chat_fab_visible',
+                                              ),
+                                              onPressed: () {
+                                                _openChat();
+                                              },
+                                              backgroundColor: const Color(
+                                                0xFF2563EB,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                              ),
+                                              child: const Icon(
+                                                LucideIcons.messageSquare,
+                                                color: Colors.white,
+                                              ),
                                             ),
-                                            onPressed: () {
-                                              context.push('/chat');
-                                            },
-                                            backgroundColor: const Color(
-                                              0xFF2563EB,
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                            ),
-                                            child: const Icon(
-                                              LucideIcons.messageSquare,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                          if (totalUnread > 0)
-                                            Positioned(
-                                              right: -2,
-                                              top: -2,
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 5,
-                                                      vertical: 1,
-                                                    ),
-                                                constraints:
-                                                    const BoxConstraints(
-                                                      minWidth: 18,
-                                                      minHeight: 16,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: const Color(
-                                                    0xFFDC2626,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        999,
+                                            if (totalUnread > 0)
+                                              Positioned(
+                                                right: -2,
+                                                top: -2,
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 5,
+                                                        vertical: 1,
                                                       ),
-                                                  border: Border.all(
-                                                    color: Colors.white,
-                                                    width: 1.5,
+                                                  constraints:
+                                                      const BoxConstraints(
+                                                        minWidth: 18,
+                                                        minHeight: 16,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(
+                                                      0xFFDC2626,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          999,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: Colors.white,
+                                                      width: 1.5,
+                                                    ),
                                                   ),
-                                                ),
-                                                child: Text(
-                                                  totalUnread > 99
-                                                      ? '99+'
-                                                      : '$totalUnread',
-                                                  textAlign: TextAlign.center,
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.w700,
+                                                  child: Text(
+                                                    totalUnread > 99
+                                                        ? '99+'
+                                                        : '$totalUnread',
+                                                    textAlign: TextAlign.center,
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 9,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                        ],
-                                      );
-                                    },
+                                          ],
+                                        );
+                                      },
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
+                                );
+                              },
+                            ),
                         ],
                       );
                     },

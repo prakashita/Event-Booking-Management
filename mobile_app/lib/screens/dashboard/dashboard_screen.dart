@@ -293,13 +293,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
               if (visibleEvents.isNotEmpty)
-                TextButton(
-                  onPressed: () => context.go('/events'),
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => context.go('/events'),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        'See All',
+                        style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ),
-                  child: const Text('See All'),
                 ),
             ],
           ),

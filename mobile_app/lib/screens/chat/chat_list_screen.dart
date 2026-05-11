@@ -9,11 +9,15 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../constants/app_colors.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/common/app_widgets.dart';
 
 class ChatListScreen extends StatefulWidget {
-  const ChatListScreen({super.key});
+  final VoidCallback? onClose;
+  final ValueChanged<String>? onOpenConversation;
+
+  const ChatListScreen({super.key, this.onClose, this.onOpenConversation});
 
   @override
   State<ChatListScreen> createState() => _ChatListScreenState();
@@ -95,10 +99,12 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Future<void> _loadConversations() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final data = await _api.get<dynamic>('/chat/conversations/me');
       final items = _extractItems(data);
+      if (!mounted) return;
       setState(() {
         _conversations = items
             .whereType<Map<String, dynamic>>()
@@ -108,6 +114,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         _error = null;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -116,10 +123,12 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Future<void> _loadUsers() async {
+    if (!mounted) return;
     setState(() => _isLoadingUsers = true);
     try {
       final data = await _api.get<dynamic>('/chat/users');
       final items = _extractItems(data);
+      if (!mounted) return;
       setState(() {
         _users = items
             .whereType<Map<String, dynamic>>()
@@ -128,6 +137,7 @@ class _ChatListScreenState extends State<ChatListScreen>
         _isLoadingUsers = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoadingUsers = false;
       });
@@ -442,7 +452,7 @@ class _ChatListScreenState extends State<ChatListScreen>
       );
       final convId = res['id'] ?? res['_id'];
       if (convId != null && mounted) {
-        context.push('/chat/$convId');
+        _openChatScreen(convId.toString());
       }
     } catch (e) {
       if (!mounted) return;
@@ -529,7 +539,16 @@ class _ChatListScreenState extends State<ChatListScreen>
             .toList();
       });
     }
-    context.push('/chat/${conversation.id}');
+    _openChatScreen(conversation.id);
+  }
+
+  Future<void> _openChatScreen(String conversationId) async {
+    final onOpenConversation = widget.onOpenConversation;
+    if (onOpenConversation != null) {
+      onOpenConversation(conversationId);
+      return;
+    }
+    context.push('/chat/$conversationId');
   }
 
   String _getInitials(String name) {
@@ -622,6 +641,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                       const SizedBox(width: 12),
                       Row(
                         children: [
+                          const _ThemeModeToggle(),
+                          const SizedBox(width: 8),
                           _HeaderActionButton(
                             tooltip: 'Refresh conversations',
                             onPressed: _isLoading ? null : _loadConversations,
@@ -642,13 +663,9 @@ class _ChatListScreenState extends State<ChatListScreen>
                           const SizedBox(width: 8),
                           _HeaderActionButton(
                             tooltip: 'Close chat',
-                            onPressed: () {
-                              if (context.canPop()) {
-                                context.pop();
-                              } else {
-                                context.go('/dashboard');
-                              }
-                            },
+                            onPressed:
+                                widget.onClose ??
+                                () => context.go('/dashboard'),
                             child: Icon(
                               Icons.close_rounded,
                               size: 18,
@@ -1312,6 +1329,107 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
     if (diff.inDays < 7) return DateFormat('EEE').format(dt);
     return DateFormat('d MMM').format(dt);
+  }
+}
+
+class _ThemeModeToggle extends StatelessWidget {
+  const _ThemeModeToggle();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final themeProvider = context.watch<ThemeProvider>();
+    final activeColor = isDark
+        ? const Color(0xFFFBBF24)
+        : const Color(0xFF2563EB);
+    final trackColor = isDark
+        ? const Color(0xFF1E293B)
+        : const Color(0xFFF1F5F9);
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0);
+    final inactiveIcon = isDark
+        ? const Color(0xFF64748B)
+        : const Color(0xFF94A3B8);
+
+    return Tooltip(
+      message: isDark ? 'Switch to light mode' : 'Switch to dark mode',
+      child: InkWell(
+        onTap: () {
+          themeProvider.setThemeModeByValue(isDark ? 'light' : 'dark');
+        },
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          width: 64,
+          height: 36,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: trackColor,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: borderColor),
+          ),
+          child: Stack(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: Icon(
+                      Icons.wb_sunny_rounded,
+                      size: 15,
+                      color: isDark ? inactiveIcon : activeColor,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: Icon(
+                      Icons.dark_mode_rounded,
+                      size: 15,
+                      color: isDark ? activeColor : inactiveIcon,
+                    ),
+                  ),
+                ],
+              ),
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                alignment: isDark
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.32 : 0.12,
+                        ),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    isDark ? Icons.dark_mode_rounded : Icons.wb_sunny_rounded,
+                    size: 15,
+                    color: activeColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

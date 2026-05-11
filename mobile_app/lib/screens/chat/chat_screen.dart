@@ -13,11 +13,12 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../services/api_service.dart';
-import '../../widgets/common/app_widgets.dart';
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
-  const ChatScreen({super.key, required this.conversationId});
+  final VoidCallback? onBack;
+
+  const ChatScreen({super.key, required this.conversationId, this.onBack});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -1056,6 +1057,18 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final pageBg = isDark
+        ? theme.scaffoldBackgroundColor
+        : AppColors.background;
+    final surface = isDark ? const Color(0xFF111827) : AppColors.surface;
+    final panel = isDark ? const Color(0xFF1E293B) : AppColors.surfaceVariant;
+    final border = isDark ? const Color(0xFF334155) : AppColors.border;
+    final heading = theme.colorScheme.onSurface;
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final composerBg = isDark ? const Color(0xFF0F172A) : AppColors.surface;
+    final inputBg = isDark ? const Color(0xFF111827) : AppColors.background;
     final workflowDeptLabel =
         _conversation?.departmentLabel ?? _conversation?.department;
     final threadStatus = (_conversation?.threadStatus ?? '')
@@ -1074,100 +1087,162 @@ class _ChatScreenState extends State<ChatScreen> {
                 _conversation!.kind == 'approval_thread')
         ? '${_conversation!.participantCount} member${_conversation!.participantCount == 1 ? '' : 's'}'
         : null;
+    final subtitle = workflowDeptLabel != null || workflowStatusHint != null
+        ? [workflowDeptLabel, workflowStatusHint]
+              .whereType<String>()
+              .where((value) => value.trim().isNotEmpty)
+              .join(' · ')
+        : (_conversation?.kind == 'direct') &&
+              _conversation?.otherUserName != null
+        ? _buildDirectStatus()
+        : participantLabel;
+    final title = _conversationTitle ?? 'Chat';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: pageBg,
       appBar: AppBar(
+        backgroundColor: surface,
+        foregroundColor: heading,
+        elevation: 0,
+        scrolledUnderElevation: 0,
         titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 6),
+          child: IconButton(
+            tooltip: 'Back',
+            onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+        ),
+        title: Row(
           children: [
-            Text(_conversationTitle ?? 'Chat'),
-            if (workflowDeptLabel != null || workflowStatusHint != null)
-              Text(
-                [workflowDeptLabel, workflowStatusHint]
-                    .whereType<String>()
-                    .where((value) => value.trim().isNotEmpty)
-                    .join(' · '),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              )
-            else if ((_conversation?.kind == 'direct') &&
-                _conversation?.otherUserName != null)
-              Text(
-                _buildDirectStatus(),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              )
-            else if (participantLabel != null)
-              Text(
-                participantLabel,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                _conversationInitial(title),
+                style: TextStyle(
+                  color: isDark ? const Color(0xFF93C5FD) : AppColors.primary,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: heading,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
         actions: [
-          PopupMenuButton<String>(
-            onSelected: _handleConversationAction,
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'clear', child: Text('Clear messages')),
-              PopupMenuItem(value: 'hide', child: Text('Hide chat')),
-              PopupMenuItem(value: 'purge', child: Text('Delete thread')),
-            ],
+          Container(
+            margin: const EdgeInsets.only(right: 6),
+            decoration: BoxDecoration(
+              color: panel,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: border),
+            ),
+            child: PopupMenuButton<String>(
+              tooltip: 'Chat options',
+              onSelected: _handleConversationAction,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'clear', child: Text('Clear messages')),
+                PopupMenuItem(value: 'hide', child: Text('Hide chat')),
+                PopupMenuItem(value: 'purge', child: Text('Delete thread')),
+              ],
+              icon: const Icon(Icons.more_vert_rounded),
+            ),
           ),
         ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, thickness: 1, color: border),
+        ),
       ),
       body: Column(
         children: [
           Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _messages.isEmpty
-                ? const EmptyState(
-                    icon: Icons.chat_bubble_outline,
-                    title: 'No messages yet',
-                    message: 'Send the first message!',
-                  )
-                : ListView.builder(
-                    controller: _scrollCtrl,
-                    reverse: true,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    itemCount: _messages.length + (_isTyping ? 1 : 0),
-                    itemBuilder: (ctx, i) {
-                      if (i == 0 && _isTyping) {
-                        return _TypingIndicator();
-                      }
-                      final idx = _isTyping ? i - 1 : i;
-                      final msg = _messages[idx];
-                      final isOwn = msg.senderId == _currentUserId;
-                      final isRead = _conversation?.kind == 'direct'
-                          ? _messages[idx].readBy.any(
-                              (readerId) =>
-                                  readerId != _currentUserId &&
-                                  readerId.isNotEmpty,
-                            )
-                          : _messages[idx].readBy.any(
-                              (readerId) =>
-                                  readerId != _currentUserId &&
-                                  (_conversation?.participants.contains(
-                                        readerId,
-                                      ) ??
-                                      false),
-                            );
-                      return _ChatBubble(
-                        message: msg,
-                        isOwn: isOwn,
-                        isRead: isRead,
-                        resolveAttachmentUrl: _resolveAttachmentUrl,
-                        onAttachmentTap: _openAttachment,
-                        onLongPress: () => _showMessageActions(msg),
-                      );
-                    },
-                  ),
+            child: Container(
+              color: pageBg,
+              child: _isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: theme.colorScheme.primary,
+                      ),
+                    )
+                  : _messages.isEmpty
+                  ? _ChatEmptyState(isDark: isDark)
+                  : ListView.builder(
+                      controller: _scrollCtrl,
+                      reverse: true,
+                      padding: const EdgeInsets.fromLTRB(12, 16, 12, 18),
+                      itemCount: _messages.length + (_isTyping ? 1 : 0),
+                      itemBuilder: (ctx, i) {
+                        if (i == 0 && _isTyping) {
+                          return _TypingIndicator();
+                        }
+                        final idx = _isTyping ? i - 1 : i;
+                        final msg = _messages[idx];
+                        final isOwn = msg.senderId == _currentUserId;
+                        final isRead = _conversation?.kind == 'direct'
+                            ? _messages[idx].readBy.any(
+                                (readerId) =>
+                                    readerId != _currentUserId &&
+                                    readerId.isNotEmpty,
+                              )
+                            : _messages[idx].readBy.any(
+                                (readerId) =>
+                                    readerId != _currentUserId &&
+                                    (_conversation?.participants.contains(
+                                          readerId,
+                                        ) ??
+                                        false),
+                              );
+                        return _ChatBubble(
+                          message: msg,
+                          isOwn: isOwn,
+                          isRead: isRead,
+                          resolveAttachmentUrl: _resolveAttachmentUrl,
+                          onAttachmentTap: _openAttachment,
+                          onLongPress: () => _showMessageActions(msg),
+                        );
+                      },
+                    ),
+            ),
           ),
           if (_isThreadLocked)
             _ThreadLockedBanner(closedAt: _conversation?.closedAt)
@@ -1189,83 +1264,114 @@ class _ChatScreenState extends State<ChatScreen> {
                 12,
                 MediaQuery.of(context).padding.bottom + 10,
               ),
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
-                border: Border(top: BorderSide(color: AppColors.border)),
+              decoration: BoxDecoration(
+                color: composerBg,
+                border: Border(top: BorderSide(color: border)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.28 : 0.05),
+                    blurRadius: 16,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  IconButton(
-                    onPressed: (_isSending || _isUploading)
-                        ? null
-                        : _pickAttachments,
-                    icon: _isUploading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.attach_file_rounded),
+                  Tooltip(
+                    message: 'Attach file',
+                    child: IconButton.filledTonal(
+                      onPressed: (_isSending || _isUploading)
+                          ? null
+                          : _pickAttachments,
+                      style: IconButton.styleFrom(
+                        backgroundColor: panel,
+                        foregroundColor: muted,
+                        disabledForegroundColor: muted.withValues(alpha: 0.45),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      icon: _isUploading
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.attach_file_rounded),
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Container(
+                      constraints: const BoxConstraints(minHeight: 48),
                       decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: AppColors.border),
+                        color: inputBg,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: border),
                       ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: _msgCtrl,
-                              onChanged: (_) => _sendTypingIndicator(),
-                              maxLines: null,
-                              decoration: InputDecoration(
-                                hintText: _isUploading
-                                    ? 'Uploading...'
-                                    : 'Type a message...',
-                                border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 10,
-                                ),
-                              ),
-                              textCapitalization: TextCapitalization.sentences,
-                              onSubmitted: (_) => _sendMessage(),
-                            ),
+                      child: TextField(
+                        controller: _msgCtrl,
+                        onChanged: (_) => _sendTypingIndicator(),
+                        maxLines: 5,
+                        minLines: 1,
+                        decoration: InputDecoration(
+                          hintText: _isUploading
+                              ? 'Uploading...'
+                              : 'Type a message...',
+                          hintStyle: TextStyle(color: muted),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 13,
                           ),
-                        ],
+                        ),
+                        style: TextStyle(color: heading, fontSize: 14),
+                        textCapitalization: TextCapitalization.sentences,
+                        onSubmitted: (_) => _sendMessage(),
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: (_isSending || _isUploading) ? null : _sendMessage,
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      child: (_isSending || _isUploading)
-                          ? const Center(
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            )
-                          : const Icon(
-                              Icons.send,
-                              color: Colors.white,
-                              size: 20,
+                  Tooltip(
+                    message: 'Send',
+                    child: InkWell(
+                      onTap: (_isSending || _isUploading) ? null : _sendMessage,
+                      borderRadius: BorderRadius.circular(16),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: (_isSending || _isUploading)
+                              ? AppColors.primary.withValues(alpha: 0.72)
+                              : AppColors.primary,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.24),
+                              blurRadius: 12,
+                              offset: const Offset(0, 5),
                             ),
+                          ],
+                        ),
+                        child: (_isSending || _isUploading)
+                            ? const Center(
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              )
+                            : const Icon(
+                                Icons.send_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                      ),
                     ),
                   ),
                 ],
@@ -1273,6 +1379,75 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  String _conversationInitial(String title) {
+    final trimmed = title.trim();
+    if (trimmed.isEmpty) return '?';
+    return trimmed.characters.first.toUpperCase();
+  }
+}
+
+class _ChatEmptyState extends StatelessWidget {
+  const _ChatEmptyState({required this.isDark});
+
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 82,
+              height: 82,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF1E293B)
+                    : const Color(0xFFEFF6FF),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFD8E8FF),
+                ),
+              ),
+              child: Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 34,
+                color: isDark ? const Color(0xFF93C5FD) : AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'No messages yet',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: theme.colorScheme.onSurface,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Send the first message!',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: muted,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1297,6 +1472,18 @@ class _ChatBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bubbleOther = isDark ? const Color(0xFF1E293B) : AppColors.surface;
+    final bubbleDeleted = isDark
+        ? const Color(0xFF111827)
+        : AppColors.surface.withValues(alpha: 0.9);
+    final bubbleBorder = isDark ? const Color(0xFF334155) : AppColors.border;
+    final textPrimary = theme.colorScheme.onSurface;
+    final textSecondary = theme.colorScheme.onSurfaceVariant;
+    final replyBg = isOwn
+        ? Colors.white.withValues(alpha: 0.14)
+        : (isDark ? const Color(0xFF0F172A) : AppColors.background);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
       child: Column(
@@ -1327,8 +1514,8 @@ class _ChatBubble extends StatelessWidget {
                 color: isOwn
                     ? AppColors.primary
                     : (message.deletedForEveryone
-                          ? AppColors.surface.withValues(alpha: 0.9)
-                          : AppColors.surface),
+                          ? bubbleDeleted
+                          : bubbleOther),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(18),
                   topRight: const Radius.circular(18),
@@ -1356,10 +1543,9 @@ class _ChatBubble extends StatelessWidget {
                       margin: const EdgeInsets.only(bottom: 8),
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: isOwn
-                            ? Colors.white.withValues(alpha: 0.14)
-                            : AppColors.background,
+                        color: replyBg,
                         borderRadius: BorderRadius.circular(12),
+                        border: isOwn ? null : Border.all(color: bubbleBorder),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1379,7 +1565,7 @@ class _ChatBubble extends StatelessWidget {
                               fontSize: 12,
                               color: isOwn
                                   ? Colors.white.withValues(alpha: 0.9)
-                                  : AppColors.textSecondary,
+                                  : textSecondary,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -1392,7 +1578,7 @@ class _ChatBubble extends StatelessWidget {
                       message.content,
                       style: TextStyle(
                         fontSize: 15,
-                        color: isOwn ? Colors.white : AppColors.textPrimary,
+                        color: isOwn ? Colors.white : textPrimary,
                         height: 1.4,
                         fontStyle: message.deletedForEveryone
                             ? FontStyle.italic
@@ -1416,8 +1602,13 @@ class _ChatBubble extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: isOwn
                                     ? Colors.white.withValues(alpha: 0.12)
-                                    : AppColors.background,
+                                    : (isDark
+                                          ? const Color(0xFF0F172A)
+                                          : AppColors.background),
                                 borderRadius: BorderRadius.circular(14),
+                                border: isOwn
+                                    ? null
+                                    : Border.all(color: bubbleBorder),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1456,7 +1647,7 @@ class _ChatBubble extends StatelessWidget {
                                           style: TextStyle(
                                             color: isOwn
                                                 ? Colors.white
-                                                : AppColors.textPrimary,
+                                                : textPrimary,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
@@ -1479,7 +1670,7 @@ class _ChatBubble extends StatelessWidget {
                           fontSize: 10,
                           color: isOwn
                               ? Colors.white.withValues(alpha: 0.7)
-                              : AppColors.textMuted,
+                              : textSecondary,
                         ),
                       ),
                       if (message.edited) ...[
@@ -1490,7 +1681,7 @@ class _ChatBubble extends StatelessWidget {
                             fontSize: 10,
                             color: isOwn
                                 ? Colors.white.withValues(alpha: 0.7)
-                                : AppColors.textMuted,
+                                : textSecondary,
                           ),
                         ),
                       ],
@@ -1538,11 +1729,16 @@ class _ReplyBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF111827) : AppColors.surface;
+    final border = isDark ? const Color(0xFF334155) : AppColors.border;
+    final textSecondary = theme.colorScheme.onSurfaceVariant;
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: surface,
+        border: Border(top: BorderSide(color: border)),
       ),
       child: Row(
         children: [
@@ -1562,7 +1758,7 @@ class _ReplyBar extends StatelessWidget {
                   reply.contentPreview,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: textSecondary),
                 ),
               ],
             ),
@@ -1585,12 +1781,16 @@ class _PendingFilesBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF111827) : AppColors.surface;
+    final border = isDark ? const Color(0xFF334155) : AppColors.border;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
+      decoration: BoxDecoration(
+        color: surface,
+        border: Border(top: BorderSide(color: border)),
       ),
       child: Wrap(
         spacing: 8,
@@ -1615,17 +1815,18 @@ class _ThreadLockedBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final closedLabel = closedAt == null
         ? ''
         : ' since ${TimeOfDay.fromDateTime(closedAt!).format(context)}';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
-      color: const Color(0xFFFFF7ED),
+      color: isDark ? const Color(0xFF2A1C0C) : const Color(0xFFFFF7ED),
       child: Text(
         'This discussion is closed$closedLabel.',
-        style: const TextStyle(
-          color: Color(0xFF9A3412),
+        style: TextStyle(
+          color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF9A3412),
           fontWeight: FontWeight.w600,
         ),
       ),

@@ -565,6 +565,7 @@ class _EventsScreenState extends State<EventsScreen>
           if (byCreated != 0) return byCreated;
           return b.startTime.compareTo(a.startTime);
         });
+      if (!mounted) return;
       setState(() {
         _inviteSentEventIds
           ..clear()
@@ -573,6 +574,7 @@ class _EventsScreenState extends State<EventsScreen>
         _loading[key] = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errors[key] = e.toString();
         _loading[key] = false;

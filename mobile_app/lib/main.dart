@@ -110,9 +110,28 @@ class _EventBookingAppState extends State<EventBookingApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeProvider.themeMode,
+      themeAnimationDuration: Duration.zero,
       routerConfig: _router!,
       debugShowCheckedModeBanner: false,
       builder: (context, child) {
+        ErrorWidget.builder = (details) {
+          return Container(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Something went wrong.',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
+        };
         final media = MediaQuery.of(context);
         final scale = _responsiveTextScale(media.size.width);
         final brightness = Theme.of(context).brightness;
