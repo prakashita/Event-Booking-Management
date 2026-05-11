@@ -855,6 +855,9 @@ class PublicationResponse(BaseModel):
     name: str
     title: str
     pub_type: Optional[str] = None
+    source_type: Optional[str] = None
+    citation_format: Optional[str] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
     others: Optional[str] = None
     file_id: Optional[str] = None
     file_name: Optional[str] = None
@@ -866,7 +869,18 @@ class PublicationResponse(BaseModel):
     author_first_name: Optional[str] = None
     author_last_name: Optional[str] = None
     publication_date: Optional[str] = None
+    issued_date: Optional[str] = None
+    accessed_date: Optional[str] = None
+    composed_date: Optional[str] = None
+    submitted_date: Optional[str] = None
+    content: Optional[str] = None
+    contributors: Optional[str] = None
+    container_title: Optional[str] = None
+    collection_title: Optional[str] = None
+    note: Optional[str] = None
+    source: Optional[str] = None
     url: Optional[str] = None
+    pdf_url: Optional[str] = None
     # Journal Article
     article_title: Optional[str] = None
     journal_name: Optional[str] = None
