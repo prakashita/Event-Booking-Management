@@ -1,10 +1,11 @@
+import json
 import os
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 
 from rate_limit import limiter
-from typing import Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from auth import ensure_google_access_token
 from drive import upload_report_file
@@ -17,12 +18,49 @@ router = APIRouter(prefix="/publications", tags=["Publications"])
 DEFAULT_PUBLICATIONS_FOLDER_ID = "1Ad_30BIMiZSLxzyVvcCXcSi9zEMmPSw0"
 
 
+def _format_contributor_item(item: Any) -> Optional[str]:
+    if not isinstance(item, dict):
+        return None
+    if item.get("kind") == "organization":
+        name = str(item.get("name") or item.get("organization") or item.get("screen_name") or item.get("screenName") or "").strip()
+        return name or None
+    name = " ".join(
+        str(item.get(key) or "").strip()
+        for key in ("title", "initials", "first_name", "first_names", "infix", "last_name", "suffix")
+        if str(item.get(key) or "").strip()
+    )
+    screen_name = str(item.get("screen_name") or item.get("screenName") or "").strip()
+    return name or screen_name or None
+
+
+def _format_contributors(value: Any) -> Optional[str]:
+    if isinstance(value, list):
+        label = "; ".join(part for part in (_format_contributor_item(item) for item in value) if part)
+        return label or None
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        try:
+            parsed = json.loads(raw)
+            parsed_label = _format_contributors(parsed)
+            if parsed_label:
+                return parsed_label
+        except Exception:
+            pass
+        return raw
+    return None
+
+
 def _to_response(pub: Publication) -> PublicationResponse:
     return PublicationResponse(
         id=str(pub.id),
         name=pub.name,
         title=pub.title,
         pub_type=pub.pub_type,
+        source_type=getattr(pub, "source_type", None) or pub.pub_type,
+        citation_format=getattr(pub, "citation_format", None),
+        details=getattr(pub, "details", None) or {},
         others=pub.others,
         file_id=pub.file_id,
         file_name=pub.file_name,
@@ -33,7 +71,18 @@ def _to_response(pub: Publication) -> PublicationResponse:
         author_first_name=getattr(pub, "author_first_name", None),
         author_last_name=getattr(pub, "author_last_name", None),
         publication_date=pub.publication_date,
+        issued_date=getattr(pub, "issued_date", None),
+        accessed_date=getattr(pub, "accessed_date", None),
+        composed_date=getattr(pub, "composed_date", None),
+        submitted_date=getattr(pub, "submitted_date", None),
+        content=getattr(pub, "content", None),
+        contributors=getattr(pub, "contributors", None),
+        container_title=getattr(pub, "container_title", None),
+        collection_title=getattr(pub, "collection_title", None),
+        note=getattr(pub, "note", None),
+        source=getattr(pub, "source", None),
         url=pub.url,
+        pdf_url=getattr(pub, "pdf_url", None),
         article_title=pub.article_title,
         journal_name=pub.journal_name,
         volume=pub.volume,
@@ -63,6 +112,9 @@ async def upload_publication(
     name: str = Form(...),
     title: str = Form(...),
     pub_type: str = Form(...),
+    source_type: Optional[str] = Form(default=None),
+    citation_format: Optional[str] = Form(default=None),
+    details: Optional[str] = Form(default=None),
     others: Optional[str] = Form(default=None),
     file: Optional[UploadFile] = File(default=None),
     # Shared
@@ -70,7 +122,18 @@ async def upload_publication(
     author_first_name: Optional[str] = Form(default=None),
     author_last_name: Optional[str] = Form(default=None),
     publication_date: Optional[str] = Form(default=None),
+    issued_date: Optional[str] = Form(default=None),
+    accessed_date: Optional[str] = Form(default=None),
+    composed_date: Optional[str] = Form(default=None),
+    submitted_date: Optional[str] = Form(default=None),
+    content: Optional[str] = Form(default=None),
+    contributors: Optional[str] = Form(default=None),
+    container_title: Optional[str] = Form(default=None),
+    collection_title: Optional[str] = Form(default=None),
+    note: Optional[str] = Form(default=None),
+    source: Optional[str] = Form(default=None),
     url: Optional[str] = Form(default=None),
+    pdf_url: Optional[str] = Form(default=None),
     # Journal Article
     article_title: Optional[str] = Form(default=None),
     journal_name: Optional[str] = Form(default=None),
@@ -97,6 +160,46 @@ async def upload_publication(
     page_title: Optional[str] = Form(default=None),
     user: User = Depends(get_current_user),
 ):
+    detail_payload: Dict[str, Any] = {}
+    if details:
+        try:
+            parsed_details = json.loads(details)
+            if not isinstance(parsed_details, dict):
+                raise ValueError("details must be an object")
+            detail_payload = parsed_details
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid publication details payload")
+
+    if contributors:
+        try:
+            parsed_contributors = json.loads(contributors)
+            detail_payload["contributors"] = parsed_contributors if isinstance(parsed_contributors, list) else contributors
+        except Exception:
+            detail_payload["contributors"] = contributors
+
+    detail_payload.update(
+        {
+            key: value
+            for key, value in {
+                "issued_date": issued_date,
+                "accessed_date": accessed_date,
+                "composed_date": composed_date,
+                "submitted_date": submitted_date,
+                "content": content,
+                "container_title": container_title,
+                "collection_title": collection_title,
+                "note": note,
+                "source": source,
+                "url": url,
+                "pdf_url": pdf_url,
+                "doi": doi,
+                "publisher": publisher,
+            }.items()
+            if value
+        }
+    )
+    contributors_display = _format_contributors(contributors) or _format_contributors(detail_payload.get("contributors"))
+
     file_id = None
     file_name = None
     web_view_link = None
@@ -143,17 +246,31 @@ async def upload_publication(
         name=name,
         title=title,
         pub_type=pub_type,
+        source_type=source_type or pub_type,
+        citation_format=citation_format,
+        details=detail_payload,
         others=others,
         file_id=file_id,
         file_name=file_name,
         web_view_link=web_view_link,
         uploaded_at=uploaded_at,
         created_by=str(user.id),
-        author=(author or " ".join([(author_first_name or "").strip(), (author_last_name or "").strip()]).strip() or None),
+        author=(author or contributors_display or " ".join([(author_first_name or "").strip(), (author_last_name or "").strip()]).strip() or None),
         author_first_name=author_first_name,
         author_last_name=author_last_name,
         publication_date=publication_date,
+        issued_date=issued_date or detail_payload.get("issued_date"),
+        accessed_date=accessed_date or detail_payload.get("accessed_date"),
+        composed_date=composed_date or detail_payload.get("composed_date"),
+        submitted_date=submitted_date or detail_payload.get("submitted_date"),
+        content=content or detail_payload.get("content"),
+        contributors=contributors_display,
+        container_title=container_title or detail_payload.get("container_title"),
+        collection_title=collection_title or detail_payload.get("collection_title"),
+        note=note or detail_payload.get("note"),
+        source=source or detail_payload.get("source"),
         url=url,
+        pdf_url=pdf_url or detail_payload.get("pdf_url"),
         article_title=article_title,
         journal_name=journal_name,
         volume=volume,

@@ -1,7 +1,7 @@
 from beanie import Document, Indexed
 from pydantic import Field
 from datetime import datetime, date, time
-from typing import Any, Optional, List, Union
+from typing import Any, Dict, Optional, List, Union
 from pydantic import BaseModel
 
 class User(Document):
@@ -335,7 +335,10 @@ class Invite(Document):
 class Publication(Document):
     name: str
     title: str
-    pub_type: Optional[str] = None  # webpage, journal_article, book, report, video, online_newspaper
+    pub_type: Optional[str] = None
+    source_type: Optional[str] = None
+    citation_format: Optional[str] = None
+    details: Dict[str, Any] = Field(default_factory=dict)
     others: Optional[str] = None
     file_id: Optional[str] = None
     file_name: Optional[str] = None
@@ -348,7 +351,18 @@ class Publication(Document):
     author_first_name: Optional[str] = None
     author_last_name: Optional[str] = None
     publication_date: Optional[str] = None
+    issued_date: Optional[str] = None
+    accessed_date: Optional[str] = None
+    composed_date: Optional[str] = None
+    submitted_date: Optional[str] = None
+    content: Optional[str] = None
+    contributors: Optional[str] = None
+    container_title: Optional[str] = None
+    collection_title: Optional[str] = None
+    note: Optional[str] = None
+    source: Optional[str] = None
     url: Optional[str] = None
+    pdf_url: Optional[str] = None
     # Journal Article
     article_title: Optional[str] = None
     journal_name: Optional[str] = None
