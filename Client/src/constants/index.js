@@ -184,14 +184,433 @@ export const eventsTable = [
   { name: "Event 9", date: "1 October 2025", time: "2 pm", status: "Pending" }
 ];
 
-export const PUB_META = {
-  webpage: { icon: "🌐", label: "Webpage", color: "#2c7a7b" },
-  journal_article: { icon: "📄", label: "Journal Article", color: "#553c9a" },
-  book: { icon: "📚", label: "Book", color: "#c05621" },
-  report: { icon: "📊", label: "Report", color: "#2b6cb0" },
-  video: { icon: "🎬", label: "Video", color: "#c53030" },
-  online_newspaper: { icon: "📰", label: "Online Newspaper", color: "#276749" }
+export const PUBLICATION_FIELD_DEFINITIONS = {
+  title: { label: "Title", type: "text", placeholder: "Main title of the cited item" },
+  content: { label: "Content", type: "textarea", placeholder: "Post or comment text" },
+  contributors: { label: "Contributors", type: "textarea", placeholder: "Authors, creators, editors, organizations" },
+  issued_date: { label: "Issued", type: "date" },
+  accessed_date: { label: "Accessed", type: "date", todayShortcut: true },
+  composed_date: { label: "Composed", type: "date" },
+  submitted_date: { label: "Submitted", type: "date" },
+  container_title: { label: "Container title", type: "text", placeholder: "Website, journal, book, platform, or publication name" },
+  collection_title: { label: "Collection title", type: "text", placeholder: "Podcast or TV series name" },
+  medium: { label: "Medium", type: "text", placeholder: "e.g. Painting, PDF, Video, Slides" },
+  archive_collection: { label: "Archive / museum / collection", type: "text" },
+  place_country: { label: "Country", type: "text" },
+  place_region: { label: "Region", type: "text" },
+  place_locality: { label: "Locality", type: "text" },
+  publisher: { label: "Publisher", type: "text", placeholder: "Publisher, producer, institution, or organization" },
+  publisher_place: { label: "Publisher place", type: "text" },
+  source: { label: "Source", type: "text", placeholder: "Database, channel, platform, or source" },
+  url: { label: "URL", type: "url", placeholder: "https://..." },
+  doi: { label: "DOI", type: "text", placeholder: "10.1000/example" },
+  pdf_url: { label: "PDF URL", type: "url", placeholder: "https://..." },
+  note: { label: "Note", type: "textarea", placeholder: "Optional citation note" },
+  edition: { label: "Edition", type: "text", placeholder: "e.g. 3rd" },
+  volume: { label: "Volume", type: "text" },
+  issue: { label: "Issue", type: "text" },
+  number: { label: "Number / article number", type: "text" },
+  pages: { label: "Page / page range", type: "text", placeholder: "e.g. 45-60" },
+  original_publication_date: { label: "Original publication date", type: "date" },
+  event: { label: "Event", type: "text", placeholder: "Conference, talk, class, or event" },
+  event_name: { label: "Event name", type: "text" },
+  version: { label: "Version", type: "text" },
+  status: { label: "Status", type: "select", options: ["Published", "In press", "Unpublished"] },
+  jurisdiction: { label: "Jurisdiction", type: "text" },
+  authority: { label: "Authority", type: "text" },
+  season: { label: "Season", type: "text" },
+  episode: { label: "Episode", type: "text" },
+  genre: { label: "Genre", type: "text", placeholder: "e.g. PhD dissertation, Master's thesis" },
+  section: { label: "Section", type: "text" }
 };
+
+const commonWebOptional = ["accessed_date", "note"];
+const placeFields = ["place_country", "place_region", "place_locality"];
+
+export const FEATURED_SOURCE_TYPE_KEYS = [
+  "webpage",
+  "journal_article",
+  "book",
+  "report",
+  "video",
+  "online_newspaper_article"
+];
+
+export const SOURCE_TYPE_CONFIG = {
+  artwork: {
+    sourceType: "Artwork",
+    label: "Artwork",
+    icon: "🎨",
+    color: "#7c3aed",
+    desc: "Artwork, museum objects, and collection items",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "composed_date"],
+    optionalFields: ["medium", "archive_collection", ...placeFields, "note"]
+  },
+  blog_post: {
+    sourceType: "Blog Post",
+    label: "Blog Post",
+    icon: "✍️",
+    color: "#0f766e",
+    desc: "Posts from blogs and editorial feeds",
+    requiredFields: ["title", "container_title"],
+    recommendedFields: ["contributors", "issued_date", "url"],
+    optionalFields: commonWebOptional
+  },
+  book: {
+    sourceType: "Book",
+    label: "Book",
+    icon: "📚",
+    color: "#c05621",
+    desc: "Printed books and e-books",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "medium", "issued_date", "publisher"],
+    optionalFields: ["edition", "volume", "original_publication_date", "publisher_place", "doi", "pdf_url", "url", "note"]
+  },
+  book_chapter: {
+    sourceType: "Book Chapter",
+    label: "Book Chapter",
+    icon: "📖",
+    color: "#a16207",
+    desc: "A chapter or section within a book",
+    requiredFields: ["title", "container_title"],
+    recommendedFields: ["contributors", "pages"],
+    optionalFields: ["edition", "volume", "medium", "issued_date", "original_publication_date", "publisher", "publisher_place", "doi", "pdf_url", "url", "note"]
+  },
+  comment: {
+    sourceType: "Comment",
+    label: "Comment",
+    icon: "💬",
+    color: "#64748b",
+    desc: "Comments on posts, articles, videos, or threads",
+    requiredFields: ["content"],
+    recommendedFields: ["container_title", "contributors", "issued_date", "source", "url"],
+    optionalFields: commonWebOptional
+  },
+  conference_proceeding: {
+    sourceType: "Conference Proceeding",
+    label: "Conference Proceeding",
+    icon: "📄",
+    color: "#4f46e5",
+    desc: "Papers published in proceedings",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "issued_date"],
+    optionalFields: ["container_title", "edition", "volume", "medium", "publisher", "publisher_place", "doi", "pdf_url", "url", "note"]
+  },
+  conference_session: {
+    sourceType: "Conference Session",
+    label: "Conference Session",
+    icon: "🎤",
+    color: "#0891b2",
+    desc: "Talks, sessions, and conference presentations",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "medium", "event", "url"],
+    optionalFields: ["container_title", "event_name", ...placeFields, "note"]
+  },
+  dataset: {
+    sourceType: "Dataset",
+    label: "Dataset",
+    icon: "🧮",
+    color: "#047857",
+    desc: "Datasets from repositories or projects",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "url"],
+    optionalFields: ["container_title", "version", "medium", "status", "issued_date", "publisher", "doi", "pdf_url", "note"]
+  },
+  film: {
+    sourceType: "Film",
+    label: "Film",
+    icon: "🎞️",
+    color: "#b91c1c",
+    desc: "Films and movies",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "issued_date", "publisher"],
+    optionalFields: ["version", "medium", "url", "note"]
+  },
+  forum_post: {
+    sourceType: "Forum Post",
+    label: "Forum Post",
+    icon: "🧵",
+    color: "#475569",
+    desc: "Posts from forums and discussion boards",
+    requiredFields: ["title"],
+    recommendedFields: ["container_title", "contributors", "issued_date", "url"],
+    optionalFields: commonWebOptional
+  },
+  image: {
+    sourceType: "Image",
+    label: "Image",
+    icon: "🖼️",
+    color: "#7c2d12",
+    desc: "Online images, figures, and photographs",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "issued_date", "url"],
+    optionalFields: ["container_title", "note"]
+  },
+  journal_article: {
+    sourceType: "Journal Article",
+    label: "Journal Article",
+    icon: "📄",
+    color: "#553c9a",
+    desc: "Peer-reviewed academic and scholarly articles",
+    requiredFields: ["title", "container_title"],
+    recommendedFields: ["contributors", "status", "issued_date", "pages", "doi"],
+    optionalFields: ["volume", "issue", "number", "source", "pdf_url", "url", "note"]
+  },
+  online_dictionary_entry: {
+    sourceType: "Online Dictionary Entry",
+    label: "Online Dictionary Entry",
+    icon: "🔤",
+    color: "#2563eb",
+    desc: "Dictionary entries published online",
+    requiredFields: ["title"],
+    recommendedFields: ["issued_date", "url"],
+    optionalFields: ["container_title", "contributors", "accessed_date", "note"]
+  },
+  online_encyclopedia_entry: {
+    sourceType: "Online Encyclopedia Entry",
+    label: "Online Encyclopedia Entry",
+    icon: "🌐",
+    color: "#1d4ed8",
+    desc: "Online encyclopedia entries",
+    requiredFields: ["title"],
+    recommendedFields: ["issued_date", "url"],
+    optionalFields: ["container_title", "contributors", "accessed_date", "note"]
+  },
+  online_magazine_article: {
+    sourceType: "Online Magazine Article",
+    label: "Online Magazine Article",
+    icon: "🗞️",
+    color: "#be123c",
+    desc: "Magazine articles published online",
+    requiredFields: ["title", "container_title"],
+    recommendedFields: ["contributors", "issued_date", "url"],
+    optionalFields: ["original_publication_date", "accessed_date", "publisher", "note"]
+  },
+  online_newspaper_article: {
+    sourceType: "Online Newspaper Article",
+    label: "Online Newspaper Article",
+    icon: "📰",
+    color: "#276749",
+    desc: "News articles published online",
+    aliases: ["online_newspaper"],
+    requiredFields: ["title", "container_title"],
+    recommendedFields: ["contributors", "issued_date", "url"],
+    optionalFields: ["publisher", "note"]
+  },
+  patent: {
+    sourceType: "Patent",
+    label: "Patent",
+    icon: "⚙️",
+    color: "#0f172a",
+    desc: "Patents with number, jurisdiction, and authority",
+    requiredFields: ["title", "contributors", "number", "jurisdiction", "authority", "issued_date"],
+    recommendedFields: [],
+    optionalFields: ["container_title", "url", "note"]
+  },
+  podcast: {
+    sourceType: "Podcast",
+    label: "Podcast",
+    icon: "🎙️",
+    color: "#9333ea",
+    desc: "A podcast series",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "url"],
+    optionalFields: ["publisher", "source", "note"]
+  },
+  podcast_episode: {
+    sourceType: "Podcast Episode",
+    label: "Podcast Episode",
+    icon: "🎧",
+    color: "#7e22ce",
+    desc: "One episode from a podcast",
+    requiredFields: ["collection_title"],
+    recommendedFields: ["contributors", "issued_date", "url"],
+    optionalFields: ["title", "season", "episode", "accessed_date", "publisher", "source", "note"]
+  },
+  presentation_slides: {
+    sourceType: "Presentation Slides",
+    label: "Presentation Slides",
+    icon: "📊",
+    color: "#0369a1",
+    desc: "Slide decks and presentation materials",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "medium", "issued_date", "event", "url"],
+    optionalFields: ["container_title", "original_publication_date", "event_name", ...placeFields, "pages", "note"]
+  },
+  press_release: {
+    sourceType: "Press Release",
+    label: "Press Release",
+    icon: "📣",
+    color: "#b45309",
+    desc: "Organization announcements and press releases",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "issued_date", "url"],
+    optionalFields: commonWebOptional
+  },
+  print_dictionary_entry: {
+    sourceType: "Print Dictionary Entry",
+    label: "Print Dictionary Entry",
+    icon: "📘",
+    color: "#334155",
+    desc: "Dictionary entries in print sources",
+    requiredFields: ["title", "container_title"],
+    recommendedFields: ["contributors", "issued_date", "publisher"],
+    optionalFields: ["edition", "volume", "number", "original_publication_date", "publisher_place", "pages", "note"]
+  },
+  print_encyclopedia_entry: {
+    sourceType: "Print Encyclopedia Entry",
+    label: "Print Encyclopedia Entry",
+    icon: "📚",
+    color: "#1e40af",
+    desc: "Encyclopedia entries in print sources",
+    requiredFields: ["title", "container_title"],
+    recommendedFields: ["contributors", "issued_date", "publisher"],
+    optionalFields: ["edition", "volume", "original_publication_date", "publisher_place", "note"]
+  },
+  print_magazine_article: {
+    sourceType: "Print Magazine Article",
+    label: "Print Magazine Article",
+    icon: "📰",
+    color: "#9f1239",
+    desc: "Magazine articles from print issues",
+    requiredFields: ["title", "container_title"],
+    recommendedFields: ["contributors", "issued_date", "pages"],
+    optionalFields: ["issue", "original_publication_date", "source", "note"]
+  },
+  print_newspaper_article: {
+    sourceType: "Print Newspaper Article",
+    label: "Print Newspaper Article",
+    icon: "🗞️",
+    color: "#166534",
+    desc: "Newspaper articles from print editions",
+    requiredFields: ["title", "container_title"],
+    recommendedFields: ["contributors", "issued_date", "pages"],
+    optionalFields: ["edition", "section", "original_publication_date", "publisher", "publisher_place", "note"]
+  },
+  report: {
+    sourceType: "Report",
+    label: "Report",
+    icon: "📊",
+    color: "#2b6cb0",
+    desc: "Research, policy, and organization reports",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "issued_date", "url"],
+    optionalFields: ["container_title", "number", "accessed_date", "publisher", "publisher_place", "doi", "pdf_url", "note"]
+  },
+  social_media_post: {
+    sourceType: "Social Media Post",
+    label: "Social Media Post",
+    icon: "#",
+    color: "#0ea5e9",
+    desc: "Posts from social platforms",
+    requiredFields: ["content"],
+    recommendedFields: ["contributors", "issued_date", "url"],
+    optionalFields: ["container_title", "accessed_date", "note"]
+  },
+  software: {
+    sourceType: "Software",
+    label: "Software",
+    icon: "⌘",
+    color: "#0f766e",
+    desc: "Software packages, apps, and tools",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "version", "issued_date"],
+    optionalFields: ["container_title", "publisher", "url", "note"]
+  },
+  speech: {
+    sourceType: "Speech",
+    label: "Speech",
+    icon: "🎤",
+    color: "#c2410c",
+    desc: "Speeches and public addresses",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "event", "url"],
+    optionalFields: ["container_title", "issued_date", "event_name", ...placeFields, "note"]
+  },
+  thesis: {
+    sourceType: "Thesis",
+    label: "Thesis",
+    icon: "🎓",
+    color: "#4338ca",
+    desc: "Theses and dissertations",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "genre", "submitted_date", "publisher"],
+    optionalFields: ["doi", "pdf_url", "note"]
+  },
+  tv_show: {
+    sourceType: "TV Show",
+    label: "TV Show",
+    icon: "📺",
+    color: "#be123c",
+    desc: "A television show or series",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "issued_date", "publisher"],
+    optionalFields: ["medium", "source", "url", "note"]
+  },
+  tv_show_episode: {
+    sourceType: "TV Show Episode",
+    label: "TV Show Episode",
+    icon: "📺",
+    color: "#e11d48",
+    desc: "One episode from a TV series",
+    requiredFields: ["collection_title"],
+    recommendedFields: ["contributors", "issued_date"],
+    optionalFields: ["title", "season", "episode", "medium", "accessed_date", "publisher", "source", "url", "note"]
+  },
+  video: {
+    sourceType: "Video",
+    label: "Video",
+    icon: "🎬",
+    color: "#c53030",
+    desc: "Online videos from YouTube, Vimeo, or platforms",
+    requiredFields: ["title"],
+    recommendedFields: ["container_title", "contributors", "issued_date"],
+    optionalFields: ["accessed_date", "url", "note"]
+  },
+  webpage: {
+    sourceType: "Webpage",
+    label: "Webpage",
+    icon: "🌐",
+    color: "#2c7a7b",
+    desc: "A specific page on a website",
+    requiredFields: ["title"],
+    recommendedFields: ["contributors", "issued_date", "url"],
+    optionalFields: ["container_title", "accessed_date", "note"]
+  },
+  website: {
+    sourceType: "Website",
+    label: "Website",
+    icon: "🌍",
+    color: "#0284c7",
+    desc: "A full website, not just one page",
+    requiredFields: ["title"],
+    recommendedFields: ["issued_date", "accessed_date", "url"],
+    optionalFields: ["publisher", "note"]
+  },
+  wiki_entry: {
+    sourceType: "Wiki Entry",
+    label: "Wiki Entry",
+    icon: "W",
+    color: "#475569",
+    desc: "Wiki or Wikipedia articles",
+    requiredFields: ["title"],
+    recommendedFields: ["container_title", "issued_date", "url"],
+    optionalFields: ["accessed_date", "note"]
+  }
+};
+
+export const SOURCE_TYPE_OPTIONS = Object.entries(SOURCE_TYPE_CONFIG).map(([key, config]) => ({
+  key,
+  ...config
+}));
+
+export const PUB_META = Object.fromEntries(
+  SOURCE_TYPE_OPTIONS.flatMap((type) => {
+    const meta = { icon: type.icon, label: type.label, color: type.color };
+    return [[type.key, meta], ...(type.aliases || []).map((alias) => [alias, meta])];
+  })
+);
 
 export const CITATION_FORMAT_OPTIONS = [
   { value: "mla", label: "MLA" },

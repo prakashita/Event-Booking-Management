@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import { createPortal } from "react-dom";
 
 const MONTHS = [
@@ -17,9 +17,9 @@ function PremiumDatePicker({ value, onChange, required, label }) {
   const triggerRef = useRef(null);
   const dropdownRef = useRef(null);
   const rafRef = useRef(null);
-  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 280 });
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 320 });
 
-  const parsed = value ? new Date(value + "T00:00:00") : null;
+  const parsed = useMemo(() => (value ? new Date(value + "T00:00:00") : null), [value]);
   const [viewYear, setViewYear] = useState(parsed ? parsed.getFullYear() : new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(parsed ? parsed.getMonth() : new Date().getMonth());
 
@@ -31,18 +31,18 @@ function PremiumDatePicker({ value, onChange, required, label }) {
       setOpen(false);
       return;
     }
-    const dropH = 340;
+    const dropH = 304;
     const spaceBelow = window.innerHeight - rect.bottom;
-    const isMobile = window.innerWidth < 560;
-    if (isMobile) {
-      setDropPos({ top: Math.max(8, window.innerHeight / 2 - 170), left: 8, width: window.innerWidth - 16 });
-    } else {
-      setDropPos({
-        top: spaceBelow >= dropH + 10 ? rect.bottom + 6 : Math.max(8, rect.top - dropH - 6),
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - 292)),
-        width: Math.max(280, rect.width),
-      });
-    }
+    const viewportPadding = window.innerWidth < 420 ? 12 : 16;
+    const preferredWidth = window.innerWidth < 420
+      ? Math.min(340, window.innerWidth - viewportPadding * 2)
+      : Math.min(360, Math.max(320, rect.width));
+    const maxLeft = Math.max(viewportPadding, window.innerWidth - preferredWidth - viewportPadding);
+    setDropPos({
+      top: spaceBelow >= dropH + 8 ? rect.bottom + 6 : Math.max(viewportPadding, rect.top - dropH - 6),
+      left: Math.max(viewportPadding, Math.min(rect.left, maxLeft)),
+      width: preferredWidth,
+    });
   }, []);
 
   useEffect(() => {
@@ -51,6 +51,7 @@ function PremiumDatePicker({ value, onChange, required, label }) {
     setViewYear(p.getFullYear());
     setViewMonth(p.getMonth());
     calcDropPos();
+    rafRef.current = requestAnimationFrame(calcDropPos);
 
     const handleMouseDown = (e) => {
       if (triggerRef.current?.contains(e.target)) return;
@@ -80,38 +81,56 @@ function PremiumDatePicker({ value, onChange, required, label }) {
     if (e.key === "Escape") setOpen(false);
   }, []);
 
-  const prevMonth = () => {
+  const toggleOpen = useCallback(() => {
+    setOpen((current) => !current);
+  }, []);
+
+  const prevMonth = useCallback(() => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear((y) => y - 1); }
     else setViewMonth((m) => m - 1);
-  };
-  const nextMonth = () => {
+  }, [viewMonth]);
+  const nextMonth = useCallback(() => {
     if (viewMonth === 11) { setViewMonth(0); setViewYear((y) => y + 1); }
     else setViewMonth((m) => m + 1);
-  };
+  }, [viewMonth]);
 
-  const selectDay = (day) => {
+  const selectDay = useCallback((day) => {
     const mm = String(viewMonth + 1).padStart(2, "0");
     const dd = String(day).padStart(2, "0");
     const syntheticEvent = { target: { value: `${viewYear}-${mm}-${dd}` } };
     onChange(syntheticEvent);
     setOpen(false);
-  };
+  }, [onChange, viewMonth, viewYear]);
 
-  const totalDays = daysInMonth(viewYear, viewMonth);
-  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
-  const grid = [];
-  for (let i = 0; i < firstDay; i++) grid.push(null);
-  for (let d = 1; d <= totalDays; d++) grid.push(d);
+  const handleDayClick = useCallback((event) => {
+    const day = Number(event.currentTarget.dataset.day);
+    if (day) selectDay(day);
+  }, [selectDay]);
 
-  const selectedDay = parsed && parsed.getFullYear() === viewYear && parsed.getMonth() === viewMonth
-    ? parsed.getDate() : null;
+  const grid = useMemo(() => {
+    const totalDays = daysInMonth(viewYear, viewMonth);
+    const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+    const days = [];
+    for (let i = 0; i < firstDay; i++) days.push(null);
+    for (let d = 1; d <= totalDays; d++) days.push(d);
+    return days;
+  }, [viewMonth, viewYear]);
 
-  const today = new Date();
-  const isToday = (d) => d && today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === d;
+  const selectedDay = useMemo(
+    () => parsed && parsed.getFullYear() === viewYear && parsed.getMonth() === viewMonth ? parsed.getDate() : null,
+    [parsed, viewMonth, viewYear]
+  );
 
-  const displayText = parsed
-    ? parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-    : "";
+  const today = useMemo(() => new Date(), []);
+  const isToday = useCallback(
+    (d) => d && today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === d,
+    [today, viewMonth, viewYear]
+  );
+
+  const displayText = useMemo(
+    () => parsed ? parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "",
+    [parsed]
+  );
 
   return (
     <div className="pdp-wrapper" ref={wrapperRef} onKeyDown={handleKeyDown}>
@@ -120,7 +139,7 @@ function PremiumDatePicker({ value, onChange, required, label }) {
         ref={triggerRef}
         type="button"
         className={`pdp-trigger ${open ? "pdp-trigger--open" : ""}`}
-        onClick={() => setOpen(!open)}
+        onClick={toggleOpen}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -163,7 +182,8 @@ function PremiumDatePicker({ value, onChange, required, label }) {
                   day === selectedDay ? "pdp-cell--selected" : "",
                   isToday(day) ? "pdp-cell--today" : ""
                 ].join(" ")}
-                onClick={() => day && selectDay(day)}
+                data-day={day || ""}
+                onClick={handleDayClick}
                 aria-label={day ? `${MONTHS[viewMonth]} ${day}` : undefined}
               >
                 {day || ""}
