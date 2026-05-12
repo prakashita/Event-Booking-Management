@@ -23,8 +23,12 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
   bool _isLoading = true;
   String? _error;
   String _typeFilter = '';
+  String _citationFilter = '';
+  String _citationFormat = 'mla';
   String _sort = 'date_desc';
   String _searchTerm = '';
+  DateTime? _dateStart;
+  DateTime? _dateEnd;
 
   static const List<String> _publicationTypes = [
     'webpage',
@@ -43,6 +47,14 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
     'video': 'Video',
     'online_newspaper': 'Online Newspaper',
     'newspaper': 'Online Newspaper',
+  };
+
+  static const Map<String, String> _citationLabels = {
+    'mla': 'MLA',
+    'apa': 'APA',
+    'chicago': 'Chicago',
+    'harvard': 'Harvard',
+    'ieee': 'IEEE',
   };
 
   @override
@@ -137,9 +149,8 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: _PublicationCard(
                       pub: pub,
-                      typeLabel: _labelForType(
-                        (pub['pub_type'] ?? pub['type'] ?? '').toString(),
-                      ),
+                      typeLabel: _labelForType(_sourceType(pub)),
+                      citationFormat: _citationFormat,
                       onOpenLink: () => _openPublicationLink(pub),
                     ),
                   ),
@@ -169,16 +180,28 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
 
   Widget _buildHeader(int count) {
     final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
     return Row(
       children: [
         Expanded(
-          child: Text(
-            'Publications',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: theme.colorScheme.onSurface,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Publications',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Citations, files, and publication records',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: muted, fontWeight: FontWeight.w600),
+              ),
+            ],
           ),
         ),
         Container(
@@ -228,6 +251,24 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
       },
     );
 
+    final citationFilterDropdown = DropdownButtonFormField<String>(
+      initialValue: _citationFilter,
+      isExpanded: true,
+      decoration: _filterInputDecoration('All formats', fieldFill, fieldBorder),
+      items: [
+        const DropdownMenuItem(value: '', child: Text('All formats')),
+        ..._citationLabels.entries.map(
+          (entry) => DropdownMenuItem(
+            value: entry.key,
+            child: Text(entry.value, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ],
+      onChanged: (value) {
+        setState(() => _citationFilter = value ?? '');
+      },
+    );
+
     final sortDropdown = DropdownButtonFormField<String>(
       initialValue: _sort,
       isExpanded: true,
@@ -243,6 +284,27 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
         if (selected == _sort) return;
         setState(() => _sort = selected);
         _loadPublications();
+      },
+    );
+
+    final citationFormatDropdown = DropdownButtonFormField<String>(
+      initialValue: _citationFormat,
+      isExpanded: true,
+      decoration: _filterInputDecoration(
+        'Show citation as',
+        fieldFill,
+        fieldBorder,
+      ),
+      items: _citationLabels.entries
+          .map(
+            (entry) => DropdownMenuItem(
+              value: entry.key,
+              child: Text('${entry.value} citation'),
+            ),
+          )
+          .toList(),
+      onChanged: (value) {
+        setState(() => _citationFormat = value ?? 'mla');
       },
     );
 
@@ -280,21 +342,105 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
                 children: [
                   typeDropdown,
                   const SizedBox(height: 10),
+                  citationFilterDropdown,
+                  const SizedBox(height: 10),
                   sortDropdown,
+                  const SizedBox(height: 10),
+                  citationFormatDropdown,
+                  const SizedBox(height: 10),
+                  _buildDateFilters(fieldFill, fieldBorder),
                 ],
               );
             }
-            return Row(
+            return Column(
               children: [
-                Expanded(child: typeDropdown),
-                const SizedBox(width: 10),
-                Expanded(child: sortDropdown),
+                Row(
+                  children: [
+                    Expanded(child: typeDropdown),
+                    const SizedBox(width: 10),
+                    Expanded(child: citationFilterDropdown),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: sortDropdown),
+                    const SizedBox(width: 10),
+                    Expanded(child: citationFormatDropdown),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _buildDateFilters(fieldFill, fieldBorder),
               ],
             );
           },
         ),
       ],
     );
+  }
+
+  Widget _buildDateFilters(Color fillColor, Color borderColor) {
+    return Row(
+      children: [
+        Expanded(
+          child: _DateFilterButton(
+            label: 'From',
+            value: _dateStart,
+            fillColor: fillColor,
+            borderColor: borderColor,
+            onTap: () => _pickDateRangeEdge(isStart: true),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _DateFilterButton(
+            label: 'To',
+            value: _dateEnd,
+            fillColor: fillColor,
+            borderColor: borderColor,
+            onTap: () => _pickDateRangeEdge(isStart: false),
+          ),
+        ),
+        if (_dateStart != null || _dateEnd != null) ...[
+          const SizedBox(width: 8),
+          IconButton.filledTonal(
+            tooltip: 'Clear date range',
+            onPressed: () {
+              setState(() {
+                _dateStart = null;
+                _dateEnd = null;
+              });
+            },
+            icon: const Icon(Icons.close_rounded, size: 18),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _pickDateRangeEdge({required bool isStart}) async {
+    final now = DateTime.now();
+    final initial = isStart ? _dateStart : _dateEnd;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial ?? now,
+      firstDate: DateTime(1900),
+      lastDate: DateTime(now.year + 5),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (isStart) {
+        _dateStart = picked;
+        if (_dateEnd != null && _dateEnd!.isBefore(picked)) {
+          _dateEnd = picked;
+        }
+      } else {
+        _dateEnd = picked;
+        if (_dateStart != null && _dateStart!.isAfter(picked)) {
+          _dateStart = picked;
+        }
+      }
+    });
   }
 
   InputDecoration _filterInputDecoration(
@@ -335,17 +481,20 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
         ? _pubs
         : _pubs.where((pub) {
             final values = [
-              pub['title'],
+              _displayTitle(pub),
+              _fieldValue(pub, 'contributors'),
+              _fieldValue(pub, 'container_title'),
               pub['name'],
               pub['file_name'],
-              pub['pub_type'],
+              _sourceType(pub),
               pub['author'],
+              pub['publisher'],
+              pub['journal_name'],
+              pub['website_name'],
+              pub['newspaper_name'],
               pub['url'],
+              pub['doi'],
               pub['others'],
-              pub['article_title'],
-              pub['book_title'],
-              pub['report_title'],
-              pub['video_title'],
             ];
             return values
                 .whereType<String>()
@@ -353,16 +502,100 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
                 .any((v) => v.contains(_searchTerm));
           }).toList();
 
-    if (_typeFilter.isEmpty) {
-      return searched;
-    }
-    return searched
-        .where(
-          (pub) =>
-              (pub['pub_type'] ?? pub['type'] ?? '').toString() == _typeFilter,
-        )
-        .toList();
+    return searched.where((pub) {
+      if (_typeFilter.isNotEmpty && _sourceType(pub) != _typeFilter) {
+        return false;
+      }
+
+      final citationFormat = (pub['citation_format'] ?? '')
+          .toString()
+          .toLowerCase();
+      if (_citationFilter.isNotEmpty && citationFormat != _citationFilter) {
+        return false;
+      }
+
+      final date = _publicationDateValue(pub);
+      if (_dateStart != null) {
+        if (date == null || date.isBefore(_dateOnly(_dateStart!))) {
+          return false;
+        }
+      }
+      if (_dateEnd != null) {
+        if (date == null || date.isAfter(_dateOnly(_dateEnd!))) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList()..sort((a, b) {
+      if (_sort.startsWith('title')) {
+        final direction = _sort.endsWith('desc') ? -1 : 1;
+        return _displayTitle(a).compareTo(_displayTitle(b)) * direction;
+      }
+      final direction = _sort.endsWith('asc') ? 1 : -1;
+      final aDate =
+          _publicationDateValue(a) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bDate =
+          _publicationDateValue(b) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return aDate.compareTo(bDate) * direction;
+    });
   }
+
+  String _sourceType(Map<String, dynamic> pub) {
+    final source = (pub['source_type'] ?? pub['pub_type'] ?? pub['type'] ?? '')
+        .toString()
+        .trim();
+    if (source == 'newspaper') return 'online_newspaper';
+    return source;
+  }
+
+  String _fieldValue(Map<String, dynamic> pub, String key) {
+    final direct = (pub[key] ?? '').toString().trim();
+    if (direct.isNotEmpty) return direct;
+    final details = pub['details'];
+    if (details is Map) {
+      final detail = (details[key] ?? '').toString().trim();
+      if (detail.isNotEmpty) return detail;
+    }
+    return '';
+  }
+
+  String _displayTitle(Map<String, dynamic> pub) {
+    for (final key in const [
+      'title',
+      'article_title',
+      'book_title',
+      'report_title',
+      'video_title',
+      'page_title',
+      'content',
+      'name',
+    ]) {
+      final value = _fieldValue(pub, key);
+      if (value.isNotEmpty) return value;
+    }
+    return 'Untitled publication';
+  }
+
+  DateTime? _publicationDateValue(Map<String, dynamic> pub) {
+    for (final key in const [
+      'issued_date',
+      'publication_date',
+      'uploaded_at',
+      'created_at',
+    ]) {
+      final raw = _fieldValue(pub, key);
+      if (raw.isEmpty) continue;
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) return _dateOnly(parsed.toLocal());
+      final year = RegExp(r'\b(19|20)\d{2}\b').firstMatch(raw)?.group(0);
+      if (year != null) return DateTime(int.parse(year));
+    }
+    return null;
+  }
+
+  DateTime _dateOnly(DateTime value) =>
+      DateTime(value.year, value.month, value.day);
 
   String _labelForType(String type) {
     return _typeLabels[type] ?? type.replaceAll('_', ' ').trim();
@@ -448,7 +681,10 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
     BuildContext context,
     String selectedType,
   ) async {
-    final draft = _PublicationDraft(pubType: selectedType);
+    final draft = _PublicationDraft(
+      pubType: selectedType,
+      citationFormat: _citationFormat,
+    );
     bool submitting = false;
 
     try {
@@ -567,6 +803,37 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
                       initialValue: draft.name,
                       enabled: !submitting,
                       onChanged: (v) => draft.name = v,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: draft.citationFormat,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: 'Citation Format',
+                        filled: true,
+                        fillColor: Theme.of(ctx).brightness == Brightness.dark
+                            ? Theme.of(ctx).colorScheme.surfaceContainerHighest
+                                  .withValues(alpha: 0.45)
+                            : Theme.of(ctx).colorScheme.surface,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      items: _citationLabels.entries
+                          .map(
+                            (entry) => DropdownMenuItem(
+                              value: entry.key,
+                              child: Text(entry.value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: submitting
+                          ? null
+                          : (value) {
+                              setModalState(() {
+                                draft.citationFormat = value ?? 'mla';
+                              });
+                            },
                     ),
                     if (draft.pubType == 'webpage')
                       ..._buildWebpageFields(draft, !submitting),
@@ -1144,6 +1411,8 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
       'name': d.name.trim(),
       'title': title,
       'pub_type': d.pubType,
+      'source_type': d.pubType,
+      'citation_format': d.citationFormat,
     };
 
     void addIfNotEmpty(String key, String value) {
@@ -1320,10 +1589,73 @@ class _PublicationTypeTile extends StatelessWidget {
   }
 }
 
+class _DateFilterButton extends StatelessWidget {
+  const _DateFilterButton({
+    required this.label,
+    required this.value,
+    required this.fillColor,
+    required this.borderColor,
+    required this.onTap,
+  });
+
+  final String label;
+  final DateTime? value;
+  final Color fillColor;
+  final Color borderColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = value == null
+        ? label
+        : '${value!.year}-${value!.month.toString().padLeft(2, '0')}-${value!.day.toString().padLeft(2, '0')}';
+    return Material(
+      color: fillColor,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                Icons.calendar_today_rounded,
+                size: 16,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: value == null
+                        ? Theme.of(context).colorScheme.onSurfaceVariant
+                        : Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PublicationDraft {
-  _PublicationDraft({required this.pubType});
+  _PublicationDraft({required this.pubType, required this.citationFormat});
 
   final String pubType;
+  String citationFormat;
 
   String name = '';
   String others = '';
@@ -1363,11 +1695,13 @@ class _PublicationDraft {
 class _PublicationCard extends StatelessWidget {
   final Map<String, dynamic> pub;
   final String typeLabel;
+  final String citationFormat;
   final VoidCallback onOpenLink;
 
   const _PublicationCard({
     required this.pub,
     required this.typeLabel,
+    required this.citationFormat,
     required this.onOpenLink,
   });
 
@@ -1409,33 +1743,30 @@ class _PublicationCard extends StatelessWidget {
   }
 
   String get _displayTitle {
-    final title = (pub['title'] ?? '').toString().trim();
-    if (title.isNotEmpty) return title;
-
-    final articleTitle = (pub['article_title'] ?? '').toString().trim();
-    if (articleTitle.isNotEmpty) return articleTitle;
-
-    final bookTitle = (pub['book_title'] ?? '').toString().trim();
-    if (bookTitle.isNotEmpty) return bookTitle;
-
-    final reportTitle = (pub['report_title'] ?? '').toString().trim();
-    if (reportTitle.isNotEmpty) return reportTitle;
-
-    final videoTitle = (pub['video_title'] ?? '').toString().trim();
-    if (videoTitle.isNotEmpty) return videoTitle;
-
+    for (final key in const [
+      'title',
+      'article_title',
+      'book_title',
+      'report_title',
+      'video_title',
+      'page_title',
+      'content',
+    ]) {
+      final value = _value(key);
+      if (value.isNotEmpty) return value;
+    }
     return (pub['name'] ?? 'Untitled publication').toString();
   }
 
   String? get _metaText {
-    final author = (pub['author'] ?? '').toString().trim();
+    final author = _contributorsText;
     final context = _contextText();
     final date =
-        (pub['publication_date'] ??
-                pub['uploaded_at'] ??
-                pub['created_at'] ??
-                '')
-            .toString()
+        (_value('issued_date').isNotEmpty
+                ? _value('issued_date')
+                : _value('publication_date').isNotEmpty
+                ? _value('publication_date')
+                : _value('created_at'))
             .trim();
 
     final parts = <String>[];
@@ -1449,6 +1780,7 @@ class _PublicationCard extends StatelessWidget {
 
   String _contextText() {
     for (final key in const [
+      'container_title',
       'website_name',
       'journal_name',
       'publisher',
@@ -1459,6 +1791,103 @@ class _PublicationCard extends StatelessWidget {
     ]) {
       final value = (pub[key] ?? '').toString().trim();
       if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
+  String get _contributorsText {
+    final contributors = _value('contributors');
+    if (contributors.isNotEmpty) return contributors;
+    final author = _value('author');
+    if (author.isNotEmpty) return author;
+    final first = _value('author_first_name');
+    final last = _value('author_last_name');
+    final combined = [first, last].where((v) => v.isNotEmpty).join(' ');
+    if (combined.isNotEmpty) return combined;
+    return _value('creator').isNotEmpty
+        ? _value('creator')
+        : _value('organization');
+  }
+
+  String _value(String key) {
+    final direct = (pub[key] ?? '').toString().trim();
+    if (direct.isNotEmpty) return direct;
+    final details = pub['details'];
+    if (details is Map) {
+      final detail = (details[key] ?? '').toString().trim();
+      if (detail.isNotEmpty) return detail;
+    }
+    return '';
+  }
+
+  String _citation() {
+    final author = _contributorsText;
+    final title = _displayTitle;
+    final container = _contextText();
+    final year = _yearText;
+    final doi = _value('doi');
+    final url = _value('url');
+    final publisher = _value('publisher');
+
+    switch (citationFormat) {
+      case 'apa':
+        return [
+          if (author.isNotEmpty) '$author.',
+          if (year.isNotEmpty) '($year).',
+          title,
+          if (container.isNotEmpty) container,
+          if (doi.isNotEmpty)
+            'https://doi.org/$doi'
+          else if (url.isNotEmpty)
+            url,
+        ].where((v) => v.trim().isNotEmpty).join(' ');
+      case 'chicago':
+        return [
+          if (author.isNotEmpty) '$author.',
+          '"$title."',
+          if (container.isNotEmpty) container,
+          if (publisher.isNotEmpty) publisher,
+          if (year.isNotEmpty) year,
+          if (url.isNotEmpty) url,
+        ].where((v) => v.trim().isNotEmpty).join(' ');
+      case 'harvard':
+        return [
+          if (author.isNotEmpty) author,
+          if (year.isNotEmpty) '($year)',
+          title,
+          if (container.isNotEmpty) container,
+          if (url.isNotEmpty) 'Available at: $url',
+        ].where((v) => v.trim().isNotEmpty).join(' ');
+      case 'ieee':
+        return [
+          if (author.isNotEmpty) author,
+          '"$title,"',
+          if (container.isNotEmpty) container,
+          if (year.isNotEmpty) year,
+          if (doi.isNotEmpty) 'doi: $doi' else if (url.isNotEmpty) url,
+        ].where((v) => v.trim().isNotEmpty).join(' ');
+      case 'mla':
+      default:
+        return [
+          if (author.isNotEmpty) '$author.',
+          '"$title."',
+          if (container.isNotEmpty) '$container,',
+          if (year.isNotEmpty) year,
+          if (url.isNotEmpty) url,
+        ].where((v) => v.trim().isNotEmpty).join(' ');
+    }
+  }
+
+  String get _yearText {
+    final explicitYear = _value('year');
+    if (explicitYear.isNotEmpty) return explicitYear;
+    for (final raw in [
+      _value('issued_date'),
+      _value('publication_date'),
+      _value('created_at'),
+    ]) {
+      final match = RegExp(r'\b(19|20)\d{2}\b').firstMatch(raw);
+      if (match != null) return match.group(0)!;
     }
     return '';
   }
@@ -1483,12 +1912,14 @@ class _PublicationCard extends StatelessWidget {
         .isNotEmpty;
     final hasUrlLink = (pub['url'] ?? '').toString().trim().isNotEmpty;
     final hasLink = hasFileLink || hasUrlLink;
+    final citation = _citation();
+    final savedFormat = (pub['citation_format'] ?? '').toString().trim();
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isDark
               ? theme.colorScheme.outline.withValues(alpha: 0.5)
@@ -1505,24 +1936,48 @@ class _PublicationCard extends StatelessWidget {
                 height: 42,
                 decoration: BoxDecoration(
                   color: _typeColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(_typeIcon, size: 22, color: _typeColor),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  _displayTitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _displayTitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      citationFormat.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: _typeColor,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            citation,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.45,
+              color: theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w500,
+            ),
           ),
           if (_metaText != null) ...[
             const SizedBox(height: 8),
@@ -1573,6 +2028,27 @@ class _PublicationCard extends StatelessWidget {
                   ),
                 ),
               ),
+              if (savedFormat.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest.withValues(
+                      alpha: isDark ? 0.55 : 0.9,
+                    ),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    'Saved ${savedFormat.toUpperCase()}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               if (hasLink)
                 OutlinedButton.icon(
                   onPressed: onOpenLink,
