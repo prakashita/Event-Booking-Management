@@ -864,6 +864,13 @@ class PublicationResponse(BaseModel):
     web_view_link: Optional[str] = None
     uploaded_at: Optional[datetime] = None
     created_at: datetime
+    created_by: Optional[str] = None
+    created_by_name: Optional[str] = None
+    created_by_email: Optional[str] = None
+    updated_by: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    updated_by_email: Optional[str] = None
+    updated_at: Optional[datetime] = None
     # Shared
     author: Optional[str] = None
     author_first_name: Optional[str] = None

@@ -345,7 +345,13 @@ class Publication(Document):
     web_view_link: Optional[str] = None
     uploaded_at: Optional[datetime] = None
     created_by: str
+    created_by_name: Optional[str] = None
+    created_by_email: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_by: Optional[str] = None
+    updated_by_name: Optional[str] = None
+    updated_by_email: Optional[str] = None
+    updated_at: Optional[datetime] = None
     # Shared / common fields
     author: Optional[str] = None
     author_first_name: Optional[str] = None
