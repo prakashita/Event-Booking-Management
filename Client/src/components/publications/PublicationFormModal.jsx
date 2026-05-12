@@ -2,60 +2,23 @@
  * PublicationFormModal — the type-specific citation form modal.
  *
  * Performance guarantees:
- *  - All state (form fields, contributors) is LOCAL to this component.
+ *  - All state (form fields) is LOCAL to this component.
  *    No App.jsx state is touched while filling in the form.
- *  - Contributor updates replace one array slot; only
- *    the changed row re-renders (memo + stable key).
  *  - Date fields use PublicationDateField (native <input type="date">).
  *    Zero portal/rAF/getBoundingClientRect overhead.
  *  - Heavy libraries (jsPDF, FullCalendar, tippy) are not imported here.
  *
  */
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { CITATION_FORMAT_OPTIONS, PUBLICATION_FIELD_DEFINITIONS } from "../../constants";
 import PublicationDateField from "./PublicationDateField";
-import PublicationContributorSection from "./PublicationContributorSection";
 import {
   FEATURED_PUBLICATION_EXTRA_FIELDS,
   PUBLICATION_SOURCE_ICON_PATHS,
   FEATURED_PUBLICATION_FORM_FIELDS,
   getDefaultPublicationForm,
-  getPublicationFieldGroups,
-  createPublicationContributor
+  getPublicationFieldGroups
 } from "./publicationUtils";
-
-const CONTRIBUTOR_ADD_BUDGET_MS = 50;
-let contributorPerfSequence = 0;
-
-function beginContributorPerfMark(action, startLength, requiresLengthIncrease = false) {
-  if (typeof performance === "undefined") return null;
-  contributorPerfSequence += 1;
-  const id = `publication-contributor-${action.toLowerCase().replace(/\s+/g, "-")}-${contributorPerfSequence}`;
-  const startMark = `${id}-click`;
-  performance.mark(startMark);
-  return { action, id, startLength, startMark, requiresLengthIncrease };
-}
-
-function finishContributorPerfMark(pending) {
-  if (!pending || typeof performance === "undefined") return;
-  const endMark = `${pending.id}-commit`;
-  const measureName = `${pending.id}-click-to-render`;
-  performance.mark(endMark);
-  performance.measure(measureName, pending.startMark, endMark);
-  const entries = performance.getEntriesByName(measureName);
-  const measure = entries[entries.length - 1];
-  const duration = measure?.duration ?? 0;
-  const rounded = Math.round(duration * 100) / 100;
-  const log = duration <= CONTRIBUTOR_ADD_BUDGET_MS ? console.info : console.warn;
-  log.call(
-    console,
-    `[publication-perf] ${pending.action} click-to-render: ${rounded}ms ` +
-      `(budget ${CONTRIBUTOR_ADD_BUDGET_MS}ms)`
-  );
-  performance.clearMarks(pending.startMark);
-  performance.clearMarks(endMark);
-  performance.clearMeasures(measureName);
-}
 
 // ─── Shared icon ─────────────────────────────────────────────────────────────
 
@@ -100,8 +63,6 @@ const PublicationField = memo(function PublicationField({
     onSetFieldValue(fieldKey, new Date().toISOString().slice(0, 10));
   }, [fieldKey, onSetFieldValue]);
 
-  if (fieldKey === "contributors") return null;
-
   const label = (
     <span>
       {field.label} {required ? <span className="req">*</span> : null}
@@ -138,7 +99,7 @@ const PublicationField = memo(function PublicationField({
       <label className="form-field">
         {label}
         <textarea
-          rows={fieldKey === "contributors" ? 3 : 2}
+          rows={2}
           placeholder={field.placeholder || ""}
           value={value || ""}
           onChange={handleChange}
@@ -255,6 +216,55 @@ const PublicationScribbrDateControl = memo(function PublicationScribbrDateContro
 });
 
 // ─── Scribbr field row ────────────────────────────────────────────────────────
+
+/**
+ * Custom memo comparator for PublicationScribbrFieldRow.
+ *
+ * Problem: `form` is the entire form state object — a new reference on every
+ * keypress. Without a custom comparator, ALL field rows re-render whenever
+ * ANY single field changes, because Object.is(newForm, oldForm) === false.
+ *
+ * Fix: compare only the specific form values that each row type actually reads.
+ *  - annotation  → form.note, form.others, noteVisible
+ *  - archiveGroup → form[sf.field] for each subField
+ *  - range/radio  → form[row.field]
+ *  - toggleDate / toggleField → form[row.field] + form[row.flag]
+ *  - date / field (default)   → form[row.field]
+ *
+ * Result: typing in "Title" only re-renders the Title row; all other rows
+ * bail out immediately regardless of the new form object reference.
+ */
+function scribbrFieldRowPropsEqual(prev, next) {
+  if (prev.row !== next.row) return false;
+  if (prev.onFieldChange !== next.onFieldChange) return false;
+  if (prev.onSetFieldValue !== next.onSetFieldValue) return false;
+  if (prev.onShowAnnotation !== next.onShowAnnotation) return false;
+  if (prev.onAnnotationChange !== next.onAnnotationChange) return false;
+  if (prev.onRemoveAnnotation !== next.onRemoveAnnotation) return false;
+
+  const row = next.row;
+
+  if (row.type === "annotation") {
+    const prevNote = prev.form.note || prev.form.others || "";
+    const nextNote = next.form.note || next.form.others || "";
+    return prev.noteVisible === next.noteVisible && prevNote === nextNote;
+  }
+
+  if (row.type === "archiveGroup") {
+    return (row.subFields || []).every(
+      (sf) => prev.form[sf.field] === next.form[sf.field]
+    );
+  }
+
+  // date, range, radio, toggleDate, toggleField, default field
+  const fieldSame = row.field
+    ? prev.form[row.field] === next.form[row.field]
+    : true;
+  const flagSame = row.flag
+    ? Boolean(prev.form[row.flag]) === Boolean(next.form[row.flag])
+    : true;
+  return fieldSame && flagSame;
+}
 
 const PublicationScribbrFieldRow = memo(function PublicationScribbrFieldRow({
   row,
@@ -426,6 +436,8 @@ const PublicationScribbrFieldRow = memo(function PublicationScribbrFieldRow({
               placeholder={row.fieldLabel || row.label}
               value={form[row.field] || ""}
               onChange={handleInputChange}
+              autoComplete="off"
+              spellCheck={false}
             />
           ) : null}
         </div>
@@ -448,6 +460,8 @@ const PublicationScribbrFieldRow = memo(function PublicationScribbrFieldRow({
                 value={form[field] || ""}
                 onChange={(e) => onFieldChange(field, e)}
                 aria-label={label}
+                autoComplete="off"
+                spellCheck={false}
               />
             </label>
           ))}
@@ -469,27 +483,19 @@ const PublicationScribbrFieldRow = memo(function PublicationScribbrFieldRow({
           value={form[row.field] || ""}
           onChange={handleInputChange}
           required={Boolean(row.required)}
+          autoComplete="off"
+          spellCheck={false}
         />
       </div>
     </section>
   );
-});
+}, scribbrFieldRowPropsEqual);
 
 // ─── Featured fields (Scribbr-style layout) ───────────────────────────────────
 
 const PublicationFeaturedFields = memo(function PublicationFeaturedFields({
   rows,
   form,
-  contributorsVisible,
-  contributors,
-  contributorsRequired,
-  contributorsRecommended,
-  onAddPerson,
-  onAddOrganization,
-  onToggleContributor,
-  onRemoveContributor,
-  onSwitchContributorKind,
-  onUpdateContributor,
   noteVisible,
   onFieldChange,
   onSetFieldValue,
@@ -500,23 +506,6 @@ const PublicationFeaturedFields = memo(function PublicationFeaturedFields({
   return (
     <div className="pub-scribbr-fields">
       {rows.map((row, index) => {
-        if (row.type === "contributors") {
-          return (
-            <PublicationContributorSection
-              key="contributors"
-              visible={contributorsVisible}
-              contributors={contributors}
-              required={contributorsRequired}
-              recommended={contributorsRecommended}
-              onAddPerson={onAddPerson}
-              onAddOrganization={onAddOrganization}
-              onToggleContributor={onToggleContributor}
-              onRemoveContributor={onRemoveContributor}
-              onSwitchContributorKind={onSwitchContributorKind}
-              onUpdateContributor={onUpdateContributor}
-            />
-          );
-        }
         return (
           <PublicationScribbrFieldRow
             key={`${row.type}-${row.field || row.flag || index}`}
@@ -540,24 +529,18 @@ const PublicationFeaturedFields = memo(function PublicationFeaturedFields({
 const PublicationFormModal = memo(function PublicationFormModal({
   modal,
   initialPubType,
+  initialForm,
+  mode,
   publicationCitationFormat,
   onClose,
   onBackToTypes,
   onSubmit
 }) {
   // Local-only state — no App.jsx state touched during form editing.
-  const [form, setForm] = useState(() => getDefaultPublicationForm(initialPubType));
-  const [contributors, setContributors] = useState(() => []);
+  const [form, setForm] = useState(() =>
+    initialForm ? { ...getDefaultPublicationForm(initialPubType), ...initialForm } : getDefaultPublicationForm(initialPubType)
+  );
   const [noteVisible, setNoteVisible] = useState(false);
-  const pendingContributorPerfRef = useRef(null);
-
-  useEffect(() => {
-    if (!modal.open) return;
-    const nextForm = getDefaultPublicationForm(initialPubType);
-    setForm(nextForm);
-    setContributors([]);
-    setNoteVisible(false);
-  }, [initialPubType, modal.open]);
 
   const fieldGroups = useMemo(
     () => getPublicationFieldGroups(form.pubType),
@@ -586,9 +569,6 @@ const PublicationFormModal = memo(function PublicationFormModal({
     [selectedSourceConfig.color]
   );
 
-  const contributorsVisible = selectedFieldSet.includes("contributors");
-  const contributorsRequired = requiredFieldSet.has("contributors");
-  const contributorsRecommended = recommendedFieldSet.has("contributors");
   const metadataOpen = useMemo(
     () =>
       metadataFields.some(
@@ -598,17 +578,6 @@ const PublicationFormModal = memo(function PublicationFormModal({
   );
   const shouldShowNoteField =
     noteVisible || noteFields.some((fieldKey) => form[fieldKey]) || form.others;
-
-  useEffect(() => {
-    const pending = pendingContributorPerfRef.current;
-    if (
-      !pending ||
-      (pending.requiresLengthIncrease && contributors.length <= pending.startLength)
-    )
-      return;
-    pendingContributorPerfRef.current = null;
-    finishContributorPerfMark(pending);
-  }, [contributors]);
 
   const onOverlayMouseDown = useCallback(
     (event) => {
@@ -655,105 +624,13 @@ const PublicationFormModal = memo(function PublicationFormModal({
     setForm((prev) => ({ ...prev, note: "", others: "" }));
   }, []);
 
-  const addPerson = useCallback(() => {
-    setContributors((prev) => {
-      pendingContributorPerfRef.current = beginContributorPerfMark(
-        "Add person",
-        prev.length,
-        true
-      );
-      return [
-        ...prev,
-        createPublicationContributor("person", { collapsed: false })
-      ];
-    });
-  }, []);
-
-  const addOrganization = useCallback(() => {
-    setContributors((prev) => {
-      pendingContributorPerfRef.current = beginContributorPerfMark(
-        "Add organization",
-        prev.length,
-        true
-      );
-      return [
-        ...prev,
-        createPublicationContributor("organization", { collapsed: false })
-      ];
-    });
-  }, []);
-
-  const updatePublicationContributor = useCallback((clientId, field, value) => {
-    setContributors((prev) => {
-      const index = prev.findIndex((c) => c.client_id === clientId);
-      if (index === -1 || prev[index][field] === value) return prev;
-      const next = prev.slice();
-      next[index] = { ...prev[index], [field]: value };
-      return next;
-    });
-  }, []);
-
-  const switchPublicationContributorKind = useCallback((clientId, kind) => {
-    setContributors((prev) => {
-      const index = prev.findIndex((c) => c.client_id === clientId);
-      if (index === -1 || prev[index].kind === kind) return prev;
-      const c = prev[index];
-      const next = prev.slice();
-      pendingContributorPerfRef.current = beginContributorPerfMark(
-        `Switch ${kind}`,
-        prev.length
-      );
-      if (kind === "organization") {
-        next[index] = {
-          ...c,
-          kind: "organization",
-          name: c.name || ""
-        };
-        return next;
-      }
-      next[index] = {
-        ...c,
-        kind: "person",
-        title: c.title || "",
-        initials: c.initials || "",
-        first_name: c.first_name || "",
-        infix: c.infix || "",
-        last_name: c.last_name || "",
-        suffix: c.suffix || ""
-      };
-      return next;
-    });
-  }, []);
-
-  const togglePublicationContributor = useCallback((clientId) => {
-    setContributors((prev) => {
-      const index = prev.findIndex((c) => c.client_id === clientId);
-      if (index === -1) return prev;
-      const next = prev.slice();
-      next[index] = { ...prev[index], collapsed: !prev[index].collapsed };
-      return next;
-    });
-  }, []);
-
-  const removePublicationContributor = useCallback((clientId) => {
-    setContributors((prev) => {
-      const index = prev.findIndex((c) => c.client_id === clientId);
-      if (index === -1) return prev;
-      const next = prev.slice();
-      next.splice(index, 1);
-      return next;
-    });
-  }, []);
-
   const handleSubmit = useCallback(
     (event) => {
       event.preventDefault();
-      onSubmit({ ...form, contributors });
+      onSubmit({ ...form });
     },
-    [contributors, form, onSubmit]
+    [form, onSubmit]
   );
-
-  if (!modal.open) return null;
 
   return (
     <div
@@ -767,7 +644,7 @@ const PublicationFormModal = memo(function PublicationFormModal({
           <div>
             <h3 className="pub-form-modal-title">
               <PublicationIcon sourceKey={selectedSourceKey} />
-              {selectedSourceConfig.label} Citation
+              {mode === "edit" ? `Edit ${selectedSourceConfig.label}` : `${selectedSourceConfig.label} Citation`}
             </h3>
           </div>
           <button type="button" className="modal-close" onClick={onClose}>
@@ -803,16 +680,6 @@ const PublicationFormModal = memo(function PublicationFormModal({
           <PublicationFeaturedFields
               rows={featuredFormRows}
               form={form}
-              contributorsVisible={contributorsVisible}
-              contributors={contributors}
-              contributorsRequired={contributorsRequired}
-              contributorsRecommended={contributorsRecommended}
-              onAddPerson={addPerson}
-              onAddOrganization={addOrganization}
-              onToggleContributor={togglePublicationContributor}
-              onRemoveContributor={removePublicationContributor}
-              onSwitchContributorKind={switchPublicationContributorKind}
-              onUpdateContributor={updatePublicationContributor}
               noteVisible={noteVisible}
               onFieldChange={handleFieldChange}
               onSetFieldValue={setPublicationFieldValue}
@@ -866,18 +733,6 @@ const PublicationFormModal = memo(function PublicationFormModal({
                 recommendedFieldSet={recommendedFieldSet}
                 onFieldChange={handleFieldChange}
                 onSetFieldValue={setPublicationFieldValue}
-              />
-              <PublicationContributorSection
-                visible={contributorsVisible}
-                contributors={contributors}
-                required={contributorsRequired}
-                recommended={contributorsRecommended}
-                onAddPerson={addPerson}
-                onAddOrganization={addOrganization}
-                onToggleContributor={togglePublicationContributor}
-                onRemoveContributor={removePublicationContributor}
-                onSwitchContributorKind={switchPublicationContributorKind}
-                onUpdateContributor={updatePublicationContributor}
               />
               <PublicationFieldSection
                 title="Date fields"
@@ -938,13 +793,15 @@ const PublicationFormModal = memo(function PublicationFormModal({
           ) : null}
 
           <div className="modal-actions">
-            <button
-              type="button"
-              className="secondary-action"
-              onClick={handleSourceTypeClick}
-            >
-              ← Back
-            </button>
+            {mode !== "edit" && (
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={handleSourceTypeClick}
+              >
+                ← Back
+              </button>
+            )}
             <button type="button" className="secondary-action" onClick={onClose}>
               Cancel
             </button>
@@ -953,7 +810,9 @@ const PublicationFormModal = memo(function PublicationFormModal({
               className="primary-action"
               disabled={modal.status === "loading"}
             >
-              {modal.status === "loading" ? "Submitting..." : "Submit"}
+              {modal.status === "loading"
+                ? mode === "edit" ? "Saving..." : "Submitting..."
+                : mode === "edit" ? "Save Changes" : "Submit"}
             </button>
           </div>
         </form>

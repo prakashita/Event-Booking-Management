@@ -33,9 +33,12 @@ def load_settings() -> Settings:
     secret_key = (os.getenv("SECRET_KEY") or "").strip()
     log_level = (os.getenv("LOG_LEVEL") or "INFO").strip().upper()
     request_id_header = (os.getenv("REQUEST_ID_HEADER") or "X-Request-ID").strip()
+    _cors_regex_env = os.getenv("CORS_ORIGIN_REGEX")
     cors_origin_regex = (
-        os.getenv("CORS_ORIGIN_REGEX") or r"^https:\/\/[a-z0-9-]+\.netlify\.app$"
-    ).strip()
+        _cors_regex_env.strip()
+        if _cors_regex_env is not None
+        else r"^https:\/\/[a-z0-9-]+\.netlify\.app$"
+    )
 
     default_origins = [
         "http://localhost:5173",

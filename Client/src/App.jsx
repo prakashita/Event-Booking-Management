@@ -474,6 +474,14 @@ export default function App() {
     return api.get(path, options);
   }, [handleSessionExpired]);
 
+  // Stable success handler for PublicationsPage.
+  // Using an inline arrow function directly in JSX would create a new reference
+  // on every App render, breaking PublicationsPage.memo.
+  const handlePublicationsSuccess = useCallback(
+    (msg) => setStatus({ type: "success", message: msg }),
+    [] // setStatus (from useState) is guaranteed stable by React
+  );
+
   const generateIdempotencyKey = () => (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : "";
 
   // loadPublications moved to PublicationsPage.jsx
@@ -7059,7 +7067,7 @@ export default function App() {
               user={user}
               apiFetch={apiFetch}
               apiBaseUrl={apiBaseUrl}
-              onSuccess={(msg) => setStatus({ type: "success", message: msg })}
+              onSuccess={handlePublicationsSuccess}
             />
           </Suspense>
         );

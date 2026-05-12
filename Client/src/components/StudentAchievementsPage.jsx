@@ -488,72 +488,178 @@ export default function StudentAchievementsPage({ user }) {
 
   return (
     <div className="primary-column student-achievements-page">
+      {/* ── Page header ── */}
       <section className="student-achievements-header">
         <div>
           <p className="student-achievements-kicker">Institutional Communication</p>
-          <h2>Students' Achievements</h2>
+          <h2>Students&rsquo; Achievements</h2>
           <p>Submit student achievement material for institutional website and social media visibility.</p>
         </div>
         <button type="button" className="primary-action student-submit-top" onClick={openCreateModal}>
-          Submit Student Achievement
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Submit Achievement
         </button>
       </section>
 
-      <section className="student-achievements-toolbar">
-        <input
-          type="search"
-          value={filters.search}
-          onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
-          placeholder="Search student, batch, course, description"
-        />
-        <select value={filters.platform} onChange={(event) => setFilters((prev) => ({ ...prev, platform: event.target.value }))}>
-          <option value="">All platforms</option>
-          {PLATFORM_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-        </select>
-        <select
-          value={filters.iqac_criterion_id}
-          onChange={(event) => setFilters((prev) => ({ ...prev, iqac_criterion_id: event.target.value }))}
-        >
-          <option value="">All IQAC criteria</option>
-          {criteriaState.items.map((item) => (
-            <option key={item.id} value={String(item.id)}>{item.id}. {item.title}</option>
-          ))}
-        </select>
-        <button type="button" className="secondary-action" onClick={loadItems}>Refresh</button>
-      </section>
+      {/* ── Toolbar ── */}
+      <div className="sa-toolbar">
+        <label className="pub-search-field sa-search" aria-label="Search achievements">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="search"
+            value={filters.search}
+            onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
+            placeholder="Search by student, batch, course, description…"
+          />
+        </label>
+        <div className="sa-toolbar-selects">
+          <div className="pub-select-wrapper">
+            <svg className="pub-select-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <rect x="2" y="3" width="6" height="6" rx="1"/><rect x="9" y="3" width="13" height="6" rx="1"/><rect x="2" y="13" width="13" height="6" rx="1"/><rect x="17" y="13" width="5" height="6" rx="1"/>
+            </svg>
+            <select value={filters.platform} onChange={(event) => setFilters((prev) => ({ ...prev, platform: event.target.value }))} className="pub-styled-select" aria-label="Filter by platform">
+              <option value="">All platforms</option>
+              {PLATFORM_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+            <svg className="pub-select-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+          </div>
+          <div className="pub-select-wrapper">
+            <svg className="pub-select-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+            </svg>
+            <select value={filters.iqac_criterion_id} onChange={(event) => setFilters((prev) => ({ ...prev, iqac_criterion_id: event.target.value }))} className="pub-styled-select" aria-label="Filter by IQAC criterion">
+              <option value="">All IQAC criteria</option>
+              {criteriaState.items.map((item) => (
+                <option key={item.id} value={String(item.id)}>{item.id}. {item.title}</option>
+              ))}
+            </select>
+            <svg className="pub-select-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+          </div>
+          <button type="button" className="sa-refresh-btn" onClick={loadItems} aria-label="Refresh list">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
+          </button>
+        </div>
+      </div>
 
-      {actionState.error ? <p className="form-error">{actionState.error}</p> : null}
+      {actionState.error ? <p className="form-error" style={{ margin: "0 0 8px" }}>{actionState.error}</p> : null}
 
+      {/* ── List ── */}
       <section className="student-achievements-list">
         <div className="student-achievements-list-head">
           <h3>{canViewAll ? "All submissions" : "My submissions"}</h3>
-          <span>{totalCount} record{totalCount === 1 ? "" : "s"}</span>
+          {itemsState.status === "ready" && (
+            <span className="sa-count-badge">{totalCount} record{totalCount === 1 ? "" : "s"}</span>
+          )}
         </div>
-        {itemsState.status === "loading" ? <p className="table-message">Loading student achievements...</p> : null}
-        {itemsState.status === "error" ? <p className="table-message">{itemsState.error}</p> : null}
-        {itemsState.status === "ready" && !itemsState.items.length ? (
-          <p className="table-message">No student achievements found.</p>
-        ) : null}
-        {itemsState.items.map((item) => (
-          <article key={item.id} className="student-achievement-card">
-            <div className="student-achievement-main">
-              <div>
-                <h3>{itemTitle(item)}</h3>
-                <p>{studentLine(item)}</p>
+
+        {/* Loading skeleton */}
+        {itemsState.status === "loading" && (
+          <div className="sa-skeleton-list">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="sa-skeleton-card">
+                <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                  <div className="skeleton-line" style={{ width: "40px", height: "40px", borderRadius: "50%", flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div className="skeleton-line" style={{ height: "14px", width: "55%" }} />
+                    <div className="skeleton-line" style={{ height: "12px", width: "35%", marginTop: "7px" }} />
+                  </div>
+                </div>
+                <div className="skeleton-line" style={{ height: "12px", width: "80%", marginTop: "12px" }} />
+                <div className="skeleton-line" style={{ height: "12px", width: "60%", marginTop: "7px" }} />
               </div>
-              <button type="button" className="details-button" onClick={() => openDetail(item)}>
-                View
-              </button>
-            </div>
-            <dl className="student-achievement-meta">
-              <div><dt>Platforms</dt><dd>{(item.suggested_platforms || []).join(", ") || "--"}</dd></div>
-              <div><dt>IQAC</dt><dd>{buildIqacLabel(criteriaState.items, item)}</dd></div>
-              <div><dt>Submitted by</dt><dd>{item.created_by_name || item.created_by_email || "--"}</dd></div>
-              <div><dt>Created</dt><dd>{formatDateTime(item.created_at)}</dd></div>
-            </dl>
-            <p className="student-achievement-caption">{item.activity_description || "No description supplied."}</p>
-          </article>
-        ))}
+            ))}
+          </div>
+        )}
+
+        {/* Error state */}
+        {itemsState.status === "error" && (
+          <div className="sa-empty-state">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#c4c9d4" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p className="sa-empty-title">Unable to load achievements</p>
+            <p className="sa-empty-sub">{itemsState.error}</p>
+            <button type="button" className="secondary-action" onClick={loadItems} style={{ marginTop: "4px" }}>Try again</button>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {itemsState.status === "ready" && !itemsState.items.length && (
+          <div className="sa-empty-state">
+            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#c4c9d4" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="8" r="4"/><path d="M6 20v-1a6 6 0 0112 0v1"/><path d="M14 14l2 2 4-4" />
+            </svg>
+            <p className="sa-empty-title">No achievements yet</p>
+            <p className="sa-empty-sub">
+              {filters.search || filters.platform || filters.iqac_criterion_id
+                ? "Try adjusting your search or filters."
+                : "Click Submit Achievement to add the first record."}
+            </p>
+          </div>
+        )}
+
+        {/* Cards */}
+        {itemsState.items.map((item) => {
+          const initials = (() => {
+            const first = getStudentName(item?.students?.[0]);
+            if (!first) return "?";
+            const parts = first.trim().split(" ");
+            return parts.length >= 2 ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase() : first.slice(0, 2).toUpperCase();
+          })();
+          const platforms = item.suggested_platforms || [];
+          const submitter = item.created_by_name || item.created_by_email || null;
+          const dateStr = item.created_at ? new Date(item.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
+          return (
+            <article key={item.id} className="student-achievement-card">
+              {/* Card header: avatar + title + date */}
+              <div className="sa-card-head">
+                <div className="sa-card-avatar" aria-hidden="true">{initials}</div>
+                <div className="sa-card-title-group">
+                  <h3 className="sa-card-title">{itemTitle(item)}</h3>
+                  <p className="sa-card-students">{studentLine(item)}</p>
+                </div>
+                {dateStr && <span className="sa-card-date">{dateStr}</span>}
+              </div>
+
+              {/* Description */}
+              {item.activity_description && (
+                <p className="student-achievement-caption">{item.activity_description}</p>
+              )}
+
+              {/* Platform chips + IQAC + submitter */}
+              <div className="sa-card-meta">
+                {platforms.length > 0 && (
+                  <div className="sa-platform-chips">
+                    {platforms.map((plat) => (
+                      <span key={plat} className="sa-platform-chip">{plat}</span>
+                    ))}
+                  </div>
+                )}
+                {submitter && (
+                  <span className="sa-card-submitter">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    {submitter}
+                  </span>
+                )}
+              </div>
+
+              {/* Action row */}
+              <div className="sa-card-actions">
+                <button type="button" className="pub-card-action-btn pub-card-action-view" onClick={() => openDetail(item)}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  View Details
+                </button>
+              </div>
+            </article>
+          );
+        })}
       </section>
 
       {createModal.open ? (
