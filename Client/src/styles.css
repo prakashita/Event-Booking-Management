@@ -7280,6 +7280,13 @@ button.marketing-attachment-remove {
   flex-direction: column;
   box-sizing: border-box;
   padding: clamp(22px, 2.4vw, 32px);
+  /* Eliminate the backdrop-filter GPU compositing layer inherited from
+     .modal-card. The dark overlay (rgba ~0.6–0.85) makes any blur behind
+     this 1180 px card completely invisible; keeping it forces Chrome to
+     maintain the ENTIRE card as a single compositing layer, causing every
+     keystroke to repaint ~1 M pixels instead of just the ~8 k px input. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .pub-form-card .modal-header {
@@ -7296,6 +7303,13 @@ button.marketing-attachment-remove {
   padding: 18px 24px 24px;
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+  /* Promote the scrollable form to its own GPU compositing layer.
+     Input repaints inside the form then only invalidate this layer
+     (~form-width × form-height), not the entire modal card.
+     scroll-position is chosen over 'transform' because it signals
+     the browser's true intent (scrollable region) without consuming
+     an unnecessarily large GPU texture. */
+  will-change: scroll-position;
 }
 
 .pub-form-card .pub-form::-webkit-scrollbar {
@@ -7592,58 +7606,6 @@ button.marketing-attachment-remove {
   align-items: center;
 }
 
-.pub-contributor-list {
-  display: grid;
-  gap: 10px;
-  contain: layout style;
-}
-
-.pub-contributor-card {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--card) 94%, var(--surface));
-  box-shadow: none;
-  contain: paint;
-}
-
-.pub-contributor-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--ink);
-}
-
-.pub-icon-btn {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--ink-soft);
-  cursor: pointer;
-  font-size: 1.1rem;
-  line-height: 1;
-  box-shadow: none;
-}
-
-.pub-icon-btn:hover {
-  color: #b91c1c;
-  border-color: rgba(185, 28, 28, 0.28);
-}
-
-.pub-contributor-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 .pub-empty-inline {
   margin: 0;
   color: var(--ink-soft);
@@ -7760,6 +7722,7 @@ button.marketing-attachment-remove {
   display: grid;
   gap: 0;
   border-top: 1px solid var(--border);
+  contain: layout;
 }
 
 .pub-scribbr-row {
@@ -7800,9 +7763,7 @@ button.marketing-attachment-remove {
 .pub-scribbr-control > select,
 .pub-date-split input,
 .pub-date-split select,
-.pub-range-control > input,
-.pub-contributor-grid input,
-.pub-contributor-grid select {
+.pub-range-control > input {
   width: 100%;
   min-height: 42px;
   border: 1px solid var(--input-border);
@@ -7824,9 +7785,7 @@ button.marketing-attachment-remove {
 .pub-scribbr-control > select:focus,
 .pub-date-split input:focus,
 .pub-date-split select:focus,
-.pub-range-control > input:focus,
-.pub-contributor-grid input:focus,
-.pub-contributor-grid select:focus {
+.pub-range-control > input:focus {
   border-color: var(--input-focus);
   box-shadow: var(--focus-ring);
   outline: 0;
@@ -7928,138 +7887,6 @@ button.marketing-attachment-remove {
   align-items: center;
 }
 
-.pub-contributor-control {
-  gap: 12px;
-}
-
-.pub-contributor-card {
-  padding: 0;
-  overflow: hidden;
-  box-shadow: none;
-  transition: none;
-}
-
-.pub-contributor-card-head {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-soft);
-  min-height: 52px;
-}
-
-.pub-contributor-card.collapsed .pub-contributor-card-head {
-  border-bottom: 0;
-}
-
-.pub-contributor-collapse {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1 1 auto;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
-.pub-drag-handle {
-  width: 24px;
-  height: 30px;
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 auto;
-  color: var(--ink-soft);
-}
-
-.pub-contributor-chevron,
-.pub-drag-handle svg,
-.pub-icon-btn svg,
-.pub-contributor-actions svg {
-  width: 16px;
-  height: 16px;
-  fill: currentColor;
-  flex: 0 0 auto;
-}
-
-.pub-contributor-chevron {
-  display: inline-block;
-  border-style: solid;
-  border-width: 5px 0 5px 7px;
-  border-color: transparent transparent transparent currentColor;
-}
-
-.pub-contributor-chevron:not(.is-collapsed) {
-  border-width: 7px 5px 0;
-  border-color: currentColor transparent transparent;
-}
-
-.pub-contributor-collapse strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pub-contributor-collapse span {
-  margin-left: auto;
-  color: var(--ink-soft);
-  font-size: 0.8rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.pub-contributor-tabs {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  padding: 14px 12px 6px;
-}
-
-.pub-contributor-tabs button {
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ink-soft);
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-  padding: 6px 14px;
-  transition: none;
-}
-
-.pub-contributor-tabs button.active {
-  background: var(--accent-tint-subtle);
-  color: var(--ink);
-}
-
-.pub-contributor-tabs button:hover {
-  background: var(--accent-tint-hover);
-  color: var(--accent-blue);
-}
-
-.pub-contributor-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 12px;
-}
-
-.pub-contributor-grid[hidden] {
-  display: none;
-}
-
-.pub-contributor-grid .form-field span {
-  font-size: 0.82rem;
-}
-
-.pub-contributor-actions .secondary-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  box-shadow: none;
-}
-
 .pub-annotation-button {
   justify-self: start;
 }
@@ -8071,10 +7898,6 @@ button.marketing-attachment-remove {
 
 .pub-remove-annotation {
   justify-self: start;
-}
-
-.pub-icon-btn {
-  background: transparent;
 }
 
 @media (max-width: 720px) {
@@ -8089,8 +7912,7 @@ button.marketing-attachment-remove {
 
   .pub-date-split,
   .pub-premium-date-control,
-  .pub-range-control,
-  .pub-contributor-grid {
+  .pub-range-control {
     grid-template-columns: 1fr;
   }
 

@@ -34,19 +34,6 @@ export const FEATURED_PUBLICATION_EXTRA_FIELDS = [
   "show_publisher_place"
 ];
 
-export const CONTRIBUTOR_ROLE_OPTIONS = [
-  "Author",
-  "Creator",
-  "Editor",
-  "Translator",
-  "Director",
-  "Producer",
-  "Host",
-  "Inventor",
-  "Applicant",
-  "Organization"
-];
-
 const PUBLICATION_FIELD_GROUP_CACHE = new Map();
 
 export const LEGACY_PUBLICATION_FIELD_MAP = {
@@ -59,8 +46,6 @@ export const LEGACY_PUBLICATION_FIELD_MAP = {
   website_name: "container_title",
   newspaper_name: "container_title",
   platform: "container_title",
-  organization: "contributors",
-  creator: "contributors",
   publication_date: "issued_date",
   year: "issued_date",
   pages: "pages",
@@ -98,7 +83,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       toggleLabel: "Show description",
       fieldLabel: "Description"
     },
-    { type: "contributors" },
     { type: "date", field: "composed_date", label: "Composed date" },
     { type: "field", field: "medium", label: "Medium" },
     {
@@ -130,7 +114,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       fieldLabel: "Subtitle"
     },
     { type: "field", field: "container_title", label: "Blog name", required: true },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "date", field: "accessed_date", label: "Access date", todayShortcut: true },
     { type: "field", field: "url", label: "URL", inputType: "url" },
@@ -146,7 +129,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       fieldLabel: "Subtitle"
     },
     { type: "field", field: "container_title", label: "Book title", required: true },
-    { type: "contributors" },
     { type: "field", field: "edition", label: "Edition", placeholder: "e.g. 2" },
     { type: "range", field: "volume", flag: "volume_is_range", label: "Volume number" },
     { type: "field", field: "medium", label: "Medium" },
@@ -174,7 +156,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   comment: [
     { type: "field", field: "content", label: "Content", required: true },
     { type: "field", field: "container_title", label: "Comment on" },
-    { type: "contributors" },
     { type: "date", field: "accessed_date", label: "Access date", todayShortcut: true },
     { type: "field", field: "source", label: "Website name" },
     { type: "field", field: "url", label: "URL", inputType: "url" },
@@ -183,7 +164,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   webpage: [
     { type: "field", field: "title", label: "Title", required: true },
     { type: "field", field: "container_title", label: "Website name" },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "date", field: "accessed_date", label: "Access date", todayShortcut: true },
     { type: "field", field: "url", label: "URL", inputType: "url" },
@@ -192,7 +172,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   journal_article: [
     { type: "field", field: "title", label: "Article title", required: true },
     { type: "field", field: "container_title", label: "Journal name", required: true },
-    { type: "contributors" },
     { type: "range", field: "volume", flag: "volume_is_range", label: "Volume number" },
     { type: "field", field: "issue", label: "Issue number" },
     { type: "field", field: "number", label: "Article number or eLocator", placeholder: "e.g. e0209899" },
@@ -207,7 +186,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   ],
   book: [
     { type: "field", field: "title", label: "Title", required: true },
-    { type: "contributors" },
     { type: "field", field: "edition", label: "Edition", placeholder: "e.g. 2" },
     { type: "range", field: "volume", flag: "volume_is_range", label: "Volume number" },
     { type: "field", field: "medium", label: "Medium" },
@@ -242,7 +220,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       fieldLabel: "Subtitle"
     },
     { type: "field", field: "container_title", label: "Website or database name" },
-    { type: "contributors" },
     { type: "field", field: "number", label: "Identifying number", placeholder: "e.g. WA-RD 896.4" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "date", field: "accessed_date", label: "Access date", todayShortcut: true },
@@ -267,7 +244,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   video: [
     { type: "field", field: "title", label: "Title", required: true },
     { type: "field", field: "container_title", label: "Website name", placeholder: "e.g. YouTube or Vimeo" },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "date", field: "accessed_date", label: "Access date", todayShortcut: true },
     { type: "field", field: "url", label: "URL", inputType: "url" },
@@ -284,7 +260,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       fieldLabel: "Subtitle"
     },
     { type: "field", field: "container_title", label: "Newspaper name", required: true },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "field", field: "publisher", label: "Publisher" },
     { type: "field", field: "url", label: "URL", inputType: "url" },
@@ -293,7 +268,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   conference_proceeding: [
     { type: "field", field: "title", label: "Title", required: true },
     { type: "field", field: "container_title", label: "Container title" },
-    { type: "contributors" },
     { type: "field", field: "edition", label: "Edition", placeholder: "e.g. 2" },
     { type: "range", field: "volume", flag: "volume_is_range", label: "Volume number" },
     { type: "field", field: "medium", label: "Medium" },
@@ -320,7 +294,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       toggleLabel: "Show subtitle",
       fieldLabel: "Subtitle"
     },
-    { type: "contributors" },
     { type: "field", field: "medium", label: "Type of contribution" },
     {
       type: "archiveGroup",
@@ -351,7 +324,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       toggleLabel: "Show subtitle",
       fieldLabel: "Subtitle"
     },
-    { type: "contributors" },
     { type: "field", field: "version", label: "Version", placeholder: "e.g. V2, 1.1.67" },
     { type: "field", field: "medium", label: "Medium" },
     { type: "radio", field: "status", label: "Publication status", options: ["Published", "Unpublished"] },
@@ -364,7 +336,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   ],
   film: [
     { type: "field", field: "title", label: "Title", required: true },
-    { type: "contributors" },
     { type: "field", field: "medium", label: "Medium", placeholder: "e.g. four-disc special extended ed. on DVDs" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "field", field: "publisher", label: "Production company" },
@@ -374,7 +345,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   forum_post: [
     { type: "field", field: "title", label: "Title", required: true },
     { type: "field", field: "container_title", label: "Website name" },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "date", field: "accessed_date", label: "Access date", todayShortcut: true },
     { type: "field", field: "url", label: "URL", inputType: "url" },
@@ -397,7 +367,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       fieldLabel: "Subtitle"
     },
     { type: "field", field: "container_title", label: "Website name" },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "field", field: "url", label: "URL", inputType: "url" },
     { type: "annotation" }
@@ -419,7 +388,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       fieldLabel: "Subtitle"
     },
     { type: "field", field: "container_title", label: "Newspaper name", required: true },
-    { type: "contributors" },
     { type: "field", field: "edition", label: "Edition", placeholder: "e.g. New York" },
     { type: "field", field: "section", label: "Section", placeholder: "e.g. Sports" },
     { type: "date", field: "issued_date", label: "Publication date" },
@@ -445,7 +413,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   online_dictionary_entry: [
     { type: "field", field: "title", label: "Entry title", required: true },
     { type: "field", field: "container_title", label: "Website name" },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "date", field: "accessed_date", label: "Access date", todayShortcut: true },
     { type: "field", field: "url", label: "URL", inputType: "url" },
@@ -455,7 +422,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   // ── Online encyclopedia entry ───────────────────────────────────────────
   online_encyclopedia_entry: [
     { type: "field", field: "title", label: "Title", required: true },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "date", field: "accessed_date", label: "Access date", todayShortcut: true },
     { type: "field", field: "url", label: "URL", inputType: "url" },
@@ -473,7 +439,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       fieldLabel: "Subtitle"
     },
     { type: "field", field: "container_title", label: "Website name" },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     {
       type: "toggleDate",
@@ -491,7 +456,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   patent: [
     { type: "field", field: "title", label: "Title", required: true },
     { type: "field", field: "container_title", label: "Container title" },
-    { type: "contributors" },
     { type: "field", field: "jurisdiction", label: "Jurisdiction", required: true },
     {
       type: "field",
@@ -508,7 +472,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   // ── Podcast (whole series) ───────────────────────────────────────────────
   podcast: [
     { type: "field", field: "title", label: "Name", required: true },
-    { type: "contributors" },
     { type: "field", field: "url", label: "URL", inputType: "url" },
     { type: "annotation" }
   ],
@@ -517,7 +480,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   podcast_episode: [
     { type: "field", field: "title", label: "Title" },
     { type: "field", field: "collection_title", label: "Podcast name", required: true },
-    { type: "contributors" },
     { type: "field", field: "season", label: "Season number" },
     { type: "field", field: "episode", label: "Episode number" },
     { type: "date", field: "issued_date", label: "Publication date" },
@@ -537,7 +499,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   presentation_slides: [
     { type: "field", field: "title", label: "Title", required: true },
     { type: "field", field: "container_title", label: "Website name" },
-    { type: "contributors" },
     { type: "field", field: "medium", label: "Medium" },
     { type: "date", field: "issued_date", label: "Publication date" },
     {
@@ -564,7 +525,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   // ── Press release ────────────────────────────────────────────────────────
   press_release: [
     { type: "field", field: "title", label: "Title", required: true },
-    { type: "contributors" },
     { type: "date", field: "accessed_date", label: "Access date", todayShortcut: true },
     { type: "field", field: "url", label: "URL", inputType: "url" },
     { type: "annotation" }
@@ -574,7 +534,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   print_dictionary_entry: [
     { type: "field", field: "title", label: "Title", required: true },
     { type: "field", field: "container_title", label: "Dictionary name", required: true },
-    { type: "contributors" },
     { type: "range", field: "volume", flag: "volume_is_range", label: "Volume number" },
     { type: "field", field: "number", label: "Identifying number" },
     { type: "date", field: "issued_date", label: "Publication date" },
@@ -600,7 +559,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   print_encyclopedia_entry: [
     { type: "field", field: "title", label: "Title", required: true },
     { type: "field", field: "container_title", label: "Encyclopedia name", required: true },
-    { type: "contributors" },
     { type: "range", field: "volume", flag: "volume_is_range", label: "Volume number" },
     { type: "date", field: "issued_date", label: "Publication date" },
     {
@@ -631,7 +589,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       fieldLabel: "Subtitle"
     },
     { type: "field", field: "container_title", label: "Magazine name", required: true },
-    { type: "contributors" },
     { type: "field", field: "issue", label: "Issue number" },
     { type: "date", field: "issued_date", label: "Publication date" },
     {
@@ -649,7 +606,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   social_media_post: [
     { type: "field", field: "content", label: "Content", required: true },
     { type: "field", field: "container_title", label: "Website name" },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "date", field: "accessed_date", label: "Access date", todayShortcut: true },
     { type: "field", field: "url", label: "URL", inputType: "url" },
@@ -660,7 +616,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   software: [
     { type: "field", field: "title", label: "Title", required: true },
     { type: "field", field: "container_title", label: "Container title" },
-    { type: "contributors" },
     { type: "field", field: "version", label: "Version", placeholder: "e.g. V3, 1.1.6.7" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "field", field: "publisher", label: "Publisher" },
@@ -686,7 +641,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
       fieldLabel: "Subtitle"
     },
     { type: "field", field: "container_title", label: "Container title" },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     {
       type: "archiveGroup",
@@ -705,7 +659,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   // ── Thesis / Dissertation ────────────────────────────────────────────────
   thesis: [
     { type: "field", field: "title", label: "Title", required: true },
-    { type: "contributors" },
     { type: "date", field: "submitted_date", label: "Year of submission" },
     {
       type: "field",
@@ -721,7 +674,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   // ── TV show (whole series) ───────────────────────────────────────────────
   tv_show: [
     { type: "field", field: "title", label: "Title", required: true },
-    { type: "contributors" },
     { type: "date", field: "issued_date", label: "Publication date" },
     { type: "field", field: "publisher", label: "Production company" },
     {
@@ -738,7 +690,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   tv_show_episode: [
     { type: "field", field: "title", label: "Title" },
     { type: "field", field: "collection_title", label: "TV show name", required: true },
-    { type: "contributors" },
     { type: "field", field: "season", label: "Season number" },
     { type: "field", field: "episode", label: "Episode number" },
     {
@@ -780,13 +731,6 @@ export const FEATURED_PUBLICATION_FORM_FIELDS = {
   ]
 };
 
-// ─── ID seed ─────────────────────────────────────────────────────────────────
-let publicationContributorIdSeed = 0;
-export function getNextPublicationContributorId() {
-  publicationContributorIdSeed += 1;
-  return `pub-contributor-${publicationContributorIdSeed}`;
-}
-
 // ─── Source helpers ───────────────────────────────────────────────────────────
 export function getPublicationSourceKey(pubType) {
   const raw = String(pubType || "").trim();
@@ -812,6 +756,20 @@ export function getPublicationSourceConfig(pubType) {
 }
 
 // ─── Default form ─────────────────────────────────────────────────────────────
+// Pre-compute the static parts of getDefaultPublicationForm once at module load.
+// PUBLICATION_DETAIL_FIELDS (37 fields) and FEATURED_PUBLICATION_EXTRA_FIELDS (6 fields)
+// never change at runtime, so there is no reason to call Object.fromEntries+map on every
+// modal open. Spreading two already-built plain objects is essentially free.
+const _STATIC_DETAIL_DEFAULTS = Object.fromEntries(
+  PUBLICATION_DETAIL_FIELDS.map((field) => [field, ""])
+);
+const _STATIC_EXTRA_DEFAULTS = Object.fromEntries(
+  FEATURED_PUBLICATION_EXTRA_FIELDS.map((field) => [
+    field,
+    field.startsWith("show_") || field.endsWith("_is_range") ? false : ""
+  ])
+);
+
 export function getDefaultPublicationForm(pubType = "webpage") {
   return {
     name: "",
@@ -844,14 +802,8 @@ export function getDefaultPublicationForm(pubType = "webpage") {
     newspaper_name: "",
     website_name: "",
     page_title: "",
-    ...Object.fromEntries(PUBLICATION_DETAIL_FIELDS.map((field) => [field, ""])),
-    ...Object.fromEntries(
-      FEATURED_PUBLICATION_EXTRA_FIELDS.map((field) => [
-        field,
-        field.startsWith("show_") || field.endsWith("_is_range") ? false : ""
-      ])
-    ),
-    contributors: []
+    ..._STATIC_DETAIL_DEFAULTS,
+    ..._STATIC_EXTRA_DEFAULTS
   };
 }
 
@@ -862,161 +814,7 @@ export function getPublicationDetails(item) {
   return {};
 }
 
-// ─── Contributor normalizers ──────────────────────────────────────────────────
-export function normalizePublicationContributor(contributor) {
-  if (!contributor || typeof contributor !== "object") return null;
-  const kind = contributor.kind === "organization" ? "organization" : "person";
-  if (kind === "organization") {
-    const name = String(contributor.name || contributor.organization || "").trim();
-    const screenName = String(contributor.screen_name || contributor.screenName || "").trim();
-    if (!name && !screenName) return null;
-    return {
-      kind,
-      name,
-      screen_name: screenName,
-      role: String(contributor.role || "Author").trim() || "Author"
-    };
-  }
-  const title = String(contributor.title || "").trim();
-  const initials = String(contributor.initials || "").trim();
-  const firstName = String(
-    contributor.first_name ||
-      contributor.firstName ||
-      contributor.first_names ||
-      contributor.firstNames ||
-      ""
-  ).trim();
-  const infix = String(contributor.infix || "").trim();
-  const lastName = String(contributor.last_name || contributor.lastName || "").trim();
-  const suffix = String(contributor.suffix || "").trim();
-  const screenName = String(contributor.screen_name || contributor.screenName || "").trim();
-  if (![title, initials, firstName, infix, lastName, suffix, screenName].some(Boolean)) return null;
-  return {
-    kind,
-    title,
-    initials,
-    first_name: firstName,
-    infix,
-    last_name: lastName,
-    suffix,
-    screen_name: screenName,
-    role: String(contributor.role || "Author").trim() || "Author"
-  };
-}
-
-export function normalizePublicationContributors(value) {
-  if (Array.isArray(value)) {
-    return value.map(normalizePublicationContributor).filter(Boolean);
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return [];
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed)) return normalizePublicationContributors(parsed);
-    } catch (_) {
-      return [];
-    }
-  }
-  return [];
-}
-
-export function createPublicationContributor(kind = "person", base = {}) {
-  const common = {
-    client_id: base.client_id || base.clientId || getNextPublicationContributorId(),
-    role: base.role || "Author",
-    screen_name: base.screen_name || base.screenName || "",
-    collapsed: base.collapsed == null ? true : Boolean(base.collapsed)
-  };
-  if (kind === "organization") {
-    return { ...common, kind: "organization", name: base.name || base.organization || "" };
-  }
-  return {
-    ...common,
-    kind: "person",
-    title: base.title || "",
-    initials: base.initials || "",
-    first_name:
-      base.first_name || base.firstName || base.first_names || base.firstNames || "",
-    infix: base.infix || "",
-    last_name: base.last_name || base.lastName || "",
-    suffix: base.suffix || ""
-  };
-}
-
-export function getPublicationContributorFormRows(value) {
-  if (!Array.isArray(value)) {
-    return normalizePublicationContributors(value).map((contributor) =>
-      createPublicationContributor(contributor.kind, contributor)
-    );
-  }
-  return value.map((contributor) => {
-    const clientId = contributor.client_id || contributor.clientId || "";
-    if (contributor?.kind === "organization") {
-      return {
-        client_id: clientId,
-        kind: "organization",
-        name: contributor.name || contributor.organization || "",
-        screen_name: contributor.screen_name || contributor.screenName || "",
-        role: contributor.role || "Author",
-        collapsed: Boolean(contributor.collapsed)
-      };
-    }
-    return {
-      client_id: clientId,
-      kind: "person",
-      title: contributor?.title || "",
-      initials: contributor?.initials || "",
-      first_name:
-        contributor?.first_name ||
-        contributor?.firstName ||
-        contributor?.first_names ||
-        contributor?.firstNames ||
-        "",
-      infix: contributor?.infix || "",
-      last_name: contributor?.last_name || contributor?.lastName || "",
-      suffix: contributor?.suffix || "",
-      screen_name: contributor?.screen_name || contributor?.screenName || "",
-      role: contributor?.role || "Author",
-      collapsed: Boolean(contributor?.collapsed)
-    };
-  });
-}
-
-export function getContributorDisplayName(contributor) {
-  const normalized = normalizePublicationContributor(contributor);
-  if (!normalized) return "";
-  if (normalized.kind === "organization") return normalized.name || normalized.screen_name;
-  return (
-    [
-      normalized.title,
-      normalized.initials,
-      normalized.first_name,
-      normalized.infix,
-      normalized.last_name,
-      normalized.suffix
-    ]
-      .filter(Boolean)
-      .join(" ") || normalized.screen_name
-  );
-}
-
-export function formatPublicationContributors(contributors) {
-  return normalizePublicationContributors(contributors)
-    .map((contributor) => getContributorDisplayName(contributor))
-    .filter(Boolean)
-    .join("; ");
-}
-
-export function getPublicationContributors(item) {
-  const details = getPublicationDetails(item);
-  return normalizePublicationContributors(details.contributors || item?.contributors);
-}
-
 export function isPublicationFieldEmpty(form, field) {
-  if (field === "contributors") {
-    return normalizePublicationContributors(form.contributors).length === 0;
-  }
   const value = form[field];
   if (Array.isArray(value)) return value.length === 0;
   return !String(value || "").trim();
@@ -1024,15 +822,6 @@ export function isPublicationFieldEmpty(form, field) {
 
 export function getPublicationFieldValue(item, field) {
   const details = getPublicationDetails(item);
-  if (field === "contributors") {
-    const contributors = getPublicationContributors(item);
-    if (contributors.length) return formatPublicationContributors(contributors);
-    if (typeof details.contributors === "string" && details.contributors.trim())
-      return details.contributors.trim();
-    if (typeof item?.contributors === "string" && item.contributors.trim())
-      return item.contributors.trim();
-    return item?.author || "";
-  }
   const direct = details[field] ?? item?.[field];
   if (Array.isArray(direct))
     return direct
@@ -1117,8 +906,7 @@ export function getPublicationFieldGroups(pubType) {
         !PUBLICATION_TITLE_FIELDS.has(fieldKey) &&
         !PUBLICATION_CONTAINER_FIELDS.has(fieldKey) &&
         !PUBLICATION_DATE_FIELDS.has(fieldKey) &&
-        !PUBLICATION_NOTE_FIELDS.has(fieldKey) &&
-      fieldKey !== "contributors"
+        !PUBLICATION_NOTE_FIELDS.has(fieldKey)
     )
   };
   PUBLICATION_FIELD_GROUP_CACHE.set(cacheKey, groups);

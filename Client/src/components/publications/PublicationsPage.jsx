@@ -4,13 +4,13 @@
  * All publication state lives here. Nothing bleeds into App.jsx.
  * Network requests: only loadPublications (on mount + sort change) and
  * submitPublication (on explicit submit). No request on date-picker open,
- * contributor add, or contributor type switch.
+ * No request on date-picker open.
  *
  * Performance marks:
  *   pub-page-render-start / end
  *   pub-modal-open-start
  */
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useTransition, useState } from "react";
 import {
   CITATION_FORMAT_OPTIONS,
   FEATURED_SOURCE_TYPE_KEYS,
@@ -22,20 +22,18 @@ import PublicationFormModal, { PublicationIcon } from "./PublicationFormModal";
 import {
   FEATURED_PUBLICATION_EXTRA_FIELDS,
   PUBLICATION_DETAIL_FIELDS,
-  formatPublicationContributors,
   getPublicationDisplayTitle,
   getPublicationFieldValue,
   getPublicationSortDate,
   getPublicationSourceConfig,
   getPublicationSourceKey,
-  isPublicationFieldEmpty,
-  normalizePublicationContributors
+  isPublicationFieldEmpty
 } from "./publicationUtils";
 
 // ─── Citation helpers (no deps, pure render) ─────────────────────────────────
 
 function getCitationPieces(item) {
-  const author = getPublicationFieldValue(item, "contributors") || item.author || "";
+  const author = item.author || "";
   const title = getPublicationDisplayTitle(item);
   const container =
     getPublicationFieldValue(item, "container_title") || item.publisher || "";
@@ -107,6 +105,10 @@ const PublicationsPage = memo(function PublicationsPage({
     error: ""
   });
   const [selectedPublicationType, setSelectedPublicationType] = useState("webpage");
+  // startTransition marks modal-mount work as a non-urgent transition.
+  // React 18 concurrent mode will not block the main thread while mounting the
+  // heavy form/type-selector subtrees, keeping all other interactions smooth.
+  const [, startTransition] = useTransition();
 
   // ── List state ─────────────────────────────────────────────────────────────
   const [publicationsState, setPublicationsState] = useState({
@@ -156,18 +158,25 @@ const PublicationsPage = memo(function PublicationsPage({
   // ── Modal open/close handlers ─────────────────────────────────────────────
 
   const handlePublicationTypeOpen = useCallback(() => {
-    setPublicationTypeModal({ open: true });
-  }, []);
+    // The type-selector grid (~36 SVG cards) is non-urgent; defer so the button
+    // click responds instantly and React won't freeze the main thread mounting it.
+    startTransition(() => setPublicationTypeModal({ open: true }));
+  }, [startTransition]);
 
   const handlePublicationTypeClose = useCallback(() => {
     setPublicationTypeModal({ open: false });
   }, []);
 
   const handlePublicationTypeSelect = useCallback((pubType) => {
+    // Close the type selector immediately (urgent — user needs visual feedback).
+    // Mount the form modal as a non-blocking transition so the heavy form tree
+    // (field rows, useCallbacks, useMemos) does not freeze the main thread.
     setPublicationTypeModal({ open: false });
-    setSelectedPublicationType(pubType);
-    setPublicationModal({ open: true, status: "idle", error: "" });
-  }, []);
+    startTransition(() => {
+      setSelectedPublicationType(pubType);
+      setPublicationModal({ open: true, status: "idle", error: "" });
+    });
+  }, [startTransition]);
 
   const handlePublicationOpen = useCallback(() => {
     handlePublicationTypeOpen();
@@ -250,11 +259,7 @@ const PublicationsPage = memo(function PublicationsPage({
               return value !== "" && value != null;
             })
         );
-        const contributors = normalizePublicationContributors(f.contributors);
-        if (contributors.length) details.contributors = contributors;
-        const contributorText =
-          formatPublicationContributors(contributors) ||
-          String(f.author || "").trim();
+        const authorText = String(f.author || "").trim();
         const selectedTitle = (
           details.title ||
           details.content ||
@@ -275,14 +280,12 @@ const PublicationsPage = memo(function PublicationsPage({
         if (f.others) formData.append("others", f.others);
         if (f.file) formData.append("file", f.file);
         const derivedAuthor =
-          contributorText ||
+          authorText ||
           [f.author_first_name, f.author_last_name]
             .map((v) => (v || "").trim())
             .filter(Boolean)
             .join(" ");
         if (derivedAuthor) formData.append("author", derivedAuthor);
-        if (contributors.length)
-          formData.append("contributors", JSON.stringify(contributors));
         const legacyTitleKeyByType = {
           journal_article: "article_title",
           online_newspaper_article: "article_title",
@@ -314,8 +317,6 @@ const PublicationsPage = memo(function PublicationsPage({
           formData.append("publication_date", selectedIssuedDate);
           formData.append("year", selectedIssuedDate.slice(0, 4));
         }
-        if (contributorText && !formData.has("author"))
-          formData.append("author", contributorText);
         if (details.publisher) formData.append("publisher", details.publisher);
         if (details.doi) formData.append("doi", details.doi);
         if (details.url) formData.append("url", details.url);
@@ -400,7 +401,7 @@ const PublicationsPage = memo(function PublicationsPage({
       if (!searchNeedle) return true;
       const fields = [
         getPublicationDisplayTitle(item),
-        getPublicationFieldValue(item, "contributors"),
+        item.author,
         getPublicationFieldValue(item, "container_title"),
         getPublicationFieldValue(item, "doi"),
         getPublicationFieldValue(item, "url"),
@@ -540,7 +541,7 @@ const PublicationsPage = memo(function PublicationsPage({
                 type="search"
                 value={publicationSearch}
                 onChange={handleSearchChange}
-                placeholder="Search title, contributor, DOI, URL"
+                placeholder="Search title, author, DOI, URL"
               />
             </label>
 
@@ -1001,15 +1002,20 @@ const PublicationsPage = memo(function PublicationsPage({
         </div>
       ) : null}
 
-      {/* Form modal */}
-      <PublicationFormModal
-        modal={publicationModal}
-        initialPubType={selectedPublicationType}
-        publicationCitationFormat={publicationCitationFormat}
-        onClose={handlePublicationClose}
-        onBackToTypes={handlePublicationBackToTypes}
-        onSubmit={submitPublication}
-      />
+      {/* Form modal — conditionally rendered so it mounts fresh on each open and
+          unmounts on close. This eliminates: the always-running hook cost when
+          closed, the stale-state first render, and the useEffect double-render
+          that previously triggered a second full mount on every open. */}
+      {publicationModal.open && (
+        <PublicationFormModal
+          modal={publicationModal}
+          initialPubType={selectedPublicationType}
+          publicationCitationFormat={publicationCitationFormat}
+          onClose={handlePublicationClose}
+          onBackToTypes={handlePublicationBackToTypes}
+          onSubmit={submitPublication}
+        />
+      )}
     </div>
   );
 });

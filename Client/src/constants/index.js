@@ -187,7 +187,6 @@ export const eventsTable = [
 export const PUBLICATION_FIELD_DEFINITIONS = {
   title: { label: "Title", type: "text", placeholder: "Main title of the cited item" },
   content: { label: "Content", type: "textarea", placeholder: "Post or comment text" },
-  contributors: { label: "Contributors", type: "textarea", placeholder: "Authors, creators, editors, organizations" },
   issued_date: { label: "Issued", type: "date" },
   accessed_date: { label: "Accessed", type: "date", todayShortcut: true },
   composed_date: { label: "Composed", type: "date" },
@@ -244,7 +243,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#7c3aed",
     desc: "Artwork, museum objects, and collection items",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "composed_date"],
+    recommendedFields: ["composed_date"],
     optionalFields: ["medium", "archive_collection", ...placeFields, "note"]
   },
   blog_post: {
@@ -254,7 +253,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#0f766e",
     desc: "Posts from blogs and editorial feeds",
     requiredFields: ["title", "container_title"],
-    recommendedFields: ["contributors", "issued_date", "url"],
+    recommendedFields: ["issued_date", "url"],
     optionalFields: commonWebOptional
   },
   book: {
@@ -264,7 +263,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#c05621",
     desc: "Printed books and e-books",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "medium", "issued_date", "publisher"],
+    recommendedFields: ["medium", "issued_date", "publisher"],
     optionalFields: ["edition", "volume", "original_publication_date", "publisher_place", "doi", "pdf_url", "url", "note"]
   },
   book_chapter: {
@@ -274,7 +273,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#a16207",
     desc: "A chapter or section within a book",
     requiredFields: ["title", "container_title"],
-    recommendedFields: ["contributors", "pages"],
+    recommendedFields: ["pages"],
     optionalFields: ["edition", "volume", "medium", "issued_date", "original_publication_date", "publisher", "publisher_place", "doi", "pdf_url", "url", "note"]
   },
   comment: {
@@ -284,7 +283,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#64748b",
     desc: "Comments on posts, articles, videos, or threads",
     requiredFields: ["content"],
-    recommendedFields: ["container_title", "contributors", "issued_date", "source", "url"],
+    recommendedFields: ["container_title", "issued_date", "source", "url"],
     optionalFields: commonWebOptional
   },
   conference_proceeding: {
@@ -294,7 +293,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#4f46e5",
     desc: "Papers published in proceedings",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "issued_date"],
+    recommendedFields: ["issued_date"],
     optionalFields: ["container_title", "edition", "volume", "medium", "publisher", "publisher_place", "doi", "pdf_url", "url", "note"]
   },
   conference_session: {
@@ -304,7 +303,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#0891b2",
     desc: "Talks, sessions, and conference presentations",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "medium", "event", "url"],
+    recommendedFields: ["medium", "event", "url"],
     optionalFields: ["container_title", "event_name", ...placeFields, "note"]
   },
   dataset: {
@@ -314,7 +313,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#047857",
     desc: "Datasets from repositories or projects",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "url"],
+    recommendedFields: ["url"],
     optionalFields: ["container_title", "version", "medium", "status", "issued_date", "publisher", "doi", "pdf_url", "note"]
   },
   film: {
@@ -324,7 +323,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#b91c1c",
     desc: "Films and movies",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "issued_date", "publisher"],
+    recommendedFields: ["issued_date", "publisher"],
     optionalFields: ["version", "medium", "url", "note"]
   },
   forum_post: {
@@ -334,7 +333,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#475569",
     desc: "Posts from forums and discussion boards",
     requiredFields: ["title"],
-    recommendedFields: ["container_title", "contributors", "issued_date", "url"],
+    recommendedFields: ["container_title", "issued_date", "url"],
     optionalFields: commonWebOptional
   },
   image: {
@@ -344,7 +343,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#7c2d12",
     desc: "Online images, figures, and photographs",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "issued_date", "url"],
+    recommendedFields: ["issued_date", "url"],
     optionalFields: ["container_title", "note"]
   },
   journal_article: {
@@ -354,7 +353,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#553c9a",
     desc: "Peer-reviewed academic and scholarly articles",
     requiredFields: ["title", "container_title"],
-    recommendedFields: ["contributors", "status", "issued_date", "pages", "doi"],
+    recommendedFields: ["status", "issued_date", "pages", "doi"],
     optionalFields: ["volume", "issue", "number", "source", "pdf_url", "url", "note"]
   },
   online_dictionary_entry: {
@@ -365,7 +364,7 @@ export const SOURCE_TYPE_CONFIG = {
     desc: "Dictionary entries published online",
     requiredFields: ["title"],
     recommendedFields: ["issued_date", "url"],
-    optionalFields: ["container_title", "contributors", "accessed_date", "note"]
+    optionalFields: ["container_title", "accessed_date", "note"]
   },
   online_encyclopedia_entry: {
     sourceType: "Online Encyclopedia Entry",
@@ -375,7 +374,7 @@ export const SOURCE_TYPE_CONFIG = {
     desc: "Online encyclopedia entries",
     requiredFields: ["title"],
     recommendedFields: ["issued_date", "url"],
-    optionalFields: ["container_title", "contributors", "accessed_date", "note"]
+    optionalFields: ["container_title", "accessed_date", "note"]
   },
   online_magazine_article: {
     sourceType: "Online Magazine Article",
@@ -384,7 +383,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#be123c",
     desc: "Magazine articles published online",
     requiredFields: ["title", "container_title"],
-    recommendedFields: ["contributors", "issued_date", "url"],
+    recommendedFields: ["issued_date", "url"],
     optionalFields: ["original_publication_date", "accessed_date", "publisher", "note"]
   },
   online_newspaper_article: {
@@ -395,7 +394,7 @@ export const SOURCE_TYPE_CONFIG = {
     desc: "News articles published online",
     aliases: ["online_newspaper"],
     requiredFields: ["title", "container_title"],
-    recommendedFields: ["contributors", "issued_date", "url"],
+    recommendedFields: ["issued_date", "url"],
     optionalFields: ["publisher", "note"]
   },
   patent: {
@@ -404,7 +403,7 @@ export const SOURCE_TYPE_CONFIG = {
     icon: "⚙️",
     color: "#0f172a",
     desc: "Patents with number, jurisdiction, and authority",
-    requiredFields: ["title", "contributors", "number", "jurisdiction", "authority", "issued_date"],
+    requiredFields: ["title", "number", "jurisdiction", "authority", "issued_date"],
     recommendedFields: [],
     optionalFields: ["container_title", "url", "note"]
   },
@@ -415,7 +414,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#9333ea",
     desc: "A podcast series",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "url"],
+    recommendedFields: ["url"],
     optionalFields: ["publisher", "source", "note"]
   },
   podcast_episode: {
@@ -425,7 +424,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#7e22ce",
     desc: "One episode from a podcast",
     requiredFields: ["collection_title"],
-    recommendedFields: ["contributors", "issued_date", "url"],
+    recommendedFields: ["issued_date", "url"],
     optionalFields: ["title", "season", "episode", "accessed_date", "publisher", "source", "note"]
   },
   presentation_slides: {
@@ -435,7 +434,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#0369a1",
     desc: "Slide decks and presentation materials",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "medium", "issued_date", "event", "url"],
+    recommendedFields: ["medium", "issued_date", "event", "url"],
     optionalFields: ["container_title", "original_publication_date", "event_name", ...placeFields, "pages", "note"]
   },
   press_release: {
@@ -445,7 +444,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#b45309",
     desc: "Organization announcements and press releases",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "issued_date", "url"],
+    recommendedFields: ["issued_date", "url"],
     optionalFields: commonWebOptional
   },
   print_dictionary_entry: {
@@ -455,7 +454,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#334155",
     desc: "Dictionary entries in print sources",
     requiredFields: ["title", "container_title"],
-    recommendedFields: ["contributors", "issued_date", "publisher"],
+    recommendedFields: ["issued_date", "publisher"],
     optionalFields: ["edition", "volume", "number", "original_publication_date", "publisher_place", "pages", "note"]
   },
   print_encyclopedia_entry: {
@@ -465,7 +464,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#1e40af",
     desc: "Encyclopedia entries in print sources",
     requiredFields: ["title", "container_title"],
-    recommendedFields: ["contributors", "issued_date", "publisher"],
+    recommendedFields: ["issued_date", "publisher"],
     optionalFields: ["edition", "volume", "original_publication_date", "publisher_place", "note"]
   },
   print_magazine_article: {
@@ -475,7 +474,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#9f1239",
     desc: "Magazine articles from print issues",
     requiredFields: ["title", "container_title"],
-    recommendedFields: ["contributors", "issued_date", "pages"],
+    recommendedFields: ["issued_date", "pages"],
     optionalFields: ["issue", "original_publication_date", "source", "note"]
   },
   print_newspaper_article: {
@@ -485,7 +484,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#166534",
     desc: "Newspaper articles from print editions",
     requiredFields: ["title", "container_title"],
-    recommendedFields: ["contributors", "issued_date", "pages"],
+    recommendedFields: ["issued_date", "pages"],
     optionalFields: ["edition", "section", "original_publication_date", "publisher", "publisher_place", "note"]
   },
   report: {
@@ -495,7 +494,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#2b6cb0",
     desc: "Research, policy, and organization reports",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "issued_date", "url"],
+    recommendedFields: ["issued_date", "url"],
     optionalFields: ["container_title", "number", "accessed_date", "publisher", "publisher_place", "doi", "pdf_url", "note"]
   },
   social_media_post: {
@@ -505,7 +504,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#0ea5e9",
     desc: "Posts from social platforms",
     requiredFields: ["content"],
-    recommendedFields: ["contributors", "issued_date", "url"],
+    recommendedFields: ["issued_date", "url"],
     optionalFields: ["container_title", "accessed_date", "note"]
   },
   software: {
@@ -515,7 +514,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#0f766e",
     desc: "Software packages, apps, and tools",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "version", "issued_date"],
+    recommendedFields: ["version", "issued_date"],
     optionalFields: ["container_title", "publisher", "url", "note"]
   },
   speech: {
@@ -525,7 +524,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#c2410c",
     desc: "Speeches and public addresses",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "event", "url"],
+    recommendedFields: ["event", "url"],
     optionalFields: ["container_title", "issued_date", "event_name", ...placeFields, "note"]
   },
   thesis: {
@@ -535,7 +534,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#4338ca",
     desc: "Theses and dissertations",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "genre", "submitted_date", "publisher"],
+    recommendedFields: ["genre", "submitted_date", "publisher"],
     optionalFields: ["doi", "pdf_url", "note"]
   },
   tv_show: {
@@ -545,7 +544,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#be123c",
     desc: "A television show or series",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "issued_date", "publisher"],
+    recommendedFields: ["issued_date", "publisher"],
     optionalFields: ["medium", "source", "url", "note"]
   },
   tv_show_episode: {
@@ -555,7 +554,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#e11d48",
     desc: "One episode from a TV series",
     requiredFields: ["collection_title"],
-    recommendedFields: ["contributors", "issued_date"],
+    recommendedFields: ["issued_date"],
     optionalFields: ["title", "season", "episode", "medium", "accessed_date", "publisher", "source", "url", "note"]
   },
   video: {
@@ -565,7 +564,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#c53030",
     desc: "Online videos from YouTube, Vimeo, or platforms",
     requiredFields: ["title"],
-    recommendedFields: ["container_title", "contributors", "issued_date"],
+    recommendedFields: ["container_title", "issued_date"],
     optionalFields: ["accessed_date", "url", "note"]
   },
   webpage: {
@@ -575,7 +574,7 @@ export const SOURCE_TYPE_CONFIG = {
     color: "#2c7a7b",
     desc: "A specific page on a website",
     requiredFields: ["title"],
-    recommendedFields: ["contributors", "issued_date", "url"],
+    recommendedFields: ["issued_date", "url"],
     optionalFields: ["container_title", "accessed_date", "note"]
   },
   website: {
