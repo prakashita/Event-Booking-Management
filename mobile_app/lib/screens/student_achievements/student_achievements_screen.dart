@@ -230,13 +230,13 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('Student Achievements')),
-      body: RefreshIndicator(
-        onRefresh: () => _loadAll(refresh: true),
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-          children: [
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: () => _loadAll(refresh: true),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+            children: [
             Row(
               children: [
                 Expanded(
@@ -338,6 +338,7 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
               ),
           ],
         ),
+      ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(),

@@ -1066,7 +1066,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
           children: [
             Container(
               color: surface,
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

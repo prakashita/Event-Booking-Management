@@ -1932,9 +1932,9 @@ class _EventsScreenState extends State<EventsScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             _buildTopSection(),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             _buildFilterPills(),
             const SizedBox(height: 16),
             _buildEventsContainer(),

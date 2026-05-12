@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'constants/app_theme.dart';
@@ -25,12 +24,7 @@ String get kApiBaseUrl {
     return _apiBaseOverride.trim();
   }
 
-  // Android emulator cannot reach host loopback via localhost.
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-    return 'http://10.0.2.2:8000';
-  }
-
-  return 'http://localhost:8000';
+  return 'https://sync.vidyashilp.edu.in';
 }
 
 Future<void> main() async {

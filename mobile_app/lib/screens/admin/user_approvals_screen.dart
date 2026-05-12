@@ -289,7 +289,7 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
           onRefresh: () => _loadAll(forceRefresh: true),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 96),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

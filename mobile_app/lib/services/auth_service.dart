@@ -84,7 +84,7 @@ class AuthService {
           e.type == DioExceptionType.sendTimeout ||
           e.type == DioExceptionType.connectionError) {
         throw Exception(
-          'Cannot reach server. Set API_BASE_URL to your backend host (e.g. http://10.0.2.2:8000 for Android emulator).',
+          'Cannot reach server. Set API_BASE_URL to your backend host (e.g. https://sync.vidyashilp.edu.in).',
         );
       }
 
@@ -127,11 +127,11 @@ class AuthService {
     try {
       await _googleSignIn.signOut();
     } catch (_) {}
-    
+
     try {
       await _storage.delete(key: AppConstants.tokenKey);
     } catch (_) {}
-    
+
     try {
       await _storage.delete(key: AppConstants.userKey);
     } catch (_) {}
