@@ -912,3 +912,44 @@ export function getPublicationFieldGroups(pubType) {
   PUBLICATION_FIELD_GROUP_CACHE.set(cacheKey, groups);
   return groups;
 }
+
+/**
+ * Convert a publication API response item → the form shape used by PublicationFormModal.
+ * Used to pre-populate the edit form.
+ */
+export function publicationItemToForm(item) {
+  const details = getPublicationDetails(item);
+  const pubType = getPublicationSourceKey(item.source_type || item.pub_type) || "webpage";
+  const base = getDefaultPublicationForm(pubType);
+
+  // Overlay all detail fields
+  const merged = { ...base };
+  for (const key of Object.keys(base)) {
+    const detailVal = details[key];
+    const itemVal = item[key];
+    if (detailVal !== undefined && detailVal !== null && detailVal !== "") {
+      merged[key] = typeof detailVal === "boolean" ? detailVal : String(detailVal);
+    } else if (itemVal !== undefined && itemVal !== null && itemVal !== "") {
+      merged[key] = typeof itemVal === "boolean" ? itemVal : String(itemVal);
+    }
+  }
+
+  // Boolean toggle flags
+  for (const flag of ["show_subtitle", "show_description", "show_publisher_place", "show_original_publication_date"]) {
+    if (details[flag] === true) merged[flag] = true;
+  }
+  for (const flag of ["volume_is_range", "pages_is_range"]) {
+    if (details[flag] === true) merged[flag] = true;
+  }
+
+  merged.pubType = pubType;
+  merged.citation_format = item.citation_format || "mla";
+  merged.name = item.name || "";
+  merged.others = item.others || item.note || details.note || "";
+  merged.author = item.author || "";
+  merged.author_first_name = item.author_first_name || "";
+  merged.author_last_name = item.author_last_name || "";
+  merged.file = null; // files cannot be pre-filled
+  return merged;
+}
+

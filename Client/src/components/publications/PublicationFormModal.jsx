@@ -529,13 +529,17 @@ const PublicationFeaturedFields = memo(function PublicationFeaturedFields({
 const PublicationFormModal = memo(function PublicationFormModal({
   modal,
   initialPubType,
+  initialForm,
+  mode,
   publicationCitationFormat,
   onClose,
   onBackToTypes,
   onSubmit
 }) {
   // Local-only state — no App.jsx state touched during form editing.
-  const [form, setForm] = useState(() => getDefaultPublicationForm(initialPubType));
+  const [form, setForm] = useState(() =>
+    initialForm ? { ...getDefaultPublicationForm(initialPubType), ...initialForm } : getDefaultPublicationForm(initialPubType)
+  );
   const [noteVisible, setNoteVisible] = useState(false);
 
   const fieldGroups = useMemo(
@@ -640,7 +644,7 @@ const PublicationFormModal = memo(function PublicationFormModal({
           <div>
             <h3 className="pub-form-modal-title">
               <PublicationIcon sourceKey={selectedSourceKey} />
-              {selectedSourceConfig.label} Citation
+              {mode === "edit" ? `Edit ${selectedSourceConfig.label}` : `${selectedSourceConfig.label} Citation`}
             </h3>
           </div>
           <button type="button" className="modal-close" onClick={onClose}>
@@ -789,13 +793,15 @@ const PublicationFormModal = memo(function PublicationFormModal({
           ) : null}
 
           <div className="modal-actions">
-            <button
-              type="button"
-              className="secondary-action"
-              onClick={handleSourceTypeClick}
-            >
-              ← Back
-            </button>
+            {mode !== "edit" && (
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={handleSourceTypeClick}
+              >
+                ← Back
+              </button>
+            )}
             <button type="button" className="secondary-action" onClick={onClose}>
               Cancel
             </button>
@@ -804,7 +810,9 @@ const PublicationFormModal = memo(function PublicationFormModal({
               className="primary-action"
               disabled={modal.status === "loading"}
             >
-              {modal.status === "loading" ? "Submitting..." : "Submit"}
+              {modal.status === "loading"
+                ? mode === "edit" ? "Saving..." : "Submitting..."
+                : mode === "edit" ? "Save Changes" : "Submit"}
             </button>
           </div>
         </form>
