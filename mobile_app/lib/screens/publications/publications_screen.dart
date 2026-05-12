@@ -3,9 +3,22 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../constants/app_colors.dart';
+import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+
+const _pubBg = Color(0xFFF3F4F6);
+const _pubSurface = Color(0xFFFFFFFF);
+const _pubBorder = Color(0xFFE5E7EB);
+const _pubText = Color(0xFF111827);
+const _pubMuted = Color(0xFF6B7280);
+const _pubAccentBg = Color(0xFFEEF2FF);
+const _pubAccent = Color(0xFF4F46E5);
+const _pubDangerBg = Color(0xFFFEF2F2);
+const _pubDanger = Color(0xFFEF4444);
 
 class PublicationsScreen extends StatefulWidget {
   const PublicationsScreen({super.key});
@@ -26,6 +39,20 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
   String _sort = 'date_desc';
   DateTime? _dateStart;
   DateTime? _dateEnd;
+
+  bool get _isAdmin {
+    final role = (context.read<AuthProvider>().user?.roleKey ?? '')
+        .trim()
+        .toLowerCase();
+    return role == 'admin';
+  }
+
+  String get _userId => context.read<AuthProvider>().user?.id ?? '';
+
+  bool _isOwner(Map<String, dynamic> item) =>
+      _string(item['created_by']) == _userId ||
+      _string(item['user_id']) == _userId ||
+      _string(item['owner_id']) == _userId;
 
   @override
   void initState() {
@@ -104,10 +131,92 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
     }
   }
 
+  Future<void> _openEditFlow(Map<String, dynamic> item) async {
+    HapticFeedback.mediumImpact();
+    final source = _sourceConfig(_sourceKey(item));
+    final changed = await Navigator.of(context, rootNavigator: true).push<bool>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _PublicationFormScreen(
+          api: _api,
+          source: source,
+          citationFormat: _citationFormat,
+          initialItem: item,
+        ),
+      ),
+    );
+    if (changed == true) {
+      await _loadPublications();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Publication updated.')));
+    }
+  }
+
+  Future<void> _deletePublication(Map<String, dynamic> item) async {
+    final title = _displayTitle(item);
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Delete publication?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: _inputDecoration(context, 'Type DELETE'),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+              onPressed: controller.text == 'DELETE'
+                  ? () => Navigator.of(context).pop(true)
+                  : null,
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (confirmed != true) return;
+
+    try {
+      await _api.delete<dynamic>('/publications/${item['id']}');
+      if (!mounted) return;
+      setState(() {
+        _items = _items.where((entry) => entry['id'] != item['id']).toList();
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Publication deleted.')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_messageFromError(e))));
+    }
+  }
+
   void _openFiltersSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (_) => _FilterBottomSheet(
         type: _typeFilter,
         format: _citationFormat,
@@ -126,6 +235,34 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _openDetail(Map<String, dynamic> item) async {
+    final canEdit = !_isAdmin && _isOwner(item);
+    final canDelete = _isAdmin || _isOwner(item);
+    final changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (_) => _PublicationDetailSheet(
+        item: item,
+        citationFormat: _citationFormat,
+        canEdit: canEdit,
+        canDelete: canDelete,
+        onOpenLink: () => _openPublicationLink(item),
+        onEdit: () async {
+          Navigator.of(context).pop(false);
+          await _openEditFlow(item);
+        },
+        onDelete: () async {
+          Navigator.of(context).pop(false);
+          await _deletePublication(item);
+          return true;
+        },
+      ),
+    );
+    if (changed == true) await _loadPublications();
   }
 
   List<Map<String, dynamic>> get _visibleItems {
@@ -178,72 +315,88 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final visible = _visibleItems;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: _pubBg,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadPublications,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                sliver: SliverToBoxAdapter(
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 10),
                   child: Row(
                     children: [
-                      Text(
-                        'Publications',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
+                      const Expanded(
+                        child: Text(
+                          'Publications',
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w900,
+                            color: _pubText,
+                            letterSpacing: 0,
+                            height: 1.1,
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      _CountPill(count: visible.length),
+                      _CountBadge(count: visible.length),
                     ],
                   ),
                 ),
               ),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          decoration:
-                              _inputDecoration(
-                                context,
-                                'Search title, author, DOI, URL...',
-                              ).copyWith(
-                                prefixIcon: const Icon(Icons.search_rounded),
-                                suffixIcon: _searchController.text.isEmpty
-                                    ? null
-                                    : IconButton(
-                                        onPressed: _searchController.clear,
-                                        icon: const Icon(Icons.close_rounded),
-                                      ),
-                              ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      IconButton.filledTonal(
-                        onPressed: _openFiltersSheet,
-                        icon: const Icon(Icons.tune_rounded),
-                      ),
-                    ],
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  child: _ModernFilterPanel(
+                    searchController: _searchController,
+                    typeFilter: _typeFilter,
+                    citationFormat: _citationFormat,
+                    sort: _sort,
+                    dateStart: _dateStart,
+                    dateEnd: _dateEnd,
+                    onOpenFilters: _openFiltersSheet,
+                    onSearchClear: _searchController.clear,
+                    onPreset: (preset) {
+                      final now = _dateOnly(DateTime.now());
+                      setState(() {
+                        if (preset == 'today') {
+                          _dateStart = now;
+                          _dateEnd = now;
+                        } else if (preset == '7days') {
+                          _dateStart = now.subtract(const Duration(days: 7));
+                          _dateEnd = now;
+                        } else if (preset == '30days') {
+                          _dateStart = now.subtract(const Duration(days: 30));
+                          _dateEnd = now;
+                        } else if (preset == 'year') {
+                          _dateStart = DateTime(now.year);
+                          _dateEnd = now;
+                        } else {
+                          _dateStart = null;
+                          _dateEnd = null;
+                        }
+                      });
+                    },
                   ),
                 ),
               ),
               if (_loading)
-                const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  sliver: SliverList.builder(
+                    itemCount: 4,
+                    itemBuilder: (context, index) => const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: _PublicationSkeletonCard(),
+                    ),
+                  ),
                 )
               else if (_error != null)
                 SliverFillRemaining(
+                  hasScrollBody: false,
                   child: _MessageState(
                     icon: Icons.error_outline_rounded,
                     title: 'Unable to load publications',
@@ -254,16 +407,19 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
                 )
               else if (_items.isEmpty)
                 SliverFillRemaining(
+                  hasScrollBody: false,
                   child: _MessageState(
                     icon: Icons.library_books_rounded,
                     title: 'No Publications Yet',
-                    message: 'Add citations and publication records.',
+                    message:
+                        'Add citations and organize your publication records.',
                     actionLabel: 'Add First Publication',
                     onAction: _openCreateFlow,
                   ),
                 )
               else if (visible.isEmpty)
                 const SliverFillRemaining(
+                  hasScrollBody: false,
                   child: _MessageState(
                     icon: Icons.search_off_rounded,
                     title: 'No Matches Found',
@@ -272,27 +428,30 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 96),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
                   sliver: SliverList.builder(
                     itemCount: visible.length,
-                    itemBuilder: (context, index) => Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: _PublicationCard(
-                        item: visible[index],
-                        citationFormat: _citationFormat,
-                        onTap: () => showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          useSafeArea: true,
-                          builder: (_) => _PublicationDetailSheet(
-                            item: visible[index],
-                            citationFormat: _citationFormat,
-                            onOpenLink: () =>
-                                _openPublicationLink(visible[index]),
-                          ),
+                    itemBuilder: (context, index) {
+                      final item = visible[index];
+                      final canEdit = !_isAdmin && _isOwner(item);
+                      final canDelete = _isAdmin || _isOwner(item);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: _PublicationCard(
+                          item: item,
+                          citationFormat: _citationFormat,
+                          canEdit: canEdit,
+                          canDelete: canDelete,
+                          onTap: () => _openDetail(item),
+                          onView: () => _openDetail(item),
+                          onEdit: canEdit ? () => _openEditFlow(item) : null,
+                          onDelete: canDelete
+                              ? () => _deletePublication(item)
+                              : null,
+                          onOpenLink: () => _openPublicationLink(item),
                         ),
-                      ),
-                    ),
+                      );
+                    },
                   ),
                 ),
             ],
@@ -301,8 +460,15 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateFlow,
+        elevation: 6,
+        backgroundColor: _pubAccent,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         icon: const Icon(Icons.add_rounded),
-        label: const Text('New Publication'),
+        label: const Text(
+          'New Publication',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
     );
   }
@@ -323,75 +489,239 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
 class _PublicationCard extends StatelessWidget {
   final Map<String, dynamic> item;
   final String citationFormat;
+  final bool canEdit;
+  final bool canDelete;
   final VoidCallback onTap;
+  final VoidCallback onView;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  final VoidCallback onOpenLink;
 
   const _PublicationCard({
     required this.item,
     required this.citationFormat,
+    required this.canEdit,
+    required this.canDelete,
     required this.onTap,
+    required this.onView,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onOpenLink,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final source = _sourceConfig(_sourceKey(item));
     final date = _sortDate(item);
+    final link = _publicationLink(item);
+    final submitter = _submitterName(item);
+    final citationText = _citation(item, citationFormat);
 
-    return Card(
-      elevation: 0,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.5)),
+    return Container(
+      decoration: BoxDecoration(
+        color: _pubSurface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _pubBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _SourcePill(source: source),
-                  Text(
-                    _displayTitle(item),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Flexible(child: _SourceTypeBadge(source: source)),
+                    if (date != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 10, top: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.calendar_today_outlined,
+                              size: 13,
+                              color: _pubMuted,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _dateLabel(date),
+                              style: const TextStyle(
+                                color: _pubMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  _displayTitle(item),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _pubText,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    height: 1.2,
+                    letterSpacing: 0,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.person_outline_rounded,
+                      size: 14,
+                      color: _pubMuted,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: RichText(
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        text: TextSpan(
+                          style: const TextStyle(
+                            color: _pubMuted,
+                            fontSize: 14,
+                          ),
+                          children: [
+                            const TextSpan(text: 'Submitted by '),
+                            TextSpan(
+                              text: submitter,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(13),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      border: const Border(
+                        left: BorderSide(color: _pubAccent, width: 4),
+                        top: BorderSide(color: _pubBorder),
+                        right: BorderSide(color: _pubBorder),
+                        bottom: BorderSide(color: _pubBorder),
+                      ),
+                    ),
+                    child: Text(
+                      citationText,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.45,
+                        color: _pubMuted,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ),
+                if (_string(item['others']).isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: _pubBorder),
+                    ),
+                    child: Text(
+                      _string(item['others']),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _pubMuted,
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                      ),
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                _citation(item, citationFormat),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  if (_field(item, 'contributors').isNotEmpty ||
-                      _string(item['author']).isNotEmpty)
-                    _MetaText(
-                      icon: Icons.person_outline_rounded,
-                      text:
-                          'Submitted by ${_field(item, 'contributors').isNotEmpty ? _field(item, 'contributors') : _string(item['author'])}',
+                const SizedBox(height: 14),
+                const Divider(height: 1, color: _pubBorder),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _CardActionButton(
+                      icon: Icons.visibility_outlined,
+                      label: 'View',
+                      onPressed: onView,
+                      isPrimary: true,
                     ),
-                  if (date != null)
-                    _MetaText(
-                      icon: Icons.calendar_today_outlined,
-                      text: _dateLabel(date),
-                    ),
-                ],
-              ),
-            ],
+                    if (link.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      _CardActionButton(
+                        icon: _string(item['web_view_link']).isNotEmpty
+                            ? Icons.description_outlined
+                            : Icons.open_in_new_rounded,
+                        label: _string(item['web_view_link']).isNotEmpty
+                            ? 'File'
+                            : 'URL',
+                        onPressed: onOpenLink,
+                      ),
+                    ],
+                    if (canEdit) ...[
+                      const SizedBox(width: 8),
+                      _CardActionButton(
+                        icon: Icons.edit_outlined,
+                        label: 'Edit',
+                        onPressed: onEdit,
+                      ),
+                    ],
+                    const Spacer(),
+                    if (canDelete)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: _pubDangerBg,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: IconButton(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.all(6),
+                          constraints: const BoxConstraints(),
+                          tooltip: 'Delete',
+                          onPressed: onDelete,
+                          color: _pubDanger,
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -402,87 +732,528 @@ class _PublicationCard extends StatelessWidget {
 class _PublicationDetailSheet extends StatelessWidget {
   final Map<String, dynamic> item;
   final String citationFormat;
+  final bool canEdit;
+  final bool canDelete;
   final VoidCallback onOpenLink;
+  final VoidCallback onEdit;
+  final Future<bool> Function() onDelete;
 
   const _PublicationDetailSheet({
     required this.item,
     required this.citationFormat,
+    required this.canEdit,
+    required this.canDelete,
     required this.onOpenLink,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final source = _sourceConfig(_sourceKey(item));
     final fields = _detailsFor(item);
     final hasLink =
         _string(item['web_view_link']).isNotEmpty ||
         _field(item, 'url').isNotEmpty ||
         _string(item['url']).isNotEmpty;
+    final createdAt = _auditDate(item, const ['created_at', 'uploaded_at']);
+    final updatedAt = _auditDate(item, const ['updated_at', 'modified_at']);
 
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.88,
-      maxChildSize: 0.96,
-      minChildSize: 0.45,
-      builder: (context, controller) => Material(
-        color: theme.scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        child: ListView(
-          controller: controller,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+    return Container(
+      decoration: const BoxDecoration(
+        color: _pubSurface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.9,
+        maxChildSize: 0.96,
+        minChildSize: 0.5,
+        builder: (context, controller) => Column(
           children: [
-            Center(
+            const SizedBox(height: 12),
+            Container(
+              width: 48,
+              height: 5,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1D5DB),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 14, 20, 16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SourceTypeBadge(source: source),
+                        const SizedBox(height: 10),
+                        Text(
+                          _displayTitle(item),
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            height: 1.18,
+                            letterSpacing: 0,
+                            color: _pubText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(false),
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFFF3F4F6),
+                      foregroundColor: _pubMuted,
+                    ),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: _pubBorder),
+            Expanded(
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+                children: [
+                  _PublicationMetaStrip(item: item),
+                  const SizedBox(height: 16),
+                  _SubmitterPanel(item: item),
+                  const SizedBox(height: 24),
+                  _SectionTitle(
+                    'Citation (${citationFormat.toUpperCase()})',
+                    icon: Icons.menu_book_outlined,
+                  ),
+                  _SoftPanel(
+                    child: SelectableText(
+                      _citation(item, citationFormat),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.55,
+                        color: _pubText,
+                        fontFamily: 'serif',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _SectionTitle(
+                    'Publication Details',
+                    icon: Icons.format_list_bulleted_rounded,
+                  ),
+                  _SoftPanel(
+                    padding: EdgeInsets.zero,
+                    child: _DetailGrid(fields: fields),
+                  ),
+                  if (hasLink) ...[
+                    const SizedBox(height: 24),
+                    const _SectionTitle('Links', icon: Icons.link_rounded),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: onOpenLink,
+                        icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                        label: Text(
+                          _string(item['web_view_link']).isNotEmpty
+                              ? 'Open File'
+                              : 'Visit URL',
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _pubAccent,
+                          side: const BorderSide(color: Color(0xFFC7D2FE)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  const _SectionTitle(
+                    'Audit Information',
+                    icon: Icons.schedule_rounded,
+                  ),
+                  _SoftPanel(
+                    child: _AuditGrid(
+                      entries: [
+                        MapEntry('Created by', _submitterName(item)),
+                        MapEntry('Created at', createdAt),
+                        MapEntry('Last updated by', _updatedBy(item)),
+                        MapEntry('Last updated at', updatedAt),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SafeArea(
+              top: false,
               child: Container(
-                width: 42,
-                height: 5,
-                decoration: BoxDecoration(
-                  color: theme.dividerColor,
-                  borderRadius: BorderRadius.circular(99),
+                padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
+                decoration: const BoxDecoration(
+                  color: _pubSurface,
+                  border: Border(top: BorderSide(color: _pubBorder)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _pubText,
+                        side: const BorderSide(color: _pubBorder),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Close',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    if (canEdit) ...[
+                      const SizedBox(width: 10),
+                      FilledButton.icon(
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        label: const Text('Edit'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _pubAccent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (canDelete) ...[
+                      const SizedBox(width: 10),
+                      OutlinedButton.icon(
+                        onPressed: () async => onDelete(),
+                        icon: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 18,
+                        ),
+                        label: const Text('Delete'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _pubDanger,
+                          side: const BorderSide(color: Color(0xFFFECACA)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                _SourcePill(source: source),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _displayTitle(item),
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const Divider(height: 28),
-            _SectionTitle('Citation (${citationFormat.toUpperCase()})'),
-            SelectableText(
-              _citation(item, citationFormat),
-              style: theme.textTheme.bodyMedium?.copyWith(height: 1.55),
-            ),
-            const SizedBox(height: 22),
-            _SectionTitle('Publication Details'),
-            _DetailGrid(fields: fields),
-            if (hasLink) ...[
-              const SizedBox(height: 22),
-              _SectionTitle('Links'),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: onOpenLink,
-                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                  label: const Text('Visit URL'),
-                ),
-              ),
-            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ModernFilterPanel extends StatelessWidget {
+  final TextEditingController searchController;
+  final String typeFilter;
+  final String citationFormat;
+  final String sort;
+  final DateTime? dateStart;
+  final DateTime? dateEnd;
+  final VoidCallback onOpenFilters;
+  final VoidCallback onSearchClear;
+  final ValueChanged<String> onPreset;
+
+  const _ModernFilterPanel({
+    required this.searchController,
+    required this.typeFilter,
+    required this.citationFormat,
+    required this.sort,
+    required this.dateStart,
+    required this.dateEnd,
+    required this.onOpenFilters,
+    required this.onSearchClear,
+    required this.onPreset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activeCount = [
+      typeFilter.isNotEmpty,
+      citationFormat != 'mla',
+      sort != 'date_desc',
+      dateStart != null || dateEnd != null,
+    ].where((value) => value).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                height: 50,
+                decoration: BoxDecoration(
+                  color: _pubSurface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _pubBorder),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search title, author, DOI, URL...',
+                    hintStyle: const TextStyle(color: _pubMuted, fontSize: 14),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: _pubMuted,
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 13,
+                    ),
+                    suffixIcon: searchController.text.isEmpty
+                        ? null
+                        : IconButton(
+                            onPressed: onSearchClear,
+                            icon: const Icon(Icons.cancel_rounded, size: 20),
+                            color: _pubMuted,
+                          ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: activeCount > 0 ? _pubAccentBg : _pubSurface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: activeCount > 0 ? const Color(0xFFC7D2FE) : _pubBorder,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: onOpenFilters,
+                icon: Badge(
+                  isLabelVisible: activeCount > 0,
+                  label: Text('$activeCount'),
+                  child: Icon(
+                    Icons.tune_rounded,
+                    color: activeCount > 0 ? _pubAccent : _pubMuted,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: [
+              _FilterChipWidget(
+                label: 'Today',
+                value: 'today',
+                onTap: onPreset,
+              ),
+              _FilterChipWidget(label: '7d', value: '7days', onTap: onPreset),
+              _FilterChipWidget(label: '30d', value: '30days', onTap: onPreset),
+              _FilterChipWidget(
+                label: 'This year',
+                value: 'year',
+                onTap: onPreset,
+              ),
+              if (dateStart != null || dateEnd != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: TextButton.icon(
+                    onPressed: () => onPreset(''),
+                    icon: const Icon(Icons.clear_all_rounded, size: 16),
+                    label: const Text('Clear Dates'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: _pubDanger,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FilterChipWidget extends StatelessWidget {
+  final String label;
+  final String value;
+  final ValueChanged<String> onTap;
+
+  const _FilterChipWidget({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: _pubSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: const BorderSide(color: _pubBorder),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => onTap(value),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: _pubText,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CardActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+  final bool isPrimary;
+
+  const _CardActionButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.isPrimary = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isPrimary) {
+      return TextButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 16),
+        label: Text(label),
+        style: TextButton.styleFrom(
+          minimumSize: const Size(0, 36),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          visualDensity: VisualDensity.compact,
+          backgroundColor: _pubAccent.withValues(alpha: 0.08),
+          foregroundColor: _pubAccent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 36),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        visualDensity: VisualDensity.compact,
+        foregroundColor: _pubText,
+        side: const BorderSide(color: _pubBorder),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+}
+
+class _PublicationSkeletonCard extends StatelessWidget {
+  const _PublicationSkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget line(double width, double height) => Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [line(80, 26), line(60, 16)],
+          ),
+          const SizedBox(height: 20),
+          line(double.infinity, 22),
+          const SizedBox(height: 8),
+          line(200, 22),
+          const SizedBox(height: 20),
+          line(double.infinity, 70),
+        ],
       ),
     );
   }
@@ -507,6 +1278,7 @@ class _SourceTypePickerScreenState extends State<_SourceTypePickerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final needle = _searchController.text.trim().toLowerCase();
     final featured = _sourceTypes
         .where((source) => _featuredSourceKeys.contains(source.key))
@@ -522,28 +1294,164 @@ class _SourceTypePickerScreenState extends State<_SourceTypePickerScreen> {
         .toList();
 
     return Scaffold(
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
       appBar: AppBar(
-        title: const Text('Select Source Type'),
+        title: const Text(
+          'Add Publication',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        backgroundColor: theme.colorScheme.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-        children: [
-          TextField(
-            controller: _searchController,
-            onChanged: (_) => setState(() {}),
-            decoration: _inputDecoration(context, 'Search source type...'),
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+              child: Container(
+                height: 52,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(
+                    alpha: 0.5,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: 'Search source type...',
+                    prefixIcon: Icon(Icons.search_rounded),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
-          const SizedBox(height: 18),
-          _SectionTitle('Popular'),
-          ...featured.map((source) => _SourceListTile(source: source)),
-          const SizedBox(height: 18),
-          _SectionTitle('All Source Types'),
-          ...more.map((source) => _SourceListTile(source: source)),
+          if (needle.isEmpty) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 8,
+                ),
+                child: Text(
+                  'POPULAR',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 1.1,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _SourceGridTile(source: featured[index]),
+                  childCount: featured.length,
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ],
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: Text(
+                needle.isEmpty ? 'ALL SOURCES' : 'SEARCH RESULTS',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 1.1,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => _SourceGridTile(source: more[index]),
+                childCount: more.length,
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _SourceGridTile extends StatelessWidget {
+  final _SourceTypeConfig source;
+
+  const _SourceGridTile({required this.source});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.pop(context, source),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: theme.dividerColor.withValues(alpha: 0.3),
+            ),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: source.color.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(source.icon, color: source.color, size: 28),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                source.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -553,11 +1461,13 @@ class _PublicationFormScreen extends StatefulWidget {
   final ApiService api;
   final _SourceTypeConfig source;
   final String citationFormat;
+  final Map<String, dynamic>? initialItem;
 
   const _PublicationFormScreen({
     required this.api,
     required this.source,
     required this.citationFormat,
+    this.initialItem,
   });
 
   @override
@@ -568,26 +1478,29 @@ class _PublicationFormScreenState extends State<_PublicationFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final Map<String, TextEditingController> _controllers = {};
   final Set<String> _enabledFlags = {};
+  late _SourceTypeConfig _selectedSource;
   late String _citationFormat;
   bool _saving = false;
   bool _noteVisible = false;
   String? _error;
 
+  bool get _isEdit => widget.initialItem != null;
+
   List<String> get _fields => _unique([
-    ...widget.source.requiredFields,
-    ...widget.source.recommendedFields,
-    ...widget.source.optionalFields,
+    ..._selectedSource.requiredFields,
+    ..._selectedSource.recommendedFields,
+    ..._selectedSource.optionalFields,
   ]);
 
-  List<_PublicationFormRow> get _rows => _formRowsFor(widget.source);
+  List<_PublicationFormRow> get _rows => _formRowsFor(_selectedSource);
 
   @override
   void initState() {
     super.initState();
+    _selectedSource = widget.source;
     _citationFormat = widget.citationFormat;
-    for (final field in {..._fields, ..._rowFieldKeys(_rows), 'record_label'}) {
-      _controllers[field] = TextEditingController();
-    }
+    _ensureControllersForSource(_selectedSource);
+    _hydrateFromItem();
   }
 
   @override
@@ -606,7 +1519,14 @@ class _PublicationFormScreenState extends State<_PublicationFormScreen> {
     });
     try {
       final formData = _buildFormData();
-      await widget.api.postMultipart('/publications', formData);
+      if (_isEdit) {
+        await widget.api.patch<Map<String, dynamic>>(
+          '/publications/${widget.initialItem!['id']}',
+          data: formData,
+        );
+      } else {
+        await widget.api.postMultipart('/publications', formData);
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
@@ -644,7 +1564,7 @@ class _PublicationFormScreenState extends State<_PublicationFormScreen> {
         ? values['record_label']!.trim()
         : title.isNotEmpty
         ? title
-        : widget.source.label;
+        : _selectedSource.label;
 
     final details = <String, dynamic>{};
     for (final key in {..._fields, ..._rowFieldKeys(_rows)}) {
@@ -658,8 +1578,8 @@ class _PublicationFormScreenState extends State<_PublicationFormScreen> {
     final map = <String, dynamic>{
       'name': recordLabel,
       'title': title.isNotEmpty ? title : recordLabel,
-      'pub_type': widget.source.key,
-      'source_type': widget.source.key,
+      'pub_type': _selectedSource.key,
+      'source_type': _selectedSource.key,
       'citation_format': _citationFormat,
       'details': jsonEncode(details),
     };
@@ -688,24 +1608,27 @@ class _PublicationFormScreenState extends State<_PublicationFormScreen> {
     add('issue', values['issue']);
     add('pages', values['pages']);
     add('year', _yearFrom(issuedDate));
-    add('article_title', widget.source.key.contains('article') ? title : null);
+    add(
+      'article_title',
+      _selectedSource.key.contains('article') ? title : null,
+    );
     add(
       'journal_name',
-      widget.source.key == 'journal_article' ? container : null,
+      _selectedSource.key == 'journal_article' ? container : null,
     );
-    add('book_title', widget.source.key == 'book' ? title : null);
-    add('report_title', widget.source.key == 'report' ? title : null);
-    add('video_title', widget.source.key == 'video' ? title : null);
-    add('platform', widget.source.key == 'video' ? container : null);
+    add('book_title', _selectedSource.key == 'book' ? title : null);
+    add('report_title', _selectedSource.key == 'report' ? title : null);
+    add('video_title', _selectedSource.key == 'video' ? title : null);
+    add('platform', _selectedSource.key == 'video' ? container : null);
     add(
       'newspaper_name',
-      widget.source.key.contains('newspaper') ? container : null,
+      _selectedSource.key.contains('newspaper') ? container : null,
     );
-    add('website_name', widget.source.key == 'webpage' ? container : null);
-    add('page_title', widget.source.key == 'webpage' ? title : null);
+    add('website_name', _selectedSource.key == 'webpage' ? container : null);
+    add('page_title', _selectedSource.key == 'webpage' ? title : null);
     add(
       'organization',
-      widget.source.key == 'report' ? contributorsText : null,
+      _selectedSource.key == 'report' ? contributorsText : null,
     );
 
     if (contributorsText.isNotEmpty) {
@@ -716,13 +1639,88 @@ class _PublicationFormScreenState extends State<_PublicationFormScreen> {
     return FormData.fromMap(map);
   }
 
+  void _hydrateFromItem() {
+    final item = widget.initialItem;
+    if (item == null) return;
+    _controller('record_label').text = _string(item['name']);
+    for (final key in {..._fields, ..._rowFieldKeys(_rows)}) {
+      final value = _field(item, key);
+      if (value.isNotEmpty) _controller(key).text = value;
+    }
+    final contributors = _field(item, 'contributors').isNotEmpty
+        ? _field(item, 'contributors')
+        : _string(item['author']);
+    if (contributors.isNotEmpty) {
+      _controller('contributors').text = contributors;
+    }
+    final note = _field(item, 'note').isNotEmpty
+        ? _field(item, 'note')
+        : _string(item['others']);
+    if (note.isNotEmpty) {
+      _controller('note').text = note;
+      _noteVisible = true;
+    }
+    for (final row in _rows) {
+      if (row.flag == null) continue;
+      final details = _detailsMap(item);
+      final flagValue = details[row.flag];
+      if (flagValue == true || flagValue.toString().toLowerCase() == 'true') {
+        _enabledFlags.add(row.flag!);
+      } else if (row.field != null && _field(item, row.field!).isNotEmpty) {
+        _enabledFlags.add(row.flag!);
+      }
+    }
+  }
+
+  void _ensureControllersForSource(_SourceTypeConfig source) {
+    final rows = _formRowsFor(source);
+    for (final field in {
+      ...source.requiredFields,
+      ...source.recommendedFields,
+      ...source.optionalFields,
+      ..._rowFieldKeys(rows),
+      'record_label',
+    }) {
+      _controller(field);
+    }
+  }
+
+  Future<void> _changeSource() async {
+    if (_saving) return;
+    HapticFeedback.selectionClick();
+    final source = await Navigator.of(context, rootNavigator: true)
+        .push<_SourceTypeConfig>(
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (_) => const _SourceTypePickerScreen(),
+          ),
+        );
+    if (!mounted || source == null || source.key == _selectedSource.key) {
+      return;
+    }
+
+    setState(() {
+      _selectedSource = source;
+      _ensureControllersForSource(source);
+      final validFlags = _flagKeys(_rows);
+      _enabledFlags.removeWhere((flag) => !validFlags.contains(flag));
+      _error = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: theme.colorScheme.surfaceContainerLowest,
       appBar: AppBar(
-        title: Text('${widget.source.label} Citation'),
+        title: Text(
+          _isEdit ? 'Edit Publication' : 'Add ${_selectedSource.label}',
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        backgroundColor: theme.colorScheme.surfaceContainerLowest,
+        surfaceTintColor: Colors.transparent,
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
           onPressed: _saving ? null : () => Navigator.pop(context),
@@ -735,18 +1733,39 @@ class _PublicationFormScreenState extends State<_PublicationFormScreen> {
               child: Form(
                 key: _formKey,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
                   children: [
-                    _SelectedPublicationSourceCard(source: widget.source),
-                    const SizedBox(height: 18),
+                    _SelectedPublicationSourceCard(
+                      source: _selectedSource,
+                      onTap: _changeSource,
+                    ),
+                    const SizedBox(height: 24),
                     ..._rows.map(_buildRow),
                     if (_error != null) ...[
                       const SizedBox(height: 16),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: theme.colorScheme.error,
-                          fontWeight: FontWeight.w700,
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.errorContainer,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              color: theme.colorScheme.error,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _error!,
+                                style: TextStyle(
+                                  color: theme.colorScheme.error,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -754,19 +1773,38 @@ class _PublicationFormScreenState extends State<_PublicationFormScreen> {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
               child: FilledButton(
                 onPressed: _saving ? null : _submit,
                 style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
+                  minimumSize: const Size.fromHeight(56),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
                 child: _saving
                     ? const SizedBox.square(
-                        dimension: 22,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        dimension: 24,
+                        child: CircularProgressIndicator(strokeWidth: 3),
                       )
-                    : const Text('Submit'),
+                    : Text(
+                        _isEdit ? 'Save Changes' : 'Submit Publication',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
               ),
             ),
           ],
@@ -998,73 +2036,233 @@ class _FilterBottomSheetState extends State<_FilterBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'Filters',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.4,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => setState(() {
-                    _type = '';
-                    _format = 'mla';
-                    _sort = 'date_desc';
-                    _start = null;
-                    _end = null;
-                  }),
-                  child: const Text('Reset'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _PublicationInlineSelect(
-              label: 'Publication Type',
-              value: _type,
-              options: {
-                '': 'All types',
-                for (final source in _sourceTypes) source.key: source.label,
-              },
-              onChanged: (value) => setState(() => _type = value),
-            ),
-            const SizedBox(height: 12),
-            _PublicationInlineSelect(
-              label: 'Citation Format',
-              value: _format,
-              options: _citationOptions,
-              onChanged: (value) => setState(() => _format = value),
-            ),
-            const SizedBox(height: 12),
-            _PublicationInlineSelect(
-              label: 'Sort',
-              value: _sort,
-              options: const {
-                'date_desc': 'Newest first',
-                'date_asc': 'Oldest first',
-                'title_asc': 'Title (A-Z)',
-                'title_desc': 'Title (Z-A)',
-              },
-              onChanged: (value) => setState(() => _sort = value),
-            ),
-            const SizedBox(height: 18),
-            FilledButton(
-              onPressed: () {
-                widget.onApply(_type, _format, _sort, _start, _end);
-                Navigator.pop(context);
-              },
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
               ),
-              child: const Text('Apply Filters'),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text(
+                    'Filters',
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _type = '';
+                      _format = 'mla';
+                      _sort = 'date_desc';
+                      _start = null;
+                      _end = null;
+                    }),
+                    child: const Text(
+                      'Reset',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _PublicationInlineSelect(
+                label: 'Publication Type',
+                value: _type,
+                options: {
+                  '': 'All Types',
+                  for (final source in _sourceTypes) source.key: source.label,
+                },
+                onChanged: (value) => setState(() => _type = value),
+              ),
+              const SizedBox(height: 16),
+              _PublicationInlineSelect(
+                label: 'Citation Format',
+                value: _format,
+                options: _citationOptions,
+                onChanged: (value) => setState(() => _format = value),
+              ),
+              const SizedBox(height: 16),
+              _PublicationInlineSelect(
+                label: 'Sort By',
+                value: _sort,
+                options: const {
+                  'date_desc': 'Newest First',
+                  'date_asc': 'Oldest First',
+                  'title_asc': 'Title (A-Z)',
+                  'title_desc': 'Title (Z-A)',
+                },
+                onChanged: (value) => setState(() => _sort = value),
+              ),
+              const SizedBox(height: 24),
+              _SectionTitle('Date Range'),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DateFilterButton(
+                      label: 'From',
+                      value: _start,
+                      onChanged: (value) => setState(() => _start = value),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _DateFilterButton(
+                      label: 'To',
+                      value: _end,
+                      onChanged: (value) => setState(() => _end = value),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ActionChip(
+                    label: const Text('Today'),
+                    onPressed: () {
+                      final now = _dateOnly(DateTime.now());
+                      setState(() {
+                        _start = now;
+                        _end = now;
+                      });
+                    },
+                  ),
+                  ActionChip(
+                    label: const Text('7d'),
+                    onPressed: () {
+                      final now = _dateOnly(DateTime.now());
+                      setState(() {
+                        _start = now.subtract(const Duration(days: 7));
+                        _end = now;
+                      });
+                    },
+                  ),
+                  ActionChip(
+                    label: const Text('30d'),
+                    onPressed: () {
+                      final now = _dateOnly(DateTime.now());
+                      setState(() {
+                        _start = now.subtract(const Duration(days: 30));
+                        _end = now;
+                      });
+                    },
+                  ),
+                  ActionChip(
+                    label: const Text('This year'),
+                    onPressed: () {
+                      final now = _dateOnly(DateTime.now());
+                      setState(() {
+                        _start = DateTime(now.year);
+                        _end = now;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+              FilledButton(
+                onPressed: () {
+                  widget.onApply(_type, _format, _sort, _start, _end);
+                  Navigator.pop(context);
+                },
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(56),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'Apply Filters',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DateFilterButton extends StatelessWidget {
+  final String label;
+  final DateTime? value;
+  final ValueChanged<DateTime?> onChanged;
+
+  const _DateFilterButton({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: context,
+          initialDate: value ?? DateTime.now(),
+          firstDate: DateTime(1800),
+          lastDate: DateTime(2200),
+        );
+        if (picked != null) onChanged(_dateOnly(picked));
+      },
+      onLongPress: value == null ? null : () => onChanged(null),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.3,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.calendar_today_rounded,
+              size: 20,
+              color: theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                value == null ? label : _dateLabel(value!),
+                style: TextStyle(
+                  fontWeight: value == null
+                      ? FontWeight.normal
+                      : FontWeight.bold,
+                  color: value == null
+                      ? theme.colorScheme.onSurfaceVariant
+                      : theme.colorScheme.onSurface,
+                ),
+              ),
             ),
           ],
         ),
@@ -1075,81 +2273,69 @@ class _FilterBottomSheetState extends State<_FilterBottomSheet> {
 
 class _SelectedPublicationSourceCard extends StatelessWidget {
   final _SourceTypeConfig source;
+  final VoidCallback? onTap;
 
-  const _SelectedPublicationSourceCard({required this.source});
+  const _SelectedPublicationSourceCard({required this.source, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.45,
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.55)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: source.color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
+    return Material(
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: theme.dividerColor.withValues(alpha: 0.3),
             ),
-            child: Icon(source.icon, color: source.color),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  source.label,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: source.color.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  source.description,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                child: Icon(source.icon, size: 32, color: source.color),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      source.label,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      source.description,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (onTap != null) ...[
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.swap_horiz_rounded,
+                  color: theme.colorScheme.primary,
+                  size: 22,
                 ),
               ],
-            ),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SourceListTile extends StatelessWidget {
-  final _SourceTypeConfig source;
-
-  const _SourceListTile({required this.source});
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 10),
-      child: ListTile(
-        onTap: () => Navigator.pop(context, source),
-        leading: CircleAvatar(
-          backgroundColor: source.color.withValues(alpha: 0.12),
-          child: Icon(source.icon, color: source.color),
         ),
-        title: Text(
-          source.label,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-        subtitle: Text(source.description),
-        trailing: const Icon(Icons.chevron_right_rounded),
       ),
     );
   }
@@ -1169,20 +2355,22 @@ class _PublicationFormShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.45)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text(
+                label.toUpperCase(),
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  letterSpacing: 0,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
               if (required)
                 Text(
                   ' *',
@@ -1216,17 +2404,48 @@ class _PublicationToggleShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _PublicationFormShell(
-      label: label,
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
       child: Column(
         children: [
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: value,
-            onChanged: onChanged,
-            title: Text(label),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: theme.dividerColor.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    Switch(
+                      value: value,
+                      onChanged: onChanged,
+                      activeThumbColor: theme.colorScheme.primary,
+                    ),
+                  ],
+                ),
+                if (child != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: child!,
+                  ),
+              ],
+            ),
           ),
-          ?child,
         ],
       ),
     );
@@ -1248,13 +2467,24 @@ class _PublicationInlineSelect extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return DropdownButtonFormField<String>(
       initialValue: options.containsKey(value) ? value : options.keys.first,
-      decoration: _inputDecoration(context, label),
+      decoration: _inputDecoration(context, label).copyWith(
+        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.3,
+        ),
+      ),
+      icon: const Icon(Icons.expand_more_rounded),
       items: options.entries
           .map(
-            (entry) =>
-                DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+            (entry) => DropdownMenuItem(
+              value: entry.key,
+              child: Text(
+                entry.value,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
           )
           .toList(),
       onChanged: onChanged == null
@@ -1281,6 +2511,7 @@ class _PublicationDateInput extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Row(
       children: [
         Expanded(
@@ -1288,10 +2519,15 @@ class _PublicationDateInput extends StatelessWidget {
             controller: controller,
             readOnly: true,
             enabled: enabled,
-            decoration: _inputDecoration(
-              context,
-              'mm/dd/yyyy',
-            ).copyWith(suffixIcon: const Icon(Icons.calendar_today_rounded)),
+            decoration: _inputDecoration(context, 'YYYY-MM-DD').copyWith(
+              fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.3,
+              ),
+              suffixIcon: Icon(
+                Icons.calendar_today_rounded,
+                color: theme.colorScheme.primary,
+              ),
+            ),
             validator: required
                 ? (value) => (value?.trim().isEmpty ?? true) ? 'Required' : null
                 : null,
@@ -1300,11 +2536,20 @@ class _PublicationDateInput extends StatelessWidget {
         ),
         if (todayShortcut) ...[
           const SizedBox(width: 8),
-          TextButton(
+          FilledButton.tonal(
             onPressed: enabled
                 ? () => controller.text = _dateLabel(DateTime.now())
                 : null,
-            child: const Text('Set to today'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'Today',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ],
@@ -1337,13 +2582,20 @@ class _PublicationChoiceGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: 12,
+      runSpacing: 12,
       children: options
           .map(
             (option) => ChoiceChip(
-              label: Text(option),
+              label: Text(
+                option,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
               selected: value == option,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
               onSelected: onChanged == null ? null : (_) => onChanged!(option),
             ),
           )
@@ -1371,11 +2623,17 @@ class _ModernTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      decoration: _inputDecoration(context, label).copyWith(hintText: hint),
+      decoration: _inputDecoration(context, label).copyWith(
+        hintText: hint,
+        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.3,
+        ),
+      ),
       validator: required
           ? (value) => (value?.trim().isEmpty ?? true)
                 ? 'This field is required'
@@ -1385,30 +2643,36 @@ class _ModernTextField extends StatelessWidget {
   }
 }
 
-class _SourcePill extends StatelessWidget {
+class _SourceTypeBadge extends StatelessWidget {
   final _SourceTypeConfig source;
 
-  const _SourcePill({required this.source});
+  const _SourceTypeBadge({required this.source});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: source.color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
+        color: _pubAccentBg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFC7D2FE)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(source.icon, size: 14, color: source.color),
-          const SizedBox(width: 5),
-          Text(
-            source.label,
-            style: TextStyle(
-              color: source.color,
-              fontWeight: FontWeight.w800,
-              fontSize: 12,
+          Icon(source.icon, size: 13, color: _pubAccent),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              source.label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: _pubAccent,
+                fontWeight: FontWeight.w800,
+                fontSize: 10,
+                letterSpacing: 0,
+              ),
             ),
           ),
         ],
@@ -1417,47 +2681,26 @@ class _SourcePill extends StatelessWidget {
   }
 }
 
-class _MetaText extends StatelessWidget {
-  final IconData icon;
-  final String text;
-
-  const _MetaText({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: Theme.of(context).colorScheme.outline),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CountPill extends StatelessWidget {
+class _CountBadge extends StatelessWidget {
   final int count;
 
-  const _CountPill({required this.count});
+  const _CountBadge({required this.count});
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: _pubAccentBg,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        '$count',
-        style: TextStyle(color: color, fontWeight: FontWeight.w800),
+        '$count Total',
+        style: const TextStyle(
+          color: _pubAccent,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+        ),
       ),
     );
   }
@@ -1480,26 +2723,61 @@ class _MessageState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(40),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 56, color: Theme.of(context).colorScheme.primary),
-            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.5,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 64,
+                color: theme.colorScheme.primary.withValues(alpha: 0.8),
+              ),
+            ),
+            const SizedBox(height: 24),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: 20),
-              FilledButton(onPressed: onAction, child: Text(actionLabel!)),
+              const SizedBox(height: 32),
+              FilledButton(
+                onPressed: onAction,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Text(
+                  actionLabel!,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ],
         ),
@@ -1510,21 +2788,204 @@ class _MessageState extends StatelessWidget {
 
 class _SectionTitle extends StatelessWidget {
   final String title;
+  final IconData? icon;
 
-  const _SectionTitle(this.title);
+  const _SectionTitle(this.title, {this.icon});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(
-        title.toUpperCase(),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.8,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 15, color: _pubMuted),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0,
+              color: _pubMuted,
+              fontSize: 11,
+            ),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _SoftPanel extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const _SoftPanel({
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFEDEFF3)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.015),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _SubmitterPanel extends StatelessWidget {
+  final Map<String, dynamic> item;
+
+  const _SubmitterPanel({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _submitterName(item);
+    final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
+    final createdAt = _auditDate(item, const ['created_at', 'uploaded_at']);
+    final published = _field(item, 'issued_date').isNotEmpty
+        ? _field(item, 'issued_date')
+        : _string(item['publication_date']);
+
+    return _SoftPanel(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: _pubAccent.withValues(alpha: 0.10),
+            child: Text(
+              initial,
+              style: const TextStyle(
+                color: _pubAccent,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RichText(
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  text: TextSpan(
+                    style: const TextStyle(color: _pubMuted, fontSize: 14),
+                    children: [
+                      const TextSpan(text: 'Submitted by '),
+                      TextSpan(
+                        text: name,
+                        style: const TextStyle(
+                          color: _pubText,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_today_outlined,
+                      size: 13,
+                      color: _pubMuted,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        [
+                          if (createdAt.isNotEmpty) createdAt,
+                          if (published.isNotEmpty) 'Published $published',
+                        ].join(' • '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _pubMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuditGrid extends StatelessWidget {
+  final List<MapEntry<String, String>> entries;
+
+  const _AuditGrid({required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = entries
+        .map(
+          (entry) =>
+              MapEntry(entry.key, entry.value.isEmpty ? '-' : entry.value),
+        )
+        .toList();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final itemWidth = (constraints.maxWidth - 14) / 2;
+        return Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: filtered
+              .map(
+                (entry) => SizedBox(
+                  width: itemWidth,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.key,
+                        style: const TextStyle(
+                          color: _pubMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        entry.value,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _pubText,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+              .toList(),
+        );
+      },
     );
   }
 }
@@ -1536,28 +2997,234 @@ class _DetailGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (fields.isEmpty) return const Text('No extra details available.');
-    return Column(
-      children: fields
-          .map(
-            (entry) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 132,
-                    child: Text(
-                      entry.key,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+    if (fields.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Text('No details available.'),
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useTwoColumns = constraints.maxWidth >= 560;
+        final urlFields = fields
+            .where((entry) => entry.key.toLowerCase().contains('url'))
+            .toList();
+        final nonUrlFields = fields
+            .where((entry) => !entry.key.toLowerCase().contains('url'))
+            .toList();
+        final ordered = _orderedDetailFields(
+          useTwoColumns ? nonUrlFields : fields,
+        );
+        return Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: useTwoColumns ? 22 : 18,
+            vertical: 18,
+          ),
+          child: useTwoColumns
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _DetailColumn(fields: ordered.left)),
+                        const SizedBox(width: 44),
+                        Expanded(child: _DetailColumn(fields: ordered.right)),
+                      ],
                     ),
-                  ),
-                  Expanded(child: SelectableText(entry.value)),
-                ],
+                    if (urlFields.isNotEmpty) ...[
+                      const SizedBox(height: 18),
+                      for (var i = 0; i < urlFields.length; i++) ...[
+                        _DetailField(entry: urlFields[i]),
+                        if (i != urlFields.length - 1)
+                          const SizedBox(height: 18),
+                      ],
+                    ],
+                  ],
+                )
+              : _DetailColumn(fields: ordered.vertical),
+        );
+      },
+    );
+  }
+}
+
+class _DetailColumn extends StatelessWidget {
+  final List<MapEntry<String, String>> fields;
+
+  const _DetailColumn({required this.fields});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < fields.length; i++) ...[
+          _DetailField(entry: fields[i]),
+          if (i != fields.length - 1) const SizedBox(height: 18),
+        ],
+      ],
+    );
+  }
+}
+
+class _DetailField extends StatelessWidget {
+  final MapEntry<String, String> entry;
+
+  const _DetailField({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final isUrl = entry.key.toLowerCase().contains('url');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          entry.key,
+          style: const TextStyle(
+            color: _pubMuted,
+            fontSize: 12,
+            height: 1.2,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: SelectableText(
+                entry.value,
+                style: TextStyle(
+                  color: isUrl ? _pubAccent : _pubText,
+                  fontSize: 14,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          )
-          .toList(),
+            if (isUrl) ...[
+              const SizedBox(width: 6),
+              const Padding(
+                padding: EdgeInsets.only(top: 2),
+                child: Icon(
+                  Icons.open_in_new_rounded,
+                  size: 14,
+                  color: _pubAccent,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+({
+  List<MapEntry<String, String>> left,
+  List<MapEntry<String, String>> right,
+  List<MapEntry<String, String>> vertical,
+})
+_orderedDetailFields(List<MapEntry<String, String>> fields) {
+  MapEntry<String, String>? take(String label) {
+    final index = fields.indexWhere(
+      (entry) => entry.key.toLowerCase() == label.toLowerCase(),
+    );
+    if (index == -1) return null;
+    return fields[index];
+  }
+
+  final preferredLeft = [
+    take('Title'),
+    take('Accessed'),
+    take('URL'),
+    take('Website Name'),
+  ].whereType<MapEntry<String, String>>().toList();
+  final preferredRight = [
+    take('Issued'),
+    take('Container Title'),
+    take('Page Title'),
+    take('Year'),
+  ].whereType<MapEntry<String, String>>().toList();
+
+  final used = {
+    for (final entry in [...preferredLeft, ...preferredRight]) entry.key,
+  };
+  final rest = fields.where((entry) => !used.contains(entry.key)).toList();
+
+  final left = [...preferredLeft];
+  final right = [...preferredRight];
+  for (var i = 0; i < rest.length; i++) {
+    if (left.length <= right.length) {
+      left.add(rest[i]);
+    } else {
+      right.add(rest[i]);
+    }
+  }
+
+  final vertical = <MapEntry<String, String>>[];
+  final maxLength = left.length > right.length ? left.length : right.length;
+  for (var i = 0; i < maxLength; i++) {
+    if (i < left.length) vertical.add(left[i]);
+    if (i < right.length) vertical.add(right[i]);
+  }
+  return (left: left, right: right, vertical: vertical);
+}
+
+class _PublicationMetaStrip extends StatelessWidget {
+  final Map<String, dynamic> item;
+
+  const _PublicationMetaStrip({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final source = _sourceConfig(_sourceKey(item));
+    final issued = _publicationIssued(item);
+    final accessed = _field(item, 'accessed_date');
+    final year = _publicationYear(item);
+    final chips = [
+      MapEntry(source.label, source.icon),
+      if (issued.isNotEmpty) const MapEntry('Issued', Icons.event_rounded),
+      if (accessed.isNotEmpty)
+        const MapEntry('Accessed', Icons.visibility_outlined),
+      if (year.isNotEmpty) const MapEntry('Year', Icons.calendar_view_month),
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: chips.map((chip) {
+        final value = switch (chip.key) {
+          'Issued' => issued,
+          'Accessed' => accessed,
+          'Year' => year,
+          _ => chip.key,
+        };
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: _pubAccentBg.withValues(alpha: 0.65),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: const Color(0xFFDDE3FF)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(chip.value, size: 14, color: _pubAccent),
+              const SizedBox(width: 6),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: _pubAccent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -2666,7 +4333,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'Show description',
       fieldLabel: 'Description',
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('composed_date', 'Composed date'),
     _PublicationFormRow.field('medium', 'Medium'),
     _PublicationFormRow.archive('Archive / Library / Museum', [
@@ -2692,7 +4358,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       fieldLabel: 'Subtitle',
     ),
     _PublicationFormRow.field('container_title', 'Blog name', required: true),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.date(
       'accessed_date',
@@ -2711,7 +4376,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       fieldLabel: 'Subtitle',
     ),
     _PublicationFormRow.field('container_title', 'Book title', required: true),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field('edition', 'Edition', placeholder: 'e.g. 2'),
     _PublicationFormRow.range('volume', 'volume_is_range', 'Volume number'),
     _PublicationFormRow.field('medium', 'Medium'),
@@ -2750,7 +4414,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   'comment': [
     _PublicationFormRow.field('content', 'Content', required: true),
     _PublicationFormRow.field('container_title', 'Comment on'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date(
       'accessed_date',
       'Access date',
@@ -2763,7 +4426,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   'webpage': [
     _PublicationFormRow.field('title', 'Title', required: true),
     _PublicationFormRow.field('container_title', 'Website name'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.date(
       'accessed_date',
@@ -2780,7 +4442,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'Journal name',
       required: true,
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.range('volume', 'volume_is_range', 'Volume number'),
     _PublicationFormRow.field('issue', 'Issue number'),
     _PublicationFormRow.field(
@@ -2815,7 +4476,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   ],
   'book': [
     _PublicationFormRow.field('title', 'Title', required: true),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field('edition', 'Edition', placeholder: 'e.g. 2'),
     _PublicationFormRow.range('volume', 'volume_is_range', 'Volume number'),
     _PublicationFormRow.field('medium', 'Medium'),
@@ -2855,7 +4515,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       fieldLabel: 'Subtitle',
     ),
     _PublicationFormRow.field('container_title', 'Website or database name'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field(
       'number',
       'Identifying number',
@@ -2899,7 +4558,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'Website name',
       placeholder: 'e.g. YouTube or Vimeo',
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.date(
       'accessed_date',
@@ -2922,7 +4580,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'Newspaper name',
       required: true,
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.field('publisher', 'Publisher'),
     _PublicationFormRow.field('url', 'URL', inputType: 'url'),
@@ -2931,7 +4588,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   'conference_proceeding': [
     _PublicationFormRow.field('title', 'Title', required: true),
     _PublicationFormRow.field('container_title', 'Container title'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field('edition', 'Edition', placeholder: 'e.g. 2'),
     _PublicationFormRow.range('volume', 'volume_is_range', 'Volume number'),
     _PublicationFormRow.field('medium', 'Medium'),
@@ -2965,7 +4621,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'Show subtitle',
       fieldLabel: 'Subtitle',
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field('medium', 'Type of contribution'),
     _PublicationFormRow.archive('Event', [
       _ArchiveSubField('event', 'Name'),
@@ -2990,7 +4645,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'Show subtitle',
       fieldLabel: 'Subtitle',
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field(
       'version',
       'Version',
@@ -3019,7 +4673,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   ],
   'film': [
     _PublicationFormRow.field('title', 'Title', required: true),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field(
       'medium',
       'Medium',
@@ -3033,7 +4686,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   'forum_post': [
     _PublicationFormRow.field('title', 'Title', required: true),
     _PublicationFormRow.field('container_title', 'Website name'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.date(
       'accessed_date',
@@ -3058,7 +4710,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       fieldLabel: 'Subtitle',
     ),
     _PublicationFormRow.field('container_title', 'Website name'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.field('url', 'URL', inputType: 'url'),
     _PublicationFormRow.annotation(),
@@ -3082,7 +4733,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'Newspaper name',
       required: true,
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field(
       'edition',
       'Edition',
@@ -3108,7 +4758,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   'online_dictionary_entry': [
     _PublicationFormRow.field('title', 'Entry title', required: true),
     _PublicationFormRow.field('container_title', 'Website name'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.date(
       'accessed_date',
@@ -3120,7 +4769,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   ],
   'online_encyclopedia_entry': [
     _PublicationFormRow.field('title', 'Title', required: true),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.date(
       'accessed_date',
@@ -3139,7 +4787,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       fieldLabel: 'Subtitle',
     ),
     _PublicationFormRow.field('container_title', 'Website name'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.toggleDate(
       'show_original_publication_date',
@@ -3158,7 +4805,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   'patent': [
     _PublicationFormRow.field('title', 'Title', required: true),
     _PublicationFormRow.field('container_title', 'Container title'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field('jurisdiction', 'Jurisdiction', required: true),
     _PublicationFormRow.field(
       'authority',
@@ -3172,7 +4818,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   ],
   'podcast': [
     _PublicationFormRow.field('title', 'Name', required: true),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field('url', 'URL', inputType: 'url'),
     _PublicationFormRow.annotation(),
   ],
@@ -3183,7 +4828,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'Podcast name',
       required: true,
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field('season', 'Season number'),
     _PublicationFormRow.field('episode', 'Episode number'),
     _PublicationFormRow.date('issued_date', 'Publication date'),
@@ -3204,7 +4848,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   'presentation_slides': [
     _PublicationFormRow.field('title', 'Title', required: true),
     _PublicationFormRow.field('container_title', 'Website name'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field('medium', 'Medium'),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.toggleDate(
@@ -3224,7 +4867,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   ],
   'press_release': [
     _PublicationFormRow.field('title', 'Title', required: true),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date(
       'accessed_date',
       'Access date',
@@ -3240,7 +4882,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'Dictionary name',
       required: true,
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.range('volume', 'volume_is_range', 'Volume number'),
     _PublicationFormRow.field('number', 'Identifying number'),
     _PublicationFormRow.date('issued_date', 'Publication date'),
@@ -3266,7 +4907,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'Encyclopedia name',
       required: true,
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.range('volume', 'volume_is_range', 'Volume number'),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.toggleDate(
@@ -3296,7 +4936,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'Magazine name',
       required: true,
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field('issue', 'Issue number'),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.toggleDate(
@@ -3311,7 +4950,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   'social_media_post': [
     _PublicationFormRow.field('content', 'Content', required: true),
     _PublicationFormRow.field('container_title', 'Website name'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.date(
       'accessed_date',
@@ -3324,7 +4962,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   'software': [
     _PublicationFormRow.field('title', 'Title', required: true),
     _PublicationFormRow.field('container_title', 'Container title'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field(
       'version',
       'Version',
@@ -3350,7 +4987,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       fieldLabel: 'Subtitle',
     ),
     _PublicationFormRow.field('container_title', 'Container title'),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.archive('Event', [
       _ArchiveSubField('event', 'Name'),
@@ -3363,7 +4999,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   ],
   'thesis': [
     _PublicationFormRow.field('title', 'Title', required: true),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('submitted_date', 'Year of submission'),
     _PublicationFormRow.field(
       'publisher',
@@ -3385,7 +5020,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
   ],
   'tv_show': [
     _PublicationFormRow.field('title', 'Title', required: true),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.date('issued_date', 'Publication date'),
     _PublicationFormRow.field('publisher', 'Production company'),
     _PublicationFormRow.field(
@@ -3403,7 +5037,6 @@ const _websitePublicationFormRows = <String, List<_PublicationFormRow>>{
       'TV show name',
       required: true,
     ),
-    _PublicationFormRow.contributors(),
     _PublicationFormRow.field('season', 'Season number'),
     _PublicationFormRow.field('episode', 'Episode number'),
     _PublicationFormRow.field(
@@ -3593,6 +5226,13 @@ List<String> _rowFieldKeys(List<_PublicationFormRow> rows) {
   return keys.toList();
 }
 
+Set<String> _flagKeys(List<_PublicationFormRow> rows) {
+  return {
+    for (final row in rows)
+      if (row.flag != null) row.flag!,
+  };
+}
+
 List<T> _unique<T>(Iterable<T> values) {
   final seen = <T>{};
   return [
@@ -3620,12 +5260,115 @@ String _sourceKey(Map<String, dynamic> item) {
   return key.isEmpty ? 'webpage' : key;
 }
 
+Map<String, dynamic> _detailsMap(Map<String, dynamic> item) {
+  final details = item['details'];
+  if (details is Map) return Map<String, dynamic>.from(details);
+  if (details is String && details.trim().isNotEmpty) {
+    try {
+      final decoded = jsonDecode(details);
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {
+      return const {};
+    }
+  }
+  return const {};
+}
+
 String _field(Map<String, dynamic> item, String key) {
   final direct = _string(item[key]);
   if (direct.isNotEmpty) return direct;
-  final details = item['details'];
-  if (details is Map) return _string(details[key]);
+  final details = _detailsMap(item);
+  if (details.isNotEmpty) return _string(details[key]);
   return '';
+}
+
+String _contributorsText(Map<String, dynamic> item) {
+  final raw = item['contributors'];
+  if (raw is List) {
+    return raw
+        .map((entry) {
+          if (entry is Map) {
+            final name = _string(entry['name']);
+            if (name.isNotEmpty) return name;
+            return [
+              _string(entry['first_name']),
+              _string(entry['last_name']),
+            ].where((value) => value.isNotEmpty).join(' ');
+          }
+          return _string(entry);
+        })
+        .where((value) => value.isNotEmpty)
+        .join(', ');
+  }
+  if (raw is String && raw.trim().startsWith('[')) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .map(
+              (entry) => entry is Map ? _string(entry['name']) : _string(entry),
+            )
+            .where((value) => value.isNotEmpty)
+            .join(', ');
+      }
+    } catch (_) {
+      return raw;
+    }
+  }
+  final detailed = _field(item, 'contributors');
+  if (detailed.isNotEmpty) return detailed;
+  return _string(item['author']);
+}
+
+String _submitterName(Map<String, dynamic> item) {
+  for (final key in const [
+    'created_by_name',
+    'submitted_by_name',
+    'user_name',
+    'owner_name',
+    'creator_name',
+    'created_by_email',
+    'submitted_by_email',
+    'user_email',
+  ]) {
+    final value = _string(item[key]);
+    if (value.isNotEmpty) return value;
+  }
+  final author = _contributorsText(item);
+  return author.isNotEmpty ? author : 'Unknown user';
+}
+
+String _updatedBy(Map<String, dynamic> item) {
+  for (final key in const [
+    'updated_by_name',
+    'modified_by_name',
+    'last_updated_by_name',
+    'updated_by_email',
+    'modified_by_email',
+  ]) {
+    final value = _string(item[key]);
+    if (value.isNotEmpty) return value;
+  }
+  return _submitterName(item);
+}
+
+String _auditDate(Map<String, dynamic> item, List<String> keys) {
+  for (final key in keys) {
+    final raw = _string(item[key]);
+    if (raw.isEmpty) continue;
+    final parsed = DateTime.tryParse(raw);
+    if (parsed != null) return _dateLabel(parsed.toLocal());
+    return raw;
+  }
+  return '';
+}
+
+String _publicationLink(Map<String, dynamic> item) {
+  if (_string(item['web_view_link']).isNotEmpty) {
+    return _string(item['web_view_link']);
+  }
+  if (_field(item, 'url').isNotEmpty) return _field(item, 'url');
+  return _string(item['url']);
 }
 
 String _displayTitle(Map<String, dynamic> item) {
@@ -3648,9 +5391,7 @@ String _displayTitle(Map<String, dynamic> item) {
 }
 
 String _citation(Map<String, dynamic> item, String format) {
-  final author = _field(item, 'contributors').isNotEmpty
-      ? _field(item, 'contributors')
-      : _string(item['author']);
+  final author = _contributorsText(item);
   final title = _displayTitle(item);
   final container = _field(item, 'container_title').isNotEmpty
       ? _field(item, 'container_title')
@@ -3718,9 +5459,40 @@ DateTime? _sortDate(Map<String, dynamic> item) {
 
 List<MapEntry<String, String>> _detailsFor(Map<String, dynamic> item) {
   final sourceKey = _sourceKey(item);
-  final rows = _formRowsFor(_sourceConfig(sourceKey));
   final entries = <MapEntry<String, String>>[];
   final seen = <String>{};
+
+  void add(String label, String value, {String? key}) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) return;
+    final uniqueKey = key ?? label.toLowerCase();
+    if (!seen.add(uniqueKey)) return;
+    entries.add(MapEntry(label, normalized));
+  }
+
+  add('Title', _displayTitle(item), key: 'title');
+  add('Issued', _publicationIssued(item), key: 'issued_date');
+  add('Accessed', _field(item, 'accessed_date'), key: 'accessed_date');
+  add(
+    'Container Title',
+    _field(item, 'container_title'),
+    key: 'container_title',
+  );
+  add('URL', _publicationLink(item), key: 'url');
+  add('Page Title', _field(item, 'page_title'), key: 'page_title');
+  add(
+    'Website Name',
+    _firstNonEmpty([
+      _field(item, 'website_name'),
+      sourceKey == 'webpage' || sourceKey == 'website'
+          ? _field(item, 'container_title')
+          : '',
+    ]),
+    key: 'website_name',
+  );
+  add('Year', _publicationYear(item), key: 'year');
+
+  final rows = _formRowsFor(_sourceConfig(sourceKey));
   for (final row in rows) {
     if (row.type == _PublicationRowType.annotation ||
         row.type == _PublicationRowType.contributors) {
@@ -3730,16 +5502,53 @@ List<MapEntry<String, String>> _detailsFor(Map<String, dynamic> item) {
         ? row.subFields.map((field) => MapEntry(field.label, field.field))
         : [MapEntry(row.fieldLabel ?? row.label, row.field ?? '')];
     for (final field in fields) {
-      if (field.value.isEmpty || !seen.add(field.value)) continue;
+      if (field.value.isEmpty) continue;
       final value = _field(item, field.value);
-      if (value.isNotEmpty) entries.add(MapEntry(field.key, value));
+      add(_websiteDetailLabel(field.value, field.key), value, key: field.value);
     }
   }
   final note = _field(item, 'note').isNotEmpty
       ? _field(item, 'note')
       : _string(item['others']);
-  if (note.isNotEmpty) entries.add(MapEntry('Annotation', note));
+  add('Annotation', note, key: 'note');
   return entries;
+}
+
+String _websiteDetailLabel(String field, String fallback) {
+  if (field == 'issued_date') return 'Issued';
+  if (field == 'accessed_date') return 'Accessed';
+  if (field == 'container_title') return 'Container Title';
+  if (field == 'page_title') return 'Page Title';
+  if (field == 'website_name') return 'Website Name';
+  if (field == 'url') return 'URL';
+  if (field == 'pdf_url') return 'PDF URL';
+  if (field == 'submitted_date') return 'Submitted';
+  if (field == 'composed_date') return 'Composed';
+  return fallback;
+}
+
+String _publicationIssued(Map<String, dynamic> item) {
+  return _firstNonEmpty([
+    _field(item, 'issued_date'),
+    _string(item['publication_date']),
+    _field(item, 'submitted_date'),
+    _field(item, 'composed_date'),
+  ]);
+}
+
+String _publicationYear(Map<String, dynamic> item) {
+  final explicit = _string(item['year']);
+  if (explicit.isNotEmpty) return explicit;
+  final issued = _publicationIssued(item);
+  return _yearFrom(issued);
+}
+
+String _firstNonEmpty(List<String> values) {
+  for (final value in values) {
+    final normalized = value.trim();
+    if (normalized.isNotEmpty) return normalized;
+  }
+  return '';
 }
 
 InputDecoration _inputDecoration(BuildContext context, String label) {
@@ -3747,20 +5556,19 @@ InputDecoration _inputDecoration(BuildContext context, String label) {
   return InputDecoration(
     labelText: label,
     filled: true,
-    fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
-      alpha: 0.45,
-    ),
+    fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: theme.dividerColor),
+      borderSide: BorderSide.none,
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: theme.dividerColor.withValues(alpha: 0.55)),
+      borderSide: BorderSide.none,
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+      borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
     ),
   );
 }

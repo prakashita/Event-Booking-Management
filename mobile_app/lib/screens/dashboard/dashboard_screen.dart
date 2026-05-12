@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
 import '../../widgets/common/error_state.dart';
 import '../home_screen.dart';
 import '../../services/api_service.dart';
@@ -103,6 +106,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
     } catch (e) {
       if (!mounted) return;
+      if (e is DioException && e.response?.statusCode == 401) {
+        context.read<AuthProvider>().handleUnauthorized();
+        return;
+      }
       setState(() {
         _isLoading = false;
         _error = e.toString();
