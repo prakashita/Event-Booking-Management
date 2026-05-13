@@ -156,43 +156,26 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
 
   Future<void> _deletePublication(Map<String, dynamic> item) async {
     final title = _displayTitle(item);
-    final controller = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Delete publication?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title),
-              const SizedBox(height: 14),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                decoration: _inputDecoration(context, 'Type DELETE'),
-                onChanged: (_) => setDialogState(() {}),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.error),
-              onPressed: controller.text == 'DELETE'
-                  ? () => Navigator.of(context).pop(true)
-                  : null,
-              child: const Text('Delete'),
-            ),
-          ],
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete publication?'),
+        content: Text(
+          'Are you sure you want to delete "$title"?\n\nThis action cannot be undone.',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
-    controller.dispose();
     if (confirmed != true) return;
 
     try {
@@ -316,9 +299,11 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
   @override
   Widget build(BuildContext context) {
     final visible = _visibleItems;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: _pubBg,
+      backgroundColor: isDark ? theme.scaffoldBackgroundColor : _pubBg,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadPublications,
@@ -330,13 +315,15 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 24, 16, 10),
                   child: Row(
                     children: [
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Publications',
                           style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.w900,
-                            color: _pubText,
+                            color: isDark
+                                ? theme.colorScheme.onSurface
+                                : _pubText,
                             letterSpacing: 0,
                             height: 1.1,
                           ),
@@ -511,23 +498,35 @@ class _PublicationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final source = _sourceConfig(_sourceKey(item));
     final date = _sortDate(item);
     final link = _publicationLink(item);
     final submitter = _submitterName(item);
     final citationText = _citation(item, citationFormat);
+    final surface = isDark ? theme.colorScheme.surface : _pubSurface;
+    final border = isDark
+        ? theme.colorScheme.outline.withValues(alpha: 0.18)
+        : _pubBorder;
+    final text = isDark ? theme.colorScheme.onSurface : _pubText;
+    final muted = isDark ? theme.colorScheme.onSurfaceVariant : _pubMuted;
+    final soft = isDark
+        ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.28)
+        : const Color(0xFFF9FAFB);
 
     return Container(
       decoration: BoxDecoration(
-        color: _pubSurface,
+        color: surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _pubBorder),
+        border: Border.all(color: border),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
         ],
       ),
       child: Material(
@@ -552,16 +551,16 @@ class _PublicationCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.calendar_today_outlined,
                               size: 13,
-                              color: _pubMuted,
+                              color: muted,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               _dateLabel(date),
-                              style: const TextStyle(
-                                color: _pubMuted,
+                              style: TextStyle(
+                                color: muted,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -576,8 +575,8 @@ class _PublicationCard extends StatelessWidget {
                   _displayTitle(item),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _pubText,
+                  style: TextStyle(
+                    color: text,
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     height: 1.2,
@@ -587,28 +586,21 @@ class _PublicationCard extends StatelessWidget {
                 const SizedBox(height: 7),
                 Row(
                   children: [
-                    const Icon(
-                      Icons.person_outline_rounded,
-                      size: 14,
-                      color: _pubMuted,
-                    ),
+                    Icon(Icons.person_outline_rounded, size: 14, color: muted),
                     const SizedBox(width: 6),
                     Expanded(
                       child: RichText(
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         text: TextSpan(
-                          style: const TextStyle(
-                            color: _pubMuted,
-                            fontSize: 14,
-                          ),
+                          style: TextStyle(color: muted, fontSize: 14),
                           children: [
                             const TextSpan(text: 'Submitted by '),
                             TextSpan(
                               text: submitter,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w600,
-                                color: Colors.black87,
+                                color: text,
                               ),
                             ),
                           ],
@@ -624,22 +616,22 @@ class _PublicationCard extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      border: const Border(
-                        left: BorderSide(color: _pubAccent, width: 4),
-                        top: BorderSide(color: _pubBorder),
-                        right: BorderSide(color: _pubBorder),
-                        bottom: BorderSide(color: _pubBorder),
+                      color: soft,
+                      border: Border(
+                        left: const BorderSide(color: _pubAccent, width: 4),
+                        top: BorderSide(color: border),
+                        right: BorderSide(color: border),
+                        bottom: BorderSide(color: border),
                       ),
                     ),
                     child: Text(
                       citationText,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         height: 1.45,
-                        color: _pubMuted,
+                        color: muted,
                         fontFamily: 'monospace',
                       ),
                     ),
@@ -651,16 +643,16 @@ class _PublicationCard extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
+                      color: soft,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: _pubBorder),
+                      border: Border.all(color: border),
                     ),
                     child: Text(
                       _string(item['others']),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: _pubMuted,
+                      style: TextStyle(
+                        color: muted,
                         fontSize: 12,
                         fontStyle: FontStyle.italic,
                       ),
@@ -668,7 +660,7 @@ class _PublicationCard extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 14),
-                const Divider(height: 1, color: _pubBorder),
+                Divider(height: 1, color: border),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -702,7 +694,11 @@ class _PublicationCard extends StatelessWidget {
                     if (canDelete)
                       Container(
                         decoration: BoxDecoration(
-                          color: _pubDangerBg,
+                          color: isDark
+                              ? theme.colorScheme.errorContainer.withValues(
+                                  alpha: 0.28,
+                                )
+                              : _pubDangerBg,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: IconButton(
@@ -750,6 +746,8 @@ class _PublicationDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final source = _sourceConfig(_sourceKey(item));
     final fields = _detailsFor(item);
     final hasLink =
@@ -760,9 +758,9 @@ class _PublicationDetailSheet extends StatelessWidget {
     final updatedAt = _auditDate(item, const ['updated_at', 'modified_at']);
 
     return Container(
-      decoration: const BoxDecoration(
-        color: _pubSurface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      decoration: BoxDecoration(
+        color: isDark ? theme.colorScheme.surface : _pubSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: DraggableScrollableSheet(
         expand: false,
@@ -776,7 +774,9 @@ class _PublicationDetailSheet extends StatelessWidget {
               width: 48,
               height: 5,
               decoration: BoxDecoration(
-                color: const Color(0xFFD1D5DB),
+                color: isDark
+                    ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.35)
+                    : const Color(0xFFD1D5DB),
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
@@ -793,12 +793,14 @@ class _PublicationDetailSheet extends StatelessWidget {
                         const SizedBox(height: 10),
                         Text(
                           _displayTitle(item),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.w900,
                             height: 1.18,
                             letterSpacing: 0,
-                            color: _pubText,
+                            color: isDark
+                                ? theme.colorScheme.onSurface
+                                : _pubText,
                           ),
                         ),
                       ],
@@ -809,15 +811,24 @@ class _PublicationDetailSheet extends StatelessWidget {
                     tooltip: 'Close',
                     onPressed: () => Navigator.of(context).pop(false),
                     style: IconButton.styleFrom(
-                      backgroundColor: const Color(0xFFF3F4F6),
-                      foregroundColor: _pubMuted,
+                      backgroundColor: isDark
+                          ? theme.colorScheme.surfaceContainerHighest
+                          : const Color(0xFFF3F4F6),
+                      foregroundColor: isDark
+                          ? theme.colorScheme.onSurfaceVariant
+                          : _pubMuted,
                     ),
                     icon: const Icon(Icons.close_rounded),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1, color: _pubBorder),
+            Divider(
+              height: 1,
+              color: isDark
+                  ? theme.colorScheme.outline.withValues(alpha: 0.18)
+                  : _pubBorder,
+            ),
             Expanded(
               child: ListView(
                 controller: controller,
@@ -834,10 +845,10 @@ class _PublicationDetailSheet extends StatelessWidget {
                   _SoftPanel(
                     child: SelectableText(
                       _citation(item, citationFormat),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         height: 1.55,
-                        color: _pubText,
+                        color: isDark ? theme.colorScheme.onSurface : _pubText,
                         fontFamily: 'serif',
                       ),
                     ),
@@ -900,9 +911,15 @@ class _PublicationDetailSheet extends StatelessWidget {
               top: false,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(24, 14, 24, 18),
-                decoration: const BoxDecoration(
-                  color: _pubSurface,
-                  border: Border(top: BorderSide(color: _pubBorder)),
+                decoration: BoxDecoration(
+                  color: isDark ? theme.colorScheme.surface : _pubSurface,
+                  border: Border(
+                    top: BorderSide(
+                      color: isDark
+                          ? theme.colorScheme.outline.withValues(alpha: 0.18)
+                          : _pubBorder,
+                    ),
+                  ),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -910,8 +927,14 @@ class _PublicationDetailSheet extends StatelessWidget {
                     OutlinedButton(
                       onPressed: () => Navigator.of(context).pop(false),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: _pubText,
-                        side: const BorderSide(color: _pubBorder),
+                        foregroundColor: isDark
+                            ? theme.colorScheme.onSurface
+                            : _pubText,
+                        side: BorderSide(
+                          color: isDark
+                              ? theme.colorScheme.outline.withValues(alpha: 0.3)
+                              : _pubBorder,
+                        ),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 18,
                           vertical: 12,
@@ -1002,6 +1025,8 @@ class _ModernFilterPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final activeCount = [
       typeFilter.isNotEmpty,
       citationFormat != 'mla',
@@ -1018,25 +1043,37 @@ class _ModernFilterPanel extends StatelessWidget {
               child: Container(
                 height: 50,
                 decoration: BoxDecoration(
-                  color: _pubSurface,
+                  color: isDark ? theme.colorScheme.surface : _pubSurface,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _pubBorder),
+                  border: Border.all(
+                    color: isDark
+                        ? theme.colorScheme.outline.withValues(alpha: 0.18)
+                        : _pubBorder,
+                  ),
                   boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.03),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
+                    if (!isDark)
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.03),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
                   ],
                 ),
                 child: TextField(
                   controller: searchController,
                   decoration: InputDecoration(
                     hintText: 'Search title, author, DOI, URL...',
-                    hintStyle: const TextStyle(color: _pubMuted, fontSize: 14),
-                    prefixIcon: const Icon(
+                    hintStyle: TextStyle(
+                      color: isDark
+                          ? theme.colorScheme.onSurfaceVariant
+                          : _pubMuted,
+                      fontSize: 14,
+                    ),
+                    prefixIcon: Icon(
                       Icons.search_rounded,
-                      color: _pubMuted,
+                      color: isDark
+                          ? theme.colorScheme.onSurfaceVariant
+                          : _pubMuted,
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
@@ -1048,7 +1085,9 @@ class _ModernFilterPanel extends StatelessWidget {
                         : IconButton(
                             onPressed: onSearchClear,
                             icon: const Icon(Icons.cancel_rounded, size: 20),
-                            color: _pubMuted,
+                            color: isDark
+                                ? theme.colorScheme.onSurfaceVariant
+                                : _pubMuted,
                           ),
                   ),
                 ),
@@ -1059,17 +1098,30 @@ class _ModernFilterPanel extends StatelessWidget {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: activeCount > 0 ? _pubAccentBg : _pubSurface,
+                color: activeCount > 0
+                    ? (isDark
+                          ? theme.colorScheme.primaryContainer.withValues(
+                              alpha: 0.3,
+                            )
+                          : _pubAccentBg)
+                    : (isDark ? theme.colorScheme.surface : _pubSurface),
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: activeCount > 0 ? const Color(0xFFC7D2FE) : _pubBorder,
+                  color: activeCount > 0
+                      ? (isDark
+                            ? theme.colorScheme.primary.withValues(alpha: 0.35)
+                            : const Color(0xFFC7D2FE))
+                      : (isDark
+                            ? theme.colorScheme.outline.withValues(alpha: 0.18)
+                            : _pubBorder),
                 ),
                 boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
+                  if (!isDark)
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
                 ],
               ),
               child: IconButton(
@@ -1079,7 +1131,11 @@ class _ModernFilterPanel extends StatelessWidget {
                   label: Text('$activeCount'),
                   child: Icon(
                     Icons.tune_rounded,
-                    color: activeCount > 0 ? _pubAccent : _pubMuted,
+                    color: activeCount > 0
+                        ? (isDark ? theme.colorScheme.primary : _pubAccent)
+                        : (isDark
+                              ? theme.colorScheme.onSurfaceVariant
+                              : _pubMuted),
                   ),
                 ),
               ),
@@ -1138,13 +1194,19 @@ class _FilterChipWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.only(right: 8),
       child: Material(
-        color: _pubSurface,
+        color: isDark ? theme.colorScheme.surface : _pubSurface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: const BorderSide(color: _pubBorder),
+          side: BorderSide(
+            color: isDark
+                ? theme.colorScheme.outline.withValues(alpha: 0.2)
+                : _pubBorder,
+          ),
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(10),
@@ -1156,7 +1218,7 @@ class _FilterChipWidget extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: _pubText,
+                color: isDark ? theme.colorScheme.onSurface : _pubText,
               ),
             ),
           ),
@@ -1181,6 +1243,8 @@ class _CardActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     if (isPrimary) {
       return TextButton.icon(
         onPressed: onPressed,
@@ -1190,8 +1254,10 @@ class _CardActionButton extends StatelessWidget {
           minimumSize: const Size(0, 36),
           padding: const EdgeInsets.symmetric(horizontal: 12),
           visualDensity: VisualDensity.compact,
-          backgroundColor: _pubAccent.withValues(alpha: 0.08),
-          foregroundColor: _pubAccent,
+          backgroundColor: isDark
+              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.28)
+              : _pubAccent.withValues(alpha: 0.08),
+          foregroundColor: isDark ? theme.colorScheme.primary : _pubAccent,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
@@ -1204,8 +1270,12 @@ class _CardActionButton extends StatelessWidget {
         minimumSize: const Size(0, 36),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         visualDensity: VisualDensity.compact,
-        foregroundColor: _pubText,
-        side: const BorderSide(color: _pubBorder),
+        foregroundColor: isDark ? theme.colorScheme.onSurface : _pubText,
+        side: BorderSide(
+          color: isDark
+              ? theme.colorScheme.outline.withValues(alpha: 0.24)
+              : _pubBorder,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
@@ -2650,25 +2720,37 @@ class _SourceTypeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: _pubAccentBg,
+        color: isDark
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.28)
+            : _pubAccentBg,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFC7D2FE)),
+        border: Border.all(
+          color: isDark
+              ? theme.colorScheme.primary.withValues(alpha: 0.32)
+              : const Color(0xFFC7D2FE),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(source.icon, size: 13, color: _pubAccent),
+          Icon(
+            source.icon,
+            size: 13,
+            color: isDark ? theme.colorScheme.primary : _pubAccent,
+          ),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
               source.label.toUpperCase(),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: _pubAccent,
+              style: TextStyle(
+                color: isDark ? theme.colorScheme.primary : _pubAccent,
                 fontWeight: FontWeight.w800,
                 fontSize: 10,
                 letterSpacing: 0,
@@ -2688,16 +2770,20 @@ class _CountBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
       decoration: BoxDecoration(
-        color: _pubAccentBg,
+        color: isDark
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.3)
+            : _pubAccentBg,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         '$count Total',
-        style: const TextStyle(
-          color: _pubAccent,
+        style: TextStyle(
+          color: isDark ? theme.colorScheme.primary : _pubAccent,
           fontWeight: FontWeight.w900,
           fontSize: 12,
         ),
@@ -2794,20 +2880,26 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 15, color: _pubMuted),
+            Icon(
+              icon,
+              size: 15,
+              color: isDark ? theme.colorScheme.onSurfaceVariant : _pubMuted,
+            ),
             const SizedBox(width: 6),
           ],
           Text(
             title.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.w900,
               letterSpacing: 0,
-              color: _pubMuted,
+              color: isDark ? theme.colorScheme.onSurfaceVariant : _pubMuted,
               fontSize: 11,
             ),
           ),
@@ -2828,19 +2920,28 @@ class _SoftPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFB),
+        color: isDark
+            ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.24)
+            : const Color(0xFFFAFAFB),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFEDEFF3)),
+        border: Border.all(
+          color: isDark
+              ? theme.colorScheme.outline.withValues(alpha: 0.16)
+              : const Color(0xFFEDEFF3),
+        ),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.015),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.015),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
         ],
       ),
       child: child,
@@ -2855,6 +2956,8 @@ class _SubmitterPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final name = _submitterName(item);
     final initial = name.isNotEmpty ? name.substring(0, 1).toUpperCase() : '?';
     final createdAt = _auditDate(item, const ['created_at', 'uploaded_at']);
@@ -2868,11 +2971,13 @@ class _SubmitterPanel extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: _pubAccent.withValues(alpha: 0.10),
+            backgroundColor: isDark
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.28)
+                : _pubAccent.withValues(alpha: 0.10),
             child: Text(
               initial,
-              style: const TextStyle(
-                color: _pubAccent,
+              style: TextStyle(
+                color: isDark ? theme.colorScheme.primary : _pubAccent,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -2886,13 +2991,20 @@ class _SubmitterPanel extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   text: TextSpan(
-                    style: const TextStyle(color: _pubMuted, fontSize: 14),
+                    style: TextStyle(
+                      color: isDark
+                          ? theme.colorScheme.onSurfaceVariant
+                          : _pubMuted,
+                      fontSize: 14,
+                    ),
                     children: [
                       const TextSpan(text: 'Submitted by '),
                       TextSpan(
                         text: name,
-                        style: const TextStyle(
-                          color: _pubText,
+                        style: TextStyle(
+                          color: isDark
+                              ? theme.colorScheme.onSurface
+                              : _pubText,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -2902,10 +3014,12 @@ class _SubmitterPanel extends StatelessWidget {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.calendar_today_outlined,
                       size: 13,
-                      color: _pubMuted,
+                      color: isDark
+                          ? theme.colorScheme.onSurfaceVariant
+                          : _pubMuted,
                     ),
                     const SizedBox(width: 5),
                     Expanded(
@@ -2916,8 +3030,10 @@ class _SubmitterPanel extends StatelessWidget {
                         ].join(' • '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _pubMuted,
+                        style: TextStyle(
+                          color: isDark
+                              ? theme.colorScheme.onSurfaceVariant
+                              : _pubMuted,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
@@ -2941,6 +3057,8 @@ class _AuditGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final filtered = entries
         .map(
           (entry) =>
@@ -2962,8 +3080,10 @@ class _AuditGrid extends StatelessWidget {
                     children: [
                       Text(
                         entry.key,
-                        style: const TextStyle(
-                          color: _pubMuted,
+                        style: TextStyle(
+                          color: isDark
+                              ? theme.colorScheme.onSurfaceVariant
+                              : _pubMuted,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
@@ -2973,8 +3093,10 @@ class _AuditGrid extends StatelessWidget {
                         entry.value,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _pubText,
+                        style: TextStyle(
+                          color: isDark
+                              ? theme.colorScheme.onSurface
+                              : _pubText,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                         ),
@@ -3075,14 +3197,16 @@ class _DetailField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final isUrl = entry.key.toLowerCase().contains('url');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           entry.key,
-          style: const TextStyle(
-            color: _pubMuted,
+          style: TextStyle(
+            color: isDark ? theme.colorScheme.onSurfaceVariant : _pubMuted,
             fontSize: 12,
             height: 1.2,
             fontWeight: FontWeight.w800,
@@ -3096,7 +3220,9 @@ class _DetailField extends StatelessWidget {
               child: SelectableText(
                 entry.value,
                 style: TextStyle(
-                  color: isUrl ? _pubAccent : _pubText,
+                  color: isUrl
+                      ? (isDark ? theme.colorScheme.primary : _pubAccent)
+                      : (isDark ? theme.colorScheme.onSurface : _pubText),
                   fontSize: 14,
                   height: 1.35,
                   fontWeight: FontWeight.w700,
@@ -3105,12 +3231,12 @@ class _DetailField extends StatelessWidget {
             ),
             if (isUrl) ...[
               const SizedBox(width: 6),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(top: 2),
                 child: Icon(
                   Icons.open_in_new_rounded,
                   size: 14,
-                  color: _pubAccent,
+                  color: isDark ? theme.colorScheme.primary : _pubAccent,
                 ),
               ),
             ],
@@ -3179,6 +3305,8 @@ class _PublicationMetaStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final source = _sourceConfig(_sourceKey(item));
     final issued = _publicationIssued(item);
     final accessed = _field(item, 'accessed_date');
@@ -3204,19 +3332,29 @@ class _PublicationMetaStrip extends StatelessWidget {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
-            color: _pubAccentBg.withValues(alpha: 0.65),
+            color: isDark
+                ? theme.colorScheme.primaryContainer.withValues(alpha: 0.26)
+                : _pubAccentBg.withValues(alpha: 0.65),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: const Color(0xFFDDE3FF)),
+            border: Border.all(
+              color: isDark
+                  ? theme.colorScheme.primary.withValues(alpha: 0.28)
+                  : const Color(0xFFDDE3FF),
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(chip.value, size: 14, color: _pubAccent),
+              Icon(
+                chip.value,
+                size: 14,
+                color: isDark ? theme.colorScheme.primary : _pubAccent,
+              ),
               const SizedBox(width: 6),
               Text(
                 value,
-                style: const TextStyle(
-                  color: _pubAccent,
+                style: TextStyle(
+                  color: isDark ? theme.colorScheme.primary : _pubAccent,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),
