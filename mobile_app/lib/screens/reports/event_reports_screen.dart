@@ -305,7 +305,9 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
                             BoxShadow(
                               color: isDark
                                   ? Colors.transparent
-                                  : const Color(0xFF4F46E5).withValues(alpha: 0.05),
+                                  : const Color(
+                                      0xFF4F46E5,
+                                    ).withValues(alpha: 0.05),
                               blurRadius: 10,
                               offset: const Offset(0, 2),
                             ),
@@ -622,7 +624,9 @@ class _ReportCard extends StatelessWidget {
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0651ED).withValues(alpha: isDark ? 0.0 : 0.05),
+            color: const Color(
+              0xFF0651ED,
+            ).withValues(alpha: isDark ? 0.0 : 0.05),
             blurRadius: 10,
             offset: const Offset(0, 2),
             spreadRadius: -3,

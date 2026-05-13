@@ -71,7 +71,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     borderRadius: BorderRadius.circular(40), // rounded-[2.5rem]
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.45 : 0.1),
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.45 : 0.1,
+                        ),
                         blurRadius: 30,
                         offset: const Offset(0, 20),
                       ),
@@ -280,7 +282,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ? theme.colorScheme.outline
         : theme.colorScheme.outlineVariant;
     final inactiveTitle = theme.colorScheme.onSurface;
-    final inactiveSubtitle = theme.colorScheme.onSurface.withValues(alpha: 0.62);
+    final inactiveSubtitle = theme.colorScheme.onSurface.withValues(
+      alpha: 0.62,
+    );
     final inactiveIconBg = isDark
         ? theme.colorScheme.surfaceContainerHighest
         : theme.colorScheme.surfaceContainer;

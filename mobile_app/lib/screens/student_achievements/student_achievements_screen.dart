@@ -247,6 +247,7 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
         : const Color(0xFFF4F6F8);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: bgColor,
       body: SafeArea(
         child: RefreshIndicator(

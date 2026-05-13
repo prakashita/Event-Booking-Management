@@ -1,0 +1,55 @@
+name: iOS Simulator Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios-simulator:
+    runs-on: macos-latest
+
+    env:
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
+      API_BASE_URL: ${{ secrets.API_BASE_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Validate required secrets
+        run: |
+          test -n "$GOOGLE_CLIENT_ID"
+          test -n "$GOOGLE_SERVER_CLIENT_ID"
+          test -n "$API_BASE_URL"
+
+      - name: Install Flutter dependencies
+        working-directory: mobile_app
+        run: flutter pub get
+
+      - name: Install iOS pods
+        working-directory: mobile_app/ios
+        run: pod install
+
+      - name: Build iOS simulator app
+        working-directory: mobile_app
+        run: |
+          flutter build ios --simulator \
+            --dart-define=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
+            --dart-define=API_BASE_URL="$API_BASE_URL"
+
+      - name: Zip simulator app
+        working-directory: mobile_app/build/ios/iphonesimulator
+        run: ditto -c -k --sequesterRsrc --keepParent Runner.app Runner.app.zip
+
+      - name: Upload simulator artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-app
+          path: mobile_app/build/ios/iphonesimulator/Runner.app.zip

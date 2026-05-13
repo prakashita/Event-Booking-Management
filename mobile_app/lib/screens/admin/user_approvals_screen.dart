@@ -306,7 +306,9 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.3 : 0.05,
+                        ),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -325,7 +327,9 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF4F46E5).withOpacity(0.1),
+                              color: const Color(
+                                0xFF4F46E5,
+                              ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(
@@ -598,7 +602,7 @@ class _CountChip extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: fg.withOpacity(0.2),
+              color: fg.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: Text(
@@ -661,7 +665,7 @@ class _SectionCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.4 : 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.04),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -820,7 +824,7 @@ class _UserApprovalTile extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -834,8 +838,8 @@ class _UserApprovalTile extends StatelessWidget {
               CircleAvatar(
                 radius: 20,
                 backgroundColor: isPending
-                    ? const Color(0xFFD97706).withOpacity(0.15)
-                    : const Color(0xFFDC2626).withOpacity(0.15),
+                    ? const Color(0xFFD97706).withValues(alpha: 0.15)
+                    : const Color(0xFFDC2626).withValues(alpha: 0.15),
                 child: Icon(
                   isPending
                       ? Icons.hourglass_empty_rounded
@@ -879,11 +883,13 @@ class _UserApprovalTile extends StatelessWidget {
             decoration: BoxDecoration(
               color: isPending
                   ? (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9))
-                  : const Color(0xFFFEE2E2).withOpacity(isDark ? 0.05 : 0.5),
+                  : const Color(
+                      0xFFFEE2E2,
+                    ).withValues(alpha: isDark ? 0.05 : 0.5),
               border: Border.all(
                 color: isPending
                     ? Colors.transparent
-                    : const Color(0xFFFCA5A5).withOpacity(0.5),
+                    : const Color(0xFFFCA5A5).withValues(alpha: 0.5),
               ),
               borderRadius: BorderRadius.circular(8),
             ),
@@ -957,7 +963,7 @@ class _UserApprovalTile extends StatelessWidget {
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(
                             0xFF10B981,
-                          ).withOpacity(0.15),
+                          ).withValues(alpha: 0.15),
                           foregroundColor: const Color(0xFF059669),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),

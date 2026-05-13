@@ -44,10 +44,22 @@ class SideNavBar extends StatelessWidget {
     final canAccessAdminConsole = AppConstants.canAccessAdminConsole(roleKey);
     final canAccessUserApprovals = AppConstants.canAccessUserApprovals(roleKey);
     final canAccessIqac = AppConstants.canAccessIqac(roleKey);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final navBg = isDark ? const Color(0xFF111827) : theme.colorScheme.surface;
+    final dividerColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0);
+    final sectionTextColor = isDark
+        ? const Color(0xFF64748B)
+        : const Color(0xFF94A3B8);
+    final headerTextColor = isDark
+        ? const Color(0xFFE2E8F0)
+        : const Color(0xFF0F172A);
 
     return Container(
       width: 288,
-      color: const Color(0xFF1B254B),
+      color: navBg,
       child: Column(
         children: [
           // Header
@@ -60,13 +72,13 @@ class SideNavBar extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: Colors.blue.shade600,
+                      color: theme.colorScheme.primary,
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Icon(
                         LucideIcons.shieldCheck,
-                        color: Colors.white,
+                        color: theme.colorScheme.onPrimary,
                         size: 24,
                       ),
                     ),
@@ -78,8 +90,8 @@ class SideNavBar extends StatelessWidget {
                       maxLines: 2,
                       softWrap: true,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: headerTextColor,
                         fontSize: 15,
                         height: 1.1,
                         fontWeight: FontWeight.w800,
@@ -101,15 +113,7 @@ class SideNavBar extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'MENU',
-                      style: TextStyle(
-                        color: Color(0xFF718096),
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
+                    _buildSectionLabel('MENU', color: sectionTextColor),
                     const SizedBox(height: 12),
                     _buildNavItem(
                       context,
@@ -178,14 +182,9 @@ class SideNavBar extends StatelessWidget {
                       ),
                     if (canAccessUserApprovals || canAccessAdminConsole) ...[
                       const SizedBox(height: 24),
-                      const Text(
+                      _buildSectionLabel(
                         'ADMINISTRATION',
-                        style: TextStyle(
-                          color: Color(0xFF718096),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.5,
-                        ),
+                        color: sectionTextColor,
                       ),
                       const SizedBox(height: 12),
                       if (canAccessUserApprovals)
@@ -210,12 +209,24 @@ class SideNavBar extends StatelessWidget {
           ),
 
           // Footer (Logout)
-          const Divider(color: Color(0xFF2D3748)),
+          Divider(color: dividerColor),
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: _buildLogoutItem(context),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSectionLabel(String text, {required Color color}) {
+    return Text(
+      text,
+      style: TextStyle(
+        color: color,
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.5,
       ),
     );
   }
@@ -229,6 +240,21 @@ class SideNavBar extends StatelessWidget {
     final bool isSelected =
         currentRoute == route ||
         (route != '/dashboard' && currentRoute.startsWith('$route/'));
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final selectedBg = isDark
+        ? theme.colorScheme.primary.withValues(alpha: 0.18)
+        : theme.colorScheme.primaryContainer.withValues(alpha: 0.72);
+    final selectedColor = isDark
+        ? const Color(0xFFBFDBFE)
+        : theme.colorScheme.primary;
+    final itemColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF475569);
+    final hoverColor = isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : theme.colorScheme.primary.withValues(alpha: 0.06);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -236,6 +262,8 @@ class SideNavBar extends StatelessWidget {
           context.go(route);
         },
         borderRadius: BorderRadius.circular(8),
+        hoverColor: hoverColor,
+        splashColor: theme.colorScheme.primary.withValues(alpha: 0.08),
         child: Container(
           padding: EdgeInsetsDirectional.fromSTEB(
             isSelected ? 12 : 16,
@@ -244,13 +272,14 @@ class SideNavBar extends StatelessWidget {
             12,
           ),
           decoration: BoxDecoration(
-            color: isSelected
-                ? Colors.blue.withValues(alpha: 0.2)
-                : Colors.transparent,
+            color: isSelected ? selectedBg : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: isSelected
                 ? Border(
-                    left: BorderSide(color: Colors.blue.shade400, width: 4),
+                    left: BorderSide(
+                      color: theme.colorScheme.primary,
+                      width: 4,
+                    ),
                   )
                 : null,
           ),
@@ -259,9 +288,7 @@ class SideNavBar extends StatelessWidget {
               Icon(
                 icon,
                 size: 20,
-                color: isSelected
-                    ? Colors.blue.shade300
-                    : const Color(0xFFA0AEC0),
+                color: isSelected ? selectedColor : itemColor,
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -271,8 +298,8 @@ class SideNavBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   softWrap: false,
                   style: TextStyle(
-                    color: isSelected ? Colors.white : const Color(0xFFA0AEC0),
-                    fontWeight: FontWeight.w500,
+                    color: isSelected ? selectedColor : itemColor,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                     fontSize: 14,
                   ),
                 ),
@@ -285,6 +312,15 @@ class SideNavBar extends StatelessWidget {
   }
 
   Widget _buildLogoutItem(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final itemColor = isDark
+        ? const Color(0xFFCBD5E1)
+        : const Color(0xFF475569);
+    final hoverColor = isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : theme.colorScheme.error.withValues(alpha: 0.06);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -292,6 +328,8 @@ class SideNavBar extends StatelessWidget {
           showSignOutDialog(context);
         },
         borderRadius: BorderRadius.circular(8),
+        hoverColor: hoverColor,
+        splashColor: theme.colorScheme.error.withValues(alpha: 0.08),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
@@ -300,16 +338,12 @@ class SideNavBar extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(
-                LucideIcons.logOut,
-                size: 20,
-                color: const Color(0xFFA0AEC0),
-              ),
+              Icon(LucideIcons.logOut, size: 20, color: itemColor),
               const SizedBox(width: 16),
               Text(
                 'Sign out',
-                style: const TextStyle(
-                  color: Color(0xFFA0AEC0),
+                style: TextStyle(
+                  color: itemColor,
                   fontWeight: FontWeight.w500,
                   fontSize: 14,
                 ),

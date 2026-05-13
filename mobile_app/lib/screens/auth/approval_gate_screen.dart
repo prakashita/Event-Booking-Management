@@ -176,44 +176,21 @@ class _ApprovalGateScreenState extends State<ApprovalGateScreen> {
                             ),
                           ),
                         const SizedBox(height: 22),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => auth.signOut(),
-                                child: const Text('Sign out'),
-                              ),
-                            ),
-                            if (!isRejected) ...[
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: _checking
-                                      ? null
-                                      : () async {
-                                          if (_checking) return;
-                                          setState(() => _checking = true);
-                                          try {
-                                            await auth.refreshApprovalStatus();
-                                          } finally {
-                                            if (mounted) {
-                                              setState(() => _checking = false);
-                                            }
-                                          }
-                                        },
-                                  child: _checking
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2.2,
-                                          ),
-                                        )
-                                      : const Text('Check status'),
-                                ),
-                              ),
-                            ],
-                          ],
+                        _ApprovalGateActions(
+                          isRejected: isRejected,
+                          isChecking: _checking,
+                          onSignOut: () => auth.signOut(),
+                          onCheckStatus: () async {
+                            if (_checking) return;
+                            setState(() => _checking = true);
+                            try {
+                              await auth.refreshApprovalStatus();
+                            } finally {
+                              if (mounted) {
+                                setState(() => _checking = false);
+                              }
+                            }
+                          },
                         ),
                       ],
                     ),
@@ -225,5 +202,77 @@ class _ApprovalGateScreenState extends State<ApprovalGateScreen> {
         ),
       ),
     );
+  }
+}
+
+class _ApprovalGateActions extends StatelessWidget {
+  final bool isRejected;
+  final bool isChecking;
+  final VoidCallback onSignOut;
+  final Future<void> Function() onCheckStatus;
+
+  const _ApprovalGateActions({
+    required this.isRejected,
+    required this.isChecking,
+    required this.onSignOut,
+    required this.onCheckStatus,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final shouldStack = constraints.maxWidth < 320;
+        final signOut = _fixedHeightButton(
+          OutlinedButton(
+            onPressed: onSignOut,
+            child: const Text(
+              'Sign out',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        );
+        final checkStatus = _fixedHeightButton(
+          ElevatedButton(
+            onPressed: isChecking ? null : onCheckStatus,
+            child: isChecking
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
+                  )
+                : const Text(
+                    'Check status',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+          ),
+        );
+
+        if (isRejected) {
+          return signOut;
+        }
+
+        if (shouldStack) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [checkStatus, const SizedBox(height: 12), signOut],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: signOut),
+            const SizedBox(width: 12),
+            Expanded(child: checkStatus),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _fixedHeightButton(Widget child) {
+    return SizedBox(width: double.infinity, height: 52, child: child);
   }
 }

@@ -15,7 +15,11 @@ class AuthService {
   final _api = ApiService();
   final _googleSignIn = GoogleSignIn(
     scopes: ['email', 'profile', 'openid'],
-    clientId: kIsWeb && AppConstants.googleClientId.isNotEmpty
+    clientId:
+        (kIsWeb ||
+                defaultTargetPlatform == TargetPlatform.iOS ||
+                defaultTargetPlatform == TargetPlatform.macOS) &&
+            AppConstants.googleClientId.isNotEmpty
         ? AppConstants.googleClientId
         : null,
     serverClientId: kIsWeb

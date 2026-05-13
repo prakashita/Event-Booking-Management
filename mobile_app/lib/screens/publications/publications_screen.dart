@@ -303,6 +303,7 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: isDark ? theme.scaffoldBackgroundColor : _pubBg,
       body: SafeArea(
         child: RefreshIndicator(

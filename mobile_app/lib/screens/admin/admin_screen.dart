@@ -327,7 +327,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
                 title: Text('Change Role - ${user.name}'),
                 content: DropdownButtonFormField<String>(
-                  value: selected,
+                  initialValue: selected,
                   decoration: InputDecoration(
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -433,7 +433,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     ),
                     const SizedBox(height: 16),
                     DropdownButtonFormField<String>(
-                      value: role,
+                      initialValue: role,
                       decoration: InputDecoration(
                         labelText: 'Role',
                         border: OutlineInputBorder(
@@ -639,7 +639,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
                 title: const Text('Approve User'),
                 content: DropdownButtonFormField<String>(
-                  value: selected,
+                  initialValue: selected,
                   decoration: InputDecoration(
                     labelText: 'Assigned Role',
                     border: OutlineInputBorder(
@@ -767,7 +767,7 @@ class _AdminScreenState extends State<AdminScreen> {
           boxShadow: isActive
               ? [
                   BoxShadow(
-                    color: theme.colorScheme.primary.withOpacity(0.3),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -841,7 +841,7 @@ class _AdminScreenState extends State<AdminScreen> {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -858,7 +858,7 @@ class _AdminScreenState extends State<AdminScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF4F46E5).withOpacity(0.1),
+                      color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
@@ -954,7 +954,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+                    color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -966,7 +966,7 @@ class _AdminScreenState extends State<AdminScreen> {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.12),
+                      color: color.withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(icon, size: 16, color: color),
@@ -1151,7 +1151,7 @@ class _AdminScreenState extends State<AdminScreen> {
                           radius: 20,
                           backgroundColor: const Color(
                             0xFFD97706,
-                          ).withOpacity(0.15),
+                          ).withValues(alpha: 0.15),
                           child: const Icon(
                             Icons.hourglass_empty_rounded,
                             color: Color(0xFFD97706),
@@ -1237,7 +1237,7 @@ class _AdminScreenState extends State<AdminScreen> {
                             style: FilledButton.styleFrom(
                               backgroundColor: const Color(
                                 0xFF10B981,
-                              ).withOpacity(0.15),
+                              ).withValues(alpha: 0.15),
                               foregroundColor: const Color(0xFF059669),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
@@ -1286,7 +1286,7 @@ class _AdminScreenState extends State<AdminScreen> {
                           radius: 20,
                           backgroundColor: const Color(
                             0xFFDC2626,
-                          ).withOpacity(0.15),
+                          ).withValues(alpha: 0.15),
                           child: const Icon(
                             Icons.block_rounded,
                             color: Color(0xFFDC2626),
@@ -1329,9 +1329,9 @@ class _AdminScreenState extends State<AdminScreen> {
                       decoration: BoxDecoration(
                         color: const Color(
                           0xFFFEE2E2,
-                        ).withOpacity(isDark ? 0.05 : 0.5),
+                        ).withValues(alpha: isDark ? 0.05 : 0.5),
                         border: Border.all(
-                          color: const Color(0xFFFCA5A5).withOpacity(0.5),
+                          color: const Color(0xFFFCA5A5).withValues(alpha: 0.5),
                         ),
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -1400,7 +1400,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       radius: 22,
                       backgroundColor: const Color(
                         0xFF4F46E5,
-                      ).withOpacity(0.12),
+                      ).withValues(alpha: 0.12),
                       child: Text(
                         user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
                         style: const TextStyle(
@@ -1443,7 +1443,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4F46E5).withOpacity(0.1),
+                        color: const Color(0xFF4F46E5).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -1527,7 +1527,7 @@ class _AdminScreenState extends State<AdminScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -1538,8 +1538,6 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Widget _buildVenuesSection() {
-    final narrow = MediaQuery.of(context).size.width < 420;
-
     return _SectionShell(
       title: 'Venue Management',
       icon: Icons.domain_rounded,
@@ -1584,7 +1582,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withOpacity(0.1),
+                          color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
@@ -1608,7 +1606,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         style: IconButton.styleFrom(
                           backgroundColor: const Color(
                             0xFFDC2626,
-                          ).withOpacity(0.1),
+                          ).withValues(alpha: 0.1),
                         ),
                         onPressed: () => _deleteVenue(venue),
                       ),
@@ -1729,7 +1727,7 @@ class _AdminScreenState extends State<AdminScreen> {
                             style: IconButton.styleFrom(
                               backgroundColor: const Color(
                                 0xFFDC2626,
-                              ).withOpacity(0.1),
+                              ).withValues(alpha: 0.1),
                             ),
                             onPressed: () => _deleteByPath(
                               path: '/admin/events',
@@ -1832,7 +1830,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
@@ -1894,7 +1892,7 @@ class _AdminScreenState extends State<AdminScreen> {
                             style: IconButton.styleFrom(
                               backgroundColor: const Color(
                                 0xFFDC2626,
-                              ).withOpacity(0.1),
+                              ).withValues(alpha: 0.1),
                             ),
                             onPressed: () => _deleteByPath(
                               path: '/admin/invites',
@@ -1943,7 +1941,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0EA5E9).withOpacity(0.1),
+                          color: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Icon(
@@ -1994,7 +1992,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         style: IconButton.styleFrom(
                           backgroundColor: const Color(
                             0xFFDC2626,
-                          ).withOpacity(0.1),
+                          ).withValues(alpha: 0.1),
                         ),
                         onPressed: () => _deleteByPath(
                           path: '/admin/publications',
@@ -2082,6 +2080,7 @@ class _AdminScreenState extends State<AdminScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: RefreshIndicator(
@@ -2170,7 +2169,7 @@ class _InlineCountChip extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: fg.withOpacity(0.2),
+              color: fg.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
             child: Text(
@@ -2227,7 +2226,7 @@ class _SectionShell extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.4 : 0.04),
+            color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.04),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -2361,7 +2360,7 @@ class _RequestGroupCard extends StatelessWidget {
         border: Border.all(color: border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -2374,7 +2373,7 @@ class _RequestGroupCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: isDark
-                  ? const Color(0xFF0F172A).withOpacity(0.5)
+                  ? const Color(0xFF0F172A).withValues(alpha: 0.5)
                   : const Color(0xFFF8FAFC),
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(16),
@@ -2504,7 +2503,7 @@ class _RequestGroupCard extends StatelessWidget {
                               style: IconButton.styleFrom(
                                 backgroundColor: const Color(
                                   0xFFDC2626,
-                                ).withOpacity(0.1),
+                                ).withValues(alpha: 0.1),
                               ),
                               onPressed: () => onDelete(id),
                             ),

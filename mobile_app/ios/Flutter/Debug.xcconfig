@@ -1,2 +1,2 @@
 #include "Generated.xcconfig"
-GOOGLE_REVERSED_CLIENT_ID=REPLACE_WITH_REVERSED_CLIENT_ID
+GOOGLE_REVERSED_CLIENT_ID=com.googleusercontent.apps.1051124848059-7guhimh3iuf97knav7oi9ofbsok6fagj

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -216,7 +215,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 20,
                     offset: const Offset(0, -5),
                   ),
@@ -234,8 +233,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
                           color: isDark
-                              ? Colors.white.withOpacity(0.2)
-                              : Colors.black.withOpacity(0.1),
+                              ? Colors.white.withValues(alpha: 0.2)
+                              : Colors.black.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
@@ -282,9 +281,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           shrinkWrap: true,
                           physics: const BouncingScrollPhysics(),
                           itemCount: _audienceOptions.length,
-                          separatorBuilder: (_, __) => Divider(
+                          separatorBuilder: (_, _) => Divider(
                             height: 1,
-                            color: theme.dividerColor.withOpacity(0.1),
+                            color: theme.dividerColor.withValues(alpha: 0.1),
                           ),
                           itemBuilder: (context, index) {
                             final value = _audienceOptions[index];
@@ -458,7 +457,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }) {
     final theme = Theme.of(context);
     final text = theme.colorScheme.onSurface;
-    final cardBg = theme.colorScheme.surfaceContainerHighest.withOpacity(0.5);
+    final cardBg = theme.colorScheme.surfaceContainerHighest.withValues(
+      alpha: 0.5,
+    );
 
     showDialog(
       context: context,
@@ -480,7 +481,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.1),
+                        color: AppColors.error.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -506,7 +507,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 Text(
                   'The following event(s) are already scheduled at the selected time:',
                   style: GoogleFonts.inter(
-                    color: text.withOpacity(0.8),
+                    color: text.withValues(alpha: 0.8),
                     fontSize: 14,
                     height: 1.5,
                   ),
@@ -529,7 +530,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                             color: cardBg,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: theme.dividerColor.withOpacity(0.1),
+                              color: theme.dividerColor.withValues(alpha: 0.1),
                             ),
                           ),
                           child: Column(
@@ -596,7 +597,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 Text(
                   'Would you like to reschedule your event or override this conflict?',
                   style: GoogleFonts.inter(
-                    color: text.withOpacity(0.9),
+                    color: text.withValues(alpha: 0.9),
                     fontWeight: FontWeight.w600,
                     fontSize: 14,
                   ),
@@ -721,16 +722,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withOpacity(0.3)
-                : const Color(0xFF64748B).withOpacity(0.06),
+                ? Colors.black.withValues(alpha: 0.3)
+                : const Color(0xFF64748B).withValues(alpha: 0.06),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
         border: Border.all(
           color: isDark
-              ? Colors.white.withOpacity(0.05)
-              : Colors.black.withOpacity(0.02),
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.black.withValues(alpha: 0.02),
         ),
       ),
       child: Column(
@@ -751,7 +752,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: isDark
-                  ? const Color(0xFF3B82F6).withOpacity(0.15)
+                  ? const Color(0xFF3B82F6).withValues(alpha: 0.15)
                   : const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(12),
             ),
@@ -850,9 +851,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final pageBg = isDark ? const Color(0xFF020617) : const Color(0xFFF8FAFC);
     final surface = theme.colorScheme.surface;
     final heading = theme.colorScheme.onSurface;
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final isKeyboardOpen = keyboardInset > 0;
 
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       backgroundColor: pageBg,
       appBar: AppBar(
         backgroundColor: pageBg,
@@ -873,8 +876,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : Colors.black.withOpacity(0.05),
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.black.withValues(alpha: 0.05),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -903,8 +906,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: isDark
-                    ? Colors.white.withOpacity(0.05)
-                    : Colors.black.withOpacity(0.05),
+                    ? Colors.white.withValues(alpha: 0.05)
+                    : Colors.black.withValues(alpha: 0.05),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -926,9 +929,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               Expanded(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 24,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    24,
+                    20,
+                    isKeyboardOpen ? keyboardInset + 24 : 24,
                   ),
                   child: Form(
                     key: _formKey,
@@ -1182,7 +1189,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                     ),
                                   )
                                 : DropdownButtonFormField<String>(
-                                    value: _selectedVenueName,
+                                    initialValue: _selectedVenueName,
                                     decoration: _inputDecoration(
                                       'Select a Venue',
                                       prefixIcon: LucideIcons.mapPin,
@@ -1379,7 +1386,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.error.withOpacity(0.1),
+                                    color: AppColors.error.withValues(
+                                      alpha: 0.1,
+                                    ),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
@@ -1421,14 +1430,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                                       : (isDark
                                             ? const Color(
                                                 0xFF1E3A8A,
-                                              ).withOpacity(0.3)
+                                              ).withValues(alpha: 0.3)
                                             : const Color(0xFFEFF6FF)),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(
                                     color: _budgetPdf == null
                                         ? (isDark
-                                              ? Colors.white.withOpacity(0.1)
-                                              : Colors.black.withOpacity(0.05))
+                                              ? Colors.white.withValues(
+                                                  alpha: 0.1,
+                                                )
+                                              : Colors.black.withValues(
+                                                  alpha: 0.05,
+                                                ))
                                         : const Color(0xFF3B82F6),
                                     width: 2,
                                     style: BorderStyle.solid,
@@ -1475,94 +1488,119 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 ),
               ),
 
-              // PREMIUM BOTTOM ACTION BAR
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 20,
-                ),
-                decoration: BoxDecoration(
-                  color: surface,
-                  boxShadow: [
-                    BoxShadow(
-                      color: isDark
-                          ? Colors.black.withOpacity(0.6)
-                          : const Color(0xFF94A3B8).withOpacity(0.15),
-                      blurRadius: 16,
-                      offset: const Offset(0, -8),
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Column(
-                    children: [
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: _submit,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                LucideIcons.arrowRightCircle,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 10),
-                              Text(
-                                'Continue to Approval',
-                                style: GoogleFonts.inter(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                child: isKeyboardOpen
+                    ? const SizedBox.shrink()
+                    : _CreateEventActionBar(
+                        surface: surface,
+                        isDark: isDark,
+                        onSubmit: _submit,
+                        onCancel: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go('/events');
+                          }
+                        },
                       ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: TextButton(
-                          onPressed: () {
-                            if (context.canPop()) {
-                              context.pop();
-                            } else {
-                              context.go('/events');
-                            }
-                          },
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: Text(
-                            'Cancel & Go Back',
-                            style: GoogleFonts.inter(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: isDark
-                                  ? const Color(0xFF94A3B8)
-                                  : const Color(0xFF64748B),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateEventActionBar extends StatelessWidget {
+  final Color surface;
+  final bool isDark;
+  final VoidCallback onSubmit;
+  final VoidCallback onCancel;
+
+  const _CreateEventActionBar({
+    required this.surface,
+    required this.isDark,
+    required this.onSubmit,
+    required this.onCancel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      decoration: BoxDecoration(
+        color: surface,
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.6)
+                : const Color(0xFF94A3B8).withValues(alpha: 0.15),
+            blurRadius: 16,
+            offset: const Offset(0, -8),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: onSubmit,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 0,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(LucideIcons.arrowRightCircle, size: 20),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Continue to Approval',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: onCancel,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Text(
+                  'Cancel & Go Back',
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

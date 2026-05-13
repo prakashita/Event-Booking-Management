@@ -88,205 +88,253 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           // Content
           SafeArea(
-            child: Column(
-              children: [
-                // Top section - branding
-                Expanded(
-                  flex: 5,
-                  child: Center(
-                    child: FadeTransition(
-                      opacity: _fadeAnim,
-                      child: SlideTransition(
-                        position: _slideAnim,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // App icon
-                            Container(
-                              width: 88,
-                              height: 88,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(22),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.25),
-                                    blurRadius: 24,
-                                    offset: const Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.event_note,
-                                size: 44,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                            const SizedBox(height: 28),
-                            const Text(
-                              'Event Booking',
-                              style: TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            const Text(
-                              'Management',
-                              style: TextStyle(
-                                fontSize: 30,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Institutional Event Planning Platform',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w400,
-                                color: Colors.white.withValues(alpha: 0.75),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isShort = constraints.maxHeight < 620;
+                final logoSize = isShort ? 72.0 : 88.0;
+                final titleSize = isShort ? 26.0 : 30.0;
 
-                // Bottom card
-                FadeTransition(
-                  opacity: _fadeAnim,
-                  child: Container(
-                    width: double.infinity,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(28),
-                        topRight: Radius.circular(28),
-                      ),
+                return SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
                     ),
-                    padding: const EdgeInsets.fromLTRB(28, 36, 28, 48),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Welcome back',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'Sign in with your institutional Google account to continue.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Google sign-in button
-                        GestureDetector(
-                          onTap: _isLoading ? null : _handleSignIn,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            height: 54,
-                            decoration: BoxDecoration(
-                              color: _isLoading
-                                  ? const Color(0xFFF5F5F5)
-                                  : const Color(0xFFF8F9FA),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: AppColors.border,
-                                width: 1.5,
-                              ),
-                              boxShadow: _isLoading
-                                  ? []
-                                  : [
-                                      const BoxShadow(
-                                        color: Color(0x12000000),
-                                        blurRadius: 8,
-                                        offset: Offset(0, 2),
-                                      ),
-                                    ],
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (_isLoading)
-                                  const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      color: AppColors.primary,
+                    child: IntrinsicHeight(
+                      child: Column(
+                        children: [
+                          // Top section - branding
+                          Expanded(
+                            flex: 5,
+                            child: Center(
+                              child: FadeTransition(
+                                opacity: _fadeAnim,
+                                child: SlideTransition(
+                                  position: _slideAnim,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
                                     ),
-                                  )
-                                else ...[
-                                  // Google G logo
-                                  const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: _GoogleIcon(),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  const Text(
-                                    'Continue with Google',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textPrimary,
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        // App icon
+                                        Container(
+                                          width: logoSize,
+                                          height: logoSize,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            borderRadius: BorderRadius.circular(
+                                              isShort ? 18 : 22,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(
+                                                  alpha: 0.25,
+                                                ),
+                                                blurRadius: 24,
+                                                offset: const Offset(0, 8),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Icon(
+                                            Icons.event_note,
+                                            size: isShort ? 36 : 44,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                        SizedBox(height: isShort ? 20 : 28),
+                                        Text(
+                                          'Event Booking',
+                                          style: TextStyle(
+                                            fontSize: titleSize,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        Text(
+                                          'Management',
+                                          style: TextStyle(
+                                            fontSize: titleSize,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Text(
+                                          'Institutional Event Planning Platform',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w400,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.75,
+                                            ),
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            Expanded(child: Divider(color: AppColors.border)),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              child: Text(
-                                'Secure & encrypted',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textMuted,
                                 ),
                               ),
                             ),
-                            Expanded(child: Divider(color: AppColors.border)),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Center(
-                          child: Text(
-                            'Only authorized institutional accounts may access this system.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textMuted,
-                              height: 1.5,
-                            ),
-                            textAlign: TextAlign.center,
                           ),
-                        ),
-                      ],
+
+                          // Bottom card
+                          FadeTransition(
+                            opacity: _fadeAnim,
+                            child: Container(
+                              width: double.infinity,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.only(
+                                  topLeft: Radius.circular(28),
+                                  topRight: Radius.circular(28),
+                                ),
+                              ),
+                              padding: EdgeInsets.fromLTRB(
+                                28,
+                                isShort ? 28 : 36,
+                                28,
+                                48,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Welcome back',
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'Sign in with your institutional Google account to continue.',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textSecondary,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                  SizedBox(height: isShort ? 24 : 32),
+
+                                  // Google sign-in button
+                                  GestureDetector(
+                                    onTap: _isLoading ? null : _handleSignIn,
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 200,
+                                      ),
+                                      height: 54,
+                                      decoration: BoxDecoration(
+                                        color: _isLoading
+                                            ? const Color(0xFFF5F5F5)
+                                            : const Color(0xFFF8F9FA),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: AppColors.border,
+                                          width: 1.5,
+                                        ),
+                                        boxShadow: _isLoading
+                                            ? []
+                                            : [
+                                                const BoxShadow(
+                                                  color: Color(0x12000000),
+                                                  blurRadius: 8,
+                                                  offset: Offset(0, 2),
+                                                ),
+                                              ],
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          if (_isLoading)
+                                            const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2.5,
+                                                color: AppColors.primary,
+                                              ),
+                                            )
+                                          else ...[
+                                            // Google G logo
+                                            const SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: _GoogleIcon(),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            const Flexible(
+                                              child: Text(
+                                                'Continue with Google',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppColors.textPrimary,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 24),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Divider(color: AppColors.border),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                        ),
+                                        child: Text(
+                                          'Secure & encrypted',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.textMuted,
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Divider(color: AppColors.border),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Center(
+                                    child: Text(
+                                      'Only authorized institutional accounts may access this system.',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textMuted,
+                                        height: 1.5,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         ],
