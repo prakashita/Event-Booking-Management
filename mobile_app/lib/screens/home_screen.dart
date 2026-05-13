@@ -828,7 +828,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final isTopRoute = ModalRoute.of(context)?.isCurrent ?? true;
     final isDesktop = MediaQuery.of(context).size.width >= 768;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final pageBg = theme.scaffoldBackgroundColor;
@@ -850,6 +849,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final shadowColor = Colors.black.withValues(alpha: isDark ? 0.35 : 0.05);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: pageBg,
       drawer: SideNavBar(currentRoute: currentRoute),
       body: Row(
@@ -1078,9 +1078,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   final baseBottomOffset = hasPageLevelActions
                                       ? 96.0
                                       : 16.0;
-                                  final defaultBottom = bottomInset > 0
-                                      ? bottomInset + 16.0
-                                      : baseBottomOffset;
+                                  final defaultBottom = baseBottomOffset;
                                   final defaultRight = 16.0;
 
                                   return Positioned(

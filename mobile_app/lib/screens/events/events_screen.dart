@@ -1925,6 +1925,7 @@ class _EventsScreenState extends State<EventsScreen>
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: isDark
           ? theme.scaffoldBackgroundColor
           : const Color(0xFFF4F7FE),

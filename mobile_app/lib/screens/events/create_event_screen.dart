@@ -852,6 +852,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final heading = theme.colorScheme.onSurface;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: pageBg,
       appBar: AppBar(
         backgroundColor: pageBg,

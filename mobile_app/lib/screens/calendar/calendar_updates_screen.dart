@@ -1750,6 +1750,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     final verticalPadding = isLarge ? 32.0 : 16.0;
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: _isLoading && _entries.isEmpty

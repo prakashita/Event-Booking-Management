@@ -1,5 +1,5 @@
 import 'package:go_router/go_router.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
 import '../providers/auth_provider.dart';
 import '../screens/auth/login_screen.dart';
@@ -31,7 +31,7 @@ class AppRouter {
     return GoRouter(
       navigatorKey: navigatorKey,
       refreshListenable: authProvider,
-      initialLocation: '/dashboard',
+      initialLocation: '/',
       redirect: (context, state) {
         final isAuth = authProvider.isAuthenticated;
         final isLoading = authProvider.isLoading;
@@ -41,6 +41,7 @@ class AppRouter {
           authProvider.user?.roleKey ?? '',
         );
         final goingToLogin = state.matchedLocation == '/login';
+        final goingToLoading = state.matchedLocation == '/';
         final goingToApprovalGate = state.matchedLocation == '/approval-gate';
         final currentPath = state.matchedLocation;
 
@@ -62,7 +63,13 @@ class AppRouter {
           roleKey,
         );
 
-        if (isLoading) return null;
+        if (isLoading) return goingToLoading ? null : '/';
+        if (goingToLoading) {
+          if (!isAuth) return '/login';
+          if (approvalPending || approvalRejected) return '/approval-gate';
+          return '/dashboard';
+        }
+
         if (!isAuth && !goingToLogin) return '/login';
 
         if (isAuth && (approvalPending || approvalRejected)) {
@@ -90,6 +97,7 @@ class AppRouter {
         return null;
       },
       routes: [
+        GoRoute(path: '/', builder: (_, _) => const _AuthLoadingScreen()),
         GoRoute(path: '/login', builder: (_, _) => const LoginScreen()),
         GoRoute(
           path: '/approval-gate',
@@ -163,6 +171,18 @@ class AppRouter {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _AuthLoadingScreen extends StatelessWidget {
+  const _AuthLoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: const Center(child: CircularProgressIndicator()),
     );
   }
 }

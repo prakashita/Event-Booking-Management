@@ -3657,6 +3657,35 @@ bool _isDateLabel(String label) {
   return lower.contains('date');
 }
 
+DateTime? _parseSsrDate(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+
+  final isoDate = DateTime.tryParse(trimmed);
+  if (isoDate != null) return isoDate;
+
+  final match = RegExp(
+    r'^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$',
+  ).firstMatch(trimmed);
+  if (match == null) return null;
+
+  final day = int.tryParse(match.group(1)!);
+  final month = int.tryParse(match.group(2)!);
+  final year = int.tryParse(match.group(3)!);
+  if (day == null || month == null || year == null) return null;
+
+  final parsed = DateTime(year, month, day);
+  if (parsed.year != year || parsed.month != month || parsed.day != day) {
+    return null;
+  }
+  return parsed;
+}
+
+String _formatSsrDate(DateTime date) {
+  String twoDigits(int value) => value.toString().padLeft(2, '0');
+  return '${date.year}-${twoDigits(date.month)}-${twoDigits(date.day)}';
+}
+
 bool _isEmailLabel(String label) {
   return label.toLowerCase().contains('email');
 }
@@ -5666,6 +5695,8 @@ class _SsrValueEditorState extends State<_SsrValueEditor> {
                 letterSpacing: 0,
               ),
             )
+          else if (_isDateLabel(widget.label))
+            _SsrDatePickerField(value: textValue, onChanged: widget.onChanged)
           else
             TextFormField(
               initialValue: textValue,
@@ -5677,11 +5708,8 @@ class _SsrValueEditorState extends State<_SsrValueEditor> {
                   ? TextInputType.emailAddress
                   : _isUrlLabel(widget.label)
                   ? TextInputType.url
-                  : _isDateLabel(widget.label)
-                  ? TextInputType.datetime
                   : TextInputType.text,
               decoration: InputDecoration(
-                hintText: _isDateLabel(widget.label) ? 'YYYY-MM-DD' : null,
                 alignLabelWithHint: multiLine,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -5957,6 +5985,82 @@ IconData _iconForSsrGroup(String label) {
       return Icons.apartment_outlined;
     default:
       return Icons.dashboard_customize_rounded;
+  }
+}
+
+class _SsrDatePickerField extends StatelessWidget {
+  const _SsrDatePickerField({required this.value, required this.onChanged});
+
+  final String value;
+  final _SsrDraftChanged<dynamic> onChanged;
+
+  Future<void> _pickDate(BuildContext context) async {
+    FocusScope.of(context).unfocus();
+    final now = DateTime.now();
+    final selectedDate = _parseSsrDate(value);
+    final initialDate = selectedDate ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(1800),
+      lastDate: DateTime(now.year + 20, 12, 31),
+      helpText: 'Select date',
+      fieldLabelText: 'Date',
+      fieldHintText: 'YYYY-MM-DD',
+    );
+
+    if (picked != null) {
+      onChanged(_formatSsrDate(picked));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = value.trim();
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _pickDate(context),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          hintText: 'Select date',
+          prefixIcon: const Icon(Icons.calendar_today_rounded, size: 18),
+          suffixIcon: text.isEmpty
+              ? const Icon(Icons.expand_more_rounded)
+              : IconButton(
+                  tooltip: 'Clear date',
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: () => onChanged(''),
+                ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFDCE5F1)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: _indigo500, width: 2),
+          ),
+          filled: true,
+          fillColor: const Color(0xFFF8FAFD),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 17,
+          ),
+        ),
+        child: Text(
+          text.isEmpty ? 'YYYY-MM-DD' : text,
+          style: GoogleFonts.poppins(
+            fontSize: 15.5,
+            height: 1.45,
+            color: text.isEmpty ? _slate400 : _slate800,
+            letterSpacing: 0,
+          ),
+        ),
+      ),
+    );
   }
 }
 

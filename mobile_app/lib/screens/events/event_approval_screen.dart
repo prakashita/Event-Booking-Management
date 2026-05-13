@@ -654,6 +654,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
     final endTime = widget.eventData['end_time'];
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: _pageBg,
       body: LoadingOverlay(
         isLoading: _submitting,
