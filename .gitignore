@@ -48,3 +48,5 @@ Server/event-booking-system-dev-*.json
 **/.env.example
 Client/.env.example
 
+Server/service-account.json
+Server/service-account.json

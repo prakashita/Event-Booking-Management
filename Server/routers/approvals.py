@@ -2,6 +2,7 @@ import base64
 import logging
 import os
 import re
+import traceback
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -384,8 +385,65 @@ async def upload_budget_breakdown(
         )
 
     drive_display_name = get_expected_budget_breakdown_filename(approval.event_name, approval.start_date)
+
+    # Resolve a Google OAuth access token for Drive upload.
+    # Priority: requesting user → any admin user with OAuth connected.
+    # Service accounts cannot upload to personal My Drive (no storage quota),
+    # so a real user token is always needed.
+    access_token = ""
     try:
         access_token = await ensure_google_access_token(user)
+        logger.info("upload_budget_breakdown: using requesting user OAuth token for request %s", request_id)
+    except HTTPException as exc:
+        logger.warning(
+            "upload_budget_breakdown: requesting user OAuth unavailable (status=%d detail=%r) — "
+            "trying admin user fallback",
+            exc.status_code,
+            exc.detail,
+        )
+
+    if not access_token:
+        # Fall back to any admin/organizer user who has Google OAuth connected.
+        # This covers IQAC/staff users who have never gone through Google OAuth flow.
+        try:
+            admin_candidates = await User.find(
+                User.google_refresh_token != None  # noqa: E711
+            ).to_list()
+            for candidate in admin_candidates:
+                c_role = (candidate.role or "").strip().lower()
+                if c_role not in ("admin", "registrar") and not is_admin_email(candidate.email or ""):
+                    continue
+                try:
+                    access_token = await ensure_google_access_token(candidate)
+                    logger.info(
+                        "upload_budget_breakdown: using admin fallback OAuth token from %s for request %s",
+                        candidate.email,
+                        request_id,
+                    )
+                    break
+                except Exception:
+                    continue
+        except Exception:
+            logger.warning(
+                "upload_budget_breakdown: admin token fallback lookup failed:\n%s",
+                traceback.format_exc(),
+            )
+
+    if not access_token:
+        logger.error(
+            "upload_budget_breakdown: no usable Google OAuth token found for request %s. "
+            "Please ensure at least one admin user has connected Google OAuth.",
+            request_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Google Drive upload is unavailable: no connected Google account found. "
+                "Please connect a Google account via Settings and try again."
+            ),
+        )
+
+    try:
         drive_file = upload_report_file(
             access_token=access_token,
             file_name=drive_display_name,
@@ -394,12 +452,23 @@ async def upload_budget_breakdown(
             folder_id=folder_id,
             replace_file_id=getattr(approval, "budget_breakdown_file_id", None),
         )
+    except HTTPException:
+        # Propagate auth/permission errors with their original status codes.
+        raise
     except RuntimeError as exc:
+        logger.error(
+            "upload_budget_breakdown: RuntimeError for request %s: %s\n%s",
+            request_id, exc, traceback.format_exc(),
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
         )
     except Exception as exc:
+        logger.error(
+            "upload_budget_breakdown: unexpected error for request %s: %s\n%s",
+            request_id, exc, traceback.format_exc(),
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unable to upload file: {exc}",
