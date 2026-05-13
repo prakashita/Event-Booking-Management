@@ -166,6 +166,7 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
     final changed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) => _AchievementDetailSheet(
@@ -1063,6 +1064,8 @@ class _AchievementDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final attachments = _listOfMaps(item['attachments']);
+    final iqacLabel = _buildIqacLabel(criteria, item);
+    final iqacDescription = _s(item['iqac_description']);
 
     return DraggableScrollableSheet(
       expand: false,
@@ -1072,321 +1075,183 @@ class _AchievementDetailSheet extends StatelessWidget {
       builder: (context, scrollController) {
         return Container(
           decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
+            color: theme.brightness == Brightness.dark
+                ? theme.colorScheme.surface
+                : const Color(0xFFF8FAFC),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
             boxShadow: const [BoxShadow(blurRadius: 20, color: Colors.black26)],
           ),
-          child: ListView(
-            controller: scrollController,
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-            children: [
-              Center(
-                child: Container(
-                  width: 48,
-                  height: 5,
-                  margin: const EdgeInsets.only(bottom: 24),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.onSurfaceVariant.withValues(
-                      alpha: 0.3,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _itemTitle(item),
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                            height: 1.2,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 900;
+              final compact = constraints.maxWidth < 520;
+              final contentPadding = wide
+                  ? const EdgeInsets.fromLTRB(32, 12, 32, 28)
+                  : const EdgeInsets.fromLTRB(16, 12, 16, 28);
+
+              Widget responsiveRow(List<Widget> children) {
+                if (!wide) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: children
+                        .map(
+                          (child) => Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: child,
                           ),
+                        )
+                        .toList(),
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var index = 0; index < children.length; index++) ...[
+                      if (index > 0) const SizedBox(width: 16),
+                      Expanded(child: children[index]),
+                    ],
+                  ],
+                );
+              }
+
+              return ListView(
+                controller: scrollController,
+                padding: contentPadding,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 48,
+                      height: 5,
+                      margin: const EdgeInsets.only(bottom: 22),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.3,
                         ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(
-                              LucideIcons.calendar,
-                              size: 14,
-                              color: theme.colorScheme.onSurfaceVariant,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 980),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _DetailHeader(
+                            title: _itemTitle(item),
+                            submittedDate: _formatDate(item['created_at']),
+                            onClose: () => Navigator.of(context).pop(false),
+                          ),
+                          const SizedBox(height: 20),
+                          _DetailCard(
+                            title: 'Students',
+                            child: _StudentTable(
+                              students: _listOfMaps(item['students']),
                             ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Submitted ${_formatDate(item['created_at'])}',
-                              style: TextStyle(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w500,
+                          ),
+                          const SizedBox(height: 16),
+                          responsiveRow([
+                            _DetailCard(
+                              title: 'Description',
+                              child: _DetailText(
+                                text: _s(item['activity_description']),
+                                emptyText: 'No description provided.',
                               ),
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    style: IconButton.styleFrom(
-                      backgroundColor:
-                          theme.colorScheme.surfaceContainerHighest,
-                    ),
-                    icon: const Icon(LucideIcons.x, size: 20),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              _DetailCard(
-                icon: LucideIcons.users,
-                title: 'Students',
-                child: _StudentTable(students: _listOfMaps(item['students'])),
-              ),
-              _DetailCard(
-                icon: LucideIcons.fileText,
-                title: 'Details',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Description',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _s(item['activity_description'], fallback: '--'),
-                      style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Additional Details',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _s(item['additional_context_objective'], fallback: '--'),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        height: 1.6,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _DetailCard(
-                icon: LucideIcons.share2,
-                title: 'Publicity',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _platformWidgets(
-                        item['suggested_platforms'],
-                        theme,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Social Media Write-up',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest
-                            .withValues(alpha: 0.4),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: theme.colorScheme.outline.withValues(
-                            alpha: 0.1,
-                          ),
-                        ),
-                      ),
-                      child: Text(
-                        _s(item['social_media_writeup'], fallback: '--'),
-                        style: const TextStyle(
-                          fontStyle: FontStyle.italic,
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _DetailCard(
-                icon: LucideIcons.paperclip,
-                title: 'Attachments',
-                child: attachments.isEmpty
-                    ? Text(
-                        '--',
-                        style: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      )
-                    : Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: attachments.map((file) {
-                          final name = _s(
-                            file['file_name'],
-                            fallback: 'Document',
-                          );
-                          final link = _s(file['web_view_link']);
-                          return ActionChip(
-                            avatar: Icon(
-                              LucideIcons.fileBox,
-                              size: 16,
-                              color: theme.colorScheme.primary,
+                            _DetailCard(
+                              title: 'Additional Details',
+                              child: _DetailText(
+                                text: _s(item['additional_context_objective']),
+                                emptyText: 'No additional details provided.',
+                              ),
                             ),
-                            label: Text(name),
-                            backgroundColor: theme.colorScheme.surface,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(
-                                color: theme.colorScheme.outline.withValues(
-                                  alpha: 0.2,
+                          ]),
+                          if (wide) const SizedBox(height: 16),
+                          responsiveRow([
+                            _DetailCard(
+                              title: 'Selected Platforms',
+                              child: Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: _platformWidgets(
+                                  item['suggested_platforms'],
+                                  theme,
                                 ),
                               ),
                             ),
-                            onPressed: link.isEmpty
-                                ? null
-                                : () => _openUrl(link),
-                          );
-                        }).toList(),
-                      ),
-              ),
-              _DetailCard(
-                icon: LucideIcons.database,
-                title: 'IQAC Mapping',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _buildIqacLabel(criteria, item),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                    if (_s(item['iqac_description']).isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _s(item['iqac_description']),
-                        style: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest.withValues(
-                      alpha: 0.3,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Record ID: ${_s(item['id'])}\n'
-                    'Last updated by ${_s(item['updated_by_name'] ?? item['updated_by_email'], fallback: '--')}',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        side: BorderSide(
-                          color: theme.colorScheme.outline.withValues(
-                            alpha: 0.3,
+                            _DetailCard(
+                              title: 'Attachments',
+                              child: _AttachmentLinks(attachments: attachments),
+                            ),
+                          ]),
+                          if (wide) const SizedBox(height: 16),
+                          _DetailCard(
+                            title: 'Social Media Write-up',
+                            child: _SocialWriteupBox(
+                              text: _s(item['social_media_writeup']),
+                            ),
                           ),
-                        ),
-                      ),
-                      child: const Text(
-                        'Close',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                          const SizedBox(height: 16),
+                          _DetailCard(
+                            title: 'IQAC Criterion',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _DetailText(
+                                  text: iqacLabel,
+                                  emptyText: 'No IQAC criterion selected.',
+                                  weight: FontWeight.w700,
+                                ),
+                                if (iqacDescription.isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      color: theme
+                                          .colorScheme
+                                          .surfaceContainerHighest
+                                          .withValues(alpha: 0.35),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: theme.colorScheme.outline
+                                            .withValues(alpha: 0.12),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      iqacDescription,
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                            height: 1.45,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _MetadataPanel(item: item, wide: !compact),
+                          const SizedBox(height: 24),
+                          _DetailActions(
+                            canEdit: canEdit,
+                            canDelete: canDelete,
+                            compact: compact,
+                            onClose: () => Navigator.of(context).pop(false),
+                            onEdit: onEdit,
+                            onDelete: onDelete,
+                          ),
+                          if (compact) const SizedBox(height: 18),
+                        ],
                       ),
                     ),
                   ),
-                  if (canEdit) ...[
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: onEdit,
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        icon: const Icon(LucideIcons.edit2, size: 18),
-                        label: const Text(
-                          'Edit',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
-              ),
-              if (canDelete) ...[
-                const SizedBox(height: 16),
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    foregroundColor: theme.colorScheme.error,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: onDelete,
-                  icon: const Icon(LucideIcons.trash2, size: 18),
-                  label: const Text(
-                    'Delete Submission',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            ],
+              );
+            },
           ),
         );
       },
@@ -1394,70 +1259,463 @@ class _AchievementDetailSheet extends StatelessWidget {
   }
 }
 
-class _DetailCard extends StatelessWidget {
-  final IconData icon;
+class _DetailHeader extends StatelessWidget {
   final String title;
-  final Widget child;
+  final String submittedDate;
+  final VoidCallback onClose;
 
-  const _DetailCard({
-    required this.icon,
+  const _DetailHeader({
     required this.title,
-    required this.child,
+    required this.submittedDate,
+    required this.onClose,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.fromLTRB(20, 18, 12, 18),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+          color: theme.colorScheme.outline.withValues(alpha: 0.14),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    height: 1.2,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(
+                      LucideIcons.calendar,
+                      size: 15,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Submitted $submittedDate',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          IconButton(
+            tooltip: 'Close',
+            onPressed: onClose,
+            style: IconButton.styleFrom(
+              backgroundColor: theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.55),
+            ),
+            icon: const Icon(LucideIcons.x, size: 20),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailCard extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const _DetailCard({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.14),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withValues(
-                alpha: 0.3,
-              ),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
-              border: Border(
-                bottom: BorderSide(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.1),
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: 18, color: theme.colorScheme.primary),
-                const SizedBox(width: 10),
-                Text(
-                  title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
+          Text(
+            title.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
             ),
           ),
-          Padding(padding: const EdgeInsets.all(20), child: child),
+          const SizedBox(height: 12),
+          child,
         ],
       ),
+    );
+  }
+}
+
+class _DetailText extends StatelessWidget {
+  final String text;
+  final String emptyText;
+  final FontWeight weight;
+
+  const _DetailText({
+    required this.text,
+    required this.emptyText,
+    this.weight = FontWeight.w500,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final value = text.trim();
+    if (value.isEmpty || value == '--') {
+      return Text(
+        emptyText,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          fontStyle: FontStyle.italic,
+          height: 1.5,
+        ),
+      );
+    }
+    return Text(
+      value,
+      style: theme.textTheme.bodyMedium?.copyWith(
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.84),
+        fontWeight: weight,
+        height: 1.55,
+      ),
+    );
+  }
+}
+
+class _SocialWriteupBox extends StatelessWidget {
+  final String text;
+
+  const _SocialWriteupBox({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            LucideIcons.quote,
+            size: 22,
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.35),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _DetailText(
+              text: text,
+              emptyText: 'No social media write-up provided.',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttachmentLinks extends StatelessWidget {
+  final List<Map<String, dynamic>> attachments;
+
+  const _AttachmentLinks({required this.attachments});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (attachments.isEmpty) {
+      return _DetailText(text: '', emptyText: 'No attachments uploaded.');
+    }
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: attachments.map((file) {
+        final name = _s(file['file_name'], fallback: 'Document');
+        final link = _s(file['web_view_link']);
+        return ActionChip(
+          avatar: Icon(
+            LucideIcons.download,
+            size: 16,
+            color: link.isEmpty
+                ? theme.colorScheme.onSurfaceVariant
+                : const Color(0xFF047857),
+          ),
+          label: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 210),
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: link.isEmpty
+                    ? theme.colorScheme.onSurfaceVariant
+                    : const Color(0xFF047857),
+              ),
+            ),
+          ),
+          backgroundColor: theme.colorScheme.surface,
+          side: BorderSide(
+            color: link.isEmpty
+                ? theme.colorScheme.outline.withValues(alpha: 0.18)
+                : const Color(0xFF10B981).withValues(alpha: 0.35),
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          onPressed: link.isEmpty ? null : () => _openUrl(link),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _MetadataPanel extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final bool wide;
+
+  const _MetadataPanel({required this.item, required this.wide});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final entries = [
+      ('Created By', _s(item['created_by_name'] ?? item['created_by_email'])),
+      ('Created At', _formatDate(item['created_at'])),
+      (
+        'Last Updated By',
+        _s(item['updated_by_name'] ?? item['updated_by_email']),
+      ),
+      ('Updated At', _formatDate(item['updated_at'])),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.35,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.12),
+        ),
+      ),
+      child: wide
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var index = 0; index < entries.length; index++) ...[
+                  if (index > 0) const SizedBox(width: 16),
+                  Expanded(
+                    child: _MetadataValue(
+                      label: entries[index].$1,
+                      value: entries[index].$2,
+                    ),
+                  ),
+                ],
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                for (var index = 0; index < entries.length; index++) ...[
+                  if (index > 0) const SizedBox(height: 14),
+                  Center(
+                    child: _MetadataValue(
+                      label: entries[index].$1,
+                      value: entries[index].$2,
+                      centered: true,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+class _MetadataValue extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool centered;
+
+  const _MetadataValue({
+    required this.label,
+    required this.value,
+    this.centered = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final shown = value.trim().isEmpty ? '--' : value;
+    return Column(
+      crossAxisAlignment: centered
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.7,
+            fontSize: 10,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          shown,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: centered ? TextAlign.center : TextAlign.start,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.78),
+            fontWeight: FontWeight.w700,
+            height: 1.35,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailActions extends StatelessWidget {
+  final bool canEdit;
+  final bool canDelete;
+  final bool compact;
+  final VoidCallback onClose;
+  final VoidCallback onEdit;
+  final Future<bool> Function() onDelete;
+
+  const _DetailActions({
+    required this.canEdit,
+    required this.canDelete,
+    required this.compact,
+    required this.onClose,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final buttons = [
+      OutlinedButton(
+        onPressed: onClose,
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: const Text(
+          'Close',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
+      if (canEdit)
+        FilledButton.icon(
+          onPressed: onEdit,
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(LucideIcons.edit2, size: 18),
+          label: const Text(
+            'Edit',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+      if (canDelete)
+        OutlinedButton.icon(
+          onPressed: onDelete,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: theme.colorScheme.error,
+            side: BorderSide(
+              color: theme.colorScheme.error.withValues(alpha: 0.35),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(LucideIcons.trash2, size: 18),
+          label: const Text(
+            'Delete',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+        ),
+    ];
+
+    if (compact) {
+      return Row(
+        children: [
+          for (var index = 0; index < buttons.length; index++) ...[
+            if (index > 0) const SizedBox(width: 10),
+            Expanded(child: buttons[index]),
+          ],
+        ],
+      );
+    }
+
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 12,
+      runSpacing: 12,
+      children: buttons,
     );
   }
 }
@@ -2123,61 +2381,176 @@ class _StudentTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (students.isEmpty) return const Text('--');
-    return Column(
-      children: students.map((student) {
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Theme.of(
-              context,
-            ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= 620) {
+          return ClipRRect(
             borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  LucideIcons.user,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.primary,
+            child: Table(
+              columnWidths: const {
+                0: FlexColumnWidth(1.25),
+                1: FlexColumnWidth(0.8),
+                2: FlexColumnWidth(1.35),
+              },
+              border: TableBorder(
+                horizontalInside: BorderSide(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.1),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const TableRow(
                   children: [
-                    Text(
-                      _studentName(student),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      [
-                        _s(student['batch']),
-                        _s(student['course']),
-                      ].where((e) => e.isNotEmpty).join(' - '),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                    _StudentTableCell('Student Name', header: true),
+                    _StudentTableCell('Batch', header: true),
+                    _StudentTableCell('Course', header: true),
                   ],
                 ),
+                ...students.map(
+                  (student) => TableRow(
+                    children: [
+                      _StudentTableCell(_studentName(student), bold: true),
+                      _StudentTableCell(_s(student['batch'], fallback: '--')),
+                      _StudentTableCell(_s(student['course'], fallback: '--')),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: students.map((student) {
+            final batch = _s(student['batch'], fallback: '--');
+            final course = _s(student['course'], fallback: '--');
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.3,
+                ),
+                borderRadius: BorderRadius.circular(12),
               ),
-            ],
-          ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          LucideIcons.user,
+                          size: 16,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _studentName(student),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StudentMetaValue(label: 'Batch', value: batch),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StudentMetaValue(
+                          label: 'Course',
+                          value: course,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
+    );
+  }
+}
+
+class _StudentMetaValue extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StudentMetaValue({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.6,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.78),
+            fontWeight: FontWeight.w600,
+            height: 1.3,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StudentTableCell extends StatelessWidget {
+  final String value;
+  final bool header;
+  final bool bold;
+
+  const _StudentTableCell(this.value, {this.header = false, this.bold = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      child: Text(
+        value,
+        maxLines: header ? 1 : 2,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: header
+              ? theme.colorScheme.onSurfaceVariant
+              : theme.colorScheme.onSurface.withValues(alpha: 0.82),
+          fontWeight: header || bold ? FontWeight.w800 : FontWeight.w500,
+        ),
+      ),
     );
   }
 }
@@ -2403,22 +2776,40 @@ List<Widget> _platformWidgets(dynamic value, ThemeData theme) {
   return platforms
       .map(
         (platform) => Chip(
+          avatar: Icon(
+            LucideIcons.share2,
+            size: 15,
+            color: _platformColor(platform),
+          ),
           label: Text(
             platform,
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.82),
+            ),
           ),
-          backgroundColor: theme.colorScheme.secondaryContainer.withValues(
-            alpha: 0.5,
-          ),
+          backgroundColor: _platformColor(platform).withValues(alpha: 0.1),
           side: BorderSide(
-            color: theme.colorScheme.secondary.withValues(alpha: 0.2),
+            color: _platformColor(platform).withValues(alpha: 0.2),
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(999),
           ),
         ),
       )
       .toList();
+}
+
+Color _platformColor(String platform) {
+  final normalized = platform.trim().toLowerCase();
+  if (normalized.contains('instagram')) return const Color(0xFFE11D48);
+  if (normalized.contains('linkedin')) return const Color(0xFF0A66C2);
+  if (normalized.contains('youtube')) return const Color(0xFFDC2626);
+  if (normalized.contains('twitter') || normalized.contains('x')) {
+    return const Color(0xFF0284C7);
+  }
+  if (normalized.contains('website')) return const Color(0xFF475569);
+  return const Color(0xFF64748B);
 }
 
 String _buildIqacLabel(
