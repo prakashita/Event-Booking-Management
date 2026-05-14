@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -440,7 +441,7 @@ class _ChatScreenState extends State<ChatScreen> {
     } else if (type == 'conversation_deleted') {
       final String conversationId = event['conversation_id']?.toString() ?? '';
       if (conversationId == widget.conversationId && mounted) {
-        Navigator.of(context).maybePop();
+        _closeChatSection();
       }
     }
   }
@@ -705,6 +706,19 @@ class _ChatScreenState extends State<ChatScreen> {
     return status == 'resolved' || status == 'closed';
   }
 
+  Future<void> _closeChatSection() async {
+    final onBack = widget.onBack;
+    if (onBack != null) {
+      onBack();
+      return;
+    }
+
+    final popped = await Navigator.of(context).maybePop();
+    if (!popped && mounted) {
+      context.go('/dashboard');
+    }
+  }
+
   Future<void> _showMessageActions(ChatMessage message) async {
     final isOwn = message.senderId == _currentUserId;
     final canEdit =
@@ -934,7 +948,7 @@ class _ChatScreenState extends State<ChatScreen> {
           '/chat/conversations/${widget.conversationId}/purge',
         );
         if (mounted) {
-          Navigator.of(context).maybePop();
+          _closeChatSection();
         }
       } catch (e) {
         _showErrorSnackBar(
@@ -953,7 +967,7 @@ class _ChatScreenState extends State<ChatScreen> {
           '/chat/conversation/${widget.conversationId}',
         );
         if (mounted) {
-          Navigator.of(context).maybePop();
+          _closeChatSection();
         }
       } catch (e) {
         _showErrorSnackBar(
@@ -1145,8 +1159,8 @@ class _ChatScreenState extends State<ChatScreen> {
         leading: Padding(
           padding: const EdgeInsets.only(left: 6),
           child: IconButton(
-            tooltip: 'Back',
-            onPressed: widget.onBack ?? () => Navigator.of(context).maybePop(),
+            tooltip: 'Close chat',
+            onPressed: _closeChatSection,
             icon: const Icon(Icons.arrow_back_rounded),
           ),
         ),

@@ -569,6 +569,19 @@ class _ChatListScreenState extends State<ChatListScreen>
     context.push('/chat/$conversationId');
   }
 
+  Future<void> _closeChatSection() async {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+      return;
+    }
+
+    final popped = await Navigator.of(context).maybePop();
+    if (!popped && mounted) {
+      context.go('/dashboard');
+    }
+  }
+
   String _getInitials(String name) {
     if (name.isEmpty) return '?';
     final parts = name.trim().split(RegExp(r'\s+'));
@@ -681,9 +694,7 @@ class _ChatListScreenState extends State<ChatListScreen>
                           const SizedBox(width: 8),
                           _HeaderActionButton(
                             tooltip: 'Close chat',
-                            onPressed:
-                                widget.onClose ??
-                                () => context.go('/dashboard'),
+                            onPressed: _closeChatSection,
                             child: Icon(
                               Icons.close_rounded,
                               size: 18,

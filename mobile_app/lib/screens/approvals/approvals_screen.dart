@@ -890,36 +890,62 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
       startDate = item.startDate;
       startTime = item.startTime;
     }
-    final date = (startDate ?? '').trim();
-    final time = (startTime ?? '').trim();
-    if (date.isEmpty) return false;
-    final parsed = DateTime.tryParse('$date ${time.isEmpty ? '00:00' : time}');
+    final parsed = _parseRequestDateTime(startDate, startTime);
     if (parsed == null) return false;
     return !parsed.isAfter(DateTime.now());
   }
 
   bool _eventHasEnded(dynamic item) {
+    String? startDate;
+    String? startTime;
     String? endDate;
     String? endTime;
     if (item is FacilityRequest) {
+      startDate = item.startDate;
+      startTime = item.startTime;
       endDate = item.endDate;
       endTime = item.endTime;
     } else if (item is MarketingRequest) {
+      startDate = item.startDate;
+      startTime = item.startTime;
       endDate = item.endDate;
       endTime = item.endTime;
     } else if (item is ITRequest) {
+      startDate = item.startDate;
+      startTime = item.startTime;
       endDate = item.endDate;
       endTime = item.endTime;
     } else if (item is TransportRequest) {
+      startDate = item.startDate;
+      startTime = item.startTime;
       endDate = item.endDate;
       endTime = item.endTime;
     }
-    final date = (endDate ?? '').trim();
-    final time = (endTime ?? '').trim();
-    if (date.isEmpty) return false;
-    final parsed = DateTime.tryParse('$date ${time.isEmpty ? '23:59' : time}');
+    final parsed = _parseRequestDateTime(
+      endDate ?? startDate,
+      endTime ?? startTime,
+    );
     if (parsed == null) return false;
     return !parsed.isAfter(DateTime.now());
+  }
+
+  DateTime? _parseRequestDateTime(String? date, String? time) {
+    final cleanDate = (date ?? '').trim();
+    if (cleanDate.isEmpty) return null;
+    final cleanTime = _normalizeTimeToHHMMSS(time);
+    return DateTime.tryParse('${cleanDate}T$cleanTime');
+  }
+
+  String _normalizeTimeToHHMMSS(String? value) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty) return '00:00:00';
+    final match = RegExp(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$').firstMatch(raw);
+    if (match == null) return '00:00:00';
+    final hour = int.tryParse(match.group(1) ?? '');
+    if (hour == null || hour > 23) return '00:00:00';
+    final minute = match.group(2) ?? '00';
+    final second = (match.group(3) ?? '00').padLeft(2, '0');
+    return '${hour.toString().padLeft(2, '0')}:$minute:$second';
   }
 
   String _departmentId(dynamic item) {

@@ -93,7 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onOpen: (popup) {
           _notificationProvider?.markNotificationAsRead(popup.id);
           _dismissPopupById(popup.id);
-          GoRouter.of(context).go(popup.route);
+          _openRoute(popup.route);
         },
         onDismiss: (popup) {
           _notificationProvider?.markNotificationAsRead(popup.id);
@@ -127,7 +127,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _openChat() {
     context.read<NotificationProvider>().setChatUiOpen(true);
-    context.go('/chat');
+    context.push('/chat');
+  }
+
+  void _openRoute(String route) {
+    if (route == '/chat' || route.startsWith('/chat/')) {
+      context.push(route);
+      return;
+    }
+    context.go(route);
   }
 
   Future<void> _openNotificationsPanel() async {
@@ -232,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         provider.markNotificationAsRead(item.id);
                         Navigator.of(sheetContext).pop();
                         if (mounted) {
-                          this.context.go(item.route);
+                          _openRoute(item.route);
                         }
                       },
                       onDismiss: () {

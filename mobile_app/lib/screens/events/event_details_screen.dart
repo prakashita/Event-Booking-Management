@@ -1482,12 +1482,37 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   bool _requestHasStarted(Map<String, dynamic> request) {
     final startDate = _s(request['start_date'], fallback: '');
     final startTime = _s(request['start_time'], fallback: '');
-    if (startDate.isEmpty) return false;
-    final parsed = DateTime.tryParse(
-      '$startDate ${startTime.isEmpty ? '00:00' : startTime}',
+    final parsed = _parseRequestDateTime(startDate, startTime);
+    if (parsed == null) return false;
+    return !parsed.isAfter(DateTime.now());
+  }
+
+  bool _requestHasEnded(Map<String, dynamic> request) {
+    final parsed = _parseRequestDateTime(
+      _s(request['end_date'], fallback: _s(request['start_date'])),
+      _s(request['end_time'], fallback: _s(request['start_time'])),
     );
     if (parsed == null) return false;
     return !parsed.isAfter(DateTime.now());
+  }
+
+  DateTime? _parseRequestDateTime(String? date, String? time) {
+    final cleanDate = (date ?? '').trim();
+    if (cleanDate.isEmpty) return null;
+    final cleanTime = _normalizeTimeToHHMMSS(time);
+    return DateTime.tryParse('${cleanDate}T$cleanTime');
+  }
+
+  String _normalizeTimeToHHMMSS(String? value) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty) return '00:00:00';
+    final match = RegExp(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$').firstMatch(raw);
+    if (match == null) return '00:00:00';
+    final hour = int.tryParse(match.group(1) ?? '');
+    if (hour == null || hour > 23) return '00:00:00';
+    final minute = match.group(2) ?? '00';
+    final second = (match.group(3) ?? '00').padLeft(2, '0');
+    return '${hour.toString().padLeft(2, '0')}:$minute:$second';
   }
 
   bool _canDepartmentTakeAction(Map<String, dynamic> request) {
@@ -1602,7 +1627,66 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     String type,
     Map<String, dynamic> request,
   ) {
-    // Matching website functionality: uploads are never locked by date.
+    final startDate = _s(request['start_date'], fallback: '');
+    if (startDate.isEmpty) {
+      return (locked: true, hint: 'Event schedule unavailable.');
+    }
+
+    final normalized = _normalizeMarketingRequirementsFromMap(request);
+    final pre = normalized['pre_event'] as Map<String, dynamic>;
+    final post = normalized['post_event'] as Map<String, dynamic>;
+    final started = _requestHasStarted(request);
+    final ended = _requestHasEnded(request);
+    final preSocial = pre['social_media'] == true;
+    final postSocial = post['social_media'] == true;
+
+    if (type == 'poster') {
+      return started
+          ? (locked: true, hint: 'Upload before the event starts.')
+          : (locked: false, hint: '');
+    }
+    if (type == 'linkedin') {
+      if (preSocial && !postSocial) {
+        return started
+            ? (
+                locked: true,
+                hint: 'Pre-event social posts: upload before the event starts.',
+              )
+            : (locked: false, hint: '');
+      }
+      if (postSocial && !preSocial) {
+        return !ended
+            ? (
+                locked: true,
+                hint:
+                    'Post-event social posts: upload after the event has ended.',
+              )
+            : (locked: false, hint: '');
+      }
+      return started && !ended
+          ? (
+              locked: true,
+              hint:
+                  'Upload before the event starts or after it ends (not during).',
+            )
+          : (locked: false, hint: '');
+    }
+    if (type == 'recording') {
+      return !ended
+          ? (
+              locked: true,
+              hint: 'Post-event video: upload after the event has ended.',
+            )
+          : (locked: false, hint: '');
+    }
+    if (type == 'photography') {
+      return !ended
+          ? (
+              locked: true,
+              hint: 'Post-event photo: upload after the event has ended.',
+            )
+          : (locked: false, hint: '');
+    }
     return (locked: false, hint: '');
   }
 

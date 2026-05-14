@@ -153,12 +153,37 @@ class _RequirementsScreenState extends State<RequirementsScreen>
       startDate = item.startDate;
       startTime = item.startTime;
     }
-    final date = (startDate ?? '').trim();
-    final time = (startTime ?? '').trim();
-    if (date.isEmpty) return false;
-    final parsed = DateTime.tryParse('$date ${time.isEmpty ? '00:00' : time}');
+    final parsed = _parseRequestDateTime(startDate, startTime);
     if (parsed == null) return false;
     return !parsed.isAfter(DateTime.now());
+  }
+
+  bool _eventHasEnded(MarketingRequest request) {
+    final parsed = _parseRequestDateTime(
+      request.endDate ?? request.startDate,
+      request.endTime ?? request.startTime,
+    );
+    if (parsed == null) return false;
+    return !parsed.isAfter(DateTime.now());
+  }
+
+  DateTime? _parseRequestDateTime(String? date, String? time) {
+    final cleanDate = (date ?? '').trim();
+    if (cleanDate.isEmpty) return null;
+    final cleanTime = _normalizeTimeToHHMMSS(time);
+    return DateTime.tryParse('${cleanDate}T$cleanTime');
+  }
+
+  String _normalizeTimeToHHMMSS(String? value) {
+    final raw = (value ?? '').trim();
+    if (raw.isEmpty) return '00:00:00';
+    final match = RegExp(r'^(\d{1,2}):(\d{2})(?::(\d{2}))?$').firstMatch(raw);
+    if (match == null) return '00:00:00';
+    final hour = int.tryParse(match.group(1) ?? '');
+    if (hour == null || hour > 23) return '00:00:00';
+    final minute = match.group(2) ?? '00';
+    final second = (match.group(3) ?? '00').padLeft(2, '0');
+    return '${hour.toString().padLeft(2, '0')}:$minute:$second';
   }
 
   Map<String, dynamic> _normalizeMarketingRequirements(
@@ -210,6 +235,65 @@ class _RequirementsScreenState extends State<RequirementsScreen>
     String type,
     MarketingRequest request,
   ) {
+    if ((request.startDate ?? '').trim().isEmpty) {
+      return (locked: true, hint: 'Event schedule unavailable.');
+    }
+
+    final normalized = _normalizeMarketingRequirements(request);
+    final pre = normalized['pre_event'] as Map<String, dynamic>;
+    final post = normalized['post_event'] as Map<String, dynamic>;
+    final started = _eventHasStarted(request);
+    final ended = _eventHasEnded(request);
+    final preSocial = pre['social_media'] == true;
+    final postSocial = post['social_media'] == true;
+
+    if (type == 'poster') {
+      return started
+          ? (locked: true, hint: 'Upload before the event starts.')
+          : (locked: false, hint: '');
+    }
+    if (type == 'linkedin') {
+      if (preSocial && !postSocial) {
+        return started
+            ? (
+                locked: true,
+                hint: 'Pre-event social posts: upload before the event starts.',
+              )
+            : (locked: false, hint: '');
+      }
+      if (postSocial && !preSocial) {
+        return !ended
+            ? (
+                locked: true,
+                hint:
+                    'Post-event social posts: upload after the event has ended.',
+              )
+            : (locked: false, hint: '');
+      }
+      return started && !ended
+          ? (
+              locked: true,
+              hint:
+                  'Upload before the event starts or after it ends (not during).',
+            )
+          : (locked: false, hint: '');
+    }
+    if (type == 'recording') {
+      return !ended
+          ? (
+              locked: true,
+              hint: 'Post-event video: upload after the event has ended.',
+            )
+          : (locked: false, hint: '');
+    }
+    if (type == 'photography') {
+      return !ended
+          ? (
+              locked: true,
+              hint: 'Post-event photo: upload after the event has ended.',
+            )
+          : (locked: false, hint: '');
+    }
     return (locked: false, hint: '');
   }
 
