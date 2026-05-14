@@ -1,55 +1,40 @@
-name: iOS Simulator Build
+workflows:
+  ios-simulator:
+    name: iOS Simulator Build
 
-on:
-  workflow_dispatch:
+    instance_type: mac_mini_m2
 
-jobs:
-  build-ios-simulator:
-    runs-on: macos-latest
+    environment:
+      flutter: stable
 
-    env:
-      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-      GOOGLE_SERVER_CLIENT_ID: ${{ secrets.GOOGLE_SERVER_CLIENT_ID }}
-      API_BASE_URL: ${{ secrets.API_BASE_URL }}
+      vars:
+        GOOGLE_CLIENT_ID: "YOUR_CLIENT_ID"
+        GOOGLE_SERVER_CLIENT_ID: "YOUR_SERVER_CLIENT_ID"
+        API_BASE_URL: "YOUR_API_URL"
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    scripts:
+      - name: Flutter pub get
+        script: |
+          cd mobile_app
+          flutter pub get
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
+      - name: Install CocoaPods
+        script: |
+          cd mobile_app/ios
+          pod install
 
-      - name: Validate required secrets
-        run: |
-          test -n "$GOOGLE_CLIENT_ID"
-          test -n "$GOOGLE_SERVER_CLIENT_ID"
-          test -n "$API_BASE_URL"
-
-      - name: Install Flutter dependencies
-        working-directory: mobile_app
-        run: flutter pub get
-
-      - name: Install iOS pods
-        working-directory: mobile_app/ios
-        run: pod install
-
-      - name: Build iOS simulator app
-        working-directory: mobile_app
-        run: |
+      - name: Build iOS simulator
+        script: |
+          cd mobile_app
           flutter build ios --simulator \
-            --dart-define=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
-            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
-            --dart-define=API_BASE_URL="$API_BASE_URL"
+            --dart-define=GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID \
+            --dart-define=API_BASE_URL=$API_BASE_URL
 
       - name: Zip simulator app
-        working-directory: mobile_app/build/ios/iphonesimulator
-        run: ditto -c -k --sequesterRsrc --keepParent Runner.app Runner.app.zip
+        script: |
+          cd mobile_app/build/ios/iphonesimulator
+          zip -r Runner.app.zip Runner.app
 
-      - name: Upload simulator artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-simulator-app
-          path: mobile_app/build/ios/iphonesimulator/Runner.app.zip
+    artifacts:
+      - mobile_app/build/ios/iphonesimulator/Runner.app.zip
