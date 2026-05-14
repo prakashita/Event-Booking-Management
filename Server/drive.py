@@ -2,7 +2,9 @@ import io
 import json
 import logging
 import os
+import re as _re
 import traceback
+import unicodedata as _unicodedata
 import uuid
 
 import requests
@@ -282,3 +284,234 @@ def delete_drive_file(access_token: str, file_id: str | None) -> None:
         )
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Enterprise folder hierarchy helpers
+# ---------------------------------------------------------------------------
+
+DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder"
+_MAX_FOLDER_NAME_LEN = 100
+
+# Module-level in-process cache: (parent_id, folder_name) → folder_id.
+# Avoids redundant Drive API list calls within the same server process.
+_folder_cache: dict[tuple[str, str], str] = {}
+
+
+def sanitize_folder_name(name: str) -> str:
+    """Return a Drive-safe folder name derived from *name*.
+
+    Rules applied in order:
+    1. Unicode normalisation (NFKD → ASCII-safe characters where possible).
+    2. Spaces and path separators (/ \\\\) → underscores.
+    3. Characters invalid in Drive / filesystem names are stripped.
+    4. Multiple consecutive underscores collapsed to one.
+    5. Leading / trailing underscores and dots trimmed.
+    6. Result truncated to _MAX_FOLDER_NAME_LEN characters.
+    7. Falls back to ``"Untitled"`` if the result would be empty.
+
+    Example: ``"AI/ML Workshop 2026"`` → ``"AI_ML_Workshop_2026"``
+    """
+    if not name:
+        return "Untitled"
+    # Normalise unicode and drop non-ASCII combining marks
+    normalized = _unicodedata.normalize("NFKD", name)
+    ascii_str = normalized.encode("ascii", "ignore").decode("ascii")
+    # Replace whitespace and path separators with underscores
+    cleaned = _re.sub(r"[\s/\\]+", "_", ascii_str)
+    # Strip characters invalid in Drive names
+    cleaned = _re.sub(r'[*?"<>|:;,]+', "", cleaned)
+    # Collapse multiple underscores
+    cleaned = _re.sub(r"_+", "_", cleaned)
+    # Strip leading / trailing underscores and dots
+    cleaned = cleaned.strip("_.")
+    # Enforce max length
+    cleaned = cleaned[:_MAX_FOLDER_NAME_LEN]
+    return cleaned or "Untitled"
+
+
+def _build_sa_service():
+    """Build a Drive v3 service object using service account credentials.
+
+    Returns ``(service, None)`` on success, ``(None, error_string)`` on failure.
+    Never raises — all errors are logged and suppressed.
+    """
+    creds = _get_sa_credentials()
+    if creds is None:
+        return None, "Service account credentials unavailable"
+    try:
+        from googleapiclient.discovery import build  # noqa: PLC0415
+        service = build("drive", "v3", credentials=creds, cache_discovery=False)
+        return service, None
+    except Exception:
+        logger.error(
+            "drive: failed to build SA Drive service for folder ops:\n%s",
+            traceback.format_exc(),
+        )
+        return None, "Failed to build Drive service"
+
+
+def get_or_create_folder(service, name: str, parent_id: str) -> str:
+    """Return the Drive folder ID for *name* inside *parent_id*, creating it if absent.
+
+    Uses a module-level cache keyed by ``(parent_id, name)`` to minimise
+    redundant Drive API calls within the same server process.
+
+    Raises ``RuntimeError`` if both the lookup and the creation fail.
+    """
+    cache_key = (parent_id, name)
+    if cache_key in _folder_cache:
+        logger.debug(
+            "drive: folder cache hit  name=%r  parent=%r  id=%s",
+            name, parent_id, _folder_cache[cache_key],
+        )
+        return _folder_cache[cache_key]
+
+    # Search for an existing folder with this name under parent_id
+    try:
+        q = (
+            f"name={json.dumps(name)}"
+            f" and mimeType={json.dumps(DRIVE_FOLDER_MIME)}"
+            f" and {json.dumps(parent_id)} in parents"
+            f" and trashed=false"
+        )
+        result = (
+            service.files()
+            .list(
+                q=q,
+                fields="files(id,name)",
+                pageSize=1,
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            )
+            .execute()
+        )
+        files = result.get("files", [])
+        if files:
+            folder_id = files[0]["id"]
+            logger.info(
+                "drive: folder reused  name=%r  parent=%r  id=%s",
+                name, parent_id, folder_id,
+            )
+            _folder_cache[cache_key] = folder_id
+            return folder_id
+    except Exception:
+        logger.warning(
+            "drive: folder lookup failed  name=%r  parent=%r:\n%s",
+            name, parent_id, traceback.format_exc(),
+        )
+
+    # Create a new folder
+    try:
+        folder_meta = {
+            "name": name,
+            "mimeType": DRIVE_FOLDER_MIME,
+            "parents": [parent_id],
+        }
+        created = (
+            service.files()
+            .create(body=folder_meta, fields="id", supportsAllDrives=True)
+            .execute()
+        )
+        folder_id = created["id"]
+        logger.info(
+            "drive: folder created  name=%r  parent=%r  id=%s",
+            name, parent_id, folder_id,
+        )
+        _folder_cache[cache_key] = folder_id
+        return folder_id
+    except Exception:
+        logger.error(
+            "drive: folder creation failed  name=%r  parent=%r:\n%s",
+            name, parent_id, traceback.format_exc(),
+        )
+        raise RuntimeError(
+            f"Failed to get or create Drive folder {name!r} in parent {parent_id!r}"
+        )
+
+
+def create_nested_folder_structure(service, path_parts: list[str], root_id: str) -> str:
+    """Walk *path_parts*, creating or reusing a Drive folder at each level.
+
+    Returns the final leaf folder's Drive ID.
+    """
+    current_id = root_id
+    for part in path_parts:
+        current_id = get_or_create_folder(service, part, current_id)
+    return current_id
+
+
+def upload_file_to_nested_folder(
+    *,
+    access_token: str,
+    file_name: str,
+    file_bytes: bytes,
+    mime_type: str,
+    root_folder_id: str,
+    folder_path_parts: list[str],
+    replace_file_id: str | None = None,
+    allow_root_fallback: bool = False,
+) -> dict:
+    """Upload *file_bytes* into a nested Drive folder hierarchy, creating folders as needed.
+
+    Folder path: ``root_folder_id → folder_path_parts[0] → … → folder_path_parts[-1]``
+
+    If folder creation fails (e.g. SA unavailable, insufficient permissions) the file is
+    uploaded directly into *root_folder_id* so that the existing upload flow is preserved.
+
+    Returns the Drive file metadata dict (``id``, ``name``, ``webViewLink``).
+    """
+    logger.info(
+        "drive: upload_file_to_nested_folder  file=%r  path=%r  root=%r  size=%d bytes",
+        file_name,
+        "/".join(folder_path_parts),
+        root_folder_id,
+        len(file_bytes),
+    )
+
+    target_folder_id = root_folder_id  # safe fallback
+
+    if folder_path_parts:
+        service, err = _build_sa_service()
+        if service is None:
+            logger.warning(
+                "drive: SA service unavailable for folder creation (%s); "
+                "uploading directly to root folder %r",
+                err,
+                root_folder_id,
+            )
+        else:
+            try:
+                target_folder_id = create_nested_folder_structure(
+                    service, folder_path_parts, root_folder_id
+                )
+                logger.info(
+                    "drive: upload target resolved  path=%r  folder_id=%s",
+                    "/".join(folder_path_parts),
+                    target_folder_id,
+                )
+            except Exception:
+                logger.warning(
+                    "drive: nested folder creation failed; "
+                    "falling back to root folder %r:\n%s",
+                    root_folder_id,
+                    traceback.format_exc(),
+                )
+                target_folder_id = root_folder_id
+
+    result = upload_report_file(
+        access_token=access_token,
+        file_name=file_name,
+        file_bytes=file_bytes,
+        mime_type=mime_type,
+        folder_id=target_folder_id,
+        replace_file_id=replace_file_id,
+        allow_root_fallback=allow_root_fallback,
+    )
+    logger.info(
+        "drive: upload_file_to_nested_folder complete  file=%r  folder=%s  drive_id=%s",
+        file_name,
+        target_folder_id,
+        result.get("id"),
+    )
+    return result

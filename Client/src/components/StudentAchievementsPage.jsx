@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../services/api";
+import { MAX_PDF_FILE_SIZE, PDF_SIZE_ERROR_MESSAGE } from "../constants/uploadConfig";
 
 const PLATFORM_OPTIONS = [
   { value: "LinkedIn", label: "LinkedIn" },
@@ -212,6 +213,13 @@ export default function StudentAchievementsPage({ user }) {
   const validateForm = (state) => {
     if (!cleanedStudents(state).length) return "Add at least one student name.";
     if (!state.activity_description.trim()) return "Description of Activity and Achievement is required.";
+    const oversizedPdf = (state.attachments || []).find(
+      (file) =>
+        ((file.type || "").toLowerCase() === "application/pdf" ||
+          (file.name || "").toLowerCase().endsWith(".pdf")) &&
+        file.size > MAX_PDF_FILE_SIZE
+    );
+    if (oversizedPdf) return PDF_SIZE_ERROR_MESSAGE;
     return "";
   };
 

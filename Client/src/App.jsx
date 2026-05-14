@@ -33,6 +33,7 @@ import EventDetailsModalBody, { ConnectedEventDetailsModalBody } from "./compone
 import { ConnectedApprovalDetailsModalBody } from "./components/ApprovalDetailsModalBody";
 import RequirementsWizardModal from "./components/RequirementsWizardModal";
 import { MessengerProvider, FloatingMessenger } from "./components/messenger";
+import { MAX_PDF_FILE_SIZE, PDF_SIZE_ERROR_MESSAGE } from "./constants/uploadConfig";
 import SettingsModal from "./components/SettingsModal";
 import NotificationBell from "./components/NotificationBell";
 import InstitutionCalendarAdmin from "./components/InstitutionCalendarAdmin";
@@ -2897,6 +2898,13 @@ export default function App() {
       });
       return;
     }
+    if (lower.endsWith(".pdf") && f.size > MAX_PDF_FILE_SIZE) {
+      setReportModal((prev) => {
+        if (!prev.open) return prev;
+        return { ...prev, status: "error", error: PDF_SIZE_ERROR_MESSAGE };
+      });
+      return;
+    }
     setReportAttendanceNotApplicable(false);
     setReportAttendanceFile(f);
     setReportModal((prev) => (prev.open ? { ...prev, status: "idle", error: "" } : prev));
@@ -3340,6 +3348,10 @@ export default function App() {
       });
       return;
     }
+    if (budgetBreakdownFile.size > MAX_PDF_FILE_SIZE) {
+      setEventFormStatus({ status: "error", error: PDF_SIZE_ERROR_MESSAGE });
+      return;
+    }
 
     setEventFormStatus({ status: "loading", error: "" });
 
@@ -3452,6 +3464,10 @@ export default function App() {
         status: "error",
         error: "Budget breakdown PDF is required. Choose a PDF file before continuing."
       });
+      return;
+    }
+    if (budgetBreakdownFile.size > MAX_PDF_FILE_SIZE) {
+      setApprovalModal({ open: true, status: "error", error: PDF_SIZE_ERROR_MESSAGE });
       return;
     }
 
@@ -4115,6 +4131,10 @@ export default function App() {
       });
       return;
     }
+    if (budgetBreakdownFile.size > MAX_PDF_FILE_SIZE) {
+      setEventFormStatus({ status: "error", error: PDF_SIZE_ERROR_MESSAGE });
+      return;
+    }
 
     if (!eventForm.intendedAudience || eventForm.intendedAudience.length === 0) {
       setEventFormStatus({ status: "error", error: "Select at least one intended audience." });
@@ -4198,6 +4218,11 @@ export default function App() {
         status: "error",
         error: "Budget breakdown PDF is required. Choose a PDF file before continuing."
       });
+      return;
+    }
+    if (budgetBreakdownFile.size > MAX_PDF_FILE_SIZE) {
+      setConflictState({ open: false, items: [] });
+      setEventFormStatus({ status: "error", error: PDF_SIZE_ERROR_MESSAGE });
       return;
     }
     setOverrideConflict(true);
@@ -5908,6 +5933,12 @@ export default function App() {
                               required
                               onChange={(e) => {
                                 const f = e.target.files?.[0];
+                                if (f && f.size > MAX_PDF_FILE_SIZE) {
+                                  setEventFormStatus({ status: "error", error: PDF_SIZE_ERROR_MESSAGE });
+                                  e.target.value = "";
+                                  setBudgetBreakdownFile(null);
+                                  return;
+                                }
                                 setBudgetBreakdownFile(f || null);
                               }}
                             />

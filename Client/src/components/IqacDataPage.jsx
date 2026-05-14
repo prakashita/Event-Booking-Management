@@ -6,6 +6,7 @@ import { SimpleIcon } from "./icons";
 import { Modal } from "./ui";
 import IqacTemplateDownloadCard from "./IqacTemplateDownloadCard";
 import api from "../services/api";
+import { MAX_PDF_FILE_SIZE, PDF_SIZE_ERROR_MESSAGE } from "../constants/uploadConfig";
 
 const SUBFOLDERS_VISIBLE = 3; // show first N, then "... +M more sub-folders"
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1953,9 +1954,16 @@ export default function IqacDataPage({ canDeleteIqacFiles = false }) {
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!uploadFile?.files?.[0] || !panel) return;
+    const file = uploadFile.files[0];
+    if (
+      (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) &&
+      file.size > MAX_PDF_FILE_SIZE
+    ) {
+      setUploadError(PDF_SIZE_ERROR_MESSAGE);
+      return;
+    }
     setUploading(true);
     setUploadError("");
-    const file = uploadFile.files[0];
     const form = new FormData();
     form.append("file", file);
     form.append("description", uploadDesc);

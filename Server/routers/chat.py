@@ -19,7 +19,7 @@ from event_chat_service import (
     notify_new_message,
     reset_unread_for_user,
 )
-from models import ChatAttachment, ChatConversation, ChatMessage, User
+from models import ApprovalRequest, ChatAttachment, ChatConversation, ChatMessage, User
 from routers.deps import can_view_conversation, get_current_user, require_conversation_access
 from schemas import (
     ChatConversationCreate,
@@ -293,6 +293,26 @@ async def list_my_conversations(
         for u in await User.find(In(User.id, participant_oids)).to_list():
             users_by_id[str(u.id)] = u
 
+    # Batch-resolve event titles for approval_thread conversations
+    _approval_ids: List[PydanticObjectId] = []
+    _seen_approval: set[str] = set()
+    for conv in convs:
+        if getattr(conv, "thread_kind", None) == "approval_thread":
+            ar_id = getattr(conv, "approval_request_id", None)
+            if ar_id and ar_id not in _seen_approval:
+                try:
+                    _approval_ids.append(PydanticObjectId(ar_id))
+                    _seen_approval.add(ar_id)
+                except Exception:
+                    pass
+    _event_title_map: Dict[str, str] = {}
+    if _approval_ids:
+        try:
+            for ar in await ApprovalRequest.find(In(ApprovalRequest.id, _approval_ids)).to_list():
+                _event_title_map[str(ar.id)] = ar.event_name or ""
+        except Exception:
+            pass
+
     items: List[ChatConversationListItem] = []
     for conv in convs:
         kind = getattr(conv, "thread_kind", None) or "direct"
@@ -345,6 +365,8 @@ async def list_my_conversations(
 
         dept = getattr(conv, "department", None)
         dept_label = DEPARTMENT_LABELS.get(dept or "", None) if dept else None
+        _ar_id = getattr(conv, "approval_request_id", None)
+        event_title = _event_title_map.get(_ar_id or "", None) or None
 
         items.append(
             ChatConversationListItem(
@@ -363,9 +385,10 @@ async def list_my_conversations(
                 department=dept,
                 department_label=dept_label,
                 related_kind=getattr(conv, "related_kind", None),
-                approval_request_id=getattr(conv, "approval_request_id", None),
+                approval_request_id=_ar_id,
                 closed_at=getattr(conv, "closed_at", None),
                 closed_reason=getattr(conv, "closed_reason", None),
+                event_title=event_title,
             )
         )
     return items

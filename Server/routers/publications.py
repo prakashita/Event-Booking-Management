@@ -10,7 +10,7 @@ from rate_limit import limiter
 from typing import Any, Dict, List, Literal, Optional
 
 from auth import ensure_google_access_token
-from drive import upload_report_file
+from drive import sanitize_folder_name, upload_file_to_nested_folder, upload_report_file
 from models import Publication, User
 from routers.deps import get_current_user
 from schemas import PaginatedResponse, PublicationResponse
@@ -236,14 +236,35 @@ async def upload_publication(
                 detail="Google Drive folder not configured",
             )
 
+        # Build nested folder path: Publication-Uploads / YYYY / YYYY-MM / Title
+        try:
+            _pub_date_raw = (publication_date or issued_date or "").strip()
+            _pdt = datetime.strptime(_pub_date_raw[:10], "%Y-%m-%d") if len(_pub_date_raw) >= 10 else None
+        except Exception:
+            _pdt = None
+        if _pdt is None and year:
+            try:
+                _pdt = datetime.strptime(str(year).strip()[:4], "%Y")
+            except Exception:
+                pass
+        if _pdt is None:
+            _pdt = datetime.utcnow()
+        _pub_folder_parts = [
+            "Publication-Uploads",
+            _pdt.strftime("%Y"),
+            _pdt.strftime("%Y-%m"),
+            sanitize_folder_name(title or name or "Publication"),
+        ]
+
         try:
             access_token = await ensure_google_access_token(user)
-            drive_file = upload_report_file(
+            drive_file = upload_file_to_nested_folder(
                 access_token=access_token,
                 file_name=file.filename,
                 file_bytes=contents,
                 mime_type=file.content_type or "application/octet-stream",
-                folder_id=folder_id,
+                root_folder_id=folder_id,
+                folder_path_parts=_pub_folder_parts,
             )
             file_id = drive_file.get("id", "")
             file_name = drive_file.get("name", file.filename)
