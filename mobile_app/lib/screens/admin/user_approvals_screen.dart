@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
+import '../../widgets/common/app_widgets.dart';
 
 class UserApprovalsScreen extends StatefulWidget {
   const UserApprovalsScreen({super.key});
@@ -74,9 +76,7 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
   }
 
   String _extractError(Object error) {
-    final text = error.toString();
-    if (text.isEmpty) return 'Something went wrong.';
-    return text;
+    return friendlyErrorMessage(error);
   }
 
   String _fmtDate(dynamic value) {
@@ -118,6 +118,49 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
         ),
       );
       await _loadAll(forceRefresh: true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_extractError(e))));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _actingUserId = null;
+          _actingAction = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteRejectedUser(Map<String, dynamic> user) async {
+    final id = (user['id'] ?? '').toString();
+    if (id.isEmpty) return;
+
+    final name = (user['name'] ?? 'this rejected user').toString();
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Delete Rejected User',
+      message: 'Delete $name? This cannot be undone.',
+      confirmLabel: 'Delete',
+      isDestructive: true,
+    );
+    if (ok != true) return;
+
+    setState(() {
+      _actingUserId = id;
+      _actingAction = 'delete';
+    });
+
+    try {
+      await _api.delete('/users/$id');
+      if (!mounted) return;
+      setState(() {
+        _rejected.removeWhere((item) => (item['id'] ?? '').toString() == id);
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Rejected user deleted.')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -390,32 +433,10 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
                             border: const Color(0xFFFCA5A5),
                           ),
                           const Spacer(),
-                          OutlinedButton.icon(
-                            onPressed: _refreshing
-                                ? null
-                                : () => _loadAll(forceRefresh: true),
-                            style: OutlinedButton.styleFrom(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                            ),
-                            icon: _refreshing
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.refresh_rounded, size: 18),
-                            label: const Text(
-                              'Refresh',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
+                          _HeaderRefreshButton(
+                            isRefreshing: _refreshing,
+                            isDark: isDark,
+                            onPressed: () => _loadAll(forceRefresh: true),
                           ),
                         ],
                       ),
@@ -554,16 +575,80 @@ class _UserApprovalsScreenState extends State<UserApprovalsScreen> {
                                 primaryLabel:
                                     acting && _actingAction == 'approve'
                                     ? '...'
-                                    : 'Review & Re-approve',
+                                    : 'Re-approve',
+                                deleteLabel: acting && _actingAction == 'delete'
+                                    ? '...'
+                                    : 'Delete',
                                 onPrimary: acting
                                     ? null
                                     : () => _showApproveDialog(item),
+                                onDelete: acting
+                                    ? null
+                                    : () => _deleteRejectedUser(item),
                               );
                             }).toList(),
                           ),
                   ),
                 ],
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeaderRefreshButton extends StatelessWidget {
+  final bool isRefreshing;
+  final bool isDark;
+  final VoidCallback onPressed;
+
+  const _HeaderRefreshButton({
+    required this.isRefreshing,
+    required this.isDark,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = isDark
+        ? const Color(0xFF334155)
+        : const Color(0xFFE2E8F0);
+    final foregroundColor = isDark
+        ? const Color(0xFF93C5FD)
+        : const Color(0xFF2563EB);
+    final backgroundColor = isDark ? const Color(0xFF1E293B) : Colors.white;
+
+    return Tooltip(
+      message: 'Refresh',
+      child: SizedBox.square(
+        dimension: 44,
+        child: Material(
+          color: backgroundColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: borderColor),
+          ),
+          elevation: isDark ? 0 : 2,
+          shadowColor: Colors.black.withValues(alpha: 0.08),
+          child: InkWell(
+            onTap: isRefreshing ? null : onPressed,
+            borderRadius: BorderRadius.circular(14),
+            child: Center(
+              child: isRefreshing
+                  ? SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: foregroundColor,
+                      ),
+                    )
+                  : Icon(
+                      Icons.refresh_rounded,
+                      size: 21,
+                      color: foregroundColor,
+                    ),
             ),
           ),
         ),
@@ -792,8 +877,10 @@ class _UserApprovalTile extends StatelessWidget {
   final String rightBottom;
   final String primaryLabel;
   final String? secondaryLabel;
+  final String? deleteLabel;
   final VoidCallback? onPrimary;
   final VoidCallback? onSecondary;
+  final VoidCallback? onDelete;
 
   const _UserApprovalTile({
     required this.name,
@@ -802,8 +889,10 @@ class _UserApprovalTile extends StatelessWidget {
     required this.rightBottom,
     required this.primaryLabel,
     this.secondaryLabel,
+    this.deleteLabel,
     this.onPrimary,
     this.onSecondary,
+    this.onDelete,
   });
 
   @override
@@ -971,14 +1060,26 @@ class _UserApprovalTile extends StatelessWidget {
                         ),
                         child: Text(primaryLabel),
                       )
-                    : OutlinedButton(
+                    : FilledButton.tonalIcon(
                         onPressed: onPrimary,
-                        style: OutlinedButton.styleFrom(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(
+                            0xFF2563EB,
+                          ).withValues(alpha: 0.12),
+                          foregroundColor: const Color(0xFF2563EB),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        child: Text(primaryLabel),
+                        icon: const Icon(
+                          Icons.person_add_alt_1_rounded,
+                          size: 18,
+                        ),
+                        label: Text(
+                          primaryLabel,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
                       ),
               ),
               if (secondaryLabel != null) ...[
@@ -994,6 +1095,31 @@ class _UserApprovalTile extends StatelessWidget {
                       ),
                     ),
                     child: Text(secondaryLabel!),
+                  ),
+                ),
+              ] else if (deleteLabel != null) ...[
+                const SizedBox(width: 12),
+                Tooltip(
+                  message: 'Delete rejected user',
+                  child: SizedBox.square(
+                    dimension: 48,
+                    child: OutlinedButton(
+                      onPressed: onDelete,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFDC2626),
+                        padding: EdgeInsets.zero,
+                        side: const BorderSide(color: Color(0xFFFCA5A5)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: deleteLabel == '...'
+                          ? const SizedBox.square(
+                              dimension: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.delete_outline_rounded, size: 20),
+                    ),
                   ),
                 ),
               ],

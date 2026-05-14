@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_colors.dart';
 import '../../constants/approval_ui.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 import '../../widgets/common/approval_widgets.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../../providers/auth_provider.dart';
@@ -447,7 +448,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(e.toString()),
+                        content: Text(friendlyErrorMessage(e)),
                         backgroundColor: AppColors.error,
                         behavior: SnackBarBehavior.floating,
                       ),
@@ -551,20 +552,14 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
             formData,
           );
         } on DioException catch (e) {
-          final detail = e.response?.data is Map<String, dynamic>
-              ? (e.response?.data['detail']?.toString() ??
-                    e.message ??
-                    'Unable to upload budget breakdown PDF')
-              : (e.message ?? 'Unable to upload budget breakdown PDF');
           if ((e.response?.statusCode ?? 0) == 403) {
             throw Exception(
               'Google connection is required to upload the budget PDF.',
             );
           }
-          uploadWarning =
-              'Event was sent, but budget PDF upload failed: $detail';
+          uploadWarning = 'Event was sent, but the budget PDF upload failed.';
         } catch (e) {
-          uploadWarning = 'Event was sent, but budget PDF upload failed: $e';
+          uploadWarning = 'Event was sent, but the budget PDF upload failed.';
         }
       }
 
@@ -591,14 +586,14 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
           }
         }
 
-        final detail = e.response?.data is Map<String, dynamic>
-            ? (e.response?.data['detail']?.toString() ??
-                  e.message ??
-                  'Request failed')
-            : (e.message ?? 'Request failed');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(detail),
+            content: Text(
+              friendlyErrorMessage(
+                e,
+                fallback: 'Request failed. Please try again.',
+              ),
+            ),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),
@@ -608,7 +603,12 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: Text(
+              friendlyErrorMessage(
+                e,
+                fallback: 'Could not submit approval. Please try again.',
+              ),
+            ),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
           ),

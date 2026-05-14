@@ -10,6 +10,7 @@ import '../../constants/app_constants.dart';
 import '../../constants/approval_ui.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/friendly_error.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../../widgets/common/marketing_deliverables_upload_dialog.dart';
 import '../../services/api_service.dart';
@@ -107,7 +108,10 @@ class _RequirementsScreenState extends State<RequirementsScreen>
       });
     } catch (e) {
       setState(() {
-        _errorInbox = e.toString();
+        _errorInbox = friendlyErrorMessage(
+          e,
+          fallback: 'Could not load requests. Please try again.',
+        );
         _loadingInbox = false;
       });
     }
@@ -251,22 +255,7 @@ class _RequirementsScreenState extends State<RequirementsScreen>
   }
 
   String _extractApiErrorMessage(Object error) {
-    if (error is DioException) {
-      final data = error.response?.data;
-      if (data is Map<String, dynamic>) {
-        final detail = data['detail']?.toString().trim();
-        if (detail != null && detail.isNotEmpty) return detail;
-      } else if (data is String && data.trim().isNotEmpty) {
-        return data.trim();
-      }
-      final message = error.message?.trim();
-      if (message != null && message.isNotEmpty) return message;
-    }
-    final text = error.toString().trim();
-    if (text.startsWith('Exception: ')) {
-      return text.substring('Exception: '.length).trim();
-    }
-    return text.isEmpty ? 'Something went wrong.' : text;
+    return friendlyErrorMessage(error);
   }
 
   Future<void> _connectGoogle() async {
@@ -358,7 +347,10 @@ class _RequirementsScreenState extends State<RequirementsScreen>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+        SnackBar(
+          content: Text(friendlyErrorMessage(e)),
+          backgroundColor: AppColors.error,
+        ),
       );
     }
   }

@@ -14,6 +14,7 @@ import '../../constants/app_constants.dart';
 import '../../constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 
 const Color _deepBlue = Color(0xFF312E81); // indigo-900
 const Color _indigo600 = Color(0xFF4F46E5); // indigo-600 – primary accent
@@ -115,7 +116,10 @@ class _IQACScreenState extends State<IQACScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = friendlyErrorMessage(
+          e,
+          fallback: 'Could not load IQAC data. Please try again.',
+        );
         _loading = false;
       });
     }
@@ -138,7 +142,10 @@ class _IQACScreenState extends State<IQACScreen> {
       });
     } catch (e) {
       setState(() {
-        _templatesError = e.toString();
+        _templatesError = friendlyErrorMessage(
+          e,
+          fallback: 'Could not load templates. Please try again.',
+        );
         _templatesLoading = false;
       });
     }
@@ -180,7 +187,10 @@ class _IQACScreenState extends State<IQACScreen> {
     } catch (e) {
       setState(() {
         _ssrSections = _defaultSsrCards;
-        _ssrError = e.toString();
+        _ssrError = friendlyErrorMessage(
+          e,
+          fallback: 'Could not load SSR sections. Please try again.',
+        );
         _ssrLoading = false;
       });
     }
@@ -282,7 +292,10 @@ class _IQACScreenState extends State<IQACScreen> {
         raw.toLowerCase().contains('failed to fulfill')) {
       return '$type export failed on the server. Please try again after the backend is restarted.';
     }
-    return '$type export failed. $raw';
+    return friendlyErrorMessage(
+      error,
+      fallback: '$type export failed. Please try again.',
+    );
   }
 
   int _subFolderCount(int criterionId, String subId) {
@@ -375,9 +388,16 @@ class _IQACScreenState extends State<IQACScreen> {
         final openResult = await OpenFile.open(out.path);
         if (openResult.type != ResultType.done) {
           if (!context.mounted) return;
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(openResult.message)));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                friendlyErrorMessage(
+                  openResult.message,
+                  fallback: 'Could not open the file.',
+                ),
+              ),
+            ),
+          );
           return;
         }
         if (download) {
@@ -392,7 +412,7 @@ class _IQACScreenState extends State<IQACScreen> {
         if (!context.mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       }
     }
 
@@ -432,7 +452,10 @@ class _IQACScreenState extends State<IQACScreen> {
       } catch (e) {
         updateModal(setModalState, () {
           uploading = false;
-          uploadError = e.toString();
+          uploadError = friendlyErrorMessage(
+            e,
+            fallback: 'Could not upload file. Please try again.',
+          );
         });
       }
     }
@@ -448,7 +471,7 @@ class _IQACScreenState extends State<IQACScreen> {
         if (!context.mounted) return;
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(e))));
       }
     }
 
@@ -1441,7 +1464,10 @@ class _IQACScreenState extends State<IQACScreen> {
             } catch (e) {
               setModalState(() {
                 saving = false;
-                message = e.toString();
+                message = friendlyErrorMessage(
+                  e,
+                  fallback: 'Could not save changes. Please try again.',
+                );
                 messageIsError = true;
               });
               return false;
@@ -1501,7 +1527,10 @@ class _IQACScreenState extends State<IQACScreen> {
                     } catch (e) {
                       setHistoryState(() {
                         historyLoading = false;
-                        historyMessage = e.toString();
+                        historyMessage = friendlyErrorMessage(
+                          e,
+                          fallback: 'Could not load history. Please try again.',
+                        );
                         historyMessageIsError = true;
                       });
                     }
@@ -1540,7 +1569,10 @@ class _IQACScreenState extends State<IQACScreen> {
                     } catch (e) {
                       setHistoryState(() {
                         historyDetailLoadingId = '';
-                        historyMessage = e.toString();
+                        historyMessage = friendlyErrorMessage(
+                          e,
+                          fallback: 'Could not load history. Please try again.',
+                        );
                         historyMessageIsError = true;
                       });
                     }
@@ -1621,7 +1653,11 @@ class _IQACScreenState extends State<IQACScreen> {
                     } catch (e) {
                       setHistoryState(() {
                         restoringId = '';
-                        historyMessage = e.toString();
+                        historyMessage = friendlyErrorMessage(
+                          e,
+                          fallback:
+                              'Could not restore version. Please try again.',
+                        );
                         historyMessageIsError = true;
                       });
                     }
@@ -3047,7 +3083,12 @@ class _IQACScreenState extends State<IQACScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error opening file: ${result.message}'),
+            content: Text(
+              friendlyErrorMessage(
+                result.message,
+                fallback: 'Could not open the downloaded file.',
+              ),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -3065,7 +3106,12 @@ class _IQACScreenState extends State<IQACScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error downloading template: ${e.toString()}'),
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Could not download template. Please try again.',
+            ),
+          ),
           backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );

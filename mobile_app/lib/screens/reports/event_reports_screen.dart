@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 
 class EventReportsScreen extends StatefulWidget {
   const EventReportsScreen({super.key});
@@ -78,9 +79,10 @@ class _EventReportsScreenState extends State<EventReportsScreen> {
   }
 
   String _extractError(Object error) {
-    final text = error.toString().trim();
-    if (text.isEmpty) return 'Unable to load event reports.';
-    return text;
+    return friendlyErrorMessage(
+      error,
+      fallback: 'Unable to load event reports.',
+    );
   }
 
   String _statusLabel(Map<String, dynamic> item) {

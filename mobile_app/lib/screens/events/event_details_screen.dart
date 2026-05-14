@@ -9,6 +9,7 @@ import 'package:dio/dio.dart';
 import '../../services/api_service.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/friendly_error.dart';
 import '../../widgets/common/marketing_deliverables_upload_dialog.dart';
 import '../requirements/requirements_wizard_dialog.dart';
 
@@ -141,7 +142,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               .map(ApprovalThreadInfo.fromJson)
               .toList();
         } catch (e) {
-          discussionError = e.toString();
+          discussionError = friendlyErrorMessage(
+            e,
+            fallback: 'Could not load discussion. Please try again.',
+          );
         }
       }
 
@@ -153,7 +157,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       });
     } catch (e) {
       setState(() {
-        _error = e.toString();
+        _error = friendlyErrorMessage(
+          e,
+          fallback: 'Could not load event details. Please try again.',
+        );
         _isLoading = false;
       });
     }
@@ -545,30 +552,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   String _extractApiErrorMessage(Object error) {
-    if (error is DioException) {
-      final data = error.response?.data;
-      if (data is Map<String, dynamic>) {
-        final detail = data['detail'];
-        if (detail is String && detail.trim().isNotEmpty) {
-          return detail.trim();
-        }
-        if (detail is List && detail.isNotEmpty) {
-          final joined = detail
-              .map((e) {
-                if (e is Map<String, dynamic>) {
-                  return (e['msg'] ?? e.toString()).toString();
-                }
-                return e.toString();
-              })
-              .where((e) => e.trim().isNotEmpty)
-              .join(' ')
-              .trim();
-          if (joined.isNotEmpty) return joined;
-        }
-      }
-      return error.message ?? 'Request failed. Please try again.';
-    }
-    return error.toString();
+    return friendlyErrorMessage(
+      error,
+      fallback: 'Request failed. Please try again.',
+    );
   }
 
   Future<void> _connectGoogle() async {
@@ -1378,7 +1365,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _discussionError = e.toString();
+        _discussionError = friendlyErrorMessage(
+          e,
+          fallback: 'Could not send message. Please try again.',
+        );
       });
     } finally {
       if (mounted) {
@@ -1415,7 +1405,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _discussionError = e.toString();
+        _discussionError = friendlyErrorMessage(
+          e,
+          fallback: 'Could not start discussion. Please try again.',
+        );
       });
     } finally {
       if (mounted) {

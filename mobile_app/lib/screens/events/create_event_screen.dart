@@ -11,6 +11,7 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 import '../../widgets/common/app_widgets.dart';
 import 'package:mobile_app/screens/events/event_approval_screen.dart';
 import 'package:provider/provider.dart';
@@ -162,7 +163,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     if (!mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(e.toString()),
+                        content: Text(friendlyErrorMessage(e)),
                         backgroundColor: AppColors.error,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(
@@ -400,12 +401,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
     } on DioException catch (e) {
       if (!mounted) return;
-      final detail = e.response?.data is Map<String, dynamic>
-          ? (e.response?.data['detail']?.toString() ??
-                e.message ??
-                'Unable to check schedule conflicts.')
-          : (e.message ?? 'Unable to check schedule conflicts.');
-      _showErrorSnackBar(detail);
+      _showErrorSnackBar(
+        friendlyErrorMessage(
+          e,
+          fallback: 'Unable to check schedule conflicts.',
+        ),
+      );
       return;
     }
 

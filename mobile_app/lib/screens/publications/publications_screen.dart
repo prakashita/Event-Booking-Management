@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 
 const _pubBg = Color(0xFFF3F4F6);
 const _pubSurface = Color(0xFFFFFFFF);
@@ -5731,11 +5732,5 @@ String _yearFrom(String value) =>
 String _string(dynamic value) => (value ?? '').toString().trim();
 
 String _messageFromError(Object error) {
-  if (error is DioException) {
-    final data = error.response?.data;
-    if (data is Map && data['detail'] != null) return data['detail'].toString();
-    if (error.message != null) return error.message!;
-  }
-  final text = error.toString();
-  return text.isEmpty ? 'Something went wrong.' : text;
+  return friendlyErrorMessage(error);
 }

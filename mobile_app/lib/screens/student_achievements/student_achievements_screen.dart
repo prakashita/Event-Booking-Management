@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 import '../../widgets/common/app_widgets.dart';
 
 class StudentAchievementsScreen extends StatefulWidget {
@@ -464,6 +465,8 @@ class _AchievementFormSheet extends StatefulWidget {
 
 class _AchievementFormSheetState extends State<_AchievementFormSheet> {
   final _formKey = GlobalKey<FormState>();
+  final _iqacDescriptionFieldKey = GlobalKey();
+  final _iqacDescriptionFocusNode = FocusNode();
   late List<_StudentDraft> _students;
   late TextEditingController _activityCtrl;
   late TextEditingController _contextCtrl;
@@ -489,6 +492,7 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
   @override
   void initState() {
     super.initState();
+    _iqacDescriptionFocusNode.addListener(_handleIqacDescriptionFocus);
     final item = widget.initialItem;
     final rawStudents = item?['students'];
     _students = rawStudents is List
@@ -524,11 +528,33 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
 
   @override
   void dispose() {
+    _iqacDescriptionFocusNode
+      ..removeListener(_handleIqacDescriptionFocus)
+      ..dispose();
     _activityCtrl.dispose();
     _contextCtrl.dispose();
     _writeupCtrl.dispose();
     _iqacDescriptionCtrl.dispose();
     super.dispose();
+  }
+
+  void _handleIqacDescriptionFocus() {
+    if (!_iqacDescriptionFocusNode.hasFocus) return;
+    _scrollIqacDescriptionIntoView();
+  }
+
+  Future<void> _scrollIqacDescriptionIntoView() async {
+    await Future<void>.delayed(const Duration(milliseconds: 280));
+    if (!mounted) return;
+    final fieldContext = _iqacDescriptionFieldKey.currentContext;
+    if (fieldContext == null) return;
+    if (!fieldContext.mounted) return;
+    await Scrollable.ensureVisible(
+      fieldContext,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      alignment: 0.35,
+    );
   }
 
   _IqacCriterion? get _criterion => widget.criteria
@@ -563,6 +589,71 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
     setState(() => _attachments.addAll(result.files));
   }
 
+  Future<void> _openGoogleConnect() async {
+    final response = await widget.api.get<Map<String, dynamic>>(
+      '/calendar/connect-url',
+    );
+    final rawUrl = response['url']?.toString().trim() ?? '';
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null) {
+      throw Exception('Could not open Google connect.');
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    if (!opened) {
+      throw Exception('Could not open Google connect.');
+    }
+  }
+
+  Future<bool> _confirmGoogleReadyForFiles() async {
+    if (_attachments.isEmpty) return true;
+
+    try {
+      final status = await widget.api.get<Map<String, dynamic>>(
+        '/auth/google/status',
+      );
+      if (status['connected'] == true) return true;
+    } catch (_) {
+      // If status cannot be checked, let submit continue and show the server
+      // response. This avoids blocking users because of a transient status call.
+      return true;
+    }
+
+    if (!mounted) return false;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Connect Google',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Google Drive access is required to upload PDFs or documents. Connect Google, then try submitting again.',
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              try {
+                await _openGoogleConnect();
+              } catch (e) {
+                if (!mounted) return;
+                setState(() => _error = friendlyErrorMessage(e));
+              }
+            },
+            child: const Text('Connect Google'),
+          ),
+        ],
+      ),
+    );
+    return false;
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final cleanedStudents = _students
@@ -573,6 +664,8 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
       setState(() => _error = 'Add at least one student name.');
       return;
     }
+    final googleReady = await _confirmGoogleReadyForFiles();
+    if (!googleReady) return;
 
     setState(() {
       _saving = true;
@@ -630,416 +723,441 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
     final inputDeco = _achievementInputDecoration(context);
 
-    return DraggableScrollableSheet(
-      expand: false,
-      initialChildSize: 0.92,
-      minChildSize: 0.6,
-      maxChildSize: 0.96,
-      builder: (context, scrollController) {
-        return Container(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            boxShadow: const [BoxShadow(blurRadius: 20, color: Colors.black26)],
-          ),
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              controller: scrollController,
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: EdgeInsets.fromLTRB(24, 12, 24, 32 + bottom),
-              children: [
-                Center(
-                  child: Container(
-                    width: 48,
-                    height: 5,
-                    margin: const EdgeInsets.only(bottom: 24),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.onSurfaceVariant.withValues(
-                        alpha: 0.3,
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                ),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      padding: EdgeInsets.only(bottom: bottom),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.92,
+        minChildSize: 0.6,
+        maxChildSize: 0.96,
+        builder: (context, scrollController) {
+          return Container(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(32),
+              ),
+              boxShadow: const [
+                BoxShadow(blurRadius: 20, color: Colors.black26),
+              ],
+            ),
+            child: Form(
+              key: _formKey,
+              child: ListView(
+                controller: scrollController,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 48,
+                      height: 5,
+                      margin: const EdgeInsets.only(bottom: 24),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primaryContainer,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _isEdit ? LucideIcons.edit2 : LucideIcons.plus,
-                        color: theme.colorScheme.primary,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        _isEdit ? 'Edit Achievement' : 'Submit Achievement',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
+                        color: theme.colorScheme.onSurfaceVariant.withValues(
+                          alpha: 0.3,
                         ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _saving
-                          ? null
-                          : () => Navigator.of(context).pop(false),
-                      style: IconButton.styleFrom(
-                        backgroundColor:
-                            theme.colorScheme.surfaceContainerHighest,
-                      ),
-                      icon: const Icon(LucideIcons.x, size: 20),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Use this for non-event institutional publicity inputs.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                _SectionTitle(
-                  title: '1. Students Included',
-                  icon: LucideIcons.users,
-                  action: TextButton.icon(
-                    onPressed: () =>
-                        setState(() => _students.add(_StudentDraft())),
-                    style: TextButton.styleFrom(
-                      foregroundColor: theme.colorScheme.primary,
-                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    icon: const Icon(LucideIcons.plus, size: 16),
-                    label: const Text(
-                      'Add Student',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
                   ),
-                ),
-                ...List.generate(_students.length, (index) {
-                  final student = _students[index];
-                  return _StudentEditor(
-                    key: ValueKey(student),
-                    student: student,
-                    canRemove: _students.length > 1,
-                    inputDeco: inputDeco,
-                    onChanged: () => setState(() {}),
-                    onRemove: () => setState(() => _students.removeAt(index)),
-                  );
-                }),
-                const SizedBox(height: 16),
-                const _SectionTitle(
-                  title: '2. Achievement Details',
-                  icon: LucideIcons.fileText,
-                ),
-                TextFormField(
-                  controller: _activityCtrl,
-                  minLines: 4,
-                  maxLines: 7,
-                  decoration: inputDeco.copyWith(
-                    labelText: 'Description of Activity and Achievement',
-                    alignLabelWithHint: true,
-                  ),
-                  validator: (value) => (value ?? '').trim().isEmpty
-                      ? 'Description is required.'
-                      : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _contextCtrl,
-                  minLines: 3,
-                  maxLines: 6,
-                  decoration: inputDeco.copyWith(
-                    labelText: 'Additional Details (Context & Objective)',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                const _SectionTitle(
-                  title: '3. Publicity Preferences',
-                  icon: LucideIcons.share2,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Suggested Platforms to Post',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: _platformOptions.map((platform) {
-                    final isSelected = _platforms.contains(platform);
-                    return FilterChip(
-                      label: Text(platform),
-                      selected: isSelected,
-                      showCheckmark: isSelected,
-                      checkmarkColor: theme.colorScheme.onPrimary,
-                      labelStyle: TextStyle(
-                        color: isSelected
-                            ? theme.colorScheme.onPrimary
-                            : theme.colorScheme.onSurface,
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      ),
-                      selectedColor: theme.colorScheme.primary,
-                      backgroundColor: theme.colorScheme.surface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: isSelected
-                              ? Colors.transparent
-                              : theme.colorScheme.outline.withValues(
-                                  alpha: 0.2,
-                                ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primaryContainer,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isEdit ? LucideIcons.edit2 : LucideIcons.plus,
+                          color: theme.colorScheme.primary,
+                          size: 20,
                         ),
                       ),
-                      onSelected: (selected) {
-                        setState(() {
-                          selected
-                              ? _platforms.add(platform)
-                              : _platforms.remove(platform);
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _writeupCtrl,
-                  minLines: 3,
-                  maxLines: 6,
-                  decoration: inputDeco.copyWith(
-                    labelText: 'Draft Social Media Write-up',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                const _SectionTitle(
-                  title: '4. Images and Attachments/Documents',
-                  icon: LucideIcons.paperclip,
-                ),
-                _AttachmentPickerBox(
-                  attachments: _attachments,
-                  onPick: _saving ? null : _pickAttachments,
-                  onRemove: (file) => setState(() => _attachments.remove(file)),
-                ),
-                const SizedBox(height: 32),
-                const _SectionTitle(
-                  title: '5. Relevant IQAC Criterion',
-                  icon: LucideIcons.database,
-                ),
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: theme.colorScheme.outline.withValues(alpha: 0.15),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.02),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Text(
+                          _isEdit ? 'Edit Achievement' : 'Submit Achievement',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _saving
+                            ? null
+                            : () => Navigator.of(context).pop(false),
+                        style: IconButton.styleFrom(
+                          backgroundColor:
+                              theme.colorScheme.surfaceContainerHighest,
+                        ),
+                        icon: const Icon(LucideIcons.x, size: 20),
                       ),
                     ],
                   ),
-                  child: Column(
-                    children: [
-                      DropdownButtonFormField<String>(
-                        key: ValueKey('criterion-$_criterionId'),
-                        initialValue: _criterionId.isEmpty
-                            ? null
-                            : _criterionId,
-                        isExpanded: true,
-                        decoration: inputDeco.copyWith(labelText: 'Criterion'),
-                        items: widget.criteria
-                            .map(
-                              (c) => DropdownMenuItem(
-                                value: c.id.toString(),
-                                child: Text(
+                  const SizedBox(height: 8),
+                  Text(
+                    'Use this for non-event institutional publicity inputs.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  _SectionTitle(
+                    title: '1. Students Included',
+                    icon: LucideIcons.users,
+                    action: TextButton.icon(
+                      onPressed: () =>
+                          setState(() => _students.add(_StudentDraft())),
+                      style: TextButton.styleFrom(
+                        foregroundColor: theme.colorScheme.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      icon: const Icon(LucideIcons.plus, size: 16),
+                      label: const Text(
+                        'Add Student',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                  ...List.generate(_students.length, (index) {
+                    final student = _students[index];
+                    return _StudentEditor(
+                      key: ValueKey(student),
+                      student: student,
+                      canRemove: _students.length > 1,
+                      inputDeco: inputDeco,
+                      onChanged: () => setState(() {}),
+                      onRemove: () => setState(() => _students.removeAt(index)),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                  const _SectionTitle(
+                    title: '2. Achievement Details',
+                    icon: LucideIcons.fileText,
+                  ),
+                  TextFormField(
+                    controller: _activityCtrl,
+                    minLines: 4,
+                    maxLines: 7,
+                    decoration: inputDeco.copyWith(
+                      labelText: 'Description of Activity and Achievement',
+                      alignLabelWithHint: true,
+                    ),
+                    validator: (value) => (value ?? '').trim().isEmpty
+                        ? 'Description is required.'
+                        : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _contextCtrl,
+                    minLines: 3,
+                    maxLines: 6,
+                    decoration: inputDeco.copyWith(
+                      labelText: 'Additional Details (Context & Objective)',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  const _SectionTitle(
+                    title: '3. Publicity Preferences',
+                    icon: LucideIcons.share2,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Suggested Platforms to Post',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: _platformOptions.map((platform) {
+                      final isSelected = _platforms.contains(platform);
+                      return FilterChip(
+                        label: Text(platform),
+                        selected: isSelected,
+                        showCheckmark: isSelected,
+                        checkmarkColor: theme.colorScheme.onPrimary,
+                        labelStyle: TextStyle(
+                          color: isSelected
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.onSurface,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                        selectedColor: theme.colorScheme.primary,
+                        backgroundColor: theme.colorScheme.surface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: isSelected
+                                ? Colors.transparent
+                                : theme.colorScheme.outline.withValues(
+                                    alpha: 0.2,
+                                  ),
+                          ),
+                        ),
+                        onSelected: (selected) {
+                          setState(() {
+                            selected
+                                ? _platforms.add(platform)
+                                : _platforms.remove(platform);
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: _writeupCtrl,
+                    minLines: 3,
+                    maxLines: 6,
+                    decoration: inputDeco.copyWith(
+                      labelText: 'Draft Social Media Write-up',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const _SectionTitle(
+                    title: '4. Images and Attachments/Documents',
+                    icon: LucideIcons.paperclip,
+                  ),
+                  _AttachmentPickerBox(
+                    attachments: _attachments,
+                    onPick: _saving ? null : _pickAttachments,
+                    onRemove: (file) =>
+                        setState(() => _attachments.remove(file)),
+                  ),
+                  const SizedBox(height: 32),
+                  const _SectionTitle(
+                    title: '5. Relevant IQAC Criterion',
+                    icon: LucideIcons.database,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withValues(
+                          alpha: 0.15,
+                        ),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.02),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        DropdownButtonFormField<String>(
+                          key: ValueKey('criterion-$_criterionId'),
+                          initialValue: _criterionId.isEmpty
+                              ? null
+                              : _criterionId,
+                          isExpanded: true,
+                          decoration: inputDeco.copyWith(
+                            labelText: 'Criterion',
+                          ),
+                          items: widget.criteria
+                              .map(
+                                (c) => DropdownMenuItem(
+                                  value: c.id.toString(),
+                                  child: Text(
+                                    '${c.id}. ${c.title}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          selectedItemBuilder: (context) => widget.criteria
+                              .map(
+                                (c) => Text(
                                   '${c.id}. ${c.title}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                            )
-                            .toList(),
-                        selectedItemBuilder: (context) => widget.criteria
-                            .map(
-                              (c) => Text(
-                                '${c.id}. ${c.title}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _criterionId = value ?? '';
-                            _subFolderId = '';
-                            _itemId = '';
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        key: ValueKey('subfolder-$_criterionId-$_subFolderId'),
-                        initialValue: _subFolderId.isEmpty
-                            ? null
-                            : _subFolderId,
-                        isExpanded: true,
-                        decoration: inputDeco.copyWith(labelText: 'Subfolder'),
-                        items:
-                            (_criterion?.subFolders ?? const <_IqacSubFolder>[])
-                                .map(
-                                  (s) => DropdownMenuItem(
-                                    value: s.id,
-                                    child: Text(
+                              )
+                              .toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _criterionId = value ?? '';
+                              _subFolderId = '';
+                              _itemId = '';
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          key: ValueKey(
+                            'subfolder-$_criterionId-$_subFolderId',
+                          ),
+                          initialValue: _subFolderId.isEmpty
+                              ? null
+                              : _subFolderId,
+                          isExpanded: true,
+                          decoration: inputDeco.copyWith(
+                            labelText: 'Subfolder',
+                          ),
+                          items:
+                              (_criterion?.subFolders ??
+                                      const <_IqacSubFolder>[])
+                                  .map(
+                                    (s) => DropdownMenuItem(
+                                      value: s.id,
+                                      child: Text(
+                                        '${s.id} ${s.title}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                          selectedItemBuilder: (context) =>
+                              (_criterion?.subFolders ??
+                                      const <_IqacSubFolder>[])
+                                  .map(
+                                    (s) => Text(
                                       '${s.id} ${s.title}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                  ),
-                                )
-                                .toList(),
-                        selectedItemBuilder: (context) =>
-                            (_criterion?.subFolders ?? const <_IqacSubFolder>[])
-                                .map(
-                                  (s) => Text(
-                                    '${s.id} ${s.title}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                )
-                                .toList(),
-                        onChanged: _criterion == null
-                            ? null
-                            : (value) {
-                                setState(() {
-                                  _subFolderId = value ?? '';
-                                  _itemId = '';
-                                });
-                              },
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        key: ValueKey('item-$_subFolderId-$_itemId'),
-                        initialValue: _itemId.isEmpty ? null : _itemId,
-                        isExpanded: true,
-                        decoration: inputDeco.copyWith(labelText: 'Item'),
-                        items: (_subFolder?.items ?? const <_IqacItem>[])
-                            .map(
-                              (i) => DropdownMenuItem(
-                                value: i.id,
-                                child: Text(
-                                  '${i.id} ${i.title}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                        selectedItemBuilder: (context) =>
-                            (_subFolder?.items ?? const <_IqacItem>[])
-                                .map(
-                                  (i) => Text(
+                                  )
+                                  .toList(),
+                          onChanged: _criterion == null
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    _subFolderId = value ?? '';
+                                    _itemId = '';
+                                  });
+                                },
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          key: ValueKey('item-$_subFolderId-$_itemId'),
+                          initialValue: _itemId.isEmpty ? null : _itemId,
+                          isExpanded: true,
+                          decoration: inputDeco.copyWith(labelText: 'Item'),
+                          items: (_subFolder?.items ?? const <_IqacItem>[])
+                              .map(
+                                (i) => DropdownMenuItem(
+                                  value: i.id,
+                                  child: Text(
                                     '${i.id} ${i.title}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                )
-                                .toList(),
-                        onChanged: _subFolder == null
-                            ? null
-                            : (value) => setState(() => _itemId = value ?? ''),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _iqacDescriptionCtrl,
-                        decoration: inputDeco.copyWith(
-                          labelText: 'IQAC Description',
+                                ),
+                              )
+                              .toList(),
+                          selectedItemBuilder: (context) =>
+                              (_subFolder?.items ?? const <_IqacItem>[])
+                                  .map(
+                                    (i) => Text(
+                                      '${i.id} ${i.title}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  )
+                                  .toList(),
+                          onChanged: _subFolder == null
+                              ? null
+                              : (value) =>
+                                    setState(() => _itemId = value ?? ''),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.errorContainer,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          color: theme.colorScheme.error,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _error!,
-                            style: TextStyle(
-                              color: theme.colorScheme.error,
-                              fontWeight: FontWeight.w600,
-                            ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          key: _iqacDescriptionFieldKey,
+                          controller: _iqacDescriptionCtrl,
+                          focusNode: _iqacDescriptionFocusNode,
+                          onTap: _scrollIqacDescriptionIntoView,
+                          decoration: inputDeco.copyWith(
+                            labelText: 'IQAC Description',
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
-                const SizedBox(height: 32),
-                SizedBox(
-                  height: 56,
-                  child: FilledButton(
-                    onPressed: _saving ? null : _submit,
-                    style: FilledButton.styleFrom(
-                      shape: RoundedRectangleBorder(
+                  if (_error != null) ...[
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.errorContainer,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      backgroundColor: theme.colorScheme.primary,
-                      foregroundColor: theme.colorScheme.onPrimary,
-                    ),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : Text(
-                            _isEdit ? 'Save Changes' : 'Submit Achievement',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            color: theme.colorScheme.error,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _error!,
+                              style: TextStyle(
+                                color: theme.colorScheme.error,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    height: 56,
+                    child: FilledButton(
+                      onPressed: _saving ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        backgroundColor: theme.colorScheme.primary,
+                        foregroundColor: theme.colorScheme.onPrimary,
+                      ),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Text(
+                              _isEdit ? 'Save Changes' : 'Submit Achievement',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -2863,11 +2981,5 @@ Future<void> _openUrl(String url) async {
 }
 
 String _messageFromError(Object error) {
-  if (error is DioException) {
-    final data = error.response?.data;
-    if (data is Map && data['detail'] != null) return data['detail'].toString();
-    if (error.message != null) return error.message!;
-  }
-  final text = error.toString();
-  return text.isEmpty ? 'Something went wrong.' : text;
+  return friendlyErrorMessage(error);
 }

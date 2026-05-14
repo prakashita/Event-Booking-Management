@@ -87,9 +87,7 @@ class AuthService {
           e.type == DioExceptionType.receiveTimeout ||
           e.type == DioExceptionType.sendTimeout ||
           e.type == DioExceptionType.connectionError) {
-        throw Exception(
-          'Cannot reach server. Set API_BASE_URL to your backend host (e.g. https://sync.vidyashilp.edu.in).',
-        );
+        throw Exception('Please check your internet connection.');
       }
 
       final status = e.response?.statusCode;
@@ -108,17 +106,15 @@ class AuthService {
       }
       if (status == 500) {
         throw Exception(
-          'Server auth configuration is incomplete. Contact admin.',
+          'Sign-in is unavailable right now. Please try again later.',
         );
       }
 
-      throw Exception(detail ?? 'Login failed (${status ?? 'network error'}).');
+      throw Exception(detail ?? 'Could not sign in. Please try again.');
     } on Exception catch (e) {
       final text = e.toString();
       if (text.contains('ApiException: 10')) {
-        throw Exception(
-          'Google Sign-In blocked by Android OAuth config (ApiException 10). Verify package name and SHA-1 in Google Cloud.',
-        );
+        throw Exception('Google sign-in is not set up correctly.');
       }
       rethrow;
     }

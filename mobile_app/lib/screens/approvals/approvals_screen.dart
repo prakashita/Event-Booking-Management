@@ -11,6 +11,7 @@ import '../../constants/approval_ui.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 import '../../widgets/common/approval_widgets.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../../widgets/common/marketing_deliverables_upload_dialog.dart';
@@ -301,32 +302,10 @@ class _ApprovalsScreenState extends State<ApprovalsScreen>
   }
 
   String _extractApiErrorMessage(Object error) {
-    if (error is DioException) {
-      final data = error.response?.data;
-      if (data is Map<String, dynamic>) {
-        final detail = data['detail'];
-        if (detail is String && detail.trim().isNotEmpty) {
-          return detail.trim();
-        }
-        if (detail is List && detail.isNotEmpty) {
-          final joined = detail
-              .map((e) {
-                if (e is Map<String, dynamic>) {
-                  return (e['msg'] ?? e.toString()).toString();
-                }
-                return e.toString();
-              })
-              .where((e) => e.trim().isNotEmpty)
-              .join(' ')
-              .trim();
-          if (joined.isNotEmpty) return joined;
-        }
-      } else if (data is String && data.trim().isNotEmpty) {
-        return data.trim();
-      }
-      return error.message ?? 'Request failed. Please try again.';
-    }
-    return error.toString();
+    return friendlyErrorMessage(
+      error,
+      fallback: 'Request failed. Please try again.',
+    );
   }
 
   Future<void> _refreshActiveTab() async {

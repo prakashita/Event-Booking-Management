@@ -11,6 +11,7 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 import '../../widgets/common/app_widgets.dart';
 
 class ChatListScreen extends StatefulWidget {
@@ -116,7 +117,10 @@ class _ChatListScreenState extends State<ChatListScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = friendlyErrorMessage(
+          e,
+          fallback: 'Could not load chats. Please try again.',
+        );
         _isLoading = false;
       });
     }
@@ -456,9 +460,16 @@ class _ChatListScreenState extends State<ChatListScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to create chat: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Could not create chat. Please try again.',
+            ),
+          ),
+        ),
+      );
     }
   }
 
@@ -501,9 +512,16 @@ class _ChatListScreenState extends State<ChatListScreen>
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not update chat: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Could not update chat. Please try again.',
+            ),
+          ),
+        ),
+      );
     }
   }
 

@@ -1070,12 +1070,19 @@ class _HomeScreenState extends State<HomeScreen> {
                                       currentRoute == '/requirements' ||
                                       currentRoute == '/admin' ||
                                       currentRoute == '/events/create' ||
+                                      currentRoute == '/publications' ||
+                                      currentRoute == '/student-achievements' ||
                                       currentRoute.startsWith('/events/') ||
                                       currentRoute.startsWith(
                                         '/approval-details/',
                                       );
+                                  final hasTallBottomActionBar =
+                                      currentRoute == '/events/create';
 
-                                  final baseBottomOffset = hasPageLevelActions
+                                  final baseBottomOffset =
+                                      hasTallBottomActionBar
+                                      ? 184.0
+                                      : hasPageLevelActions
                                       ? 96.0
                                       : 16.0;
                                   final defaultBottom = baseBottomOffset;

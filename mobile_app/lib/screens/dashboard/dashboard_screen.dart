@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/friendly_error.dart';
 import '../../widgets/common/error_state.dart';
 import '../home_screen.dart';
 import '../../services/api_service.dart';
@@ -112,7 +113,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
       setState(() {
         _isLoading = false;
-        _error = e.toString();
+        _error = friendlyErrorMessage(
+          e,
+          fallback: 'Could not load dashboard. Please try again.',
+        );
       });
     }
   }

@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:dio/dio.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../constants/app_colors.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 
 class RequirementsWizardDialog extends StatefulWidget {
   final Event event;
@@ -221,6 +223,21 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       if (missingGuest) {
         return 'Fill guest cab details: pickup location, pickup date & time, dropoff location, and dropoff time.';
       }
+
+      final pickupDate = _trimmed(_transportForm['guest_pickup_date']);
+      final pickupTime = _trimmed(_transportForm['guest_pickup_time']);
+      final dropoffDate = _trimmed(_transportForm['guest_dropoff_date']).isEmpty
+          ? pickupDate
+          : _trimmed(_transportForm['guest_dropoff_date']);
+      final dropoffTime = _trimmed(_transportForm['guest_dropoff_time']);
+      final pickupDateTime = _parseTransportDateTime(pickupDate, pickupTime);
+      final dropoffDateTime = _parseTransportDateTime(dropoffDate, dropoffTime);
+      if (pickupDateTime == null || dropoffDateTime == null) {
+        return 'Select valid guest pickup and dropoff date/time.';
+      }
+      if (!dropoffDateTime.isAfter(pickupDateTime)) {
+        return 'Guest drop off time must be after pick up time.';
+      }
     }
 
     if (wantsStudents) {
@@ -240,6 +257,26 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     }
 
     return null;
+  }
+
+  DateTime? _parseTransportDateTime(String date, String time) {
+    final dateParts = date.split('-');
+    final timeParts = time.split(':');
+    if (dateParts.length != 3 || timeParts.length < 2) return null;
+
+    final year = int.tryParse(dateParts[0]);
+    final month = int.tryParse(dateParts[1]);
+    final day = int.tryParse(dateParts[2]);
+    final hour = int.tryParse(timeParts[0]);
+    final minute = int.tryParse(timeParts[1]);
+    if (year == null ||
+        month == null ||
+        day == null ||
+        hour == null ||
+        minute == null) {
+      return null;
+    }
+    return DateTime(year, month, day, hour, minute);
   }
 
   void _goNext() {
@@ -309,6 +346,75 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     }
   }
 
+  Future<void> _openGoogleConnect() async {
+    final response = await _api.get<Map<String, dynamic>>(
+      '/calendar/connect-url',
+    );
+    final rawUrl = response['url']?.toString().trim() ?? '';
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null) {
+      throw Exception('Could not open Google connect.');
+    }
+
+    final opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    if (!opened) {
+      throw Exception('Could not open Google connect.');
+    }
+  }
+
+  Future<bool> _confirmGoogleReadyForMarketingAttachments() async {
+    if (_marketingAttachments.isEmpty || _skipped['marketing'] == true) {
+      return true;
+    }
+
+    try {
+      final status = await _api.get<Map<String, dynamic>>(
+        '/auth/google/status',
+      );
+      if (status['connected'] == true) return true;
+    } catch (_) {
+      return true;
+    }
+
+    if (!mounted) return false;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Connect Google',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Google Drive access is required to upload marketing request documents. Connect Google, then try sending requirements again.',
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              try {
+                await _openGoogleConnect();
+              } catch (e) {
+                if (!mounted) return;
+                setState(() {
+                  _status = 'error';
+                  _errorMessage = friendlyErrorMessage(e);
+                });
+              }
+            },
+            child: const Text('Connect Google'),
+          ),
+        ],
+      ),
+    );
+    return false;
+  }
+
   Future<void> _sendAll() async {
     if (!_hasAnySelected) {
       if (mounted) {
@@ -321,6 +427,9 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
       }
       return;
     }
+
+    final googleReady = await _confirmGoogleReadyForMarketingAttachments();
+    if (!googleReady) return;
 
     setState(() {
       _status = 'loading';
@@ -369,7 +478,10 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
     } catch (e) {
       setState(() {
         _status = 'error';
-        _errorMessage = e.toString();
+        _errorMessage = friendlyErrorMessage(
+          e,
+          fallback: 'Could not send requirements. Please try again.',
+        );
       });
     }
   }

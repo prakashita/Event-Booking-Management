@@ -13,6 +13,7 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
@@ -679,7 +680,12 @@ class _ChatScreenState extends State<ChatScreen> {
         _pendingFiles = [..._pendingFiles, ...result.files];
       });
     } catch (e) {
-      _showErrorSnackBar('Could not pick attachments: $e');
+      _showErrorSnackBar(
+        friendlyErrorMessage(
+          e,
+          fallback: 'Could not pick attachments. Please try again.',
+        ),
+      );
     }
   }
 
@@ -811,7 +817,12 @@ class _ChatScreenState extends State<ChatScreen> {
             .toList();
       });
     } catch (e) {
-      _showErrorSnackBar('Could not save changes: $e');
+      _showErrorSnackBar(
+        friendlyErrorMessage(
+          e,
+          fallback: 'Could not save changes. Please try again.',
+        ),
+      );
     }
   }
 
@@ -856,7 +867,12 @@ class _ChatScreenState extends State<ChatScreen> {
         }).toList();
       });
     } catch (e) {
-      _showErrorSnackBar('Could not delete message: $e');
+      _showErrorSnackBar(
+        friendlyErrorMessage(
+          e,
+          fallback: 'Could not delete message. Please try again.',
+        ),
+      );
     }
   }
 
@@ -870,7 +886,12 @@ class _ChatScreenState extends State<ChatScreen> {
             .toList();
       });
     } catch (e) {
-      _showErrorSnackBar('Could not delete message: $e');
+      _showErrorSnackBar(
+        friendlyErrorMessage(
+          e,
+          fallback: 'Could not delete message. Please try again.',
+        ),
+      );
     }
   }
 
@@ -891,7 +912,12 @@ class _ChatScreenState extends State<ChatScreen> {
           _messages = [];
         });
       } catch (e) {
-        _showErrorSnackBar('Could not clear conversation: $e');
+        _showErrorSnackBar(
+          friendlyErrorMessage(
+            e,
+            fallback: 'Could not clear conversation. Please try again.',
+          ),
+        );
       }
       return;
     }
@@ -911,7 +937,12 @@ class _ChatScreenState extends State<ChatScreen> {
           Navigator.of(context).maybePop();
         }
       } catch (e) {
-        _showErrorSnackBar('Could not delete thread: $e');
+        _showErrorSnackBar(
+          friendlyErrorMessage(
+            e,
+            fallback: 'Could not delete thread. Please try again.',
+          ),
+        );
       }
       return;
     }
@@ -925,7 +956,12 @@ class _ChatScreenState extends State<ChatScreen> {
           Navigator.of(context).maybePop();
         }
       } catch (e) {
-        _showErrorSnackBar('Could not hide conversation: $e');
+        _showErrorSnackBar(
+          friendlyErrorMessage(
+            e,
+            fallback: 'Could not hide conversation. Please try again.',
+          ),
+        );
       }
     }
   }

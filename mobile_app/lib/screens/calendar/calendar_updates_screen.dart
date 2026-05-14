@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 
 enum _EntryTypeFilter { all, holiday, academic }
 
@@ -224,19 +224,10 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
   }
 
   String _extractError(Object error) {
-    if (error is DioException) {
-      final data = error.response?.data;
-      if (data is Map<String, dynamic>) {
-        final detail = data['detail'];
-        if (detail is String && detail.isNotEmpty) return detail;
-        final errors = data['errors'] ?? detail;
-        if (errors is List) {
-          return errors.map((e) => e.toString()).join('\n');
-        }
-      }
-      return error.message ?? 'Request failed.';
-    }
-    return error.toString();
+    return friendlyErrorMessage(
+      error,
+      fallback: 'Request failed. Please try again.',
+    );
   }
 
   String _normalizeHexColor(String value, {required String fallback}) {

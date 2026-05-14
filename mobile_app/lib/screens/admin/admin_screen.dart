@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../home_screen.dart';
 
@@ -198,9 +199,7 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   String _extractError(Object error) {
-    final text = error.toString();
-    if (text.isEmpty) return 'Something went wrong.';
-    return text;
+    return friendlyErrorMessage(error);
   }
 
   Future<void> _switchTab(_AdminTab tab) async {
@@ -230,6 +229,40 @@ class _AdminScreenState extends State<AdminScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('User deleted.')));
+      await _loadOverview();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_extractError(e))));
+    }
+  }
+
+  Future<void> _deleteRejectedUser(Map<String, dynamic> user) async {
+    final id = (user['id'] ?? '').toString();
+    if (id.isEmpty) return;
+
+    final name = (user['name'] ?? 'this rejected user').toString();
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Delete Rejected User',
+      message: 'Delete $name? This cannot be undone.',
+      confirmLabel: 'Delete',
+      isDestructive: true,
+    );
+    if (ok != true) return;
+
+    try {
+      await _api.delete('/users/$id');
+      if (!mounted) return;
+      setState(() {
+        _rejectedUsers.removeWhere(
+          (item) => (item['id'] ?? '').toString() == id,
+        );
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Rejected user deleted.')));
       await _loadOverview();
     } catch (e) {
       if (!mounted) return;
@@ -1043,6 +1076,53 @@ class _AdminScreenState extends State<AdminScreen> {
     );
   }
 
+  Widget _buildSectionRefreshButton() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final foregroundColor = isDark
+        ? const Color(0xFF93C5FD)
+        : const Color(0xFF2563EB);
+
+    return Tooltip(
+      message: 'Refresh',
+      child: SizedBox.square(
+        dimension: 44,
+        child: Material(
+          color: isDark ? const Color(0xFF1E293B) : Colors.white,
+          elevation: isDark ? 0 : 2,
+          shadowColor: Colors.black.withValues(alpha: 0.08),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: InkWell(
+            onTap: _isRefreshing
+                ? null
+                : () => _loadCurrentSection(forceRefresh: true),
+            borderRadius: BorderRadius.circular(14),
+            child: Center(
+              child: _isRefreshing
+                  ? SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: foregroundColor,
+                      ),
+                    )
+                  : Icon(
+                      Icons.refresh_rounded,
+                      size: 21,
+                      color: foregroundColor,
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildUsersSection() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -1065,17 +1145,7 @@ class _AdminScreenState extends State<AdminScreen> {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          OutlinedButton.icon(
-            onPressed: () => _loadCurrentSection(forceRefresh: true),
-            style: OutlinedButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            icon: const Icon(Icons.refresh_rounded, size: 16),
-            label: const Text('Refresh'),
-          ),
+          _buildSectionRefreshButton(),
           const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: _showAddUserDialog,
@@ -1370,17 +1440,56 @@ class _AdminScreenState extends State<AdminScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () => _showApproveUserDialog(item),
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.tonalIcon(
+                            onPressed: () => _showApproveUserDialog(item),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(
+                                0xFF2563EB,
+                              ).withValues(alpha: 0.12),
+                              foregroundColor: const Color(0xFF2563EB),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            icon: const Icon(
+                              Icons.person_add_alt_1_rounded,
+                              size: 18,
+                            ),
+                            label: const Text(
+                              'Re-approve',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
                           ),
                         ),
-                        child: const Text('Review & Re-approve'),
-                      ),
+                        const SizedBox(width: 12),
+                        Tooltip(
+                          message: 'Delete rejected user',
+                          child: SizedBox.square(
+                            dimension: 48,
+                            child: OutlinedButton(
+                              onPressed: () => _deleteRejectedUser(item),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFFDC2626),
+                                padding: EdgeInsets.zero,
+                                side: const BorderSide(
+                                  color: Color(0xFFFCA5A5),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.delete_outline_rounded,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1544,17 +1653,7 @@ class _AdminScreenState extends State<AdminScreen> {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          OutlinedButton.icon(
-            onPressed: () => _loadCurrentSection(forceRefresh: true),
-            style: OutlinedButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            icon: const Icon(Icons.refresh_rounded, size: 16),
-            label: const Text('Refresh'),
-          ),
+          _buildSectionRefreshButton(),
           const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: _showAddVenueDialog,
@@ -1624,14 +1723,7 @@ class _AdminScreenState extends State<AdminScreen> {
     return _SectionShell(
       title: 'All Events',
       icon: Icons.event_note_rounded,
-      trailing: OutlinedButton.icon(
-        onPressed: () => _loadCurrentSection(forceRefresh: true),
-        style: OutlinedButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        icon: const Icon(Icons.refresh_rounded, size: 16),
-        label: const Text('Refresh'),
-      ),
+      trailing: _buildSectionRefreshButton(),
       child: _events.isEmpty
           ? _buildEmptyState(
               'There are no events in the system.',
@@ -1765,14 +1857,7 @@ class _AdminScreenState extends State<AdminScreen> {
     return _SectionShell(
       title: 'Requests Overview',
       icon: Icons.assignment_outlined,
-      trailing: OutlinedButton.icon(
-        onPressed: () => _loadCurrentSection(forceRefresh: true),
-        style: OutlinedButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        icon: const Icon(Icons.refresh_rounded, size: 16),
-        label: const Text('Refresh'),
-      ),
+      trailing: _buildSectionRefreshButton(),
       child: Column(
         children: groups.entries.map((entry) {
           final title = entry.key;
@@ -1801,14 +1886,7 @@ class _AdminScreenState extends State<AdminScreen> {
     return _SectionShell(
       title: 'Invites',
       icon: Icons.forward_to_inbox_rounded,
-      trailing: OutlinedButton.icon(
-        onPressed: () => _loadCurrentSection(forceRefresh: true),
-        style: OutlinedButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        icon: const Icon(Icons.refresh_rounded, size: 16),
-        label: const Text('Refresh'),
-      ),
+      trailing: _buildSectionRefreshButton(),
       child: _invites.isEmpty
           ? _buildEmptyState(
               'No invites have been sent.',
@@ -1916,14 +1994,7 @@ class _AdminScreenState extends State<AdminScreen> {
     return _SectionShell(
       title: 'Publications',
       icon: Icons.article_outlined,
-      trailing: OutlinedButton.icon(
-        onPressed: () => _loadCurrentSection(forceRefresh: true),
-        style: OutlinedButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        icon: const Icon(Icons.refresh_rounded, size: 16),
-        label: const Text('Refresh'),
-      ),
+      trailing: _buildSectionRefreshButton(),
       child: _publications.isEmpty
           ? _buildEmptyState('No publications found.', Icons.note_alt_outlined)
           : Column(

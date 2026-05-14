@@ -7,6 +7,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../constants/app_colors.dart';
 import '../../models/models.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 
 enum _CalendarFilter { all, events, holidays, academic }
 
@@ -331,9 +332,16 @@ class _CalendarScreenState extends State<CalendarScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Google connect failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Google connect failed. Please try again.',
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isConnectingGoogle = false);

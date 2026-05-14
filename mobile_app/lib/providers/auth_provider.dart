@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
+import '../utils/friendly_error.dart';
 
 enum AuthStatus { loading, authenticated, unauthenticated }
 
@@ -74,7 +75,10 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _error = e.toString().replaceAll('Exception: ', '');
+      _error = friendlyErrorMessage(
+        e,
+        fallback: 'Could not sign in. Please try again.',
+      );
       notifyListeners();
       return false;
     }
@@ -117,7 +121,7 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      final message = e.toString().replaceAll('Exception: ', '');
+      final message = friendlyErrorMessage(e);
       if (message.contains('401')) {
         await signOut();
         return;

@@ -12,6 +12,7 @@ import '../../constants/app_constants.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../utils/friendly_error.dart';
 import '../../widgets/common/app_widgets.dart';
 import '../requirements/requirements_wizard_dialog.dart';
 import 'package:intl/intl.dart';
@@ -333,11 +334,7 @@ class _EventsScreenState extends State<EventsScreen>
     Object error, {
     String fallback = 'Something went wrong.',
   }) {
-    final text = error.toString().trim();
-    if (text.startsWith('Exception: ')) {
-      return text.substring('Exception: '.length).trim();
-    }
-    return text.isEmpty ? fallback : text;
+    return friendlyErrorMessage(error, fallback: fallback);
   }
 
   void _showMessage(
@@ -356,6 +353,67 @@ class _EventsScreenState extends State<EventsScreen>
             : null,
       ),
     );
+  }
+
+  Future<void> _openGoogleConnect() async {
+    final response = await _api.get<Map<String, dynamic>>(
+      '/calendar/connect-url',
+    );
+    final rawUrl = response['url']?.toString().trim() ?? '';
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null) {
+      throw Exception('Could not open Google connect.');
+    }
+
+    final opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    if (!opened) {
+      throw Exception('Could not open Google connect.');
+    }
+  }
+
+  Future<bool> _confirmGoogleReadyForEventReport() async {
+    try {
+      final status = await _api.get<Map<String, dynamic>>(
+        '/auth/google/status',
+      );
+      if (status['connected'] == true) return true;
+    } catch (_) {
+      return true;
+    }
+
+    if (!mounted) return false;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Connect Google',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Google Drive access is required to upload event reports and attendance files. Connect Google, then try submitting again.',
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.of(dialogContext).pop();
+              try {
+                await _openGoogleConnect();
+              } catch (e) {
+                _showMessage(friendlyErrorMessage(e), isError: true);
+              }
+            },
+            child: const Text('Connect Google'),
+          ),
+        ],
+      ),
+    );
+    return false;
   }
 
   Future<void> _refreshCurrentTab() async {
@@ -576,7 +634,10 @@ class _EventsScreenState extends State<EventsScreen>
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _errors[key] = e.toString();
+        _errors[key] = friendlyErrorMessage(
+          e,
+          fallback: 'Could not load events. Please try again.',
+        );
         _loading[key] = false;
       });
     }
@@ -681,7 +742,15 @@ class _EventsScreenState extends State<EventsScreen>
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text(
+            friendlyErrorMessage(
+              e,
+              fallback: 'Could not send for approval. Please try again.',
+            ),
+          ),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -1032,6 +1101,8 @@ class _EventsScreenState extends State<EventsScreen>
               );
               return;
             }
+            final googleReady = await _confirmGoogleReadyForEventReport();
+            if (!googleReady) return;
             setLocal(() => submitting = true);
             try {
               final attendanceText = attendanceNotApplicable
