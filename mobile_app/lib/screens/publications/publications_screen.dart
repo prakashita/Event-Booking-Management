@@ -18,6 +18,7 @@ const _pubText = Color(0xFF111827);
 const _pubMuted = Color(0xFF6B7280);
 const _pubAccentBg = Color(0xFFEEF2FF);
 const _pubAccent = Color(0xFF4F46E5);
+const _pubFabBlue = Color(0xFF2563EB);
 const _pubDangerBg = Color(0xFFFEF2F2);
 const _pubDanger = Color(0xFFEF4444);
 
@@ -227,6 +228,7 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
     final changed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       useSafeArea: true,
       builder: (_) => _PublicationDetailSheet(
@@ -450,7 +452,7 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateFlow,
         elevation: 6,
-        backgroundColor: _pubAccent,
+        backgroundColor: _pubFabBlue,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         icon: const Icon(Icons.add_rounded),

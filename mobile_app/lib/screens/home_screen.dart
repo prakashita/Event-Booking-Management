@@ -1078,12 +1078,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                       );
                                   final hasTallBottomActionBar =
                                       currentRoute == '/events/create';
+                                  final hasExtendedPageFab =
+                                      currentRoute == '/admin' ||
+                                      currentRoute == '/publications' ||
+                                      currentRoute == '/student-achievements';
+                                  final bottomInset = MediaQuery.viewPaddingOf(
+                                    context,
+                                  ).bottom;
 
                                   final baseBottomOffset =
                                       hasTallBottomActionBar
-                                      ? 184.0
+                                      ? 150.0 + bottomInset
+                                      : hasExtendedPageFab
+                                      ? 92.0 + bottomInset
                                       : hasPageLevelActions
-                                      ? 96.0
+                                      ? 72.0 + bottomInset
                                       : 16.0;
                                   final defaultBottom = baseBottomOffset;
                                   final defaultRight = 16.0;

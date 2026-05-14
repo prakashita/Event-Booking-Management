@@ -88,11 +88,13 @@ class _LoginScreenState extends State<LoginScreen>
           ),
           // Content
           SafeArea(
+            bottom: false,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final isShort = constraints.maxHeight < 620;
                 final logoSize = isShort ? 72.0 : 88.0;
                 final titleSize = isShort ? 26.0 : 30.0;
+                final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
                 return SingleChildScrollView(
                   keyboardDismissBehavior:
@@ -200,7 +202,7 @@ class _LoginScreenState extends State<LoginScreen>
                                 28,
                                 isShort ? 28 : 36,
                                 28,
-                                48,
+                                48 + bottomInset,
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,

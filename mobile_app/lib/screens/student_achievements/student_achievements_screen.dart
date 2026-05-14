@@ -13,6 +13,7 @@ import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
 import '../../utils/friendly_error.dart';
 import '../../widgets/common/app_widgets.dart';
+import '../home_screen.dart';
 
 class StudentAchievementsScreen extends StatefulWidget {
   const StudentAchievementsScreen({super.key});
@@ -133,20 +134,29 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
   }
 
   Future<void> _openForm({Map<String, dynamic>? item}) async {
-    final result = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useRootNavigator: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _AchievementFormSheet(
-        api: _api,
-        criteria: _criteria,
-        initialItem: item,
-      ),
-    );
-    if (result == true) {
-      await _loadAll(refresh: true);
+    final chatFabVisible = ChatFabVisibilityScope.maybeOf(context);
+    final restoreChatFab = chatFabVisible?.value;
+    chatFabVisible?.value = false;
+    try {
+      final result = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useRootNavigator: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _AchievementFormSheet(
+          api: _api,
+          criteria: _criteria,
+          initialItem: item,
+        ),
+      );
+      if (result == true) {
+        await _loadAll(refresh: true);
+      }
+    } finally {
+      if (mounted && restoreChatFab != null) {
+        chatFabVisible?.value = restoreChatFab;
+      }
     }
   }
 
@@ -164,27 +174,36 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
     }
 
     if (!mounted) return;
-    final changed = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useRootNavigator: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _AchievementDetailSheet(
-        item: detail,
-        criteria: _criteria,
-        canEdit:
-            !_isAdmin && (detail['created_by'] ?? '').toString() == _userId,
-        canDelete: _isAdmin,
-        onEdit: () async {
-          Navigator.of(context).pop(false);
-          await _openForm(item: detail);
-        },
-        onDelete: () => _deleteAchievement(detail),
-      ),
-    );
-    if (changed == true) {
-      await _loadAll(refresh: true);
+    final chatFabVisible = ChatFabVisibilityScope.maybeOf(context);
+    final restoreChatFab = chatFabVisible?.value;
+    chatFabVisible?.value = false;
+    try {
+      final changed = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useRootNavigator: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => _AchievementDetailSheet(
+          item: detail,
+          criteria: _criteria,
+          canEdit:
+              !_isAdmin && (detail['created_by'] ?? '').toString() == _userId,
+          canDelete: _isAdmin,
+          onEdit: () async {
+            Navigator.of(context).pop(false);
+            await _openForm(item: detail);
+          },
+          onDelete: () => _deleteAchievement(detail),
+        ),
+      );
+      if (changed == true) {
+        await _loadAll(refresh: true);
+      }
+    } finally {
+      if (mounted && restoreChatFab != null) {
+        chatFabVisible?.value = restoreChatFab;
+      }
     }
   }
 
