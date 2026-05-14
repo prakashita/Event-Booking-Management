@@ -1,6 +1,6 @@
 workflows:
-  ios-simulator:
-    name: iOS Simulator Build
+  ios-ipa:
+    name: iOS Unsigned IPA Build
 
     instance_type: mac_mini_m2
 
@@ -13,30 +13,6 @@ workflows:
         API_BASE_URL: "https://sync.vidyashilp.edu.in"
 
     scripts:
-      - name: Validate environment variables
-        script: |
-          test -n "$GOOGLE_CLIENT_ID"
-          test -n "$GOOGLE_SERVER_CLIENT_ID"
-          test -n "$API_BASE_URL"
-
-          if [ "$GOOGLE_CLIENT_ID" = "REPLACE_WITH_YOUR_GOOGLE_CLIENT_ID" ]; then
-            echo "GOOGLE_CLIENT_ID is still a placeholder. Replace it before building."
-            exit 1
-          fi
-
-          if [ "$GOOGLE_SERVER_CLIENT_ID" = "REPLACE_WITH_YOUR_GOOGLE_SERVER_CLIENT_ID" ]; then
-            echo "GOOGLE_SERVER_CLIENT_ID is still a placeholder. Replace it before building."
-            exit 1
-          fi
-
-          case "$API_BASE_URL" in
-            http://*|https://*) ;;
-            *)
-              echo "API_BASE_URL must start with http:// or https://"
-              exit 1
-              ;;
-          esac
-
       - name: Flutter pub get
         script: |
           cd mobile_app
@@ -47,18 +23,13 @@ workflows:
           cd mobile_app/ios
           pod install
 
-      - name: Build iOS simulator
+      - name: Build unsigned IPA
         script: |
           cd mobile_app
-          flutter build ios --simulator \
-            --dart-define=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
-            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
-            --dart-define=API_BASE_URL="$API_BASE_URL"
-
-      - name: Zip simulator app
-        script: |
-          cd mobile_app/build/ios/iphonesimulator
-          zip -r Runner.app.zip Runner.app
+          flutter build ipa --release --no-codesign \
+            --dart-define=GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID \
+            --dart-define=API_BASE_URL=$API_BASE_URL
 
     artifacts:
-      - mobile_app/build/ios/iphonesimulator/Runner.app.zip
+      - mobile_app/build/ios/ipa/*.ipa
