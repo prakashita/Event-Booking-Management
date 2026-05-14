@@ -8,11 +8,35 @@ workflows:
       flutter: stable
 
       vars:
-        GOOGLE_CLIENT_ID: "YOUR_CLIENT_ID"
-        GOOGLE_SERVER_CLIENT_ID: "YOUR_SERVER_CLIENT_ID"
-        API_BASE_URL: "YOUR_API_URL"
+        GOOGLE_CLIENT_ID: "1051124848059-7guhimh3iuf97knav7oi9ofbsok6fagj.apps.googleusercontent.com"
+        GOOGLE_SERVER_CLIENT_ID: "1051124848059-c1si7f3i0njmhm2baeit8oacri1cin19.apps.googleusercontent.com"
+        API_BASE_URL: "https://sync.vidyashilp.edu.in"
 
     scripts:
+      - name: Validate environment variables
+        script: |
+          test -n "$GOOGLE_CLIENT_ID"
+          test -n "$GOOGLE_SERVER_CLIENT_ID"
+          test -n "$API_BASE_URL"
+
+          if [ "$GOOGLE_CLIENT_ID" = "REPLACE_WITH_YOUR_GOOGLE_CLIENT_ID" ]; then
+            echo "GOOGLE_CLIENT_ID is still a placeholder. Replace it before building."
+            exit 1
+          fi
+
+          if [ "$GOOGLE_SERVER_CLIENT_ID" = "REPLACE_WITH_YOUR_GOOGLE_SERVER_CLIENT_ID" ]; then
+            echo "GOOGLE_SERVER_CLIENT_ID is still a placeholder. Replace it before building."
+            exit 1
+          fi
+
+          case "$API_BASE_URL" in
+            http://*|https://*) ;;
+            *)
+              echo "API_BASE_URL must start with http:// or https://"
+              exit 1
+              ;;
+          esac
+
       - name: Flutter pub get
         script: |
           cd mobile_app
@@ -27,9 +51,9 @@ workflows:
         script: |
           cd mobile_app
           flutter build ios --simulator \
-            --dart-define=GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID \
-            --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID \
-            --dart-define=API_BASE_URL=$API_BASE_URL
+            --dart-define=GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID" \
+            --dart-define=API_BASE_URL="$API_BASE_URL"
 
       - name: Zip simulator app
         script: |
