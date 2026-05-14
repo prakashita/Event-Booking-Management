@@ -22,6 +22,7 @@ from event_chat_service import (
 from models import ApprovalRequest, ChatAttachment, ChatConversation, ChatMessage, User
 from routers.deps import can_view_conversation, get_current_user, require_conversation_access
 from schemas import (
+    ChatAttachment as SchemaChatAttachment,
     ChatConversationCreate,
     ChatConversationListItem,
     ChatConversationResponse,
@@ -877,10 +878,18 @@ async def upload_attachment(
     ext = os.path.splitext(file.filename)[1]
     safe_name = f"{uuid.uuid4().hex}{ext}"
     destination = os.path.join(UPLOADS_DIR, safe_name)
-    with open(destination, "wb") as out_file:
-        out_file.write(content)
+    try:
+        with open(destination, "wb") as out_file:
+            out_file.write(content)
+    except OSError:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": "Failed to save file. Please try again."},
+        )
 
-    attachment = ChatAttachment(
+    # Use the schema-level ChatAttachment (not the Beanie storage model) so
+    # Pydantic v2 can validate the response type without a cross-model coercion error.
+    attachment = SchemaChatAttachment(
         name=file.filename,
         url=f"/uploads/{safe_name}",
         content_type=file.content_type or "application/octet-stream",
@@ -940,7 +949,7 @@ async def websocket_chat(websocket: WebSocket, token: Optional[str] = Query(defa
                     sender_name=user.name,
                     sender_email=user.email,
                     content=content,
-                    attachments=[ChatAttachment(**item) for item in attachments],
+                    attachments=[ChatAttachment(**item) for item in attachments if isinstance(item, dict) and all(k in item for k in ("name", "url", "content_type", "size"))],
                     read_by=[str(user.id)],
                     created_at=datetime.now(timezone.utc),
                     reply_to_message_id=ws_reply_id,

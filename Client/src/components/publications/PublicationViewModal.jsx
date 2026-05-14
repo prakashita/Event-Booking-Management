@@ -36,7 +36,8 @@ function formatDateStr(value) {
 }
 
 function buildCitation(item, format) {
-  const author = item.author || "";
+  const rawAuthor = item.author || "";
+  const author = rawAuthor.startsWith("[") || rawAuthor.startsWith("{") ? "" : rawAuthor;
   const title = getPublicationDisplayTitle(item);
   const container =
     getPublicationFieldValue(item, "container_title") || item.publisher || "";
@@ -248,10 +249,13 @@ const PublicationViewModal = memo(function PublicationViewModal({
         {/* ── Scrollable body ── */}
         <div className="pub-view-body">
           {/* Submitter row */}
-          {(item.author || item.created_by_name || submittedDate) && (
+          {(() => {
+            const rawA = item.author || "";
+            const safeAuthor = (rawA.startsWith("[") || rawA.startsWith("{")) ? "" : rawA;
+            return (safeAuthor || item.created_by_name || submittedDate) ? (
             <div className="pub-view-meta-row">
               <div className="pub-view-avatar" aria-hidden="true">
-                {(item.created_by_name || item.author || "P").charAt(0).toUpperCase()}
+                {(item.created_by_name || safeAuthor || "P").charAt(0).toUpperCase()}
               </div>
               <div className="pub-view-meta-info">
                 {item.created_by_name && (
@@ -259,9 +263,9 @@ const PublicationViewModal = memo(function PublicationViewModal({
                     <strong>Submitted by</strong> {item.created_by_name}
                   </span>
                 )}
-                {item.author && (
+                {safeAuthor && (
                   <span className="pub-view-author-row">
-                    <strong>Author</strong> {item.author}
+                    <strong>Author</strong> {safeAuthor}
                   </span>
                 )}
                 {submittedDate && (
@@ -280,7 +284,8 @@ const PublicationViewModal = memo(function PublicationViewModal({
                 )}
               </div>
             </div>
-          )}
+          ) : null;
+          })()}
 
           {/* Citation format badge */}
           {item.citation_format && (

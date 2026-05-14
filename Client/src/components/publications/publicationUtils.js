@@ -802,6 +802,7 @@ export function getDefaultPublicationForm(pubType = "webpage") {
     newspaper_name: "",
     website_name: "",
     page_title: "",
+    contributors: [],
     ..._STATIC_DETAIL_DEFAULTS,
     ..._STATIC_EXTRA_DEFAULTS
   };
@@ -941,6 +942,10 @@ export function publicationItemToForm(item) {
   for (const flag of ["volume_is_range", "pages_is_range"]) {
     if (details[flag] === true) merged[flag] = true;
   }
+
+  // Contributors — restore the structured array from details (never from the display string)
+  const rawContributors = details?.contributors;
+  merged.contributors = Array.isArray(rawContributors) ? rawContributors : [];
 
   merged.pubType = pubType;
   merged.citation_format = item.citation_format || "mla";
