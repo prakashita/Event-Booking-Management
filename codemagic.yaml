@@ -6,6 +6,8 @@ workflows:
 
     environment:
       flutter: stable
+      xcode: latest
+      cocoapods: default
 
       vars:
         GOOGLE_CLIENT_ID: "1051124848059-7guhimh3iuf97knav7oi9ofbsok6fagj.apps.googleusercontent.com"
@@ -23,13 +25,21 @@ workflows:
           cd mobile_app/ios
           pod install
 
-      - name: Build unsigned IPA
+      - name: Build unsigned iOS app
         script: |
           cd mobile_app
-          flutter build ipa --release --no-codesign \
+          flutter build ios --release --no-codesign \
             --dart-define=GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID \
             --dart-define=GOOGLE_SERVER_CLIENT_ID=$GOOGLE_SERVER_CLIENT_ID \
             --dart-define=API_BASE_URL=$API_BASE_URL
 
+      - name: Create IPA manually
+        script: |
+          cd mobile_app/build/ios/iphoneos
+
+          mkdir Payload
+          cp -R Runner.app Payload/
+          zip -r Runner.ipa Payload
+
     artifacts:
-      - mobile_app/build/ios/ipa/*.ipa
+      - mobile_app/build/ios/iphoneos/Runner.ipa
