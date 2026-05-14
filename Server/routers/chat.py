@@ -22,6 +22,7 @@ from event_chat_service import (
 from models import ChatAttachment, ChatConversation, ChatMessage, User
 from routers.deps import can_view_conversation, get_current_user, require_conversation_access
 from schemas import (
+    ChatAttachment as ChatAttachmentResponse,
     ChatConversationCreate,
     ChatConversationListItem,
     ChatConversationResponse,
@@ -69,10 +70,56 @@ _CHAT_ALLOWED_CT_EXACT = frozenset(
     }
 )
 
+_CHAT_EXT_TO_MIME = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".pdf": "application/pdf",
+}
 
-def _is_allowed_chat_upload(content_type: str) -> bool:
+
+def _normalize_declared_chat_mime(content_type: str) -> str:
     ct = (content_type or "application/octet-stream").split(";")[0].strip().lower()
-    return ct in _CHAT_ALLOWED_CT_EXACT
+    if ct == "image/pjpeg":
+        return "image/jpeg"
+    return ct
+
+
+def _mime_from_filename(filename: str) -> Optional[str]:
+    ext = os.path.splitext(filename or "")[1].lower()
+    return _CHAT_EXT_TO_MIME.get(ext)
+
+
+def resolve_allowed_chat_mime(content_type: Optional[str], filename: str) -> Optional[str]:
+    """
+    Return a canonical allowed MIME, or None if the upload should be rejected.
+    Accepts application/octet-stream (or empty) when the filename extension matches.
+    """
+    raw = (content_type or "application/octet-stream").split(";")[0].strip().lower()
+    ct = _normalize_declared_chat_mime(raw)
+    if ct in _CHAT_ALLOWED_CT_EXACT:
+        return ct
+    if raw in ("application/octet-stream", "", "binary/octet-stream"):
+        guessed = _mime_from_filename(filename)
+        if guessed:
+            return guessed
+    return None
+
+
+async def _read_upload_bytes_capped(upload: UploadFile, max_bytes: int) -> tuple[Optional[bytes], Optional[str]]:
+    """Read upload into memory with a hard cap; returns (data, error_message)."""
+    chunks: List[bytes] = []
+    total = 0
+    while True:
+        chunk = await upload.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            return None, "File size exceeds 5MB. Please upload a smaller file or share a Drive link."
+        chunks.append(chunk)
+    return b"".join(chunks), None
 
 
 def serialize_message(
@@ -821,8 +868,8 @@ async def mark_read(
 @limiter.limit("30/minute")
 async def upload_attachment(
     request: Request,
-    file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
+    file: UploadFile = File(...),
 ):
     if not file.filename:
         return JSONResponse(
@@ -830,8 +877,8 @@ async def upload_attachment(
             content={"success": False, "message": "Missing filename."},
         )
 
-    ct = (file.content_type or "application/octet-stream").split(";")[0].strip().lower()
-    if not _is_allowed_chat_upload(ct):
+    canonical_mime = resolve_allowed_chat_mime(file.content_type, file.filename)
+    if not canonical_mime:
         return JSONResponse(
             status_code=400,
             content={
@@ -840,27 +887,33 @@ async def upload_attachment(
             },
         )
 
-    # Read content before touching the filesystem so we can reject oversized files early.
-    content = await file.read()
-    if len(content) > MAX_CHAT_UPLOAD_BYTES:
+    content, size_err = await _read_upload_bytes_capped(file, MAX_CHAT_UPLOAD_BYTES)
+    if size_err or content is None:
         return JSONResponse(
             status_code=400,
-            content={
-                "success": False,
-                "message": "File size exceeds 5MB. Please upload a smaller file or share a Drive link.",
-            },
+            content={"success": False, "message": size_err or "Could not read the uploaded file."},
         )
 
     ext = os.path.splitext(file.filename)[1]
     safe_name = f"{uuid.uuid4().hex}{ext}"
     destination = os.path.join(UPLOADS_DIR, safe_name)
-    with open(destination, "wb") as out_file:
-        out_file.write(content)
+    try:
+        with open(destination, "wb") as out_file:
+            out_file.write(content)
+    except OSError as exc:
+        logger.exception("chat upload: failed to write file path=%s err=%s", destination, exc)
+        return JSONResponse(
+            status_code=507,
+            content={
+                "success": False,
+                "message": "Could not save the file on the server. Ask an admin to check disk space and upload permissions.",
+            },
+        )
 
-    attachment = ChatAttachment(
+    attachment = ChatAttachmentResponse(
         name=file.filename,
         url=f"/uploads/{safe_name}",
-        content_type=file.content_type or "application/octet-stream",
+        content_type=canonical_mime,
         size=len(content),
     )
     return ChatUploadResponse(attachment=attachment)

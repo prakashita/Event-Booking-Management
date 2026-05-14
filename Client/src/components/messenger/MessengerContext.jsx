@@ -10,7 +10,7 @@ import {
 import api from "../../services/api";
 import {
   MAX_CHAT_FILE_SIZE,
-  ALLOWED_CHAT_MIME_TYPES,
+  resolveChatFileMime,
   UPLOAD_ERRORS,
 } from "../../constants/uploadConfig";
 
@@ -689,7 +689,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
         setChatStatus({ status: "error", error: UPLOAD_ERRORS.FILE_TOO_LARGE });
         return;
       }
-      if (!ALLOWED_CHAT_MIME_TYPES.has(file.type)) {
+      if (!resolveChatFileMime(file)) {
         setChatStatus({ status: "error", error: UPLOAD_ERRORS.UNSUPPORTED_TYPE });
         return;
       }
