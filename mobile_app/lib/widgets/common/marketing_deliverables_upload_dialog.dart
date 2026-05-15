@@ -14,6 +14,9 @@ typedef MarketingDeliverablesUpload =
       required Map<String, MultipartFile?> filesByType,
     });
 
+const int _maxDeliverableFileBytes = 25 * 1024 * 1024;
+const String _maxDeliverableFileLabel = '25MB';
+
 Future<void> showMarketingDeliverablesUploadDialog({
   required BuildContext context,
   required List<Map<String, String>> enabledOptions,
@@ -64,6 +67,18 @@ Future<void> showMarketingDeliverablesUploadDialog({
           );
           final file = picked?.files.first;
           if (file == null) return;
+          if (file.size > _maxDeliverableFileBytes) {
+            if (!ctx.mounted) return;
+            ScaffoldMessenger.of(ctx).showSnackBar(
+              SnackBar(
+                content: Text(
+                  '${file.name} is larger than $_maxDeliverableFileLabel.',
+                  style: GoogleFonts.inter(),
+                ),
+              ),
+            );
+            return;
+          }
 
           MultipartFile? multipart;
           if (file.path != null && file.path!.trim().isNotEmpty) {

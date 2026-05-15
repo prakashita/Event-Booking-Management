@@ -35,6 +35,8 @@ const Color _blue50 = Color(0xFFEFF6FF);
 const Color _blue100 = Color(0xFFDBEAFE);
 const Color _blue600 = Color(0xFF2563EB);
 const Color _blue800 = Color(0xFF1E3A8A);
+const int _maxIqacUploadBytes = 10 * 1024 * 1024;
+const String _maxIqacUploadLabel = '10 MB';
 const List<String> _campusTypeOptions = [
   'Urban',
   'Semi Urban',
@@ -639,10 +641,19 @@ class _IQACScreenState extends State<IQACScreen> {
                           withData: false,
                         );
                         if (picked == null || picked.files.isEmpty) return;
-                        updateModal(
-                          setModalState,
-                          () => pickedFile = picked.files.first,
-                        );
+                        final file = picked.files.first;
+                        if (file.size > _maxIqacUploadBytes) {
+                          updateModal(
+                            setModalState,
+                            () => uploadError =
+                                '${file.name} is larger than $_maxIqacUploadLabel.',
+                          );
+                          return;
+                        }
+                        updateModal(setModalState, () {
+                          pickedFile = file;
+                          uploadError = null;
+                        });
                       },
                       onUpload: () => uploadFile(setModalState),
                       onView: (f) => viewOrDownload(f, download: false),

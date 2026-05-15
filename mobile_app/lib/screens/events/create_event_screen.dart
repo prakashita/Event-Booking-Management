@@ -26,6 +26,8 @@ class CreateEventScreen extends StatefulWidget {
 class _CreateEventScreenState extends State<CreateEventScreen> {
   final _api = ApiService();
   final _formKey = GlobalKey<FormState>();
+  static const int _maxBudgetPdfBytes = 10 * 1024 * 1024;
+  static const String _maxBudgetPdfLabel = '10MB';
 
   final _nameCtrl = TextEditingController();
   final _facilitatorCtrl = TextEditingController();
@@ -93,8 +95,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       allowedExtensions: ['pdf'],
     );
     if (result != null && result.files.isNotEmpty) {
+      final picked = result.files.first;
+      if (picked.size > _maxBudgetPdfBytes) {
+        _showErrorSnackBar(
+          'Budget PDF must be $_maxBudgetPdfLabel or smaller.',
+        );
+        return;
+      }
       setState(() {
-        _budgetPdf = result.files.first;
+        _budgetPdf = picked;
       });
     }
   }

@@ -282,7 +282,7 @@ class _ChatScreenState extends State<ChatScreen> {
           _isTyping = false;
         });
         if (msg.senderId != _currentUserId) {
-          _syncReadReceipts();
+          unawaited(_syncReadReceipts());
         }
       }
     } else if (type == 'typing') {
@@ -487,6 +487,7 @@ class _ChatScreenState extends State<ChatScreen> {
           data: {'message_ids': unreadMessageIds},
         );
       }
+      await _api.post<dynamic>('/chat/read/${widget.conversationId}');
 
       if (!mounted) return;
       final unreadIds = unreadMessageIds.toSet();

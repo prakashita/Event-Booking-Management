@@ -1000,10 +1000,16 @@ class ChatConversation {
 
   static String? _extractLastMessage(dynamic lastMessageField) {
     // ... existing code ...
-    if (lastMessageField is String) return lastMessageField;
+    if (lastMessageField is String) {
+      final trimmed = lastMessageField.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
     if (lastMessageField is Map<String, dynamic>) {
-      final text = lastMessageField['text'];
-      if (text is String) return text;
+      final text = lastMessageField['text']?.toString().trim() ?? '';
+      if (text.isNotEmpty) return text;
+      if (lastMessageField['message_id'] != null) {
+        return 'Sent an attachment';
+      }
     }
     return null;
   }

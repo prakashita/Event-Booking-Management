@@ -784,6 +784,7 @@ class _AdminScreenState extends State<AdminScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final isActive = _activeTab == tab;
+    final compact = MediaQuery.sizeOf(context).width < 430;
 
     return GestureDetector(
       onTap: () => _switchTab(tab),
@@ -791,7 +792,10 @@ class _AdminScreenState extends State<AdminScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 16 : 20,
+          vertical: compact ? 10 : 12,
+        ),
         decoration: BoxDecoration(
           color: isActive
               ? theme.colorScheme.primary
@@ -824,6 +828,7 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _buildTopSummary() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final compact = MediaQuery.sizeOf(context).width < 430;
 
     final stats = [
       (
@@ -862,7 +867,7 @@ class _AdminScreenState extends State<AdminScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(compact ? 18 : 24),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: isDark
@@ -912,11 +917,11 @@ class _AdminScreenState extends State<AdminScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: compact ? 10 : 12),
               Text(
                 'Administration Center',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: compact ? 18 : 20,
                   fontWeight: FontWeight.w800,
                   height: 1.2,
                   color: theme.colorScheme.onSurface,
@@ -933,7 +938,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       : const Color(0xFF64748B),
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: compact ? 14 : 16),
               FilledButton.tonalIcon(
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
@@ -962,21 +967,21 @@ class _AdminScreenState extends State<AdminScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: compact ? 14 : 20),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           itemCount: stats.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 2.2,
+            mainAxisSpacing: compact ? 10 : 12,
+            crossAxisSpacing: compact ? 10 : 12,
+            childAspectRatio: compact ? 2.28 : 2.2,
           ),
           itemBuilder: (context, i) {
             final (label, value, icon, color) = stats[i];
             return Container(
-              padding: const EdgeInsets.all(12),
+              padding: EdgeInsets.all(compact ? 12 : 12),
               decoration: BoxDecoration(
                 color: isDark ? const Color(0xFF1E293B) : Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -996,15 +1001,15 @@ class _AdminScreenState extends State<AdminScreen> {
               child: Row(
                 children: [
                   Container(
-                    width: 32,
-                    height: 32,
+                    width: compact ? 30 : 32,
+                    height: compact ? 30 : 32,
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(icon, size: 16, color: color),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: compact ? 7 : 8),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1013,7 +1018,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         Text(
                           label,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: compact ? 11.5 : 12,
                             fontWeight: FontWeight.w600,
                             color: isDark
                                 ? const Color(0xFF94A3B8)
@@ -1024,7 +1029,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         Text(
                           '$value',
                           style: TextStyle(
-                            fontSize: 17,
+                            fontSize: compact ? 16 : 17,
                             fontWeight: FontWeight.w800,
                             color: theme.colorScheme.onSurface,
                           ),
@@ -1624,10 +1629,11 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _buildListCard({required Widget child}) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final compact = MediaQuery.sizeOf(context).width < 430;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: EdgeInsets.only(bottom: compact ? 10 : 12),
+      padding: EdgeInsets.all(compact ? 14 : 16),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1990,6 +1996,7 @@ class _AdminScreenState extends State<AdminScreen> {
 
   Widget _buildPublicationsSection() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final compact = MediaQuery.sizeOf(context).width < 430;
 
     return _SectionShell(
       title: 'Publications',
@@ -1998,83 +2005,178 @@ class _AdminScreenState extends State<AdminScreen> {
       child: _publications.isEmpty
           ? _buildEmptyState('No publications found.', Icons.note_alt_outlined)
           : Column(
-              children: _publications.map((pub) {
-                final id = (pub['id'] ?? '').toString();
-                final name = (pub['name'] ?? '').toString();
-                final fileName = (pub['file_name'] ?? '-').toString();
-                final uploadedAt = _fmtDate(
-                  pub['uploaded_at'] ?? pub['created_at'],
-                );
-
-                return _buildListCard(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 12 : 14,
+                    vertical: 10,
+                  ),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF1E293B)
+                        : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFE2E8F0),
+                    ),
+                  ),
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0EA5E9).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.picture_as_pdf_rounded,
-                          color: Color(0xFF0EA5E9),
-                        ),
+                      const Icon(
+                        Icons.library_books_outlined,
+                        size: 18,
+                        color: Color(0xFF2563EB),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 8),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              fileName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark
-                                    ? const Color(0xFF94A3B8)
-                                    : const Color(0xFF64748B),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Uploaded: $uploadedAt',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark
-                                    ? const Color(0xFF64748B)
-                                    : const Color(0xFF94A3B8),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded),
-                        color: const Color(0xFFDC2626),
-                        style: IconButton.styleFrom(
-                          backgroundColor: const Color(
-                            0xFFDC2626,
-                          ).withValues(alpha: 0.1),
-                        ),
-                        onPressed: () => _deleteByPath(
-                          path: '/admin/publications',
-                          id: id,
-                          success: 'Publication deleted.',
+                        child: Text(
+                          '${_publications.length} publication${_publications.length == 1 ? '' : 's'} on record',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: isDark
+                                ? const Color(0xFFE2E8F0)
+                                : const Color(0xFF334155),
+                          ),
                         ),
                       ),
                     ],
                   ),
-                );
-              }).toList(),
+                ),
+                ..._publications.map((pub) {
+                  final id = (pub['id'] ?? '').toString();
+                  final rawName = (pub['name'] ?? '').toString().trim();
+                  final name = rawName.isEmpty
+                      ? 'Untitled publication'
+                      : rawName;
+                  final rawFileName = (pub['file_name'] ?? '')
+                      .toString()
+                      .trim();
+                  final fileName = rawFileName.isEmpty || rawFileName == '-'
+                      ? 'No file name'
+                      : rawFileName;
+                  final uploadedAt = _fmtDate(
+                    pub['uploaded_at'] ?? pub['created_at'],
+                  );
+
+                  return _buildListCard(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: compact ? 42 : 46,
+                          height: compact ? 42 : 46,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE0F2FE),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.picture_as_pdf_rounded,
+                            color: Color(0xFF0284C7),
+                            size: 22,
+                          ),
+                        ),
+                        SizedBox(width: compact ? 12 : 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: compact ? 14.5 : 15.5,
+                                  color: isDark
+                                      ? const Color(0xFFF8FAFC)
+                                      : const Color(0xFF0F172A),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      fileName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark
+                                            ? const Color(0xFFCBD5E1)
+                                            : const Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.schedule_rounded,
+                                    size: 14,
+                                    color: isDark
+                                        ? const Color(0xFF64748B)
+                                        : const Color(0xFF94A3B8),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      'Uploaded $uploadedAt',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isDark
+                                            ? const Color(0xFF64748B)
+                                            : const Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Delete publication',
+                          constraints: const BoxConstraints(
+                            minWidth: 42,
+                            minHeight: 42,
+                          ),
+                          icon: const Icon(
+                            Icons.delete_outline_rounded,
+                            size: 22,
+                          ),
+                          color: const Color(0xFFDC2626),
+                          style: IconButton.styleFrom(
+                            backgroundColor: const Color(0xFFFEE2E2),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          onPressed: () => _deleteByPath(
+                            path: '/admin/publications',
+                            id: id,
+                            success: 'Publication deleted.',
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
             ),
     );
   }
@@ -2149,6 +2251,7 @@ class _AdminScreenState extends State<AdminScreen> {
     }
 
     final theme = Theme.of(context);
+    final compact = MediaQuery.sizeOf(context).width < 430;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -2158,12 +2261,17 @@ class _AdminScreenState extends State<AdminScreen> {
           onRefresh: () => _loadCurrentSection(forceRefresh: true),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
+            padding: EdgeInsets.fromLTRB(
+              compact ? 10 : 12,
+              compact ? 8 : 12,
+              compact ? 10 : 12,
+              116,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildTopSummary(),
-                const SizedBox(height: 20),
+                SizedBox(height: compact ? 14 : 20),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   physics: const BouncingScrollPhysics(),
@@ -2171,20 +2279,20 @@ class _AdminScreenState extends State<AdminScreen> {
                   child: Row(
                     children: [
                       _buildTabButton(_AdminTab.users, 'Users'),
-                      const SizedBox(width: 10),
+                      SizedBox(width: compact ? 8 : 10),
                       _buildTabButton(_AdminTab.venues, 'Venues'),
-                      const SizedBox(width: 10),
+                      SizedBox(width: compact ? 8 : 10),
                       _buildTabButton(_AdminTab.events, 'Events'),
-                      const SizedBox(width: 10),
+                      SizedBox(width: compact ? 8 : 10),
                       _buildTabButton(_AdminTab.requests, 'Requests'),
-                      const SizedBox(width: 10),
+                      SizedBox(width: compact ? 8 : 10),
                       _buildTabButton(_AdminTab.invites, 'Invites'),
-                      const SizedBox(width: 10),
+                      SizedBox(width: compact ? 8 : 10),
                       _buildTabButton(_AdminTab.publications, 'Publications'),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                SizedBox(height: compact ? 14 : 16),
                 _buildSectionBody(),
               ],
             ),

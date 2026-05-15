@@ -868,15 +868,15 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 // Custom Header
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0,
-                    vertical: 8.0,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isDesktop ? 16.0 : 10.0,
+                    vertical: isDesktop ? 8.0 : 6.0,
                   ),
                   child: SafeArea(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8.0,
-                        vertical: 8.0,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isDesktop ? 8.0 : 6.0,
+                        vertical: isDesktop ? 8.0 : 6.0,
                       ),
                       decoration: BoxDecoration(
                         color: headerBg,
@@ -894,13 +894,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (!isDesktop)
                             Builder(
                               builder: (context) => IconButton(
+                                visualDensity: VisualDensity.compact,
                                 icon: const Icon(LucideIcons.menu),
                                 onPressed: () {
                                   Scaffold.of(context).openDrawer();
                                 },
                               ),
                             ),
-                          if (!isDesktop) const SizedBox(width: 8),
+                          if (!isDesktop) const SizedBox(width: 4),
                           // Search Bar
                           Expanded(
                             child: SizedBox(
@@ -932,7 +933,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: isDesktop ? 12 : 8),
                           Consumer<NotificationProvider>(
                             builder: (context, notificationProvider, _) {
                               final totalUnread =
@@ -956,7 +957,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ? const Color(0xFF93C5FD)
                                   : _eventActionBlue;
                               return SizedBox(
-                                width: 48,
+                                width: isDesktop ? 48 : 44,
                                 height: 42,
                                 child: Tooltip(
                                   message: 'Notifications',
@@ -969,7 +970,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         Align(
                                           alignment: Alignment.centerLeft,
                                           child: Container(
-                                            width: 42,
+                                            width: isDesktop ? 42 : 40,
                                             height: 42,
                                             decoration: BoxDecoration(
                                               color: bellBg,
@@ -1031,7 +1032,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               );
                             },
                           ),
-                          const SizedBox(width: 8),
+                          SizedBox(width: isDesktop ? 8 : 4),
                           if (user != null)
                             ProfileDropdown(user: user)
                           else
@@ -1087,7 +1088,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   final hasTallBottomActionBar =
                                       currentRoute == '/events/create';
                                   final hasExtendedPageFab =
-                                      currentRoute == '/admin' ||
                                       currentRoute == '/publications' ||
                                       currentRoute == '/student-achievements';
                                   final bottomInset = MediaQuery.viewPaddingOf(
@@ -1098,7 +1098,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       hasTallBottomActionBar
                                       ? 150.0 + bottomInset
                                       : hasExtendedPageFab
-                                      ? 92.0 + bottomInset
+                                      ? 32.0 + bottomInset
                                       : hasPageLevelActions
                                       ? 72.0 + bottomInset
                                       : 16.0;
