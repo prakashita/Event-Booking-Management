@@ -12,6 +12,7 @@ class ApiService {
   final _storage = const FlutterSecureStorage();
   String? _baseUrl;
   String? _cachedToken;
+  bool _hasLoadedStoredToken = false;
 
   ApiService._internal() {
     _dio = Dio(
@@ -33,10 +34,12 @@ class ApiService {
     _cachedToken = (normalized == null || normalized.isEmpty)
         ? null
         : normalized;
+    _hasLoadedStoredToken = true;
   }
 
   void clearAuthToken() {
     _cachedToken = null;
+    _hasLoadedStoredToken = true;
   }
 
   String? getToken() => _cachedToken;
@@ -46,11 +49,12 @@ class ApiService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          // Keep in-memory token aligned with persisted token to avoid
-          // cross-account leakage after sign out / sign in.
-          final storedToken = await _storage.read(key: AppConstants.tokenKey);
-          if (storedToken != _cachedToken) {
-            _cachedToken = storedToken;
+          // Secure storage is comparatively slow on mobile, especially iOS.
+          // AuthProvider keeps this cache current on init/sign-in/sign-out, so
+          // only touch storage as a fallback for early requests.
+          if (!_hasLoadedStoredToken) {
+            _cachedToken = await _storage.read(key: AppConstants.tokenKey);
+            _hasLoadedStoredToken = true;
           }
 
           final token = _cachedToken;
@@ -198,11 +202,11 @@ class ApiService {
     FormData formData, {
     T Function(dynamic)? parser,
   }) async {
-    final resp = await _dio.post(
-      path,
-      data: formData,
-      options: Options(contentType: 'multipart/form-data'),
-    );
+    // Do NOT set contentType explicitly — Dio auto-generates the proper
+    // multipart Content-Type header with boundary when sending FormData.
+    // Setting 'multipart/form-data' without boundary causes the server
+    // to reject the request (422) because it cannot parse the body.
+    final resp = await _dio.post(path, data: formData);
     return parser != null ? parser(resp.data) : resp.data as T;
   }
 

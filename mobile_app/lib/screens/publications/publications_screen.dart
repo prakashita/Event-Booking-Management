@@ -305,6 +305,9 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final fabClearance = bottomInset + 16.0 + 56.0 + 12.0; // inset + margin + height + gap
+
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: isDark ? theme.scaffoldBackgroundColor : _pubBg,
@@ -419,7 +422,7 @@ class _PublicationsScreenState extends State<PublicationsScreen> {
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, fabClearance),
                   sliver: SliverList.builder(
                     itemCount: visible.length,
                     itemBuilder: (context, index) {

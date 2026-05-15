@@ -12,6 +12,8 @@ class User {
   final String approvalStatus;
   final String? rejectionReason;
   final String? department;
+  final bool online;
+  final DateTime? lastSeen;
 
   const User({
     required this.id,
@@ -23,6 +25,8 @@ class User {
     this.approvalStatus = 'approved',
     this.rejectionReason,
     this.department,
+    this.online = false,
+    this.lastSeen,
   });
 
   factory User.fromJson(Map<String, dynamic> json) => User(
@@ -35,7 +39,27 @@ class User {
     approvalStatus: (json['approval_status'] ?? 'approved').toString(),
     rejectionReason: json['rejection_reason']?.toString(),
     department: json['department'],
+    online: json['online'] == true,
+    lastSeen: json['last_seen'] is String
+        ? DateTime.tryParse(json['last_seen'] as String)?.toLocal()
+        : null,
   );
+
+  User copyWith({bool? online, DateTime? lastSeen}) {
+    return User(
+      id: id,
+      email: email,
+      name: name,
+      picture: picture,
+      role: role,
+      rawRole: rawRole,
+      approvalStatus: approvalStatus,
+      rejectionReason: rejectionReason,
+      department: department,
+      online: online ?? this.online,
+      lastSeen: lastSeen ?? this.lastSeen,
+    );
+  }
 
   String get roleKey {
     final fromServer = (rawRole ?? '').trim().toLowerCase();

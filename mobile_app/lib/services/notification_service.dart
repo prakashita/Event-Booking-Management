@@ -82,6 +82,7 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
   WebSocketChannel? _channel;
   bool _isConnected = false;
   bool _isConnecting = false;
+  bool _isDisposed = false;
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
   static const int _maxReconnectAttempts = 5;
@@ -297,7 +298,9 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Connect to WebSocket server.
   Future<void> _connect() async {
-    if (_isConnecting) return;
+    if (_isDisposed || !_authProvider.isAuthenticated || _isConnecting) {
+      return;
+    }
     _isConnecting = true;
 
     try {
@@ -376,6 +379,7 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
         }
       },
       onError: (error) {
+        if (_isDisposed || !_authProvider.isAuthenticated) return;
         if (kDebugMode) {
           print('WebSocket error: $error');
         }
@@ -384,6 +388,7 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
         _handleConnectionError();
       },
       onDone: () {
+        if (_isDisposed || !_authProvider.isAuthenticated) return;
         if (kDebugMode) {
           print('WebSocket closed');
         }
@@ -965,6 +970,7 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Handle connection errors and schedule reconnection.
   void _handleConnectionError() {
+    if (_isDisposed || !_authProvider.isAuthenticated) return;
     _reconnectTimer?.cancel();
     _reconnectAttempts++;
 
@@ -1033,6 +1039,7 @@ class NotificationService extends ChangeNotifier with WidgetsBindingObserver {
   /// Disconnect and clean up resources.
   @override
   Future<void> dispose() async {
+    _isDisposed = true;
     if (_observerRegistered) {
       WidgetsBinding.instance.removeObserver(this);
       _observerRegistered = false;

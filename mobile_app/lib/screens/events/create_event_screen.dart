@@ -46,7 +46,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   final List<String> _selectedAudiences = [];
   PlatformFile? _budgetPdf;
-  final bool _submitting = false;
+  bool _submitting = false;
 
   static const List<String> _audienceOptions = [
     'Students',
@@ -341,6 +341,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     if (!_formKey.currentState!.validate()) return;
 
     if (_startDate == null ||
@@ -397,6 +398,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       'override_conflict': false,
     };
 
+    setState(() => _submitting = true);
     try {
       final conflictRes = await _api.post<Map<String, dynamic>>(
         '/events/conflicts',
@@ -405,11 +407,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       if (!mounted) return;
       final conflicts = conflictRes['conflicts'];
       if (conflicts is List && conflicts.isNotEmpty) {
+        setState(() => _submitting = false);
         _showConflictDialog(eventData: eventData, conflicts: conflicts);
         return;
       }
     } on DioException catch (e) {
       if (!mounted) return;
+      setState(() => _submitting = false);
       _showErrorSnackBar(
         friendlyErrorMessage(
           e,
@@ -420,6 +424,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
 
     if (!mounted) return;
+    setState(() => _submitting = false);
     _openApprovalScreen(eventData, overrideConflict: false);
   }
 
@@ -449,8 +454,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     Map<String, dynamic> eventData, {
     required bool overrideConflict,
   }) async {
+    if (_submitting) return;
+    setState(() => _submitting = true);
     final googleReady = await _ensureGoogleConnectedForBudgetPdf();
-    if (!mounted || !googleReady) return;
+    if (!mounted) return;
+    setState(() => _submitting = false);
+    if (!googleReady) return;
 
     final payload = {...eventData, 'override_conflict': overrideConflict};
     Navigator.of(context).push(
@@ -1507,6 +1516,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     : _CreateEventActionBar(
                         surface: surface,
                         isDark: isDark,
+                        isSubmitting: _submitting,
                         onSubmit: _submit,
                         onCancel: () {
                           if (context.canPop()) {
@@ -1528,12 +1538,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 class _CreateEventActionBar extends StatelessWidget {
   final Color surface;
   final bool isDark;
+  final bool isSubmitting;
   final VoidCallback onSubmit;
   final VoidCallback onCancel;
 
   const _CreateEventActionBar({
     required this.surface,
     required this.isDark,
+    required this.isSubmitting,
     required this.onSubmit,
     required this.onCancel,
   });
@@ -1562,7 +1574,7 @@ class _CreateEventActionBar extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: onSubmit,
+                onPressed: isSubmitting ? null : onSubmit,
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF2563EB),
                   padding: const EdgeInsets.symmetric(vertical: 18),
@@ -1574,10 +1586,20 @@ class _CreateEventActionBar extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(LucideIcons.arrowRightCircle, size: 20),
+                    if (isSubmitting)
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    else
+                      const Icon(LucideIcons.arrowRightCircle, size: 20),
                     const SizedBox(width: 10),
                     Text(
-                      'Continue to Approval',
+                      isSubmitting ? 'Checking...' : 'Continue to Approval',
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -1591,7 +1613,7 @@ class _CreateEventActionBar extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: TextButton(
-                onPressed: onCancel,
+                onPressed: isSubmitting ? null : onCancel,
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(

@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -266,6 +267,9 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
         ? theme.scaffoldBackgroundColor
         : const Color(0xFFF4F6F8);
 
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final fabClearance = bottomInset + 16.0 + 56.0 + 12.0; // inset + margin + height + gap
+
     return Scaffold(
       resizeToAvoidBottomInset: false,
       backgroundColor: bgColor,
@@ -429,7 +433,7 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                  padding: EdgeInsets.fromLTRB(20, 0, 20, fabClearance),
                   sliver: SliverList.builder(
                     itemCount: _items.length,
                     itemBuilder: (context, index) {
@@ -589,7 +593,7 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
   Future<void> _pickAttachments() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
-      withData: true,
+      withData: kIsWeb,
       type: FileType.custom,
       allowedExtensions: [
         'jpg',
@@ -1372,8 +1376,13 @@ class _AchievementDetailSheet extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 16),
+                          _StudentDetailSectionTitle(
+                            'Audit Information',
+                            icon: LucideIcons.clock,
+                          ),
+                          const SizedBox(height: 12),
                           _MetadataPanel(item: item, wide: !compact),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 22),
                           _DetailActions(
                             canEdit: canEdit,
                             canDelete: canDelete,
@@ -1666,104 +1675,146 @@ class _MetadataPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final entries = [
-      ('Created By', _s(item['created_by_name'] ?? item['created_by_email'])),
-      ('Created At', _formatDate(item['created_at'])),
+    final entries = <({String label, String value, IconData icon})>[
       (
-        'Last Updated By',
-        _s(item['updated_by_name'] ?? item['updated_by_email']),
+        label: 'Created by',
+        value: _s(item['created_by_name'] ?? item['created_by_email']),
+        icon: LucideIcons.user,
       ),
-      ('Updated At', _formatDate(item['updated_at'])),
+      (
+        label: 'Created at',
+        value: _formatDate(item['created_at']),
+        icon: LucideIcons.calendar,
+      ),
+      (
+        label: 'Last updated by',
+        value: _s(item['updated_by_name'] ?? item['updated_by_email']),
+        icon: LucideIcons.userCheck,
+      ),
+      (
+        label: 'Updated at',
+        value: _formatDate(item['updated_at']),
+        icon: LucideIcons.clock,
+      ),
     ];
 
     return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.35,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.12),
-        ),
-      ),
+      color: Colors.transparent,
       child: wide
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (var index = 0; index < entries.length; index++) ...[
-                  if (index > 0) const SizedBox(width: 16),
-                  Expanded(
-                    child: _MetadataValue(
-                      label: entries[index].$1,
-                      value: entries[index].$2,
-                    ),
-                  ),
+                  if (index > 0) const SizedBox(width: 12),
+                  Expanded(child: _MetadataValue(entry: entries[index])),
                 ],
               ],
             )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                for (var index = 0; index < entries.length; index++) ...[
-                  if (index > 0) const SizedBox(height: 14),
-                  Center(
-                    child: _MetadataValue(
-                      label: entries[index].$1,
-                      value: entries[index].$2,
-                      centered: true,
-                    ),
-                  ),
-                ],
-              ],
+          : GridView.builder(
+              itemCount: entries.length,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: 1.72,
+              ),
+              itemBuilder: (context, index) =>
+                  _MetadataValue(entry: entries[index]),
             ),
     );
   }
 }
 
-class _MetadataValue extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool centered;
+class _StudentDetailSectionTitle extends StatelessWidget {
+  final String title;
+  final IconData icon;
 
-  const _MetadataValue({
-    required this.label,
-    required this.value,
-    this.centered = false,
-  });
+  const _StudentDetailSectionTitle(this.title, {required this.icon});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final shown = value.trim().isEmpty ? '--' : value;
-    return Column(
-      crossAxisAlignment: centered
-          ? CrossAxisAlignment.center
-          : CrossAxisAlignment.start,
+    return Row(
       children: [
+        Icon(icon, size: 15, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 7),
         Text(
-          label.toUpperCase(),
+          title.toUpperCase(),
           style: theme.textTheme.labelSmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.7,
-            fontSize: 10,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          shown,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: centered ? TextAlign.center : TextAlign.start,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.78),
-            fontWeight: FontWeight.w700,
-            height: 1.35,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.2,
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MetadataValue extends StatelessWidget {
+  final ({String label, String value, IconData icon}) entry;
+
+  const _MetadataValue({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final shown = entry.value.trim().isEmpty ? '--' : entry.value;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.12),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(entry.icon, size: 16, color: theme.colorScheme.primary),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.label.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                    fontSize: 9,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  shown,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.82),
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1788,72 +1839,83 @@ class _DetailActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final buttons = [
-      OutlinedButton(
-        onPressed: onClose,
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-        child: const Text(
-          'Close',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
+    final closeButton = OutlinedButton(
+      onPressed: onClose,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 50),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      if (canEdit)
-        FilledButton.icon(
-          onPressed: onEdit,
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          icon: const Icon(LucideIcons.edit2, size: 18),
-          label: const Text(
-            'Edit',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
+      child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w800)),
+    );
+
+    final editButton = FilledButton.icon(
+      onPressed: onEdit,
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(0, 50),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      icon: const Icon(LucideIcons.edit2, size: 18),
+      label: const Text('Edit', style: TextStyle(fontWeight: FontWeight.w800)),
+    );
+
+    final deleteButton = OutlinedButton.icon(
+      onPressed: onDelete,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 50),
+        foregroundColor: theme.colorScheme.error,
+        side: BorderSide(
+          color: theme.colorScheme.error.withValues(alpha: 0.35),
         ),
-      if (canDelete)
-        OutlinedButton.icon(
-          onPressed: onDelete,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: theme.colorScheme.error,
-            side: BorderSide(
-              color: theme.colorScheme.error.withValues(alpha: 0.35),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          icon: const Icon(LucideIcons.trash2, size: 18),
-          label: const Text(
-            'Delete',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
-        ),
-    ];
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      icon: const Icon(LucideIcons.trash2, size: 18),
+      label: const Text(
+        'Delete',
+        style: TextStyle(fontWeight: FontWeight.w800),
+      ),
+    );
 
     if (compact) {
-      return Row(
-        children: [
-          for (var index = 0; index < buttons.length; index++) ...[
-            if (index > 0) const SizedBox(width: 10),
-            Expanded(child: buttons[index]),
-          ],
-        ],
-      );
+      return canEdit
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                editButton,
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: closeButton),
+                    if (canDelete) ...[
+                      const SizedBox(width: 10),
+                      Expanded(child: deleteButton),
+                    ],
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(child: closeButton),
+                if (canDelete) ...[
+                  const SizedBox(width: 10),
+                  Expanded(child: deleteButton),
+                ],
+              ],
+            );
     }
 
     return Wrap(
       alignment: WrapAlignment.end,
       spacing: 12,
       runSpacing: 12,
-      children: buttons,
+      children: [
+        closeButton,
+        if (canEdit) editButton,
+        if (canDelete) deleteButton,
+      ],
     );
   }
 }

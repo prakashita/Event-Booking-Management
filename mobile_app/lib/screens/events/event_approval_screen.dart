@@ -476,6 +476,7 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     if (_loadingApprovalEmails) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -515,10 +516,13 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
       return;
     }
 
-    final googleReady = await _ensureGoogleConnectedForBudgetPdf();
-    if (!googleReady) return;
-
     setState(() => _submitting = true);
+    final googleReady = await _ensureGoogleConnectedForBudgetPdf();
+    if (!mounted) return;
+    if (!googleReady) {
+      setState(() => _submitting = false);
+      return;
+    }
 
     try {
       final payload = {
@@ -1093,15 +1097,29 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                           ),
                                         ),
                                       ),
-                                      onPressed: (canSend && _confirmed)
+                                      onPressed:
+                                          (canSend &&
+                                              _confirmed &&
+                                              !_submitting)
                                           ? _submit
                                           : null,
-                                      icon: const Icon(
-                                        LucideIcons.send,
-                                        size: 18,
-                                      ),
+                                      icon: _submitting
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              LucideIcons.send,
+                                              size: 18,
+                                            ),
                                       label: Text(
-                                        'Send Request',
+                                        _submitting
+                                            ? 'Sending...'
+                                            : 'Send Request',
                                         style: GoogleFonts.plusJakartaSans(
                                           fontSize: 15,
                                           fontWeight: FontWeight.w700,
@@ -1127,7 +1145,9 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                           ),
                                         ),
                                       ),
-                                      onPressed: () => context.pop(),
+                                      onPressed: _submitting
+                                          ? null
+                                          : () => context.pop(),
                                       child: Text(
                                         'Cancel',
                                         style: GoogleFonts.plusJakartaSans(
@@ -1153,7 +1173,9 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
-                                    onPressed: () => context.pop(),
+                                    onPressed: _submitting
+                                        ? null
+                                        : () => context.pop(),
                                     child: Text(
                                       'Cancel',
                                       style: TextStyle(
@@ -1178,15 +1200,27 @@ class _EventApprovalScreenState extends State<EventApprovalScreen> {
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
-                                    onPressed: (canSend && _confirmed)
+                                    onPressed:
+                                        (canSend && _confirmed && !_submitting)
                                         ? _submit
                                         : null,
-                                    icon: const Icon(
-                                      LucideIcons.send,
-                                      size: 18,
-                                    ),
+                                    icon: _submitting
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            LucideIcons.send,
+                                            size: 18,
+                                          ),
                                     label: Text(
-                                      'Send Request',
+                                      _submitting
+                                          ? 'Sending...'
+                                          : 'Send Request',
                                       style: GoogleFonts.plusJakartaSans(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w700,

@@ -51,9 +51,12 @@ class _ChatScreenState extends State<ChatScreen> {
   List<ChatMessage> _messages = [];
   List<PlatformFile> _pendingFiles = [];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
+  bool _hasMoreMessages = true;
   bool _isSending = false;
   bool _isUploading = false;
   bool _isTyping = false;
+  bool _isDisposed = false;
   WebSocketChannel? _ws;
   ChatConversation? _conversation;
   ChatReplySnapshot? _replyingTo;
@@ -68,6 +71,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollCtrl.addListener(_handleMessageScroll);
     _loadMessages();
     _loadConversationMetadata();
     _connectWs();
@@ -98,12 +102,15 @@ class _ChatScreenState extends State<ChatScreen> {
     _conversationTitle = null;
     _replyingTo = null;
     _pendingFiles = [];
+    _hasMoreMessages = true;
+    _isLoadingMore = false;
     _loadMessages();
     _loadConversationMetadata();
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
     _typingTimer?.cancel();
     _remoteTypingResetTimer?.cancel();
     _reconnectTimer?.cancel();
@@ -114,6 +121,21 @@ class _ChatScreenState extends State<ChatScreen> {
     // Notify notification service that this chat is no longer active
     _clearNotificationServiceForThisChat();
     super.dispose();
+  }
+
+  void _handleMessageScroll() {
+    if (!_scrollCtrl.hasClients ||
+        _isLoading ||
+        _isLoadingMore ||
+        !_hasMoreMessages ||
+        _messages.isEmpty) {
+      return;
+    }
+
+    final position = _scrollCtrl.position;
+    if (position.pixels >= position.maxScrollExtent - 120) {
+      unawaited(_loadMoreMessages());
+    }
   }
 
   /// Update notification service with current chat activity status
@@ -145,16 +167,19 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final data = await _api.get<dynamic>(
         '/chat/conversations/${widget.conversationId}/messages',
+        params: const {'limit': 50},
       );
       final items = _extractItems(data);
       if (!mounted) return;
       setState(() {
-        _messages = items
+        final loadedMessages = items
             .whereType<Map<String, dynamic>>()
             .map(ChatMessage.fromJson)
             .toList()
             .reversed
             .toList();
+        _messages = _mergeLoadedMessagesWithLocalPending(loadedMessages);
+        _hasMoreMessages = items.length >= 50;
         _isLoading = false;
         _conversationTitle = _extractConversationTitle(data);
       });
@@ -165,6 +190,79 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  Future<void> _loadMoreMessages() async {
+    if (_messages.isEmpty) return;
+    final oldestMessage = _messages.last;
+
+    setState(() => _isLoadingMore = true);
+    try {
+      final data = await _api.get<dynamic>(
+        '/chat/conversations/${widget.conversationId}/messages',
+        params: {
+          'limit': 50,
+          'before': oldestMessage.createdAt.toUtc().toIso8601String(),
+        },
+      );
+      final items = _extractItems(data);
+      final olderMessages = items
+          .whereType<Map<String, dynamic>>()
+          .map(ChatMessage.fromJson)
+          .toList()
+          .reversed
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        final existingIds = _messages.map((message) => message.id).toSet();
+        _messages = [
+          ..._messages,
+          ...olderMessages.where(
+            (message) => !existingIds.contains(message.id),
+          ),
+        ];
+        _hasMoreMessages = items.length >= 50;
+        _isLoadingMore = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+      }
+    }
+  }
+
+  List<ChatMessage> _mergeLoadedMessagesWithLocalPending(
+    List<ChatMessage> loadedMessages,
+  ) {
+    if (_messages.isEmpty) return loadedMessages;
+    if (loadedMessages.isEmpty &&
+        _messages.any(
+          (message) => message.conversationId == widget.conversationId,
+        )) {
+      return _messages
+          .where((message) => message.conversationId == widget.conversationId)
+          .toList();
+    }
+
+    final loadedIds = loadedMessages.map((message) => message.id).toSet();
+    final loadedClientIds = loadedMessages
+        .map((message) => message.clientId)
+        .whereType<String>()
+        .toSet();
+    final localOnlyMessages = _messages.where((message) {
+      final clientId = message.clientId;
+      final isLocalPending =
+          message.id.startsWith('client-') ||
+          (clientId != null && clientId.startsWith('client-'));
+
+      if (!isLocalPending) return false;
+      if (loadedIds.contains(message.id)) return false;
+      if (clientId != null && loadedClientIds.contains(clientId)) return false;
+      return true;
+    });
+
+    return [...localOnlyMessages, ...loadedMessages];
   }
 
   Future<void> _loadConversationMetadata() async {
@@ -217,6 +315,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _connectWs() {
+    if (_isDisposed) return;
     final token = _api.getToken();
     final wsBase = _api.wsBaseUrl;
     if (token == null || wsBase == null) return;
@@ -241,6 +340,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scheduleReconnect() {
+    if (_isDisposed || !mounted) return;
     _reconnectTimer?.cancel();
     if (!mounted) return;
     _reconnectTimer = Timer(const Duration(seconds: 3), () {
@@ -260,25 +360,7 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           // Check if this is a response to an optimistic message
           final clientId = payload['client_id']?.toString();
-          if (clientId != null && clientId.startsWith('client-')) {
-            // Replace optimistic message with real message
-            final hasMatch = _messages.any(
-              (m) => m.clientId == clientId || m.id == clientId,
-            );
-            if (hasMatch) {
-              _messages = _messages
-                  .map(
-                    (m) =>
-                        (m.clientId == clientId || m.id == clientId) ? msg : m,
-                  )
-                  .toList();
-            } else {
-              _messages.insert(0, msg);
-            }
-          } else {
-            // Regular incoming message
-            _messages.insert(0, msg);
-          }
+          _replaceOrInsertMessage(msg, clientId: clientId);
           _isTyping = false;
         });
         if (msg.senderId != _currentUserId) {
@@ -446,6 +528,51 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  void _replaceOrInsertMessage(ChatMessage message, {String? clientId}) {
+    final index = _messages.indexWhere(
+      (item) =>
+          item.id == message.id ||
+          (clientId != null &&
+              clientId.startsWith('client-') &&
+              (item.id == clientId || item.clientId == clientId)) ||
+          _matchesLocalPendingMessage(item, message),
+    );
+
+    if (index == -1) {
+      _messages.insert(0, message);
+      return;
+    }
+
+    _messages[index] = message;
+  }
+
+  bool _matchesLocalPendingMessage(ChatMessage local, ChatMessage server) {
+    final localIsPending =
+        local.id.startsWith('client-') ||
+        (local.clientId?.startsWith('client-') ?? false);
+    if (!localIsPending) return false;
+    if (local.conversationId != server.conversationId) return false;
+    if (local.senderId != server.senderId) return false;
+    if (local.content.trim() != server.content.trim()) return false;
+    if (_attachmentSignature(local.attachments) !=
+        _attachmentSignature(server.attachments)) {
+      return false;
+    }
+
+    return local.createdAt.difference(server.createdAt).abs() <
+        const Duration(minutes: 2);
+  }
+
+  String _attachmentSignature(List<dynamic> attachments) {
+    return attachments
+        .whereType<Map<String, dynamic>>()
+        .map(
+          (attachment) =>
+              '${attachment['url'] ?? ''}|${attachment['name'] ?? ''}|${attachment['size'] ?? ''}',
+        )
+        .join(';;');
+  }
+
   Future<void> _markConversationRead() async {
     try {
       await _notificationProvider?.markConversationAsRead(
@@ -569,24 +696,21 @@ class _ChatScreenState extends State<ChatScreen> {
           'reply_to_message_id': capturedReply!.messageId,
       };
 
-      if (_ws != null) {
+      if (_ws != null && attachments.isEmpty) {
         _ws!.sink.add(jsonEncode(payload));
       } else {
-        final data = await _api.post<Map<String, dynamic>>(
-          '/chat/messages',
-          data: {
-            'conversation_id': widget.conversationId,
-            'content': content,
-            'attachments': attachments,
-            if (capturedReply?.messageId != null)
-              'reply_to_message_id': capturedReply!.messageId,
-          },
+        final savedMessage = await _sendMessageOverRest(
+          content: content,
+          attachments: attachments,
+          replyToMessageId: capturedReply?.messageId,
+          wsPayload: payload,
         );
-        final msg = ChatMessage.fromJson(data);
-        if (!mounted) return;
-        setState(() {
-          _messages = _messages.map((m) => m.id == clientId ? msg : m).toList();
-        });
+        if (savedMessage != null) {
+          if (!mounted) return;
+          setState(() {
+            _replaceOrInsertMessage(savedMessage, clientId: clientId);
+          });
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -598,7 +722,9 @@ class _ChatScreenState extends State<ChatScreen> {
       _msgCtrl.text = content;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to send: $e'),
+          content: Text(
+            'Failed to send: ${friendlyErrorMessage(e, fallback: 'Please try again.')}',
+          ),
           backgroundColor: AppColors.error,
         ),
       );
@@ -612,23 +738,65 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<ChatMessage?> _sendMessageOverRest({
+    required String content,
+    required List<Map<String, dynamic>> attachments,
+    required String? replyToMessageId,
+    required Map<String, dynamic> wsPayload,
+  }) async {
+    try {
+      final messageData = <String, dynamic>{
+        'conversation_id': widget.conversationId,
+        'content': content,
+        'attachments': attachments,
+      };
+      if (replyToMessageId != null) {
+        messageData['reply_to_message_id'] = replyToMessageId;
+      }
+
+      final data = await _api.post<Map<String, dynamic>>(
+        '/chat/messages',
+        data: messageData,
+      );
+      return ChatMessage.fromJson(data);
+    } on DioException catch (e) {
+      final shouldFallbackToWs =
+          attachments.isNotEmpty &&
+          (e.response?.statusCode ?? 0) >= 500 &&
+          _ws != null;
+      if (!shouldFallbackToWs) rethrow;
+
+      _ws!.sink.add(jsonEncode(wsPayload));
+      _showErrorSnackBar(
+        'Attachment sent. Sync may take a moment if the connection is unstable.',
+      );
+      return null;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _uploadAttachments(
     List<PlatformFile> files,
   ) async {
-    final uploaded = <Map<String, dynamic>>[];
-    for (final file in files) {
-      final multipartFile = await _createMultipartFile(file);
-      final formData = FormData.fromMap({'file': multipartFile});
-      final response = await _api.postMultipart<Map<String, dynamic>>(
-        '/chat/upload',
-        formData,
-      );
-      final attachment = response['attachment'];
-      if (attachment is Map<String, dynamic>) {
-        uploaded.add(attachment);
-      }
-    }
-    return uploaded;
+    return Future.wait(
+      files.map((file) async {
+        final multipartFile = await _createMultipartFile(file);
+        final formData = FormData.fromMap({'file': multipartFile});
+        final response = await _api.postMultipart<Map<String, dynamic>>(
+          '/chat/upload',
+          formData,
+        );
+        final attachment = response['attachment'];
+        if (attachment is Map<String, dynamic>) {
+          return attachment;
+        }
+
+        // Server returned an unexpected format, so let _sendMessage() restore UI
+        // state instead of silently sending with missing attachments.
+        throw Exception(
+          'Upload failed for ${file.name}: unexpected server response',
+        );
+      }),
+    );
   }
 
   Future<MultipartFile> _createMultipartFile(PlatformFile file) async {
@@ -656,7 +824,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
-        withData: true,
+        withData: kIsWeb,
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
       );
@@ -1261,12 +1429,29 @@ class _ChatScreenState extends State<ChatScreen> {
                       controller: _scrollCtrl,
                       reverse: true,
                       padding: const EdgeInsets.fromLTRB(12, 16, 12, 18),
-                      itemCount: _messages.length + (_isTyping ? 1 : 0),
+                      itemCount:
+                          _messages.length +
+                          (_isTyping ? 1 : 0) +
+                          (_isLoadingMore ? 1 : 0),
                       itemBuilder: (ctx, i) {
                         if (i == 0 && _isTyping) {
                           return _TypingIndicator();
                         }
                         final idx = _isTyping ? i - 1 : i;
+                        if (idx >= _messages.length) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Center(
+                              child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                          );
+                        }
                         final msg = _messages[idx];
                         final isOwn = msg.senderId == _currentUserId;
                         final isRead = _conversation?.kind == 'direct'
@@ -1638,78 +1823,98 @@ class _ChatBubble extends StatelessWidget {
                     ),
                   if (message.attachments.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    ...message.attachments
-                        .whereType<Map<String, dynamic>>()
-                        .map((attachment) {
-                          final contentType =
-                              attachment['content_type']?.toString() ?? '';
-                          final isImage = contentType.startsWith('image/');
-                          return GestureDetector(
-                            onTap: () => onAttachmentTap(attachment),
-                            child: Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: isOwn
-                                    ? Colors.white.withValues(alpha: 0.12)
-                                    : (isDark
-                                          ? const Color(0xFF0F172A)
-                                          : AppColors.background),
-                                borderRadius: BorderRadius.circular(14),
-                                border: isOwn
-                                    ? null
-                                    : Border.all(color: bubbleBorder),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (isImage)
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.network(
-                                        resolveAttachmentUrl(
-                                          attachment['url']?.toString() ?? '',
+                    ...message.attachments.whereType<Map<String, dynamic>>().map(
+                      (attachment) {
+                        final contentType =
+                            attachment['content_type']?.toString() ?? '';
+                        final isImage = contentType.startsWith('image/');
+                        return GestureDetector(
+                          onTap: () => onAttachmentTap(attachment),
+                          child: Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: isOwn
+                                  ? Colors.white.withValues(alpha: 0.12)
+                                  : (isDark
+                                        ? const Color(0xFF0F172A)
+                                        : AppColors.background),
+                              borderRadius: BorderRadius.circular(14),
+                              border: isOwn
+                                  ? null
+                                  : Border.all(color: bubbleBorder),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (isImage)
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(
+                                      resolveAttachmentUrl(
+                                        attachment['url']?.toString() ?? '',
+                                      ),
+                                      height: 180,
+                                      width: double.infinity,
+                                      cacheWidth: 720,
+                                      fit: BoxFit.cover,
+                                      loadingBuilder:
+                                          (context, child, progress) {
+                                            if (progress == null) {
+                                              return child;
+                                            }
+                                            return const SizedBox(
+                                              height: 180,
+                                              child: Center(
+                                                child: SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                      ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                      errorBuilder: (_, _, _) =>
+                                          const SizedBox.shrink(),
+                                    ),
+                                  ),
+                                if (isImage) const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isImage
+                                          ? Icons.image_outlined
+                                          : Icons.picture_as_pdf_outlined,
+                                      size: 18,
+                                      color: isOwn
+                                          ? Colors.white
+                                          : AppColors.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        attachment['name']?.toString() ??
+                                            'Attachment',
+                                        style: TextStyle(
+                                          color: isOwn
+                                              ? Colors.white
+                                              : textPrimary,
+                                          fontWeight: FontWeight.w600,
                                         ),
-                                        height: 180,
-                                        width: double.infinity,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, _, _) =>
-                                            const SizedBox.shrink(),
                                       ),
                                     ),
-                                  if (isImage) const SizedBox(height: 8),
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        isImage
-                                            ? Icons.image_outlined
-                                            : Icons.picture_as_pdf_outlined,
-                                        size: 18,
-                                        color: isOwn
-                                            ? Colors.white
-                                            : AppColors.primary,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          attachment['name']?.toString() ??
-                                              'Attachment',
-                                          style: TextStyle(
-                                            color: isOwn
-                                                ? Colors.white
-                                                : textPrimary,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                                  ],
+                                ),
+                              ],
                             ),
-                          );
-                        }),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                   const SizedBox(height: 3),
                   Row(

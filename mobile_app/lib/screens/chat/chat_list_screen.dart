@@ -37,6 +37,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   String? _error;
   WebSocketChannel? _ws;
   bool _isConnectingWs = false;
+  bool _isDisposed = false;
   String _currentUserId = '';
   Timer? _autoRefreshTimer;
   Timer? _reconnectTimer;
@@ -53,7 +54,11 @@ class _ChatListScreenState extends State<ChatListScreen>
       .fold<int>(0, (sum, conversation) => sum + conversation.unreadCount);
 
   int get _workflowUnreadCount => _conversations
-      .where((conversation) => conversation.kind == 'approval_thread')
+      .where(
+        (conversation) =>
+            conversation.kind == 'approval_thread' &&
+            _isActiveWorkflowThread(conversation),
+      )
       .fold<int>(0, (sum, conversation) => sum + conversation.unreadCount);
 
   int get _totalUnreadCount => _conversations.fold<int>(
@@ -74,6 +79,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   @override
   void dispose() {
+    _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
     _autoRefreshTimer?.cancel();
     _reconnectTimer?.cancel();
@@ -150,7 +156,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
   /// Connect to WebSocket for real-time conversation updates
   void _connectWs() {
-    if (_isConnectingWs) return;
+    if (_isDisposed || _isConnectingWs) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final token = authProvider.token;
@@ -179,6 +185,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           }
         },
         onError: (error) {
+          if (_isDisposed) return;
           _isConnectingWs = false;
           if (kDebugMode) {
             print('WebSocket error: $error');
@@ -186,6 +193,7 @@ class _ChatListScreenState extends State<ChatListScreen>
           _scheduleReconnect();
         },
         onDone: () {
+          if (_isDisposed) return;
           _isConnectingWs = false;
           if (kDebugMode) {
             print('WebSocket closed');
@@ -210,6 +218,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   void _scheduleReconnect() {
+    if (_isDisposed || !mounted) return;
     _reconnectTimer?.cancel();
     _reconnectTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) {
@@ -219,6 +228,7 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   void _reconnectWs() {
+    if (_isDisposed) return;
     _reconnectTimer?.cancel();
     _ws?.sink.close();
     _ws = null;
@@ -371,8 +381,16 @@ class _ChatListScreenState extends State<ChatListScreen>
     if (userId == null || !mounted) return;
 
     final online = event['online'] == true;
+    final lastSeen = _parseDateTime(event['last_seen']?.toString());
 
     setState(() {
+      _users = _users
+          .map(
+            (user) => user.id == userId
+                ? user.copyWith(online: online, lastSeen: lastSeen)
+                : user,
+          )
+          .toList();
       _conversations = _conversations.map((conversation) {
         if (conversation.kind != 'direct') {
           return conversation;
@@ -387,7 +405,10 @@ class _ChatListScreenState extends State<ChatListScreen>
           return conversation;
         }
 
-        return conversation.copyWith(otherUserOnline: online);
+        return conversation.copyWith(
+          otherUserOnline: online,
+          otherUserLastSeen: lastSeen,
+        );
       }).toList();
     });
   }
@@ -531,6 +552,19 @@ class _ChatListScreenState extends State<ChatListScreen>
         conversation.otherUserName ??
         conversation.participantNames.join(', ');
     return title.trim().isEmpty ? 'Unknown conversation' : title.trim();
+  }
+
+  bool _isActiveWorkflowThread(ChatConversation conversation) {
+    final status = (conversation.threadStatus ?? '').trim().toLowerCase();
+    return status.isEmpty ||
+        status == 'active' ||
+        status == 'waiting_for_faculty' ||
+        status == 'waiting_for_department';
+  }
+
+  bool _isArchivedWorkflowThread(ChatConversation conversation) {
+    final status = (conversation.threadStatus ?? '').trim().toLowerCase();
+    return status == 'resolved' || status == 'closed';
   }
 
   bool _matchesConversation(ChatConversation conversation, String query) {
@@ -874,7 +908,7 @@ class _ChatListScreenState extends State<ChatListScreen>
             initials: _getInitials(u.name),
             avatarBg: color.withValues(alpha: 0.15),
             avatarFg: color,
-            isOnline: false,
+            isOnline: u.online,
             onTap: () => _startDirectMessage(u),
           );
         },
@@ -1004,6 +1038,12 @@ class _ChatListScreenState extends State<ChatListScreen>
       final workflowThreads = targetConversations
           .where((c) => c.kind == 'approval_thread')
           .toList();
+      final activeWorkflowThreads = workflowThreads
+          .where(_isActiveWorkflowThread)
+          .toList();
+      final archivedWorkflowThreads = workflowThreads
+          .where(_isArchivedWorkflowThread)
+          .toList();
       if (workflowThreads.isEmpty) {
         return const EmptyState(
           icon: Icons.account_tree_outlined,
@@ -1014,26 +1054,53 @@ class _ChatListScreenState extends State<ChatListScreen>
       return ListView(
         padding: const EdgeInsets.all(8),
         children: [
-          _buildSectionHeader('Active Discussions'),
-          ...workflowThreads.map((conv) {
-            final title = conv.eventTitle ?? 'Event Discussion';
-            final dept = conv.departmentLabel ?? conv.department ?? 'Workflow';
-            return _buildChatItem(
-              name: title,
-              subtitle1: dept,
-              subtitle2: conv.lastMessage ?? 'No messages yet',
-              initials: dept.isNotEmpty ? dept[0].toUpperCase() : 'W',
-              avatarBg: const Color(0xFFFFF7ED), // orange bg
-              avatarFg: const Color(0xFFC2410C), // orange fg
-              date: conv.lastMessageAt != null
-                  ? _formatTime(conv.lastMessageAt!)
-                  : null,
-              unreadCount: conv.unreadCount,
-              onActionSelected: (value) =>
-                  _handleConversationAction(conv, value),
-              onTap: () => _openConversation(conv),
-            );
-          }),
+          if (activeWorkflowThreads.isNotEmpty) ...[
+            _buildSectionHeader('Active Discussions'),
+            ...activeWorkflowThreads.map((conv) {
+              final title = conv.eventTitle ?? 'Event Discussion';
+              final dept =
+                  conv.departmentLabel ?? conv.department ?? 'Workflow';
+              return _buildChatItem(
+                name: title,
+                subtitle1: dept,
+                subtitle2: conv.lastMessage ?? 'No messages yet',
+                initials: dept.isNotEmpty ? dept[0].toUpperCase() : 'W',
+                avatarBg: const Color(0xFFFFF7ED),
+                avatarFg: const Color(0xFFC2410C),
+                date: conv.lastMessageAt != null
+                    ? _formatTime(conv.lastMessageAt!)
+                    : null,
+                unreadCount: conv.unreadCount,
+                onActionSelected: (value) =>
+                    _handleConversationAction(conv, value),
+                onTap: () => _openConversation(conv),
+              );
+            }),
+          ],
+          if (archivedWorkflowThreads.isNotEmpty) ...[
+            if (activeWorkflowThreads.isNotEmpty) const SizedBox(height: 16),
+            _buildSectionHeader('Archived Discussions'),
+            ...archivedWorkflowThreads.map((conv) {
+              final title = conv.eventTitle ?? 'Event Discussion';
+              final dept =
+                  conv.departmentLabel ?? conv.department ?? 'Workflow';
+              return _buildChatItem(
+                name: title,
+                subtitle1: dept,
+                subtitle2: conv.lastMessage ?? 'No messages yet',
+                initials: dept.isNotEmpty ? dept[0].toUpperCase() : 'W',
+                avatarBg: const Color(0xFFFFF7ED),
+                avatarFg: const Color(0xFFC2410C),
+                date: conv.lastMessageAt != null
+                    ? _formatTime(conv.lastMessageAt!)
+                    : null,
+                unreadCount: 0,
+                onActionSelected: (value) =>
+                    _handleConversationAction(conv, value),
+                onTap: () => _openConversation(conv),
+              );
+            }),
+          ],
         ],
       );
     }
