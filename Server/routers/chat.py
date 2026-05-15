@@ -19,9 +19,10 @@ from event_chat_service import (
     notify_new_message,
     reset_unread_for_user,
 )
-from models import ChatAttachment, ChatConversation, ChatMessage, User
+from models import ApprovalRequest, ChatAttachment, ChatConversation, ChatMessage, User
 from routers.deps import can_view_conversation, get_current_user, require_conversation_access
 from schemas import (
+    ChatAttachment as SchemaChatAttachment,
     ChatConversationCreate,
     ChatConversationListItem,
     ChatConversationResponse,
@@ -293,6 +294,26 @@ async def list_my_conversations(
         for u in await User.find(In(User.id, participant_oids)).to_list():
             users_by_id[str(u.id)] = u
 
+    # Batch-resolve event titles for approval_thread conversations
+    _approval_ids: List[PydanticObjectId] = []
+    _seen_approval: set[str] = set()
+    for conv in convs:
+        if getattr(conv, "thread_kind", None) == "approval_thread":
+            ar_id = getattr(conv, "approval_request_id", None)
+            if ar_id and ar_id not in _seen_approval:
+                try:
+                    _approval_ids.append(PydanticObjectId(ar_id))
+                    _seen_approval.add(ar_id)
+                except Exception:
+                    pass
+    _event_title_map: Dict[str, str] = {}
+    if _approval_ids:
+        try:
+            for ar in await ApprovalRequest.find(In(ApprovalRequest.id, _approval_ids)).to_list():
+                _event_title_map[str(ar.id)] = ar.event_name or ""
+        except Exception:
+            pass
+
     items: List[ChatConversationListItem] = []
     for conv in convs:
         kind = getattr(conv, "thread_kind", None) or "direct"
@@ -345,6 +366,8 @@ async def list_my_conversations(
 
         dept = getattr(conv, "department", None)
         dept_label = DEPARTMENT_LABELS.get(dept or "", None) if dept else None
+        _ar_id = getattr(conv, "approval_request_id", None)
+        event_title = _event_title_map.get(_ar_id or "", None) or None
 
         items.append(
             ChatConversationListItem(
@@ -363,9 +386,10 @@ async def list_my_conversations(
                 department=dept,
                 department_label=dept_label,
                 related_kind=getattr(conv, "related_kind", None),
-                approval_request_id=getattr(conv, "approval_request_id", None),
+                approval_request_id=_ar_id,
                 closed_at=getattr(conv, "closed_at", None),
                 closed_reason=getattr(conv, "closed_reason", None),
+                event_title=event_title,
             )
         )
     return items
@@ -854,10 +878,18 @@ async def upload_attachment(
     ext = os.path.splitext(file.filename)[1]
     safe_name = f"{uuid.uuid4().hex}{ext}"
     destination = os.path.join(UPLOADS_DIR, safe_name)
-    with open(destination, "wb") as out_file:
-        out_file.write(content)
+    try:
+        with open(destination, "wb") as out_file:
+            out_file.write(content)
+    except OSError:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": "Failed to save file. Please try again."},
+        )
 
-    attachment = ChatAttachment(
+    # Use the schema-level ChatAttachment (not the Beanie storage model) so
+    # Pydantic v2 can validate the response type without a cross-model coercion error.
+    attachment = SchemaChatAttachment(
         name=file.filename,
         url=f"/uploads/{safe_name}",
         content_type=file.content_type or "application/octet-stream",
@@ -917,7 +949,7 @@ async def websocket_chat(websocket: WebSocket, token: Optional[str] = Query(defa
                     sender_name=user.name,
                     sender_email=user.email,
                     content=content,
-                    attachments=[ChatAttachment(**item) for item in attachments],
+                    attachments=[ChatAttachment(**item) for item in attachments if isinstance(item, dict) and all(k in item for k in ("name", "url", "content_type", "size"))],
                     read_by=[str(user.id)],
                     created_at=datetime.now(timezone.utc),
                     reply_to_message_id=ws_reply_id,

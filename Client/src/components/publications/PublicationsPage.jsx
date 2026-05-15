@@ -30,11 +30,14 @@ import {
   isPublicationFieldEmpty,
   publicationItemToForm
 } from "./publicationUtils";
+import { serializeContributors } from "./contributorUtils";
 
 // ─── Citation helpers (no deps, pure render) ─────────────────────────────────
 
 function getCitationPieces(item) {
-  const author = item.author || "";
+  const rawAuthor = item.author || "";
+  // Guard against raw JSON stored before the contributor formatter was fixed
+  const author = rawAuthor.startsWith("[") || rawAuthor.startsWith("{") ? "" : rawAuthor;
   const title = getPublicationDisplayTitle(item);
   const container =
     getPublicationFieldValue(item, "container_title") || item.publisher || "";
@@ -329,6 +332,14 @@ const PublicationsPage = memo(function PublicationsPage({
               return value !== "" && value != null;
             })
         );
+        // Serialize contributors into details and as a separate form field
+        const contributorsArray = serializeContributors(
+          Array.isArray(f.contributors) ? f.contributors : []
+        );
+        if (contributorsArray.length > 0) {
+          details.contributors = contributorsArray;
+          formData.append("contributors", JSON.stringify(contributorsArray));
+        }
         const authorText = String(f.author || "").trim();
         const selectedTitle = (
           details.title ||
@@ -471,6 +482,13 @@ const PublicationsPage = memo(function PublicationsPage({
               return value !== "" && value != null;
             })
         );
+        // Serialize contributors into details and as a separate form field.
+        // Always include in details so the PATCH overwrites any previously stored array.
+        const contributorsArray = serializeContributors(
+          Array.isArray(f.contributors) ? f.contributors : []
+        );
+        details.contributors = contributorsArray;
+        formData.append("contributors", JSON.stringify(contributorsArray));
         const authorText = String(f.author || "").trim();
         const selectedTitle = (details.title || details.content || f.title || f.name || "").trim();
         const selectedIssuedDate = details.issued_date || "";
@@ -596,10 +614,9 @@ const PublicationsPage = memo(function PublicationsPage({
           );
         }
         const direction = publicationSort.endsWith("asc") ? 1 : -1;
-        return (
-          getPublicationSortDate(a).localeCompare(getPublicationSortDate(b)) *
-          direction
-        );
+        const aDate = a.created_at || "0000-01-01";
+        const bDate = b.created_at || "0000-01-01";
+        return aDate.localeCompare(bDate) * direction;
       });
   }, [
     allPubItems,

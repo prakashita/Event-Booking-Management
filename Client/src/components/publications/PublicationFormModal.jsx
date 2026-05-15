@@ -9,9 +9,10 @@
  *  - Heavy libraries (jsPDF, FullCalendar, tippy) are not imported here.
  *
  */
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { CITATION_FORMAT_OPTIONS, PUBLICATION_FIELD_DEFINITIONS } from "../../constants";
 import PublicationDateField from "./PublicationDateField";
+import ContributorsSection from "./ContributorsSection";
 import {
   FEATURED_PUBLICATION_EXTRA_FIELDS,
   PUBLICATION_SOURCE_ICON_PATHS,
@@ -542,6 +543,15 @@ const PublicationFormModal = memo(function PublicationFormModal({
   );
   const [noteVisible, setNoteVisible] = useState(false);
 
+  // Contributors are managed by ContributorsSection; we keep a ref here so
+  // the entire modal does NOT re-render when a contributor field changes.
+  const contributorsRef = useRef(
+    Array.isArray(initialForm?.contributors) ? initialForm.contributors : []
+  );
+  const handleContributorsChange = useCallback((updated) => {
+    contributorsRef.current = updated;
+  }, []);
+
   const fieldGroups = useMemo(
     () => getPublicationFieldGroups(form.pubType),
     [form.pubType]
@@ -627,7 +637,7 @@ const PublicationFormModal = memo(function PublicationFormModal({
   const handleSubmit = useCallback(
     (event) => {
       event.preventDefault();
-      onSubmit({ ...form });
+      onSubmit({ ...form, contributors: contributorsRef.current });
     },
     [form, onSubmit]
   );
@@ -677,16 +687,22 @@ const PublicationFormModal = memo(function PublicationFormModal({
           </section>
 
           {featuredFormRows ? (
-          <PublicationFeaturedFields
-              rows={featuredFormRows}
-              form={form}
-              noteVisible={noteVisible}
-              onFieldChange={handleFieldChange}
-              onSetFieldValue={setPublicationFieldValue}
-              onShowAnnotation={showAnnotation}
-              onAnnotationChange={handleAnnotationChange}
-              onRemoveAnnotation={removeAnnotation}
-            />
+            <>
+              <PublicationFeaturedFields
+                rows={featuredFormRows}
+                form={form}
+                noteVisible={noteVisible}
+                onFieldChange={handleFieldChange}
+                onSetFieldValue={setPublicationFieldValue}
+                onShowAnnotation={showAnnotation}
+                onAnnotationChange={handleAnnotationChange}
+                onRemoveAnnotation={removeAnnotation}
+              />
+              <ContributorsSection
+                initialContributors={contributorsRef.current}
+                onChange={handleContributorsChange}
+              />
+            </>
           ) : (
             <>
               <label className="form-field">
@@ -760,6 +776,11 @@ const PublicationFormModal = memo(function PublicationFormModal({
                   />
                 </details>
               ) : null}
+
+              <ContributorsSection
+                initialContributors={contributorsRef.current}
+                onChange={handleContributorsChange}
+              />
 
               <label className="form-field">
                 <span>PDF File (optional, max 10 MB)</span>

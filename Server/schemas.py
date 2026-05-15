@@ -836,6 +836,7 @@ class ChatConversationListItem(BaseModel):
     approval_request_id: Optional[str] = None
     closed_at: Optional[datetime] = None
     closed_reason: Optional[str] = None
+    event_title: Optional[str] = None  # resolved event name for approval_thread rows
 
 
 class ChatSendMessage(BaseModel):

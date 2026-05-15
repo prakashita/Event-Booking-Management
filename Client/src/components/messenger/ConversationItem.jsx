@@ -35,10 +35,17 @@ const ConversationItem = React.memo(function ConversationItem({
   }, [menuOpen]);
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       className={`msger-conv-item${isActive ? " active" : ""}${isEvent ? " event" : ""}${isWorkflow ? " workflow" : ""}${isLocked ? " locked" : ""}`}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
       title={participantNamesTitle || undefined}
     >
       <span
@@ -75,8 +82,45 @@ const ConversationItem = React.memo(function ConversationItem({
       </div>
       <div className="msger-conv-right">
         {time ? <span className="msger-conv-time">{time}</span> : null}
+        {showConvMenu && (
+          <div className="msger-conv-menu-wrap" ref={menuRef}>
+            <button
+              type="button"
+              className="msger-conv-menu-trigger"
+              aria-label="Conversation options"
+              aria-expanded={menuOpen}
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+            >
+              ···
+            </button>
+            {menuOpen && (
+              <div className="msger-conv-menu" role="menu">
+                {onClearChat && (
+                  <button
+                    type="button"
+                    className="msger-conv-menu-item"
+                    role="menuitem"
+                    onClick={(e) => { e.stopPropagation(); onClearChat(); setMenuOpen(false); }}
+                  >
+                    Clear chat
+                  </button>
+                )}
+                {onPurgeChat && (
+                  <button
+                    type="button"
+                    className="msger-conv-menu-item danger"
+                    role="menuitem"
+                    onClick={(e) => { e.stopPropagation(); onPurgeChat(); setMenuOpen(false); }}
+                  >
+                    Delete chat
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    </button>
+    </div>
   );
 });
 

@@ -52,6 +52,63 @@ const MessageBubble = React.memo(function MessageBubble({
               (edited)
             </span>
           ) : null}
+          {hasActions && !isEditing ? (
+            <div className="msger-msg-menu-wrap" ref={menuRef}>
+              <button
+                type="button"
+                className="msger-msg-menu-trigger"
+                aria-label="Message actions"
+                aria-expanded={dropdownOpen}
+                onClick={(e) => { e.stopPropagation(); setDropdownOpen((v) => !v); }}
+              >
+                ···
+              </button>
+              {dropdownOpen && (
+                <div className="msger-msg-menu" role="menu">
+                  {onStartReply && !isDeleted && (
+                    <button
+                      type="button"
+                      className="msger-msg-menu-item"
+                      role="menuitem"
+                      onClick={() => { onStartReply(message); setDropdownOpen(false); }}
+                    >
+                      ↩ Reply
+                    </button>
+                  )}
+                  {canEdit && onStartEdit && (
+                    <button
+                      type="button"
+                      className="msger-msg-menu-item"
+                      role="menuitem"
+                      onClick={() => { onStartEdit(message); setDropdownOpen(false); }}
+                    >
+                      ✎ Edit
+                    </button>
+                  )}
+                  {onDeleteForMe && (
+                    <button
+                      type="button"
+                      className="msger-msg-menu-item"
+                      role="menuitem"
+                      onClick={() => { onDeleteForMe(message.id); setDropdownOpen(false); }}
+                    >
+                      Delete for me
+                    </button>
+                  )}
+                  {isOwn && onRequestDeleteForEveryone && !isDeleted && (
+                    <button
+                      type="button"
+                      className="msger-msg-menu-item danger"
+                      role="menuitem"
+                      onClick={() => { onRequestDeleteForEveryone(message.id); setDropdownOpen(false); }}
+                    >
+                      Delete for everyone
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
         {isDeleted ? (
           <p className="msger-msg-text msger-msg-deleted">

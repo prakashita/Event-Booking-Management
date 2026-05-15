@@ -45,6 +45,14 @@ function resolveAttachmentUrl(url) {
   return `${base}${url}`;
 }
 
+function sortConvsByActivity(convs) {
+  return [...convs].sort((a, b) => {
+    const ta = new Date(a.last_message?.created_at || a.updated_at || 0).getTime();
+    const tb = new Date(b.last_message?.created_at || b.updated_at || 0).getTime();
+    return tb - ta;
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------
@@ -183,7 +191,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
 
         const qs = params.toString();
         const data = await api.getJson(`/chat/conversations/me${qs ? `?${qs}` : ""}`);
-        setConversations(Array.isArray(data) ? data : []);
+        setConversations(sortConvsByActivity(Array.isArray(data) ? data : []));
       } catch {
         // silent
       }
@@ -301,7 +309,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
           // Refresh conversations and search again
           const convData = await api.getJson("/chat/conversations/me");
           if (Array.isArray(convData)) {
-            setConversations(convData);
+            setConversations(sortConvsByActivity(convData));
             conv = convData.find((c) => String(c.id) === String(conversationId));
           }
         }
@@ -778,9 +786,9 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
               setMessages((prev) => [...prev, incoming]);
             }
           } else {
-            // Update unread in conversation list
-            setConversations((prev) =>
-              prev.map((c) =>
+            // Update unread in conversation list and re-sort by latest activity
+            setConversations((prev) => {
+              const updated = prev.map((c) =>
                 c.id === incoming.conversation_id
                   ? {
                       ...c,
@@ -794,8 +802,9 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
                       },
                     }
                   : c
-              )
-            );
+              );
+              return sortConvsByActivity(updated);
+            });
           }
 
           if (incoming.sender_id && incoming.sender_id !== user?.id) {

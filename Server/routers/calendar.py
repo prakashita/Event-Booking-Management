@@ -3,6 +3,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 import requests
 
+
+def ensure_utc(dt: datetime | None) -> datetime | None:
+    """Return dt as a timezone-aware UTC datetime. Naive datetimes are assumed UTC."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
 from auth import (
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
@@ -164,14 +173,17 @@ async def get_app_calendar_events(
     except (ValueError, AttributeError):
         range_end = None
 
+    range_start = ensure_utc(range_start)
+    range_end = ensure_utc(range_end)
+
     for event in all_events:
         item = _event_to_calendar_item(event)
         if not item:
             continue
         if range_start is not None or range_end is not None:
             try:
-                ev_start = combine_datetime(event.start_date, event.start_time)
-                ev_end = combine_datetime(event.end_date, event.end_time)
+                ev_start = ensure_utc(combine_datetime(event.start_date, event.start_time))
+                ev_end = ensure_utc(combine_datetime(event.end_date, event.end_time))
             except (ValueError, TypeError):
                 continue
             if range_start is not None and ev_end < range_start:
@@ -185,8 +197,8 @@ async def get_app_calendar_events(
         item = institution_entry_to_calendar_item(entry)
         if range_start is not None or range_end is not None:
             try:
-                ev_start = datetime.fromisoformat(f"{entry.start_date}T00:00:00+05:30")
-                ev_end = datetime.fromisoformat(f"{entry.end_date}T23:59:59+05:30")
+                ev_start = ensure_utc(datetime.fromisoformat(f"{entry.start_date}T00:00:00+05:30"))
+                ev_end = ensure_utc(datetime.fromisoformat(f"{entry.end_date}T23:59:59+05:30"))
             except Exception:
                 continue
             if range_start is not None and ev_end < range_start:

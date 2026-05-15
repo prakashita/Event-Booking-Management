@@ -16,6 +16,7 @@ from fastapi.responses import FileResponse, Response
 from models import IQACFile, IQACSSRHistory, IQACSSRSection, User
 from routers.deps import IQAC_DELETE_ALLOWED_ROLES, require_iqac
 from schemas import IQACSSRHistoryResponse, IQACSSRSectionResponse, IQACSSRSectionUpdate
+from upload_validation import MAX_PDF_UPLOAD_BYTES, PDF_SIZE_ERROR_DETAIL
 
 router = APIRouter(prefix="/iqac", tags=["iqac"])
 
@@ -834,6 +835,12 @@ async def persist_iqac_upload(
     ok, err = _allowed_filename(original_filename)
     if not ok:
         raise HTTPException(status_code=400, detail=err)
+    # PDFs are allowed up to 15 MB; other document types keep the 10 MB limit.
+    if original_filename.lower().endswith(".pdf") and len(content) > MAX_PDF_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=PDF_SIZE_ERROR_DETAIL,
+        )
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File size must not exceed 10MB")
     base_name = os.path.basename(original_filename) or "file"

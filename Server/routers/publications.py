@@ -10,7 +10,7 @@ from rate_limit import limiter
 from typing import Any, Dict, List, Literal, Optional
 
 from auth import ensure_google_access_token
-from drive import upload_report_file
+from drive import sanitize_folder_name, upload_file_to_nested_folder, upload_report_file
 from models import Publication, User
 from routers.deps import get_current_user
 from schemas import PaginatedResponse, PublicationResponse
@@ -23,9 +23,29 @@ DEFAULT_PUBLICATIONS_FOLDER_ID = "1Ad_30BIMiZSLxzyVvcCXcSi9zEMmPSw0"
 def _format_contributor_item(item: Any) -> Optional[str]:
     if not isinstance(item, dict):
         return None
-    if item.get("kind") == "organization":
-        name = str(item.get("name") or item.get("organization") or item.get("screen_name") or item.get("screenName") or "").strip()
+    # New schema: type="organization"|"person", with nested dicts
+    item_type = item.get("type") or item.get("kind")
+    if item_type == "organization":
+        org = item.get("organization") or {}
+        if isinstance(org, dict):
+            name = str(org.get("name") or org.get("screen_name") or "").strip()
+            if name:
+                return name
+        # Fallback: old flat schema
+        name = str(item.get("name") or item.get("screen_name") or item.get("screenName") or "").strip()
         return name or None
+    # Person (default when type is absent or "person")
+    person = item.get("person") or {}
+    if isinstance(person, dict):
+        name = " ".join(
+            str(person.get(key) or "").strip()
+            for key in ("title", "initials", "first_names", "infix", "last_name", "suffix")
+            if str(person.get(key) or "").strip()
+        )
+        screen_name = str(person.get("screen_name") or "").strip()
+        if name or screen_name:
+            return name or screen_name
+    # Fallback: old flat schema with direct fields
     name = " ".join(
         str(item.get(key) or "").strip()
         for key in ("title", "initials", "first_name", "first_names", "infix", "last_name", "suffix")
@@ -236,14 +256,35 @@ async def upload_publication(
                 detail="Google Drive folder not configured",
             )
 
+        # Build nested folder path: Publication-Uploads / YYYY / YYYY-MM / Title
+        try:
+            _pub_date_raw = (publication_date or issued_date or "").strip()
+            _pdt = datetime.strptime(_pub_date_raw[:10], "%Y-%m-%d") if len(_pub_date_raw) >= 10 else None
+        except Exception:
+            _pdt = None
+        if _pdt is None and year:
+            try:
+                _pdt = datetime.strptime(str(year).strip()[:4], "%Y")
+            except Exception:
+                pass
+        if _pdt is None:
+            _pdt = datetime.utcnow()
+        _pub_folder_parts = [
+            "Publication-Uploads",
+            _pdt.strftime("%Y"),
+            _pdt.strftime("%Y-%m"),
+            sanitize_folder_name(title or name or "Publication"),
+        ]
+
         try:
             access_token = await ensure_google_access_token(user)
-            drive_file = upload_report_file(
+            drive_file = upload_file_to_nested_folder(
                 access_token=access_token,
                 file_name=file.filename,
                 file_bytes=contents,
                 mime_type=file.content_type or "application/octet-stream",
-                folder_id=folder_id,
+                root_folder_id=folder_id,
+                folder_path_parts=_pub_folder_parts,
             )
             file_id = drive_file.get("id", "")
             file_name = drive_file.get("name", file.filename)
@@ -503,7 +544,16 @@ async def update_publication(
     if composed_date is not None: update_fields["composed_date"] = composed_date
     if submitted_date is not None: update_fields["submitted_date"] = submitted_date
     if content is not None: update_fields["content"] = content
-    if contributors is not None: update_fields["contributors"] = _format_contributors(contributors)
+    if contributors is not None:
+        formatted = _format_contributors(contributors)
+        # Preserve structured array in detail_payload for future edits
+        try:
+            parsed_contrib = json.loads(contributors)
+            if isinstance(parsed_contrib, list):
+                detail_payload["contributors"] = parsed_contrib
+        except Exception:
+            pass
+        update_fields["contributors"] = formatted
     if container_title is not None: update_fields["container_title"] = container_title
     if collection_title is not None: update_fields["collection_title"] = collection_title
     if note is not None: update_fields["note"] = note

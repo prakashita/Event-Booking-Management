@@ -7,10 +7,11 @@ from beanie import PydanticObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 
 from auth import ensure_google_access_token
-from drive import upload_report_file
+from drive import upload_file_to_nested_folder, upload_report_file
 from models import StudentAchievement, StudentAchievementFile, StudentAchievementStudent, User
 from rate_limit import limiter
 from routers.deps import get_current_user, require_admin_only
+from upload_validation import MAX_PDF_UPLOAD_BYTES, PDF_SIZE_ERROR_DETAIL
 from schemas import (
     PaginatedResponse,
     StudentAchievementFileResponse,
@@ -226,16 +227,37 @@ async def _upload_files(files: Optional[list[UploadFile]], user: User, folder_id
     uploaded: list[StudentAchievementFile] = []
     for file in selected:
         contents = await file.read()
+        # PDFs must not exceed 15 MB.
+        if (
+            (file.content_type or "").lower() == "application/pdf"
+            or (file.filename or "").lower().endswith(".pdf")
+        ) and len(contents) > MAX_PDF_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=PDF_SIZE_ERROR_DETAIL,
+            )
         if len(contents) > MAX_FILE_BYTES:
             raise HTTPException(status_code=400, detail=f"{file.filename} is too large (max 25MB)")
-        drive_file = upload_report_file(
-            access_token=access_token,
-            file_name=file.filename,
-            file_bytes=contents,
-            mime_type=file.content_type or "application/octet-stream",
-            folder_id=folder_id,
-            allow_root_fallback=True,
-        )
+        if folder_id:
+            _now = datetime.utcnow()
+            drive_file = upload_file_to_nested_folder(
+                access_token=access_token,
+                file_name=file.filename,
+                file_bytes=contents,
+                mime_type=file.content_type or "application/octet-stream",
+                root_folder_id=folder_id,
+                folder_path_parts=[_now.strftime("%Y"), _now.strftime("%Y-%m")],
+                allow_root_fallback=True,
+            )
+        else:
+            drive_file = upload_report_file(
+                access_token=access_token,
+                file_name=file.filename,
+                file_bytes=contents,
+                mime_type=file.content_type or "application/octet-stream",
+                folder_id=None,
+                allow_root_fallback=True,
+            )
         uploaded.append(
             StudentAchievementFile(
                 file_id=drive_file.get("id", ""),

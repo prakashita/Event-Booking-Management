@@ -2,6 +2,7 @@ import base64
 import logging
 import os
 import re
+import traceback
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -10,8 +11,9 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Upl
 import requests
 
 from auth import ensure_google_access_token, get_primary_email_by_role, is_admin_email
-from drive import upload_report_file
+from drive import sanitize_folder_name, upload_file_to_nested_folder, upload_report_file
 from idempotency import get_cached_response, get_idempotency_key, store_response
+from upload_validation import MAX_PDF_UPLOAD_BYTES, PDF_SIZE_ERROR_DETAIL
 from models import (
     ApprovalRequest, ChatConversation, ChatMessage, Event,
     FacilityManagerRequest, ItRequest, MarketingRequest, TransportRequest,
@@ -372,9 +374,11 @@ async def upload_budget_breakdown(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only PDF files are allowed")
 
     contents = await file.read()
-    max_size = 10 * 1024 * 1024
-    if len(contents) > max_size:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 10MB)")
+    if len(contents) > MAX_PDF_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=PDF_SIZE_ERROR_DETAIL,
+        )
 
     folder_id = os.getenv("GOOGLE_DRIVE_FOLDER_ID", "")
     if not folder_id:
@@ -384,22 +388,105 @@ async def upload_budget_breakdown(
         )
 
     drive_display_name = get_expected_budget_breakdown_filename(approval.event_name, approval.start_date)
+
+    # Build nested folder path: Event-Uploads / YYYY / YYYY-MM / Event_Name
+    try:
+        _adt = datetime.strptime((approval.start_date or "")[:10], "%Y-%m-%d")
+        _approval_year_s, _approval_month_s = _adt.strftime("%Y"), _adt.strftime("%Y-%m")
+    except Exception:
+        _approval_year_s = datetime.utcnow().strftime("%Y")
+        _approval_month_s = datetime.utcnow().strftime("%Y-%m")
+    _approval_folder_parts = [
+        "Event-Uploads",
+        _approval_year_s,
+        _approval_month_s,
+        sanitize_folder_name(approval.event_name),
+    ]
+
+    # Resolve a Google OAuth access token for Drive upload.
+    # Priority: requesting user → any admin user with OAuth connected.
+    # Service accounts cannot upload to personal My Drive (no storage quota),
+    # so a real user token is always needed.
+    access_token = ""
     try:
         access_token = await ensure_google_access_token(user)
-        drive_file = upload_report_file(
+        logger.info("upload_budget_breakdown: using requesting user OAuth token for request %s", request_id)
+    except HTTPException as exc:
+        logger.warning(
+            "upload_budget_breakdown: requesting user OAuth unavailable (status=%d detail=%r) — "
+            "trying admin user fallback",
+            exc.status_code,
+            exc.detail,
+        )
+
+    if not access_token:
+        # Fall back to any admin/organizer user who has Google OAuth connected.
+        # This covers IQAC/staff users who have never gone through Google OAuth flow.
+        try:
+            admin_candidates = await User.find(
+                User.google_refresh_token != None  # noqa: E711
+            ).to_list()
+            for candidate in admin_candidates:
+                c_role = (candidate.role or "").strip().lower()
+                if c_role not in ("admin", "registrar") and not is_admin_email(candidate.email or ""):
+                    continue
+                try:
+                    access_token = await ensure_google_access_token(candidate)
+                    logger.info(
+                        "upload_budget_breakdown: using admin fallback OAuth token from %s for request %s",
+                        candidate.email,
+                        request_id,
+                    )
+                    break
+                except Exception:
+                    continue
+        except Exception:
+            logger.warning(
+                "upload_budget_breakdown: admin token fallback lookup failed:\n%s",
+                traceback.format_exc(),
+            )
+
+    if not access_token:
+        logger.error(
+            "upload_budget_breakdown: no usable Google OAuth token found for request %s. "
+            "Please ensure at least one admin user has connected Google OAuth.",
+            request_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Google Drive upload is unavailable: no connected Google account found. "
+                "Please connect a Google account via Settings and try again."
+            ),
+        )
+
+    try:
+        drive_file = upload_file_to_nested_folder(
             access_token=access_token,
             file_name=drive_display_name,
             file_bytes=contents,
             mime_type="application/pdf",
-            folder_id=folder_id,
+            root_folder_id=folder_id,
+            folder_path_parts=_approval_folder_parts,
             replace_file_id=getattr(approval, "budget_breakdown_file_id", None),
         )
+    except HTTPException:
+        # Propagate auth/permission errors with their original status codes.
+        raise
     except RuntimeError as exc:
+        logger.error(
+            "upload_budget_breakdown: RuntimeError for request %s: %s\n%s",
+            request_id, exc, traceback.format_exc(),
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
         )
     except Exception as exc:
+        logger.error(
+            "upload_budget_breakdown: unexpected error for request %s: %s\n%s",
+            request_id, exc, traceback.format_exc(),
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Unable to upload file: {exc}",

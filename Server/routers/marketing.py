@@ -11,13 +11,14 @@ from rate_limit import limiter
 logger = logging.getLogger(__name__)
 
 from auth import ensure_google_access_token, get_primary_email_by_role
-from drive import upload_report_file
+from drive import sanitize_folder_name, upload_file_to_nested_folder, upload_report_file
 from event_status import event_has_ended, event_has_started
 from models import ApprovalRequest, Event, MarketingDeliverable, MarketingRequest, MarketingRequesterAttachment, User
 from notifications import send_notification_email
 from routers.deps import get_current_user
 from decision_helpers import parse_requirement_decision_status, requirement_decision_comment
 from requirement_decision_service import apply_requirement_decision
+from upload_validation import MAX_PDF_UPLOAD_BYTES, PDF_SIZE_ERROR_DETAIL
 from schemas import (
     MarketingDecision,
     MarketingDeliverableResponse,
@@ -30,6 +31,21 @@ router = APIRouter(prefix="/marketing", tags=["Marketing"])
 
 MAX_REQUESTER_MARKETING_FILES = 10
 MAX_REQUESTER_MARKETING_FILE_BYTES = 25 * 1024 * 1024
+
+
+def _marketing_event_folder_parts(event_name: str, start_date: str) -> list[str]:
+    """Return the Drive nested folder path parts for a marketing request's event files.
+
+    Structure: Event-Uploads / YYYY / YYYY-MM / Event_Name / Marketing
+    Falls back to current UTC date if *start_date* cannot be parsed.
+    """
+    try:
+        _dt = datetime.strptime((start_date or "")[:10], "%Y-%m-%d")
+        _year_s, _month_s = _dt.strftime("%Y"), _dt.strftime("%Y-%m")
+    except Exception:
+        _year_s = datetime.utcnow().strftime("%Y")
+        _month_s = datetime.utcnow().strftime("%Y-%m")
+    return ["Event-Uploads", _year_s, _month_s, sanitize_folder_name(event_name), "Marketing"]
 
 
 def _as_bool(value) -> bool:
@@ -425,6 +441,10 @@ async def upload_marketing_requester_attachments(
             detail="Google Drive folder is not configured",
         )
 
+    _mkt_attach_folder_parts = _marketing_event_folder_parts(
+        request_item.event_name, request_item.start_date
+    )
+
     existing = list(getattr(request_item, "requester_attachments", None) or [])
     if len(existing) + len(files) > MAX_REQUESTER_MARKETING_FILES:
         raise HTTPException(
@@ -448,18 +468,28 @@ async def upload_marketing_requester_attachments(
         if not file.filename:
             continue
         contents = await file.read()
+        # PDFs must not exceed 15 MB.
+        if (
+            (file.content_type or "").lower() == "application/pdf"
+            or (file.filename or "").lower().endswith(".pdf")
+        ) and len(contents) > MAX_PDF_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=PDF_SIZE_ERROR_DETAIL,
+            )
         if len(contents) > MAX_REQUESTER_MARKETING_FILE_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"File {file.filename!s} is too large (max 25MB per file)",
             )
         try:
-            drive_file = upload_report_file(
+            drive_file = upload_file_to_nested_folder(
                 access_token=access_token,
                 file_name=file.filename,
                 file_bytes=contents,
                 mime_type=file.content_type or "application/octet-stream",
-                folder_id=folder_id,
+                root_folder_id=folder_id,
+                folder_path_parts=_mkt_attach_folder_parts,
             )
         except Exception as exc:
             logger.exception("Marketing requester attachment Drive upload failed")
@@ -569,6 +599,15 @@ async def upload_marketing_deliverable(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File is required")
         contents = await file.read()
         max_size = 25 * 1024 * 1024  # 25MB
+        # PDFs must not exceed 15 MB.
+        if (
+            (file.content_type or "").lower() == "application/pdf"
+            or (file.filename or "").lower().endswith(".pdf")
+        ) and len(contents) > MAX_PDF_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=PDF_SIZE_ERROR_DETAIL,
+            )
         if len(contents) > max_size:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 25MB)")
 
@@ -581,12 +620,15 @@ async def upload_marketing_deliverable(
 
         try:
             access_token = await ensure_google_access_token(user)
-            drive_file = upload_report_file(
+            drive_file = upload_file_to_nested_folder(
                 access_token=access_token,
                 file_name=file.filename,
                 file_bytes=contents,
                 mime_type=file.content_type or "application/octet-stream",
-                folder_id=folder_id,
+                root_folder_id=folder_id,
+                folder_path_parts=_marketing_event_folder_parts(
+                    request_item.event_name, request_item.start_date
+                ),
             )
         except HTTPException:
             raise
@@ -658,6 +700,10 @@ async def upload_marketing_deliverables_batch(
                 detail="Google Drive folder not configured. Set GOOGLE_DRIVE_FOLDER_ID in .env.",
             )
 
+        _batch_folder_parts = _marketing_event_folder_parts(
+            request_item.event_name, request_item.start_date
+        )
+
         na_map = {"poster": na_poster, "linkedin": na_linkedin, "photography": na_photography, "recording": na_recording}
         file_map = {"poster": file_poster, "linkedin": file_linkedin, "photography": file_photography, "recording": file_recording}
 
@@ -684,6 +730,15 @@ async def upload_marketing_deliverables_batch(
             elif uf and uf.filename:
                 contents = await uf.read()
                 max_size = 25 * 1024 * 1024
+                # PDFs must not exceed 15 MB.
+                if (
+                    (uf.content_type or "").lower() == "application/pdf"
+                    or (uf.filename or "").lower().endswith(".pdf")
+                ) and len(contents) > MAX_PDF_UPLOAD_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail=PDF_SIZE_ERROR_DETAIL,
+                    )
                 if len(contents) > max_size:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -691,12 +746,13 @@ async def upload_marketing_deliverables_batch(
                     )
                 if access_token is None:
                     access_token = await ensure_google_access_token(user)
-                drive_file = upload_report_file(
+                drive_file = upload_file_to_nested_folder(
                     access_token=access_token,
                     file_name=uf.filename,
                     file_bytes=contents,
                     mime_type=uf.content_type or "application/octet-stream",
-                    folder_id=folder_id,
+                    root_folder_id=folder_id,
+                    folder_path_parts=_batch_folder_parts,
                 )
                 existing_by_type[dtype] = MarketingDeliverable(
                     deliverable_type=dtype,

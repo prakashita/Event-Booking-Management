@@ -20,9 +20,10 @@ from auth import (
     get_user_by_role,
     is_admin_email,
 )
-from drive import delete_drive_file, upload_report_file
+from drive import delete_drive_file, sanitize_folder_name, upload_file_to_nested_folder, upload_report_file
 from errors import error_payload
 from idempotency import get_cached_response, get_idempotency_key, store_response
+from upload_validation import MAX_PDF_UPLOAD_BYTES, PDF_SIZE_ERROR_DETAIL
 from event_status import combine_datetime, sync_event_status
 from models import ApprovalRequest, ChatConversation, ChatMessage, Event, FacilityManagerRequest, ItRequest, MarketingRequest, TransportRequest, User
 from routers.admin import (
@@ -271,6 +272,12 @@ async def _read_validated_attendance_attachment(file: UploadFile) -> Tuple[bytes
             detail="Attendance attachment must be PDF, Word (.doc, .docx), or Excel (.xls, .xlsx)",
         )
     contents = await file.read()
+    # PDF attendance files: enforce 15 MB limit.
+    if ext == ".pdf" and len(contents) > MAX_PDF_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=PDF_SIZE_ERROR_DETAIL,
+        )
     max_size = 10 * 1024 * 1024
     if len(contents) > max_size:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Attendance attachment too large (max 10MB)")
@@ -845,9 +852,11 @@ async def upload_event_report(
         )
 
     contents = await file.read()
-    max_size = 10 * 1024 * 1024
-    if len(contents) > max_size:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large (max 10MB)")
+    if len(contents) > MAX_PDF_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=PDF_SIZE_ERROR_DETAIL,
+        )
 
     attendance_bytes: Optional[bytes] = None
     attendance_name: Optional[str] = None
@@ -901,26 +910,37 @@ async def upload_event_report(
             detail="Google Drive folder not configured",
         )
 
+    # Build nested Drive folder path: Event-Uploads / YYYY / YYYY-MM / Event_Name
+    try:
+        _edt = datetime.strptime((event.start_date or "")[:10], "%Y-%m-%d")
+        _year_s, _month_s = _edt.strftime("%Y"), _edt.strftime("%Y-%m")
+    except Exception:
+        _year_s = datetime.utcnow().strftime("%Y")
+        _month_s = datetime.utcnow().strftime("%Y-%m")
+    _event_folder_parts = ["Event-Uploads", _year_s, _month_s, sanitize_folder_name(event.name)]
+
     access_token = None
     drive_file = None
     drive_attendance = None
     try:
         access_token = await ensure_google_access_token(user)
-        drive_file = upload_report_file(
+        drive_file = upload_file_to_nested_folder(
             access_token=access_token,
             file_name=file.filename,
             file_bytes=contents,
             mime_type=file.content_type,
-            folder_id=folder_id,
+            root_folder_id=folder_id,
+            folder_path_parts=_event_folder_parts,
             replace_file_id=event.report_file_id,
         )
         if not attendance_na and attendance_bytes is not None and attendance_name and attendance_mime:
-            drive_attendance = upload_report_file(
+            drive_attendance = upload_file_to_nested_folder(
                 access_token=access_token,
                 file_name=attendance_name,
                 file_bytes=attendance_bytes,
                 mime_type=attendance_mime,
-                folder_id=folder_id,
+                root_folder_id=folder_id,
+                folder_path_parts=_event_folder_parts,
                 replace_file_id=getattr(event, "attendance_file_id", None),
             )
     except RuntimeError as exc:
