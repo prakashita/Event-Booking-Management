@@ -16,6 +16,13 @@ typedef MarketingDeliverablesUpload =
 
 const int _maxDeliverableFileBytes = 25 * 1024 * 1024;
 const String _maxDeliverableFileLabel = '25MB';
+const int _maxDeliverablePdfBytes = 15 * 1024 * 1024;
+const String _maxDeliverablePdfLabel = '15MB';
+
+bool _isPdfUpload(PlatformFile file) {
+  return (file.extension ?? '').toLowerCase() == 'pdf' ||
+      file.name.toLowerCase().endsWith('.pdf');
+}
 
 Future<void> showMarketingDeliverablesUploadDialog({
   required BuildContext context,
@@ -67,12 +74,18 @@ Future<void> showMarketingDeliverablesUploadDialog({
           );
           final file = picked?.files.first;
           if (file == null) return;
-          if (file.size > _maxDeliverableFileBytes) {
+          final maxBytes = _isPdfUpload(file)
+              ? _maxDeliverablePdfBytes
+              : _maxDeliverableFileBytes;
+          final maxLabel = _isPdfUpload(file)
+              ? _maxDeliverablePdfLabel
+              : _maxDeliverableFileLabel;
+          if (file.size > maxBytes) {
             if (!ctx.mounted) return;
             ScaffoldMessenger.of(ctx).showSnackBar(
               SnackBar(
                 content: Text(
-                  '${file.name} is larger than $_maxDeliverableFileLabel.',
+                  '${file.name} is larger than $maxLabel.',
                   style: GoogleFonts.inter(),
                 ),
               ),
@@ -198,7 +211,7 @@ Future<void> showMarketingDeliverablesUploadDialog({
                       ),
                     ),
                     child: Text(
-                      'Upload pre-event items (poster, pre-event social) before the event starts. Post-event items (video upload, post social, post-event photos) after the event ends. Videography and on-site photography are handled during the event and do not use this form. You can save in multiple visits (max 25MB per file).',
+                      'Upload pre-event items (poster, pre-event social) before the event starts. Post-event items (video upload, post social, post-event photos) after the event ends. Videography and on-site photography are handled during the event and do not use this form. You can save in multiple visits (PDF max 15MB, other files max 25MB).',
                       style: GoogleFonts.inter(
                         fontSize: 13.5,
                         height: 1.5,

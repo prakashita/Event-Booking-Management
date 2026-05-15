@@ -40,6 +40,9 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
   static const int _maxMarketingRequesterFileMb = 25;
   static const int _maxMarketingRequesterFileBytes =
       _maxMarketingRequesterFileMb * 1024 * 1024;
+  static const int _maxMarketingRequesterPdfMb = 15;
+  static const int _maxMarketingRequesterPdfBytes =
+      _maxMarketingRequesterPdfMb * 1024 * 1024;
 
   static const List<String> _allDepartments = [
     'facility',
@@ -630,11 +633,19 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
 
     for (final file in picked) {
       final size = file.size;
-      if (size > _maxMarketingRequesterFileBytes) {
+      final isPdf =
+          (file.extension ?? '').toLowerCase() == 'pdf' ||
+          file.name.toLowerCase().endsWith('.pdf');
+      final maxBytes = isPdf
+          ? _maxMarketingRequesterPdfBytes
+          : _maxMarketingRequesterFileBytes;
+      final maxMb = isPdf
+          ? _maxMarketingRequesterPdfMb
+          : _maxMarketingRequesterFileMb;
+      if (size > maxBytes) {
         setState(() {
           _status = 'error';
-          _errorMessage =
-              '${file.name} is larger than ${_maxMarketingRequesterFileMb}MB.';
+          _errorMessage = '${file.name} is larger than ${maxMb}MB.';
         });
         return;
       }
@@ -1511,7 +1522,7 @@ class _RequirementsWizardDialogState extends State<RequirementsWizardDialog> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Up to $_maxMarketingRequesterFiles files, $_maxMarketingRequesterFileMb MB each (PDF, Word, images, text). Files upload after the request is created; Google must be connected.',
+            'Up to $_maxMarketingRequesterFiles files. PDFs max $_maxMarketingRequesterPdfMb MB; Word, images, and text max $_maxMarketingRequesterFileMb MB each. Files upload after the request is created; Google must be connected.',
             style: TextStyle(
               fontSize: _isCompactLayout ? 11 : 12,
               color: Colors.grey[500],

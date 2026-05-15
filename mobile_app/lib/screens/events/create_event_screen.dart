@@ -26,8 +26,8 @@ class CreateEventScreen extends StatefulWidget {
 class _CreateEventScreenState extends State<CreateEventScreen> {
   final _api = ApiService();
   final _formKey = GlobalKey<FormState>();
-  static const int _maxBudgetPdfBytes = 10 * 1024 * 1024;
-  static const String _maxBudgetPdfLabel = '10MB';
+  static const int _maxBudgetPdfBytes = 15 * 1024 * 1024;
+  static const String _maxBudgetPdfLabel = '15MB';
 
   final _nameCtrl = TextEditingController();
   final _facilitatorCtrl = TextEditingController();

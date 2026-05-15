@@ -1705,10 +1705,9 @@ class _PublicationFormScreenState extends State<_PublicationFormScreen> {
       _selectedSource.key == 'report' ? contributorsText : null,
     );
 
-    if (contributorsText.isNotEmpty) {
-      map['contributors'] = jsonEncode([
-        {'kind': 'organization', 'name': contributorsText},
-      ]);
+    final contributorPayload = _contributorsPayloadFromText(contributorsText);
+    if (contributorPayload.isNotEmpty) {
+      map['contributors'] = jsonEncode(contributorPayload);
     }
     return FormData.fromMap(map);
   }
@@ -1721,8 +1720,8 @@ class _PublicationFormScreenState extends State<_PublicationFormScreen> {
       final value = _field(item, key);
       if (value.isNotEmpty) _controller(key).text = value;
     }
-    final contributors = _field(item, 'contributors').isNotEmpty
-        ? _field(item, 'contributors')
+    final contributors = _contributorsText(item).isNotEmpty
+        ? _contributorsText(item)
         : _string(item['author']);
     if (contributors.isNotEmpty) {
       _controller('contributors').text = contributors;
@@ -5420,38 +5419,85 @@ String _field(Map<String, dynamic> item, String key) {
   final direct = _string(item[key]);
   if (direct.isNotEmpty) return direct;
   final details = _detailsMap(item);
-  if (details.isNotEmpty) return _string(details[key]);
+  if (details.isNotEmpty) {
+    final value = details[key];
+    if (value is List && key == 'contributors') {
+      return _contributorsText({'contributors': value});
+    }
+    return _string(value);
+  }
   return '';
+}
+
+String _contributorName(dynamic entry) {
+  if (entry is! Map) return _string(entry);
+  final directName = _string(entry['name']);
+  if (directName.isNotEmpty) return directName;
+
+  final organization = entry['organization'];
+  if (organization is Map) {
+    final orgName = _firstNonEmpty([
+      _string(organization['name']),
+      _string(organization['screen_name']),
+      _string(organization['screenName']),
+    ]);
+    if (orgName.isNotEmpty) return orgName;
+  }
+
+  final person = entry['person'];
+  if (person is Map) {
+    final personName = [
+      _string(person['title']),
+      _firstNonEmpty([
+        _string(person['first_names']),
+        _string(person['first_name']),
+        _string(person['firstName']),
+        _string(person['initials']),
+      ]),
+      _string(person['infix']),
+      _string(person['last_name']),
+      _string(person['lastName']),
+      _string(person['suffix']),
+    ].where((value) => value.isNotEmpty).join(' ').trim();
+    if (personName.isNotEmpty) return personName;
+    final screenName = _firstNonEmpty([
+      _string(person['screen_name']),
+      _string(person['screenName']),
+    ]);
+    if (screenName.isNotEmpty) return screenName;
+  }
+
+  return [
+    _string(entry['title']),
+    _firstNonEmpty([
+      _string(entry['first_names']),
+      _string(entry['first_name']),
+      _string(entry['firstName']),
+      _string(entry['initials']),
+    ]),
+    _string(entry['infix']),
+    _string(entry['last_name']),
+    _string(entry['lastName']),
+    _string(entry['suffix']),
+  ].where((value) => value.isNotEmpty).join(' ').trim();
 }
 
 String _contributorsText(Map<String, dynamic> item) {
   final raw = item['contributors'];
   if (raw is List) {
     return raw
-        .map((entry) {
-          if (entry is Map) {
-            final name = _string(entry['name']);
-            if (name.isNotEmpty) return name;
-            return [
-              _string(entry['first_name']),
-              _string(entry['last_name']),
-            ].where((value) => value.isNotEmpty).join(' ');
-          }
-          return _string(entry);
-        })
+        .map(_contributorName)
         .where((value) => value.isNotEmpty)
-        .join(', ');
+        .join('; ');
   }
   if (raw is String && raw.trim().startsWith('[')) {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is List) {
         return decoded
-            .map(
-              (entry) => entry is Map ? _string(entry['name']) : _string(entry),
-            )
+            .map(_contributorName)
             .where((value) => value.isNotEmpty)
-            .join(', ');
+            .join('; ');
       }
     } catch (_) {
       return raw;
@@ -5460,6 +5506,23 @@ String _contributorsText(Map<String, dynamic> item) {
   final detailed = _field(item, 'contributors');
   if (detailed.isNotEmpty) return detailed;
   return _string(item['author']);
+}
+
+List<Map<String, dynamic>> _contributorsPayloadFromText(String value) {
+  final names = value
+      .split(RegExp(r'[;,]'))
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList();
+  return names
+      .map(
+        (name) => {
+          'type': 'organization',
+          'role': 'Author',
+          'organization': {'name': name, 'screen_name': ''},
+        },
+      )
+      .toList();
 }
 
 String _submitterName(Map<String, dynamic> item) {
