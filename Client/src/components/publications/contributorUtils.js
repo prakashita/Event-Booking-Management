@@ -155,6 +155,9 @@ export function normalizeContributors(raw) {
 
 /**
  * Serialize contributors for API submission — strips the UI-only `expanded` flag.
+ * IMPORTANT: Always include BOTH `person` and `organization` sub-objects so that
+ * switching a contributor's type tab and saving never permanently discards the
+ * data entered for the other type.
  */
 export function serializeContributors(contributors) {
   if (!Array.isArray(contributors)) return [];
@@ -162,6 +165,10 @@ export function serializeContributors(contributors) {
     id,
     type,
     role,
-    ...(type === "person" ? { person } : { organization }),
+    person: person ?? {
+      title: "", initials: "", first_names: "", infix: "",
+      last_name: "", suffix: "", screen_name: "",
+    },
+    organization: organization ?? { name: "", screen_name: "" },
   }));
 }
