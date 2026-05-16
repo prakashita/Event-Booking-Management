@@ -139,11 +139,13 @@ export const MENU_ICON_IQAC = MENU_ICONS["iqac-data"];
  */
 export const ROLES_WITH_IQAC_ACCESS = [
   "iqac",
+  "admin",
 ];
 
 /** Roles that may delete IQAC uploads. Must match Server IQAC_DELETE_ALLOWED_ROLES. */
 export const ROLES_WITH_IQAC_DELETE_ACCESS = [
   "iqac",
+  "admin",
 ];
 
 export const menuItems = [
@@ -157,7 +159,7 @@ export const menuItems = [
   { id: "student-achievements", label: "Other Achievements" },
   { id: "iqac-data", label: "IQAC Data Collection" },
   { id: "calendar-updates", label: "Calendar Updates" },
-  { id: "user-approvals", label: "User Approvals" },
+  { id: "user-approvals", label: "Users" },
   { id: "admin", label: "Admin Console" }
 ];
 

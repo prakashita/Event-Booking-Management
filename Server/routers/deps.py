@@ -134,11 +134,17 @@ IQAC_ALLOWED_ROLES = frozenset({"iqac"})
 IQAC_DELETE_ALLOWED_ROLES = frozenset({"iqac"})
 
 
+def has_module_access(user: User, module: str) -> bool:
+    modules = getattr(user, "enabled_modules", []) or []
+    return module in {(m or "").strip().lower() for m in modules}
+
+
 async def require_iqac(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> User:
     user = await get_current_user(credentials)
-    if (user.role or '').strip().lower() not in IQAC_ALLOWED_ROLES:
+    role = (user.role or '').strip().lower()
+    if role not in IQAC_ALLOWED_ROLES and role != "admin" and not has_module_access(user, "iqac"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='IQAC access required')
     return user
 

@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.responses import FileResponse, Response
 
 from models import IQACFile, IQACSSRHistory, IQACSSRSection, User
-from routers.deps import IQAC_DELETE_ALLOWED_ROLES, require_iqac
+from routers.deps import IQAC_DELETE_ALLOWED_ROLES, has_module_access, require_iqac
 from schemas import IQACSSRHistoryResponse, IQACSSRSectionResponse, IQACSSRSectionUpdate
 from upload_validation import MAX_PDF_UPLOAD_BYTES, PDF_SIZE_ERROR_DETAIL
 
@@ -918,7 +918,7 @@ async def delete_file(
 ):
     """Delete file record and the stored file (not allowed for faculty)."""
     role = (current_user.role or "").strip().lower()
-    if role not in IQAC_DELETE_ALLOWED_ROLES:
+    if role not in IQAC_DELETE_ALLOWED_ROLES and role != "admin" and not has_module_access(current_user, "iqac"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="IQAC file deletion is not allowed for your role",

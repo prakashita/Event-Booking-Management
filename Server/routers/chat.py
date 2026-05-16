@@ -484,7 +484,10 @@ async def create_message(
     await conversation.save()
 
     data = serialize_message(message, conversation)
-    await manager.send_to_users(conversation.participants, {"type": "message", "message": data.model_dump()})
+    msg_dict = data.model_dump()
+    if payload.client_id:
+        msg_dict["client_id"] = payload.client_id
+    await manager.send_to_users(conversation.participants, {"type": "message", "message": msg_dict})
 
     # Fire-and-forget email notification
     try:

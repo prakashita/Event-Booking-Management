@@ -107,6 +107,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
   const panelOpenRef = useRef(false);
   const closeChatRef = useRef(() => {});
   const pendingApprovalThreadRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
 
   // Keep refs in sync
   useEffect(() => {
@@ -385,22 +386,22 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
       if (!conv?.id) return;
       if (conv.thread_kind === "event") {
         await openEventThread(conv);
-      } else if (conv.other_user) {
-        await startConversation(conv.other_user);
       } else {
-        // Fallback: open as generic conversation
+        // Use the known conv.id directly — avoids a redundant POST that can
+        // return a fresh empty conversation instead of the one with messages.
         setActiveEventThread(null);
-        setActiveUser(null);
+        setActiveUser(conv.other_user || null);
         setActiveConversation(conv);
         setTypingUser(null);
         setMessages([]);
         setHasMore(true);
+        setLoadingMore(false);
         setChatStatus({ status: "loading", error: "" });
         await loadMessages(conv.id);
         await markConversationRead(conv.id);
       }
     },
-    [openEventThread, startConversation, loadMessages, markConversationRead]
+    [openEventThread, loadMessages, markConversationRead]
   );
 
   const startReply = useCallback((msg) => {
@@ -508,12 +509,23 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
           })
         );
       } else {
-        await api.postJson("/chat/messages", {
+        const confirmed = await api.postJson("/chat/messages", {
           conversation_id: activeConversation.id,
           content: trimmed,
           attachments,
           reply_to_message_id: replyRef?.messageId || undefined,
         });
+        // Replace the optimistic entry with the server-confirmed message to
+        // prevent duplication if the WS broadcast arrives without client_id.
+        if (confirmed?.id) {
+          setMessages((prev) =>
+            prev.some((m) => m.client_id === clientId)
+              ? prev.map((m) =>
+                  m.client_id === clientId ? { ...confirmed, client_id: clientId } : m
+                )
+              : prev
+          );
+        }
       }
 
       setChatInput("");
@@ -765,6 +777,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
     const wsBase = `${base.replace(/^http/, "ws")}/api/v1`;
     const ws = new WebSocket(`${wsBase}/chat/ws?token=${token}`);
     wsRef.current = ws;
+    let destroyed = false;
 
     ws.onmessage = (event) => {
       try {
@@ -785,14 +798,36 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
             } else {
               setMessages((prev) => [...prev, incoming]);
             }
+            // Keep the conversation list last_message preview in sync
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === incoming.conversation_id
+                  ? {
+                      ...c,
+                      unread_count: 0,
+                      last_message: {
+                        text: (incoming.content || "").slice(0, 120),
+                        sender_id: incoming.sender_id,
+                        sender_name: incoming.sender_name,
+                        created_at: incoming.created_at,
+                        message_id: incoming.id,
+                      },
+                    }
+                  : c
+              )
+            );
           } else {
-            // Update unread in conversation list and re-sort by latest activity
+            // Update conversation list — re-sort by latest activity
             setConversations((prev) => {
               const updated = prev.map((c) =>
                 c.id === incoming.conversation_id
                   ? {
                       ...c,
-                      unread_count: (c.unread_count || 0) + 1,
+                      // Only increment unread for messages from other users, not your own
+                      unread_count:
+                        incoming.sender_id !== user?.id
+                          ? (c.unread_count || 0) + 1
+                          : c.unread_count,
                       last_message: {
                         text: (incoming.content || "").slice(0, 120),
                         sender_id: incoming.sender_id,
@@ -981,8 +1016,37 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
       }
     };
 
+    ws.onerror = () => {};
+    ws.onclose = (event) => {
+      if (destroyed) return;
+      wsRef.current = null;
+      // Reconnect unless the server rejected our token (1008)
+      if (event.code !== 1008) {
+        reconnectTimerRef.current = setTimeout(() => {
+          if (destroyed || wsRef.current) return;
+          const rToken = localStorage.getItem("auth_token");
+          if (!rToken) return;
+          const rWs = new WebSocket(`${wsBase}/chat/ws?token=${rToken}`);
+          wsRef.current = rWs;
+          rWs.onmessage = ws.onmessage;
+          rWs.onerror = ws.onerror;
+          rWs.onclose = ws.onclose;
+        }, 3000);
+      }
+    };
+
     return () => {
-      ws.close();
+      destroyed = true;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      } else {
+        ws.close();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);

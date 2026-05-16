@@ -9,6 +9,7 @@ class User(Document):
     email: str = Field(unique=True)
     google_id: str = Field(unique=True)
     role: str = Field(default="faculty")
+    enabled_modules: List[str] = Field(default_factory=list)
     # Approval workflow: "approved" | "pending" | "rejected"
     # Existing users without this field are treated as approved (see backfill in auth).
     approval_status: str = Field(default="approved")
@@ -36,6 +37,7 @@ class PendingRoleAssignment(Document):
     """Pre-assigned role for an email before first login. Applied when user signs in with Google."""
     email: str = Field(unique=True)
     role: str  # registrar, facility_manager, marketing, it
+    enabled_modules: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     created_by: Optional[str] = None  # admin user id who added
 

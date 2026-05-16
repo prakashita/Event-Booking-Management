@@ -56,6 +56,7 @@ async def google_login(request: Request, payload: TokenRequest):
                 email=email,
                 google_id=google_id,
                 role=(pending_role.role or "").strip().lower(),
+                enabled_modules=getattr(pending_role, "enabled_modules", []) or [],
                 approval_status="approved",
             )
             await user.insert()
@@ -93,6 +94,7 @@ async def google_login(request: Request, payload: TokenRequest):
             "name": user.name,
             "email": user.email,
             "role": user.role,
+            "enabled_modules": getattr(user, "enabled_modules", []) or [],
             "approval_status": getattr(user, "approval_status", None) or "approved",
         }
     }
@@ -190,5 +192,6 @@ async def get_current_user_info(user: User = Depends(get_current_user_any_status
         "name": user.name,
         "email": user.email,
         "role": user.role,
+        "enabled_modules": getattr(user, "enabled_modules", []) or [],
         "approval_status": getattr(user, "approval_status", None) or "approved",
     }
