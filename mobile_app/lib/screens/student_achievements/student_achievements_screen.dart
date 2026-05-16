@@ -458,14 +458,14 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(),
-        elevation: 3,
+        elevation: 8,
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: theme.colorScheme.onPrimary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         icon: const Icon(LucideIcons.plus, size: 20),
         label: const Text(
-          'Submit',
-          style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 0.5),
+          'Submit Achievement',
+          style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0),
         ),
       ),
     );
@@ -794,8 +794,12 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(32),
               ),
-              boxShadow: const [
-                BoxShadow(blurRadius: 20, color: Colors.black26),
+              boxShadow: [
+                BoxShadow(
+                  blurRadius: 28,
+                  offset: const Offset(0, -8),
+                  color: Colors.black.withValues(alpha: 0.16),
+                ),
               ],
             ),
             child: Form(
@@ -804,7 +808,7 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
                 controller: scrollController,
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
                 children: [
                   Center(
                     child: Container(
@@ -819,49 +823,11 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
                       ),
                     ),
                   ),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primaryContainer,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _isEdit ? LucideIcons.edit2 : LucideIcons.plus,
-                          color: theme.colorScheme.primary,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Text(
-                          _isEdit
-                              ? 'Edit ${_achievementTypeLabel(_achievementType)}'
-                              : 'Submit ${_achievementTypeLabel(_achievementType)}',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _saving
-                            ? null
-                            : () => Navigator.of(context).pop(false),
-                        style: IconButton.styleFrom(
-                          backgroundColor:
-                              theme.colorScheme.surfaceContainerHighest,
-                        ),
-                        icon: const Icon(LucideIcons.x, size: 20),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Use this for student or faculty achievements that need institutional visibility.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
+                  _AchievementFormHeader(
+                    isEdit: _isEdit,
+                    achievementType: _achievementType,
+                    saving: _saving,
+                    onClose: () => Navigator.of(context).pop(false),
                   ),
                   const SizedBox(height: 24),
                   _AchievementTypeSelector(
@@ -1258,6 +1224,101 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _AchievementFormHeader extends StatelessWidget {
+  final bool isEdit;
+  final String achievementType;
+  final bool saving;
+  final VoidCallback onClose;
+
+  const _AchievementFormHeader({
+    required this.isEdit,
+    required this.achievementType,
+    required this.saving,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final label = _achievementTypeLabel(achievementType);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45)
+            : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.12),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(
+              isEdit ? LucideIcons.edit2 : LucideIcons.award,
+              color: theme.colorScheme.primary,
+              size: 23,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isEdit ? 'Edit $label' : 'Submit $label',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  'Share material for institutional visibility and IQAC records.',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: saving ? null : onClose,
+            style: IconButton.styleFrom(
+              backgroundColor: theme.colorScheme.surface,
+              foregroundColor: theme.colorScheme.onSurfaceVariant,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(
+                  color: theme.colorScheme.outline.withValues(alpha: 0.12),
+                ),
+              ),
+            ),
+            icon: const Icon(LucideIcons.x, size: 20),
+          ),
+        ],
       ),
     );
   }

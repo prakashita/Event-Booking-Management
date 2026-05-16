@@ -714,9 +714,10 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     final savedMessage = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: modalSurface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       builder: (context) {
         return StatefulBuilder(
@@ -753,32 +754,12 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _buildDragHandle(),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(
-                                0xFFD97706,
-                              ).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(
-                              Icons.celebration,
-                              color: Color(0xFFD97706),
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            entry == null ? 'Add Holiday' : 'Edit Holiday',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                        ],
+                      _CalendarSheetHeader(
+                        title: entry == null ? 'New Holiday' : 'Edit Holiday',
+                        subtitle:
+                            'Add a date that appears on the institution calendar.',
+                        icon: Icons.celebration_rounded,
+                        accent: const Color(0xFFD97706),
                       ),
                       const SizedBox(height: 24),
                       Row(
@@ -797,11 +778,37 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                           ),
                           const SizedBox(width: 16),
                           Expanded(
-                            child: TextFormField(
-                              key: ValueKey('holiday-year-$calendarYear'),
-                              initialValue: calendarYear.toString(),
-                              decoration: _inputDecoration('Calendar Year')
-                                  .copyWith(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Calendar Year',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: mutedText,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                TextFormField(
+                                  key: ValueKey('holiday-year-$calendarYear'),
+                                  initialValue: calendarYear.toString(),
+                                  decoration: _inputDecoration('').copyWith(
+                                    labelText: null,
+                                    hintText: 'Year',
+                                    contentPadding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      16,
+                                      6,
+                                      16,
+                                    ),
+                                    suffixIconConstraints:
+                                        const BoxConstraints.tightFor(
+                                          width: 40,
+                                          height: 48,
+                                        ),
                                     suffixIcon: Column(
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
@@ -831,27 +838,29 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                                       ],
                                     ),
                                   ),
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
+                                  keyboardType: TextInputType.number,
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                  validator: (v) {
+                                    final value = (v ?? '').trim();
+                                    if (value.isEmpty) return null;
+                                    final year = int.tryParse(value);
+                                    if (year == null) return 'Invalid';
+                                    if (year < _minCalendarYear ||
+                                        year > _maxCalendarYear) {
+                                      return 'Out of range';
+                                    }
+                                    return null;
+                                  },
+                                  onChanged: (v) => setModal(() {
+                                    final parsed = int.tryParse(v);
+                                    calendarYear = _clampCalendarYear(
+                                      parsed ?? now.year,
+                                    );
+                                  }),
+                                ),
                               ],
-                              validator: (v) {
-                                final value = (v ?? '').trim();
-                                if (value.isEmpty) return null;
-                                final year = int.tryParse(value);
-                                if (year == null) return 'Invalid';
-                                if (year < _minCalendarYear ||
-                                    year > _maxCalendarYear) {
-                                  return 'Out of range';
-                                }
-                                return null;
-                              },
-                              onChanged: (v) => setModal(() {
-                                final parsed = int.tryParse(v);
-                                calendarYear = _clampCalendarYear(
-                                  parsed ?? now.year,
-                                );
-                              }),
                             ),
                           ),
                         ],
@@ -1160,9 +1169,10 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     final savedMessage = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: modalSurface,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       builder: (context) {
         return StatefulBuilder(
@@ -1183,34 +1193,14 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _buildDragHandle(),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(
-                                0xFF2563EB,
-                              ).withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(
-                              Icons.school,
-                              color: Color(0xFF2563EB),
-                              size: 20,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            entry == null
-                                ? 'Add Academic Entry'
-                                : 'Edit Academic Entry',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                        ],
+                      _CalendarSheetHeader(
+                        title: entry == null
+                            ? 'New Academic Entry'
+                            : 'Edit Academic Entry',
+                        subtitle:
+                            'Schedule a term, exam, registration, or campus milestone.',
+                        icon: Icons.school_rounded,
+                        accent: const Color(0xFF2563EB),
                       ),
                       const SizedBox(height: 24),
                       Row(
@@ -2336,21 +2326,6 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
   Widget _buildActions() {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
-    final holidayBg = isDark
-        ? const Color(0xFFD97706).withValues(alpha: 0.15)
-        : const Color(0xFFFEF3C7);
-    final holidayFg = isDark
-        ? const Color(0xFFFCD34D)
-        : const Color(0xFFD97706);
-
-    final academicBg = isDark
-        ? const Color(0xFF2563EB).withValues(alpha: 0.15)
-        : const Color(0xFFDBEAFE);
-    final academicFg = isDark
-        ? const Color(0xFF93C5FD)
-        : const Color(0xFF2563EB);
-
     final iconColor = isDark
         ? const Color(0xFF94A3B8)
         : const Color(0xFF64748B);
@@ -2372,6 +2347,7 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
                     : const Color(0xFFE2E8F0),
               ),
             ),
+            elevation: 0,
             child: InkWell(
               onTap: _loadEntries,
               borderRadius: BorderRadius.circular(16),
@@ -2387,80 +2363,24 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
     }
 
     Widget buildHolidayButton({required bool compact}) {
-      return InkWell(
+      return _CalendarActionButton(
+        compact: compact,
+        title: compact ? 'Holiday' : 'New Holiday',
+        subtitle: 'Institution day off',
+        icon: Icons.celebration_rounded,
+        accent: const Color(0xFFD97706),
         onTap: () => _openHolidaySheet(),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            vertical: compact ? 11 : 12,
-            horizontal: compact ? 10 : 12,
-          ),
-          decoration: BoxDecoration(
-            color: holidayBg,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.add_circle, color: holidayFg, size: compact ? 18 : 20),
-              SizedBox(width: compact ? 6 : 8),
-              Flexible(
-                child: Text(
-                  compact ? 'Holiday' : 'Add Holiday',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: holidayFg,
-                    fontWeight: FontWeight.bold,
-                    fontSize: compact ? 13 : 14,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       );
     }
 
     Widget buildAcademicButton({required bool compact}) {
-      return InkWell(
+      return _CalendarActionButton(
+        compact: compact,
+        title: compact ? 'Academic' : 'New Academic',
+        subtitle: 'Term or exam event',
+        icon: Icons.school_rounded,
+        accent: const Color(0xFF2563EB),
         onTap: () => _openAcademicSheet(),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            vertical: compact ? 11 : 12,
-            horizontal: compact ? 10 : 12,
-          ),
-          decoration: BoxDecoration(
-            color: academicBg,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.add_circle,
-                color: academicFg,
-                size: compact ? 18 : 20,
-              ),
-              SizedBox(width: compact ? 6 : 8),
-              Flexible(
-                child: Text(
-                  compact ? 'Academic' : 'Academic Entry',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: academicFg,
-                    fontWeight: FontWeight.bold,
-                    fontSize: compact ? 13 : 14,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       );
     }
 
@@ -2503,6 +2423,174 @@ class _CalendarUpdatesScreenState extends State<CalendarUpdatesScreen> {
           ],
         );
       },
+    );
+  }
+}
+
+class _CalendarActionButton extends StatelessWidget {
+  final bool compact;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _CalendarActionButton({
+    required this.compact,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.accent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final surface = isDark ? const Color(0xFF1E293B) : Colors.white;
+    final border = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
+
+    return Material(
+      color: surface,
+      elevation: isDark ? 0 : 8,
+      shadowColor: Colors.black.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          constraints: BoxConstraints(minHeight: compact ? 52 : 62),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 14,
+            vertical: compact ? 10 : 12,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: compact ? 32 : 38,
+                height: compact ? 32 : 38,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: isDark ? 0.18 : 0.1),
+                  borderRadius: BorderRadius.circular(compact ? 12 : 13),
+                ),
+                child: Icon(icon, color: accent, size: compact ? 17 : 20),
+              ),
+              SizedBox(width: compact ? 8 : 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurface,
+                        fontSize: compact ? 12.5 : 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (!compact) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (!compact) Icon(Icons.add_rounded, color: accent, size: 22),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CalendarSheetHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color accent;
+
+  const _CalendarSheetHeader({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45)
+            : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.12),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: isDark ? 0.18 : 0.1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: accent, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
