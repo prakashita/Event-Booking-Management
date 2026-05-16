@@ -408,6 +408,12 @@ export default function App() {
   const requirementsWizardRef = useRef(null);
   const adminBroadcastRef = useRef(null);
   const usersManagementLoadedRef = useRef(false);
+  // Stable ref for user — keeps loadEvents callback stable across periodic /auth/me refreshes
+  const userRef = useRef(null);
+  // Guards for one-time-per-session loads that must not repeat on user-object refresh
+  const emailsLoadedForUserRef = useRef(null);
+  // Throttle for checkGoogleScopes — prevents repeated API calls on rapid tab switches
+  const googleScopeLastCheckRef = useRef(0);
   const [requirementsWizard, setRequirementsWizard] = useState({
     open: false,
     steps: [],
@@ -431,6 +437,8 @@ export default function App() {
       return null;
     }
   });
+  // Keep stable ref in sync on every render (cost: trivial)
+  userRef.current = user;
   const normalizedUserRole = (user?.role || "").toLowerCase();
   const enabledModules = normalizeEnabledModules(user?.enabled_modules);
   const hasIqacModule = enabledModules.includes("iqac");
@@ -524,10 +532,23 @@ export default function App() {
   const syncStoredUser = useCallback((data) => {
     if (!data) return;
     setUser((prev) => {
+      const nextEnabled = normalizeEnabledModules(data.enabled_modules);
+      // Preserve existing reference when critical fields are unchanged to prevent
+      // cascading re-renders (loadEvents, email effects, etc.) on periodic /auth/me refresh.
+      if (
+        prev &&
+        prev.id === data.id &&
+        prev.role === (data.role ?? prev.role) &&
+        prev.name === (data.name ?? prev.name) &&
+        prev.email === (data.email ?? prev.email) &&
+        JSON.stringify(prev.enabled_modules) === JSON.stringify(nextEnabled)
+      ) {
+        return prev;
+      }
       const nextUser = {
         ...(prev || {}),
         ...data,
-        enabled_modules: normalizeEnabledModules(data.enabled_modules)
+        enabled_modules: nextEnabled,
       };
       localStorage.setItem("auth_user", JSON.stringify(nextUser));
       return nextUser;
@@ -1424,14 +1445,16 @@ export default function App() {
 
     setEventsState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
-      const role = (user?.role || "").toLowerCase();
+      // Read user from stable ref — avoids recreating loadEvents on periodic /auth/me refresh
+      const currentUser = userRef.current;
+      const role = (currentUser?.role || "").toLowerCase();
       const isAdminOrRegistrar =
         role === "admin" ||
         role === "registrar" ||
         role === "vice_chancellor" ||
         role === "deputy_registrar" ||
         role === "finance_team";
-      if (activeView === "event-reports" && user && isAdminOrRegistrar) {
+      if (activeView === "event-reports" && currentUser && isAdminOrRegistrar) {
         const reportsRes = await apiFetch(`${apiBaseUrl}/admin/event-reports`);
         if (!reportsRes.ok) {
           throw new Error("Unable to load event reports.");
@@ -1618,7 +1641,7 @@ export default function App() {
         error: err?.message || "Unable to load events."
       });
     }
-  }, [apiBaseUrl, apiFetch, activeView, user]);
+  }, [apiBaseUrl, apiFetch, activeView]); // user accessed via stable ref — not a dep
 
   const loadApprovalsInbox = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
@@ -1821,6 +1844,11 @@ export default function App() {
       return;
     }
 
+    // Throttle: skip if checked within the last 5 minutes (prevents API spam on rapid tab switches)
+    const now = Date.now();
+    if (now - googleScopeLastCheckRef.current < 5 * 60 * 1000) return;
+    googleScopeLastCheckRef.current = now;
+
     try {
       const res = await apiFetch(`${apiBaseUrl}/auth/google/status`);
       if (!res.ok) {
@@ -1917,25 +1945,34 @@ export default function App() {
   useEffect(() => {
     if (user) {
       checkGoogleScopes();
+    } else {
+      // Reset throttle on logout so the next login triggers a fresh check
+      googleScopeLastCheckRef.current = 0;
     }
   }, [checkGoogleScopes, user]);
 
   useEffect(() => {
-    if (user) {
-      loadEventApprovalEmails();
-      loadFacilityManagerEmail();
-      loadMarketingEmail();
-      loadItEmail();
-      loadTransportEmail();
-    } else {
+    // Email addresses change rarely — load once per user session, not on every user-object refresh.
+    // emailsLoadedForUserRef tracks the user.id for which emails were last loaded.
+    const uid = user?.id ?? null;
+    if (!uid) {
+      emailsLoadedForUserRef.current = null;
       setRegistrarEmail("");
       setViceChancellorEmail("");
       setFacilityManagerEmail("");
       setMarketingEmail("");
       setItEmail("");
       setTransportEmail("");
+      return;
     }
-  }, [user, loadEventApprovalEmails, loadFacilityManagerEmail, loadMarketingEmail, loadItEmail, loadTransportEmail]);
+    if (emailsLoadedForUserRef.current === uid) return; // already loaded for this user
+    emailsLoadedForUserRef.current = uid;
+    loadEventApprovalEmails();
+    loadFacilityManagerEmail();
+    loadMarketingEmail();
+    loadItEmail();
+    loadTransportEmail();
+  }, [user?.id, loadEventApprovalEmails, loadFacilityManagerEmail, loadMarketingEmail, loadItEmail, loadTransportEmail]);
 
   useEffect(() => {
     if (!user) return;

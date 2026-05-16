@@ -22,8 +22,7 @@ export default function ConversationList() {
     openEventThread,
     openConversation,
     openApprovalThread,
-    clearConversationMessages,
-    purgeConversation,
+    deleteConversation,
     formatChatTime,
   } = useMessenger();
 
@@ -167,16 +166,9 @@ export default function ConversationList() {
                       meta={meta}
                       time={lm?.created_at ? formatChatTime(lm.created_at) : ""}
                       onClick={() => openEventThread(thread)}
-                      onClearChat={() =>
+                      onDeleteForMe={() =>
                         setActionDialog({
-                          kind: "clear",
-                          id: thread.id,
-                          name: tname,
-                        })
-                      }
-                      onPurgeChat={() =>
-                        setActionDialog({
-                          kind: "purge",
+                          kind: "deleteForMe",
                           id: thread.id,
                           name: tname,
                         })
@@ -213,16 +205,9 @@ export default function ConversationList() {
                         meta={meta}
                         time={lm?.created_at ? formatChatTime(lm.created_at) : ""}
                         onClick={() => openConversation(conv)}
-                        onClearChat={() =>
+                        onDeleteForMe={() =>
                           setActionDialog({
-                            kind: "clear",
-                            id: conv.id,
-                            name,
-                          })
-                        }
-                        onPurgeChat={() =>
-                          setActionDialog({
-                            kind: "purge",
+                            kind: "deleteForMe",
                             id: conv.id,
                             name,
                           })
@@ -336,27 +321,14 @@ export default function ConversationList() {
       </div>
 
       <MessengerConfirmDialog
-        open={actionDialog?.kind === "clear"}
-        title="Clear this chat?"
-        message={`Are you sure you want to clear "${actionDialog?.name || "this chat"}"? Messages will be removed for all participants, but the conversation will stay open.`}
-        confirmLabel="Clear chat"
+        open={actionDialog?.kind === "deleteForMe"}
+        title="Delete chat for me?"
+        message={`"${actionDialog?.name || "This chat"}" will be hidden from your messenger only. Other participants will keep their conversation history.`}
+        confirmLabel="Delete for me"
         cancelLabel="Cancel"
         danger
         onConfirm={async () => {
-          if (actionDialog?.id) await clearConversationMessages(actionDialog.id);
-          setActionDialog(null);
-        }}
-        onCancel={() => setActionDialog(null)}
-      />
-      <MessengerConfirmDialog
-        open={actionDialog?.kind === "purge"}
-        title="Delete this chat?"
-        message={`Are you sure you want to delete "${actionDialog?.name || "this chat"}"? The conversation and all messages will be permanently removed for everyone.`}
-        confirmLabel="Delete chat"
-        cancelLabel="Cancel"
-        danger
-        onConfirm={async () => {
-          if (actionDialog?.id) await purgeConversation(actionDialog.id);
+          if (actionDialog?.id) await deleteConversation(actionDialog.id);
           setActionDialog(null);
         }}
         onCancel={() => setActionDialog(null)}
