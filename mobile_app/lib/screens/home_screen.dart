@@ -8,16 +8,14 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../constants/app_colors.dart';
-import '../models/models.dart';
-import '../providers/auth_provider.dart';
-import '../providers/notification_provider.dart';
-import '../screens/chat/chat_list_screen.dart';
-import '../screens/chat/chat_screen.dart';
-import '../services/api_service.dart';
-import '../services/notification_service.dart';
-import '../widgets/common/side_nav_bar.dart';
-import '../widgets/dashboard/profile_dropdown.dart';
+import '../../constants/app_colors.dart';
+import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/notification_provider.dart';
+import '../../services/api_service.dart';
+import '../../services/notification_service.dart';
+import '../../widgets/common/side_nav_bar.dart';
+import '../../widgets/dashboard/profile_dropdown.dart';
 
 const Color _eventActionBlue = Color(0xFF1A73E8);
 const Color _eventActionBlueSoft = Color(0xFFE8F0FE);
@@ -34,10 +32,15 @@ class _HomeScreenState extends State<HomeScreen> {
   // Increase this to make the in-app notification banner larger everywhere.
   // Example: 1.15 gives the popup bar more height, padding, and larger text.
   static const double _notificationPopupScale = 1.0;
+  static const double _chatFabSize = 56.0;
+  static const double _chatFabEdgeMargin = 16.0;
+  static const double _chatFabStackGap = 12.0;
 
   String _searchQuery = '';
   final ValueNotifier<bool> _chatFabVisible = ValueNotifier<bool>(true);
   Offset? _fabPos;
+  String? _lastFabRoute;
+  Size? _lastFabViewport;
   bool? _lastChatUiOpen;
   OverlayEntry? _notificationBanner;
   final List<NotificationPopupEvent> _activePopupEvents =
@@ -95,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onOpen: (popup) {
           _notificationProvider?.markNotificationAsRead(popup.id);
           _dismissPopupById(popup.id);
-          GoRouter.of(context).go(popup.route);
+          _openRoute(popup.route);
         },
         onDismiss: (popup) {
           _notificationProvider?.markNotificationAsRead(popup.id);
@@ -125,6 +128,19 @@ class _HomeScreenState extends State<HomeScreen> {
       _notificationBanner?.remove();
       _notificationBanner = null;
     }
+  }
+
+  void _openChat() {
+    context.read<NotificationProvider>().setChatUiOpen(true);
+    context.push('/chat');
+  }
+
+  void _openRoute(String route) {
+    if (route == '/chat' || route.startsWith('/chat/')) {
+      context.push(route);
+      return;
+    }
+    context.go(route);
   }
 
   Future<void> _openNotificationsPanel() async {
@@ -229,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         provider.markNotificationAsRead(item.id);
                         Navigator.of(sheetContext).pop();
                         if (mounted) {
-                          this.context.go(item.route);
+                          _openRoute(item.route);
                         }
                       },
                       onDismiss: () {
@@ -806,18 +822,27 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.user;
-    final currentRoute = GoRouterState.of(context).uri.toString();
-    final isChatChild =
-        widget.child is ChatListScreen || widget.child is ChatScreen;
+    final routerState = GoRouterState.of(context);
+    final currentRoute = routerState.matchedLocation;
+    final currentPath = routerState.uri.path;
     final isChatRoute =
-        isChatChild ||
         currentRoute == '/chat' ||
-        currentRoute.startsWith('/chat/');
+        currentRoute.startsWith('/chat/') ||
+        currentPath == '/chat' ||
+        currentPath.startsWith('/chat/');
+    final shouldShowChatFab = !isChatRoute;
+    final viewportSize = MediaQuery.sizeOf(context);
+    if (_lastFabRoute != currentRoute || _lastFabViewport != viewportSize) {
+      _lastFabRoute = currentRoute;
+      _lastFabViewport = viewportSize;
+      _fabPos = null;
+    }
     if (_lastChatUiOpen != isChatRoute) {
       _lastChatUiOpen = isChatRoute;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         context.read<NotificationProvider>().setChatUiOpen(isChatRoute);
+        _chatFabVisible.value = shouldShowChatFab;
       });
     }
     final isTopRoute = ModalRoute.of(context)?.isCurrent ?? true;
@@ -825,6 +850,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final pageBg = theme.scaffoldBackgroundColor;
+
+    if (isChatRoute) {
+      return ChatFabVisibilityScope(
+        visibleNotifier: _chatFabVisible,
+        child: DashboardSearchScope(
+          searchQuery: _searchQuery,
+          child: widget.child,
+        ),
+      );
+    }
+
     final headerBg = theme.colorScheme.surface;
     final searchBg = isDark
         ? theme.colorScheme.surfaceContainerHighest
@@ -832,6 +868,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final shadowColor = Colors.black.withValues(alpha: isDark ? 0.35 : 0.05);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: pageBg,
       drawer: SideNavBar(currentRoute: currentRoute),
       body: Row(
@@ -842,13 +879,15 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 // Custom Header
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16.0, 4.0, 16.0, 4.0),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isDesktop ? 16.0 : 10.0,
+                    vertical: isDesktop ? 8.0 : 6.0,
+                  ),
                   child: SafeArea(
-                    bottom: false,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8.0,
-                        vertical: 6.0,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isDesktop ? 8.0 : 6.0,
+                        vertical: isDesktop ? 8.0 : 6.0,
                       ),
                       decoration: BoxDecoration(
                         color: headerBg,
@@ -866,13 +905,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (!isDesktop)
                             Builder(
                               builder: (context) => IconButton(
+                                visualDensity: VisualDensity.compact,
                                 icon: const Icon(LucideIcons.menu),
                                 onPressed: () {
                                   Scaffold.of(context).openDrawer();
                                 },
                               ),
                             ),
-                          if (!isDesktop) const SizedBox(width: 8),
+                          if (!isDesktop) const SizedBox(width: 4),
                           // Search Bar
                           Expanded(
                             child: SizedBox(
@@ -904,7 +944,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: isDesktop ? 12 : 8),
                           Consumer<NotificationProvider>(
                             builder: (context, notificationProvider, _) {
                               final totalUnread =
@@ -928,7 +968,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ? const Color(0xFF93C5FD)
                                   : _eventActionBlue;
                               return SizedBox(
-                                width: 48,
+                                width: isDesktop ? 48 : 44,
                                 height: 42,
                                 child: Tooltip(
                                   message: 'Notifications',
@@ -941,7 +981,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         Align(
                                           alignment: Alignment.centerLeft,
                                           child: Container(
-                                            width: 42,
+                                            width: isDesktop ? 42 : 40,
                                             height: 42,
                                             decoration: BoxDecoration(
                                               color: bellBg,
@@ -1003,7 +1043,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               );
                             },
                           ),
-                          const SizedBox(width: 8),
+                          SizedBox(width: isDesktop ? 8 : 4),
                           if (user != null)
                             ProfileDropdown(user: user)
                           else
@@ -1020,7 +1060,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 // Main Content
-                const SizedBox(height: 8),
                 Expanded(
                   child: MediaQuery.removePadding(
                     context: context,
@@ -1038,186 +1077,188 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                             ),
-                            ValueListenableBuilder<bool>(
-                              valueListenable: _chatFabVisible,
-                              builder: (context, visible, _) {
-                                final showFab =
-                                    isTopRoute && visible && !isChatRoute;
+                            if (!isChatRoute)
+                              ValueListenableBuilder<bool>(
+                                valueListenable: _chatFabVisible,
+                                builder: (context, visible, _) {
+                                  final showFab = isTopRoute && visible;
 
-                                if (!showFab) return const SizedBox.shrink();
+                                  if (!showFab) return const SizedBox.shrink();
 
-                                const scaffoldFabMargin = 16.0;
-                                const pageFabHeight = 56.0;
-                                const gapAbovePageFab = 16.0;
-                                const tallBottomActionHeight = 126.0;
-
-                                final hasPageLevelActions =
-                                    currentRoute == '/requirements' ||
-                                    currentRoute == '/admin' ||
-                                    currentRoute == '/events/create' ||
-                                    currentRoute == '/publications' ||
-                                    currentRoute == '/student-achievements' ||
-                                    currentRoute.startsWith('/events/') ||
-                                    currentRoute.startsWith(
-                                      '/approval-details/',
-                                    );
-                                final hasTallBottomAction =
-                                    currentRoute == '/events/create';
-                                final hasExtendedPageFab =
-                                    currentRoute == '/admin' ||
-                                    currentRoute == '/publications' ||
-                                    currentRoute == '/student-achievements';
-                                final bottomSafeArea = MediaQuery.viewPaddingOf(
-                                  context,
-                                ).bottom;
-
-                                final defaultBottom = hasTallBottomAction
-                                    ? bottomSafeArea +
-                                          tallBottomActionHeight +
-                                          gapAbovePageFab
-                                    : hasExtendedPageFab
-                                    ? bottomSafeArea +
-                                          scaffoldFabMargin +
-                                          pageFabHeight +
-                                          gapAbovePageFab
-                                    : hasPageLevelActions
-                                    ? bottomSafeArea + 72.0
-                                    : 16.0;
-                                final defaultRight = 16.0;
-                                final maxCustomY =
-                                    (constraints.maxHeight -
-                                            56.0 -
-                                            defaultBottom)
-                                        .clamp(
-                                          0.0,
-                                          constraints.maxHeight - 56.0,
-                                        )
-                                        .toDouble();
-                                final effectiveFabPos = _fabPos == null
-                                    ? null
-                                    : Offset(
-                                        _fabPos!.dx
-                                            .clamp(
-                                              0.0,
-                                              constraints.maxWidth - 56.0,
-                                            )
-                                            .toDouble(),
-                                        _fabPos!.dy
-                                            .clamp(0.0, maxCustomY)
-                                            .toDouble(),
+                                  // Keep logic for dynamically calculating the default position based on page
+                                  final hasPageLevelActions =
+                                      currentRoute == '/requirements' ||
+                                      currentRoute == '/admin' ||
+                                      currentRoute == '/events/create' ||
+                                      currentRoute == '/publications' ||
+                                      currentRoute == '/student-achievements' ||
+                                      currentRoute.startsWith('/events/') ||
+                                      currentRoute.startsWith(
+                                        '/approval-details/',
                                       );
+                                  final hasTallBottomActionBar =
+                                      currentRoute == '/events/create';
+                                  final hasExtendedPageFab =
+                                      currentRoute == '/admin' ||
+                                      currentRoute == '/publications' ||
+                                      currentRoute == '/student-achievements';
+                                  final bottomInset = MediaQuery.viewPaddingOf(
+                                    context,
+                                  ).bottom;
 
-                                return Positioned(
-                                  left: effectiveFabPos?.dx,
-                                  top: effectiveFabPos?.dy,
-                                  right: effectiveFabPos == null
-                                      ? defaultRight
-                                      : null,
-                                  bottom: effectiveFabPos == null
-                                      ? defaultBottom
-                                      : null,
-                                  child: GestureDetector(
-                                    onPanUpdate: (details) {
-                                      setState(() {
-                                        double curX =
-                                            effectiveFabPos?.dx ??
-                                            (constraints.maxWidth -
-                                                56 -
-                                                defaultRight);
-                                        double curY =
-                                            effectiveFabPos?.dy ??
-                                            (constraints.maxHeight -
-                                                56 -
-                                                defaultBottom);
-
-                                        double newX = curX + details.delta.dx;
-                                        double newY = curY + details.delta.dy;
-
-                                        newX = newX.clamp(
-                                          0.0,
-                                          constraints.maxWidth - 56.0,
+                                  final baseBottomOffset =
+                                      hasTallBottomActionBar
+                                      ? 150.0 + bottomInset
+                                      : hasExtendedPageFab
+                                      ? bottomInset +
+                                            _chatFabEdgeMargin +
+                                            _chatFabSize +
+                                            _chatFabStackGap
+                                      : hasPageLevelActions
+                                      ? bottomInset +
+                                            _chatFabEdgeMargin +
+                                            _chatFabSize +
+                                            _chatFabStackGap
+                                      : _chatFabEdgeMargin;
+                                  final defaultBottom = baseBottomOffset;
+                                  final defaultRight = _chatFabEdgeMargin;
+                                  final maxCustomY =
+                                      (constraints.maxHeight -
+                                              _chatFabSize -
+                                              defaultBottom)
+                                          .clamp(
+                                            0.0,
+                                            constraints.maxHeight -
+                                                _chatFabSize,
+                                          )
+                                          .toDouble();
+                                  final effectiveFabPos = _fabPos == null
+                                      ? null
+                                      : Offset(
+                                          _fabPos!.dx
+                                              .clamp(
+                                                0.0,
+                                                constraints.maxWidth -
+                                                    _chatFabSize,
+                                              )
+                                              .toDouble(),
+                                          _fabPos!.dy
+                                              .clamp(0.0, maxCustomY)
+                                              .toDouble(),
                                         );
-                                        newY = newY.clamp(0.0, maxCustomY);
 
-                                        _fabPos = Offset(newX, newY);
-                                      });
-                                    },
-                                    child: Consumer<NotificationProvider>(
-                                      builder: (context, notificationProvider, _) {
-                                        final totalUnread =
-                                            notificationProvider.totalUnread;
-                                        return Stack(
-                                          clipBehavior: Clip.none,
-                                          children: [
-                                            FloatingActionButton(
-                                              key: const ValueKey<String>(
-                                                'chat_fab_visible',
+                                  return Positioned(
+                                    left: effectiveFabPos?.dx,
+                                    top: effectiveFabPos?.dy,
+                                    right: effectiveFabPos == null
+                                        ? defaultRight
+                                        : null,
+                                    bottom: effectiveFabPos == null
+                                        ? defaultBottom
+                                        : null,
+                                    child: GestureDetector(
+                                      onPanUpdate: (details) {
+                                        setState(() {
+                                          double curX =
+                                              effectiveFabPos?.dx ??
+                                              (constraints.maxWidth -
+                                                  _chatFabSize -
+                                                  defaultRight);
+                                          double curY =
+                                              effectiveFabPos?.dy ??
+                                              (constraints.maxHeight -
+                                                  _chatFabSize -
+                                                  defaultBottom);
+
+                                          double newX = curX + details.delta.dx;
+                                          double newY = curY + details.delta.dy;
+
+                                          newX = newX.clamp(
+                                            0.0,
+                                            constraints.maxWidth - _chatFabSize,
+                                          );
+                                          newY = newY.clamp(0.0, maxCustomY);
+
+                                          _fabPos = Offset(newX, newY);
+                                        });
+                                      },
+                                      child: Consumer<NotificationProvider>(
+                                        builder: (context, notificationProvider, _) {
+                                          final totalUnread =
+                                              notificationProvider.totalUnread;
+                                          return Stack(
+                                            clipBehavior: Clip.none,
+                                            children: [
+                                              FloatingActionButton(
+                                                key: const ValueKey<String>(
+                                                  'chat_fab_visible',
+                                                ),
+                                                onPressed: () {
+                                                  _openChat();
+                                                },
+                                                backgroundColor: const Color(
+                                                  0xFF2563EB,
+                                                ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(16),
+                                                ),
+                                                child: const Icon(
+                                                  LucideIcons.messageSquare,
+                                                  color: Colors.white,
+                                                ),
                                               ),
-                                              onPressed: () {
-                                                context.go('/chat');
-                                              },
-                                              backgroundColor: const Color(
-                                                0xFF2563EB,
-                                              ),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(16),
-                                              ),
-                                              child: const Icon(
-                                                LucideIcons.messageSquare,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                            if (totalUnread > 0)
-                                              Positioned(
-                                                right: -2,
-                                                top: -2,
-                                                child: Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 5,
-                                                        vertical: 1,
-                                                      ),
-                                                  constraints:
-                                                      const BoxConstraints(
-                                                        minWidth: 18,
-                                                        minHeight: 16,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(
-                                                      0xFFDC2626,
-                                                    ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          999,
+                                              if (totalUnread > 0)
+                                                Positioned(
+                                                  right: -2,
+                                                  top: -2,
+                                                  child: Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 5,
+                                                          vertical: 1,
                                                         ),
-                                                    border: Border.all(
-                                                      color: Colors.white,
-                                                      width: 1.5,
+                                                    constraints:
+                                                        const BoxConstraints(
+                                                          minWidth: 18,
+                                                          minHeight: 16,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                        0xFFDC2626,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            999,
+                                                          ),
+                                                      border: Border.all(
+                                                        color: Colors.white,
+                                                        width: 1.5,
+                                                      ),
                                                     ),
-                                                  ),
-                                                  child: Text(
-                                                    totalUnread > 99
-                                                        ? '99+'
-                                                        : '$totalUnread',
-                                                    textAlign: TextAlign.center,
-                                                    style: const TextStyle(
-                                                      color: Colors.white,
-                                                      fontSize: 9,
-                                                      fontWeight:
-                                                          FontWeight.w700,
+                                                    child: Text(
+                                                      totalUnread > 99
+                                                          ? '99+'
+                                                          : '$totalUnread',
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 9,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
-                                              ),
-                                          ],
-                                        );
-                                      },
+                                            ],
+                                          );
+                                        },
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
+                                  );
+                                },
+                              ),
                           ],
                         );
                       },

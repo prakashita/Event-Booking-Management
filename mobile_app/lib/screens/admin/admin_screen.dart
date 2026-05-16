@@ -2059,9 +2059,19 @@ class _AdminScreenState extends State<AdminScreen> {
                   final rawFileName = (pub['file_name'] ?? '')
                       .toString()
                       .trim();
+                  final rawUrl = (pub['url'] ?? '').toString().trim();
+                  final rawWebViewLink = (pub['web_view_link'] ?? '')
+                      .toString()
+                      .trim();
                   final fileName = rawFileName.isEmpty || rawFileName == '-'
-                      ? 'No file name'
+                      ? ''
                       : rawFileName;
+                  final publicationLink = rawUrl.isNotEmpty
+                      ? rawUrl
+                      : rawWebViewLink;
+                  final detailText = fileName.isNotEmpty
+                      ? fileName
+                      : publicationLink;
                   final uploadedAt = _fmtDate(
                     pub['uploaded_at'] ?? pub['created_at'],
                   );
@@ -2100,25 +2110,27 @@ class _AdminScreenState extends State<AdminScreen> {
                                       : const Color(0xFF0F172A),
                                 ),
                               ),
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Flexible(
-                                    child: Text(
-                                      fileName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark
-                                            ? const Color(0xFFCBD5E1)
-                                            : const Color(0xFF64748B),
+                              if (detailText.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        detailText,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark
+                                              ? const Color(0xFFCBD5E1)
+                                              : const Color(0xFF64748B),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              ),
+                                  ],
+                                ),
+                              ],
                               const SizedBox(height: 6),
                               Row(
                                 children: [
