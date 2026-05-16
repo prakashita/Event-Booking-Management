@@ -418,6 +418,7 @@ class StudentAchievementFile(BaseModel):
 
 class StudentAchievement(Document):
     achievement_title: str = ""
+    achievement_type: Optional[str] = Field(default="student")  # "student" | "faculty"
     students: List[StudentAchievementStudent] = Field(default_factory=list)
     activity_description: Optional[str] = None
     additional_context_objective: Optional[str] = None

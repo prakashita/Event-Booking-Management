@@ -10,7 +10,7 @@ export default function LoginPage({ googleButtonRef, status }) {
         <section className="hero">
           <PlaceholderCard />
           <div className="hero-text">
-            <p className="eyebrow">Event Booking Management</p>
+            <p className="eyebrow">VU Sync</p>
             <h1>Run smarter events, from invites to attendance.</h1>
             <p className="lead">
               Organize every stage with a centralized workspace, automated

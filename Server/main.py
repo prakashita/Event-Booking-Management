@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
     logger.info("API shutdown complete")
 
 
-app = FastAPI(title="Event Booking Management API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="VU Sync: Events and Repository Management API", version="1.0.0", lifespan=lifespan)
 app.state.limiter = limiter
 
 def handle_rate_limit_exceeded(request: Request, exc: RateLimitExceeded):
