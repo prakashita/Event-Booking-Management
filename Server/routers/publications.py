@@ -554,6 +554,10 @@ async def update_publication(
         except Exception:
             pass
         update_fields["contributors"] = formatted
+        # Keep pub.author in sync with the new contributors when no manual
+        # author override was sent — cards read item.author, not item.contributors.
+        if author is None and formatted:
+            update_fields["author"] = formatted
     if container_title is not None: update_fields["container_title"] = container_title
     if collection_title is not None: update_fields["collection_title"] = collection_title
     if note is not None: update_fields["note"] = note

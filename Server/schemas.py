@@ -935,6 +935,7 @@ class StudentAchievementFileResponse(BaseModel):
 
 class StudentAchievementPatch(BaseModel):
     achievement_title: Optional[str] = Field(default=None, max_length=240)
+    achievement_type: Optional[str] = Field(default=None, max_length=40)
     students: Optional[List[StudentAchievementStudentPayload]] = None
     activity_description: Optional[str] = Field(default=None, max_length=6000)
     additional_context_objective: Optional[str] = Field(default=None, max_length=6000)
@@ -964,6 +965,7 @@ class StudentAchievementPatch(BaseModel):
 class StudentAchievementResponse(BaseModel):
     id: str
     achievement_title: str
+    achievement_type: Optional[str] = None
     students: List[StudentAchievementStudentPayload] = Field(default_factory=list)
     activity_description: Optional[str] = None
     additional_context_objective: Optional[str] = None

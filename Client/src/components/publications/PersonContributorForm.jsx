@@ -30,7 +30,7 @@ const PersonContributorForm = memo(function PersonContributorForm({
 
   return (
     <div className="contrib-form">
-      {/* Title + Initials row */}
+      {/* Title + Initials */}
       <div className="contrib-field-row contrib-field-row-split">
         <label className="contrib-split-label">
           <span className="contrib-label-text">Title</span>
@@ -61,12 +61,10 @@ const PersonContributorForm = memo(function PersonContributorForm({
         </label>
       </div>
 
-      {/* First name(s) */}
-      <div className="contrib-field-row">
-        <div className="contrib-field-label">
-          <strong>First name(s)</strong>
-        </div>
-        <div className="contrib-field-control">
+      {/* First name(s) + Last name */}
+      <div className="contrib-field-row contrib-field-row-split">
+        <label className="contrib-split-label">
+          <span className="contrib-label-text">First name(s)</span>
           <input
             name="first_names"
             className="contrib-input"
@@ -76,34 +74,12 @@ const PersonContributorForm = memo(function PersonContributorForm({
             autoComplete="off"
             spellCheck={false}
           />
-        </div>
-      </div>
-
-      {/* Infix */}
-      <div className="contrib-field-row">
-        <div className="contrib-field-label">
-          <strong>Infix</strong>
-        </div>
-        <div className="contrib-field-control">
-          <input
-            name="infix"
-            className="contrib-input"
-            type="text"
-            value={data.infix}
-            onChange={handleInput}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-      </div>
-
-      {/* Last name */}
-      <div className="contrib-field-row">
-        <div className="contrib-field-label">
-          <strong>Last name</strong>
-          <span className="contrib-recommended">Recommended</span>
-        </div>
-        <div className="contrib-field-control">
+        </label>
+        <label className="contrib-split-label">
+          <span className="contrib-label-text">
+            Last name
+            <span className="contrib-recommended"> Recommended</span>
+          </span>
           <input
             name="last_name"
             className="contrib-input"
@@ -113,15 +89,25 @@ const PersonContributorForm = memo(function PersonContributorForm({
             autoComplete="off"
             spellCheck={false}
           />
-        </div>
+        </label>
       </div>
 
-      {/* Suffix */}
-      <div className="contrib-field-row">
-        <div className="contrib-field-label">
-          <strong>Suffix</strong>
-        </div>
-        <div className="contrib-field-control">
+      {/* Infix + Suffix */}
+      <div className="contrib-field-row contrib-field-row-split">
+        <label className="contrib-split-label">
+          <span className="contrib-label-text">Infix</span>
+          <input
+            name="infix"
+            className="contrib-input"
+            type="text"
+            value={data.infix}
+            onChange={handleInput}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </label>
+        <label className="contrib-split-label">
+          <span className="contrib-label-text">Suffix</span>
           <input
             name="suffix"
             className="contrib-input"
@@ -131,15 +117,13 @@ const PersonContributorForm = memo(function PersonContributorForm({
             autoComplete="off"
             spellCheck={false}
           />
-        </div>
+        </label>
       </div>
 
-      {/* Screen name */}
-      <div className="contrib-field-row">
-        <div className="contrib-field-label">
-          <strong>Screen name</strong>
-        </div>
-        <div className="contrib-field-control">
+      {/* Screen name + Role */}
+      <div className="contrib-field-row contrib-field-row-split contrib-field-row-last">
+        <label className="contrib-split-label">
+          <span className="contrib-label-text">Screen name</span>
           <input
             name="screen_name"
             className="contrib-input"
@@ -149,16 +133,12 @@ const PersonContributorForm = memo(function PersonContributorForm({
             autoComplete="off"
             spellCheck={false}
           />
-        </div>
-      </div>
-
-      {/* Role */}
-      <div className="contrib-field-row contrib-field-row-last">
-        <div className="contrib-field-label">
-          <strong>Role</strong>
-          <span className="contrib-recommended">Recommended</span>
-        </div>
-        <div className="contrib-field-control">
+        </label>
+        <label className="contrib-split-label">
+          <span className="contrib-label-text">
+            Role
+            <span className="contrib-recommended"> Recommended</span>
+          </span>
           <select
             className="contrib-select"
             value={role}
@@ -170,7 +150,7 @@ const PersonContributorForm = memo(function PersonContributorForm({
               </option>
             ))}
           </select>
-        </div>
+        </label>
       </div>
     </div>
   );

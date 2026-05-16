@@ -154,7 +154,7 @@ export const menuItems = [
   { id: "approvals", label: "Approvals" },
   { id: "requirements", label: "Requirements" },
   { id: "publications", label: "Publications" },
-  { id: "student-achievements", label: "Student Achievements" },
+  { id: "student-achievements", label: "Other Achievements" },
   { id: "iqac-data", label: "IQAC Data Collection" },
   { id: "calendar-updates", label: "Calendar Updates" },
   { id: "user-approvals", label: "User Approvals" },

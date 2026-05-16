@@ -7954,7 +7954,7 @@ export default function App() {
                     : isPublications
                       ? "Publications"
                     : isStudentAchievements
-                      ? "Student Achievements"
+                      ? "Other Achievements"
                       : isIqacData
                         ? "IQAC Data Collection"
                         : isCalendar

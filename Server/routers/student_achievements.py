@@ -39,6 +39,7 @@ EDITABLE_TEXT_FIELDS = {
     "iqac_subfolder_id",
     "iqac_item_id",
     "iqac_description",
+    "achievement_type",
 }
 
 
@@ -136,17 +137,18 @@ def _all_attachments(item: StudentAchievement) -> list[StudentAchievementFile]:
     return attachments
 
 
-def _derived_title(students: list[StudentAchievementStudent], description: Optional[str], legacy_title: Optional[str] = None) -> str:
+def _derived_title(students: list[StudentAchievementStudent], description: Optional[str], legacy_title: Optional[str] = None, achievement_type: Optional[str] = None) -> str:
     title = _clean(legacy_title)
     if title:
         return title
     names = [_student_name(student) for student in students if _student_name(student)]
+    prefix = "Faculty Achievement" if (achievement_type or "").lower() == "faculty" else "Student Achievement"
     if names:
-        return f"Student Achievement - {', '.join(names[:2])}{' +' if len(names) > 2 else ''}"
+        return f"{prefix} - {', '.join(names[:2])}{' +' if len(names) > 2 else ''}"
     description = _clean(description)
     if description:
         return description[:120]
-    return "Student Achievement"
+    return prefix
 
 
 def _audit_entry(action: str, user: User, changed_fields: Optional[list[str]] = None) -> dict:
@@ -167,7 +169,8 @@ def _to_response(item: StudentAchievement) -> StudentAchievementResponse:
     social_writeup = item.social_media_writeup or item.detailed_writeup
     return StudentAchievementResponse(
         id=str(item.id),
-        achievement_title=_derived_title(item.students or [], activity_description, item.achievement_title),
+        achievement_title=_derived_title(item.students or [], activity_description, item.achievement_title, item.achievement_type),
+        achievement_type=item.achievement_type or "student",
         students=[
             StudentAchievementStudentPayload(
                 student_name=_student_name(s),
@@ -305,6 +308,7 @@ async def create_student_achievement(
     iqac_item_id: Optional[str] = Form(default=None),
     iqac_description: Optional[str] = Form(default=None),
     achievement_title: Optional[str] = Form(default=None),
+    achievement_type: Optional[str] = Form(default="student"),
     attachments: Optional[list[UploadFile]] = File(default=None),
     assets: Optional[list[UploadFile]] = File(default=None),
     proofs: Optional[list[UploadFile]] = File(default=None),
@@ -328,8 +332,10 @@ async def create_student_achievement(
         raise HTTPException(status_code=500, detail=f"Unable to upload files: {exc}") from exc
 
     now = datetime.utcnow()
+    _atype = _clean(achievement_type) or "student"
     achievement = StudentAchievement(
-        achievement_title=_derived_title(student_rows, activity_description, achievement_title),
+        achievement_title=_derived_title(student_rows, activity_description, achievement_title, _atype),
+        achievement_type=_atype,
         students=student_rows,
         activity_description=_clean(activity_description),
         additional_context_objective=_clean(additional_context_objective),
@@ -469,7 +475,7 @@ async def update_student_achievement(
     if not _clean(item.activity_description):
         raise HTTPException(status_code=400, detail="Description of activity and achievement is required")
 
-    item.achievement_title = _derived_title(item.students, item.activity_description, item.achievement_title)
+    item.achievement_title = _derived_title(item.students, item.activity_description, item.achievement_title, item.achievement_type)
     item.updated_by = str(user.id)
     item.updated_by_name = user.name
     item.updated_by_email = user.email

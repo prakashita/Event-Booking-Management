@@ -10,9 +10,12 @@ const PLATFORM_OPTIONS = [
 ];
 
 const emptyStudent = () => ({ student_name: "", batch: "", course: "" });
+const emptyFaculty = () => ({ faculty_name: "", school: "" });
 
 const emptyForm = () => ({
+  achievement_type: "student",
   students: [emptyStudent()],
+  faculty_members: [emptyFaculty()],
   activity_description: "",
   additional_context_objective: "",
   suggested_platforms: [],
@@ -41,18 +44,31 @@ function getStudentName(student) {
 function studentLine(item) {
   const students = item?.students || [];
   if (!students.length) return "--";
+  const isFaculty = (item?.achievement_type || "student") === "faculty";
+  if (isFaculty) {
+    return students
+      .map((s) => [getStudentName(s), s.course].filter(Boolean).join(" - "))
+      .join(", ");
+  }
   return students
     .map((student) => [getStudentName(student), student.batch, student.course].filter(Boolean).join(" - "))
     .join(", ");
 }
 
 function itemTitle(item) {
-  const firstStudent = getStudentName(item?.students?.[0]);
-  if (firstStudent) return `Student Achievement - ${firstStudent}`;
+  const isFaculty = (item?.achievement_type || "student") === "faculty";
+  const firstName = getStudentName(item?.students?.[0]);
+  if (isFaculty) {
+    if (firstName) return `Faculty Achievement - ${firstName}`;
+    return item?.achievement_title || "Faculty Achievement";
+  }
+  if (firstName) return `Student Achievement - ${firstName}`;
   return item?.achievement_title || "Student Achievement";
 }
 
 function toForm(item) {
+  const achievementType = item?.achievement_type || "student";
+
   const students = (item?.students || [])
     .map((student) => ({
       student_name: getStudentName(student),
@@ -61,8 +77,17 @@ function toForm(item) {
     }))
     .filter((student) => student.student_name || student.batch || student.course);
 
+  // When editing a faculty achievement, reconstruct faculty_members from students array
+  const facultyMembers = achievementType === "faculty"
+    ? (item?.students || [])
+        .map((s) => ({ faculty_name: getStudentName(s), school: s.course || "" }))
+        .filter((f) => f.faculty_name || f.school)
+    : [];
+
   return {
+    achievement_type: achievementType,
     students: students.length ? students : [emptyStudent()],
+    faculty_members: facultyMembers.length ? facultyMembers : [emptyFaculty()],
     activity_description: item?.activity_description || "",
     additional_context_objective: item?.additional_context_objective || "",
     suggested_platforms: Array.isArray(item?.suggested_platforms) ? item.suggested_platforms : [],
@@ -179,6 +204,24 @@ export default function StudentAchievementsPage({ user }) {
     }));
   };
 
+  const updateFaculty = (setter, index, field, value) => {
+    setter((prev) => ({
+      ...prev,
+      faculty_members: prev.faculty_members.map((f, i) => (i === index ? { ...f, [field]: value } : f)),
+    }));
+  };
+
+  const addFaculty = (setter) => {
+    setter((prev) => ({ ...prev, faculty_members: [...prev.faculty_members, emptyFaculty()] }));
+  };
+
+  const removeFaculty = (setter, index) => {
+    setter((prev) => ({
+      ...prev,
+      faculty_members: prev.faculty_members.length > 1 ? prev.faculty_members.filter((_, i) => i !== index) : prev.faculty_members,
+    }));
+  };
+
   const togglePlatform = (setter, platform) => {
     setter((prev) => ({
       ...prev,
@@ -210,8 +253,23 @@ export default function StudentAchievementsPage({ user }) {
       }))
       .filter((student) => student.student_name);
 
+  // Faculty entries are serialised into the same students array for backend reuse.
+  // faculty_name → student_name, school → course, batch left empty.
+  const cleanedFacultyAsStudents = (state) =>
+    (state.faculty_members || [])
+      .map((f) => ({
+        student_name: f.faculty_name.trim(),
+        batch: "",
+        course: f.school.trim(),
+      }))
+      .filter((f) => f.student_name);
+
   const validateForm = (state) => {
-    if (!cleanedStudents(state).length) return "Add at least one student name.";
+    if (state.achievement_type === "faculty") {
+      if (!cleanedFacultyAsStudents(state).length) return "Add at least one faculty name.";
+    } else {
+      if (!cleanedStudents(state).length) return "Add at least one student name.";
+    }
     if (!state.activity_description.trim()) return "Description of Activity and Achievement is required.";
     const oversizedPdf = (state.attachments || []).find(
       (file) =>
@@ -241,7 +299,9 @@ export default function StudentAchievementsPage({ user }) {
     }
 
     const fd = new FormData();
-    fd.append("students", JSON.stringify(cleanedStudents(form)));
+    const entries = form.achievement_type === "faculty" ? cleanedFacultyAsStudents(form) : cleanedStudents(form);
+    fd.append("students", JSON.stringify(entries));
+    fd.append("achievement_type", form.achievement_type || "student");
     fd.append("activity_description", form.activity_description.trim());
     fd.append("additional_context_objective", form.additional_context_objective.trim());
     fd.append("suggested_platforms", JSON.stringify(form.suggested_platforms));
@@ -299,7 +359,9 @@ export default function StudentAchievementsPage({ user }) {
     setDetailModal((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
       const fd = new FormData();
-      fd.append("students", JSON.stringify(cleanedStudents(editForm)));
+      const entries = editForm.achievement_type === "faculty" ? cleanedFacultyAsStudents(editForm) : cleanedStudents(editForm);
+      fd.append("students", JSON.stringify(entries));
+      fd.append("achievement_type", editForm.achievement_type || "student");
       fd.append("activity_description", editForm.activity_description.trim());
       fd.append("additional_context_objective", editForm.additional_context_objective.trim());
       fd.append("suggested_platforms", JSON.stringify(editForm.suggested_platforms));
@@ -321,7 +383,7 @@ export default function StudentAchievementsPage({ user }) {
 
   const deleteItem = async () => {
     const item = detailModal.item;
-    if (!item || !window.confirm("Delete this student achievement submission?")) return;
+    if (!item || !window.confirm("Delete this achievement submission?")) return;
     setActionState({ id: item.id, error: "" });
     try {
       const res = await api.delete(`/student-achievements/${item.id}`);
@@ -338,49 +400,111 @@ export default function StudentAchievementsPage({ user }) {
   const renderForm = (state, setter, onSubmit, submitLabel, options = {}) => {
     const criterion = selectedCriterion(state);
     const subFolder = selectedSubFolder(state);
+    const isFaculty = state.achievement_type === "faculty";
     return (
       <form className="student-achievement-form" onSubmit={onSubmit}>
-        <section className="student-form-block">
-          <div className="student-form-section-head">
-            <div>
-              <h4>Students</h4>
-              <p>Add every student who should be credited in the post.</p>
-            </div>
-            <button type="button" className="secondary-action" onClick={() => addStudent(setter)}>
-              Add Student
-            </button>
-          </div>
-          <div className="student-rows">
-            {state.students.map((student, index) => (
-              <div key={index} className="student-row">
-                <label className="form-field">
-                  <span>Student Name</span>
-                  <input
-                    value={student.student_name}
-                    onChange={(event) => updateStudent(setter, index, "student_name", event.target.value)}
-                    required={index === 0}
-                  />
-                </label>
-                <label className="form-field">
-                  <span>Batch</span>
-                  <input value={student.batch} onChange={(event) => updateStudent(setter, index, "batch", event.target.value)} />
-                </label>
-                <label className="form-field">
-                  <span>Course</span>
-                  <input value={student.course} onChange={(event) => updateStudent(setter, index, "course", event.target.value)} />
-                </label>
-                <button
-                  type="button"
-                  className="details-button reject"
-                  onClick={() => removeStudent(setter, index)}
-                  disabled={state.students.length === 1}
-                >
-                  Remove
-                </button>
+        {/* Achievement Type selector */}
+        <label className="form-field">
+          <span>Achievement Type</span>
+          <select
+            value={state.achievement_type || "student"}
+            onChange={(event) =>
+              setter((prev) => ({
+                ...prev,
+                achievement_type: event.target.value,
+              }))
+            }
+          >
+            <option value="student">Student</option>
+            <option value="faculty">Faculty</option>
+          </select>
+        </label>
+
+        {/* ── Student section ── */}
+        {!isFaculty && (
+          <section className="student-form-block">
+            <div className="student-form-section-head">
+              <div>
+                <h4>Students</h4>
+                <p>Add every student who should be credited in the post.</p>
               </div>
-            ))}
-          </div>
-        </section>
+              <button type="button" className="secondary-action" onClick={() => addStudent(setter)}>
+                Add Student
+              </button>
+            </div>
+            <div className="student-rows">
+              {state.students.map((student, index) => (
+                <div key={index} className="student-row">
+                  <label className="form-field">
+                    <span>Student Name</span>
+                    <input
+                      value={student.student_name}
+                      onChange={(event) => updateStudent(setter, index, "student_name", event.target.value)}
+                      required={index === 0}
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Batch</span>
+                    <input value={student.batch} onChange={(event) => updateStudent(setter, index, "batch", event.target.value)} />
+                  </label>
+                  <label className="form-field">
+                    <span>Course</span>
+                    <input value={student.course} onChange={(event) => updateStudent(setter, index, "course", event.target.value)} />
+                  </label>
+                  <button
+                    type="button"
+                    className="details-button reject"
+                    onClick={() => removeStudent(setter, index)}
+                    disabled={state.students.length === 1}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Faculty section ── */}
+        {isFaculty && (
+          <section className="student-form-block">
+            <div className="student-form-section-head">
+              <div>
+                <h4>Faculty</h4>
+                <p>Add every faculty member who should be credited in the post.</p>
+              </div>
+              <button type="button" className="secondary-action" onClick={() => addFaculty(setter)}>
+                Add Faculty
+              </button>
+            </div>
+            <div className="student-rows">
+              {(state.faculty_members || [emptyFaculty()]).map((faculty, index) => (
+                <div key={index} className="student-row">
+                  <label className="form-field">
+                    <span>Faculty Name</span>
+                    <input
+                      value={faculty.faculty_name}
+                      onChange={(event) => updateFaculty(setter, index, "faculty_name", event.target.value)}
+                      required={index === 0}
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>School</span>
+                    <input value={faculty.school} onChange={(event) => updateFaculty(setter, index, "school", event.target.value)} />
+                  </label>
+                  <button
+                    type="button"
+                    className="details-button reject"
+                    onClick={() => removeFaculty(setter, index)}
+                    disabled={(state.faculty_members || []).length === 1}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <label className="form-field">
           <span>Description of Activity and Achievement</span>
@@ -500,8 +624,8 @@ export default function StudentAchievementsPage({ user }) {
       <section className="student-achievements-header">
         <div>
           <p className="student-achievements-kicker">Institutional Communication</p>
-          <h2>Students&rsquo; Achievements</h2>
-          <p>Submit student achievement material for institutional website and social media visibility.</p>
+          <h2>Other Achievements</h2>
+          <p>Submit student or faculty achievement material for institutional website and social media visibility.</p>
         </div>
         <button type="button" className="primary-action student-submit-top" onClick={openCreateModal}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -521,7 +645,7 @@ export default function StudentAchievementsPage({ user }) {
             type="search"
             value={filters.search}
             onChange={(event) => setFilters((prev) => ({ ...prev, search: event.target.value }))}
-            placeholder="Search by student, batch, course, description…"
+            placeholder="Search by name, batch, course, description…"
           />
         </label>
         <div className="sa-toolbar-selects">
@@ -675,12 +799,12 @@ export default function StudentAchievementsPage({ user }) {
           <div className="modal-card student-achievement-modal">
             <div className="modal-header">
               <div>
-                <h3>Submit Student Achievement</h3>
+                <h3>{form.achievement_type === "faculty" ? "Submit Faculty Achievement" : "Submit Student Achievement"}</h3>
                 <p className="form-hint">Use this for non-event institutional publicity inputs.</p>
               </div>
               <button type="button" className="modal-close" onClick={closeCreateModal}>&times;</button>
             </div>
-            {renderForm(form, setForm, submitAchievement, "Submit Student Achievement", {
+            {renderForm(form, setForm, submitAchievement, form.achievement_type === "faculty" ? "Submit Faculty Achievement" : "Submit Student Achievement", {
               onCancel: closeCreateModal,
               loading: createModal.status === "loading",
               error: createModal.status === "error" ? createModal.error : "",
@@ -694,7 +818,9 @@ export default function StudentAchievementsPage({ user }) {
           <div className="modal-card student-achievement-modal">
             <div className="modal-header">
               <div>
-                <h3>{detailModal.mode === "edit" ? "Edit Student Achievement" : itemTitle(detailItem)}</h3>
+                <h3>{detailModal.mode === "edit"
+                  ? (editForm.achievement_type === "faculty" ? "Edit Faculty Achievement" : "Edit Student Achievement")
+                  : itemTitle(detailItem)}</h3>
                 <p className="form-hint">Submitted {formatDateTime(detailItem?.created_at)}</p>
               </div>
               <button type="button" className="modal-close" onClick={closeDetail}>&times;</button>
@@ -711,23 +837,42 @@ export default function StudentAchievementsPage({ user }) {
             ) : detailItem ? (
               <div className="student-detail-view">
                 {detailModal.status === "error" ? <p className="form-error">{detailModal.error}</p> : null}
-                <section>
-                  <h4>Students</h4>
-                  <div className="student-detail-table">
-                    <div className="student-detail-row student-detail-row-head">
-                      <span>Student Name</span>
-                      <span>Batch</span>
-                      <span>Course</span>
-                    </div>
-                    {(detailItem.students || []).map((student, index) => (
-                      <div className="student-detail-row" key={`${getStudentName(student)}-${index}`}>
-                        <span>{getStudentName(student) || "--"}</span>
-                        <span>{student.batch || "--"}</span>
-                        <span>{student.course || "--"}</span>
+                {/* Students or Faculty section — rendered based on achievement_type */}
+                {(detailItem.achievement_type || "student") === "faculty" ? (
+                  <section>
+                    <h4>Faculty</h4>
+                    <div className="student-detail-table">
+                      <div className="student-detail-row student-detail-row-head">
+                        <span>Faculty Name</span>
+                        <span>School</span>
                       </div>
-                    ))}
-                  </div>
-                </section>
+                      {(detailItem.students || []).map((s, index) => (
+                        <div className="student-detail-row" key={`${getStudentName(s)}-${index}`}>
+                          <span>{getStudentName(s) || "--"}</span>
+                          <span>{s.course || "--"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : (
+                  <section>
+                    <h4>Students</h4>
+                    <div className="student-detail-table">
+                      <div className="student-detail-row student-detail-row-head">
+                        <span>Student Name</span>
+                        <span>Batch</span>
+                        <span>Course</span>
+                      </div>
+                      {(detailItem.students || []).map((student, index) => (
+                        <div className="student-detail-row" key={`${getStudentName(student)}-${index}`}>
+                          <span>{getStudentName(student) || "--"}</span>
+                          <span>{student.batch || "--"}</span>
+                          <span>{student.course || "--"}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
                 <section>
                   <h4>Description</h4>
                   <p>{detailItem.activity_description || "--"}</p>

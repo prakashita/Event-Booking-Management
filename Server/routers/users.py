@@ -209,10 +209,10 @@ async def decide_user_approval(
                 subject="Your account has been approved",
                 body=(
                     f"Hello {user.name},\n\n"
-                    f"Your account on the Event Booking Management system has been approved.\n"
+                    f"Your account on the VU Sync: Events and Repository Management system has been approved.\n"
                     f"Your assigned role is: {role}.\n\n"
                     f"You can now sign in and access the application.\n\n"
-                    f"Regards,\nEvent Booking Management"
+                    f"Regards,\nVU Sync"
                 ),
                 requester=admin,
                 fallback_role="admin",
@@ -240,10 +240,10 @@ async def decide_user_approval(
                 subject="Account access request update",
                 body=(
                     f"Hello {user.name},\n\n"
-                    f"We regret to inform you that your access request for the Event Booking "
-                    f"Management system has not been approved at this time.{reason_line}\n"
+                    f"We regret to inform you that your access request for the VU Sync: Events and Repository Management "
+                    f"system has not been approved at this time.{reason_line}\n"
                     f"If you believe this is an error, please contact the administrator.\n\n"
-                    f"Regards,\nEvent Booking Management"
+                    f"Regards,\nVU Sync"
                 ),
                 requester=admin,
                 fallback_role="admin",

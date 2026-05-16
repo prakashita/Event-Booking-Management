@@ -28,13 +28,13 @@ const OrganizationContributorForm = memo(function OrganizationContributorForm({
 
   return (
     <div className="contrib-form">
-      {/* Name */}
-      <div className="contrib-field-row">
-        <div className="contrib-field-label">
-          <strong>Name</strong>
-          <span className="contrib-recommended">Recommended</span>
-        </div>
-        <div className="contrib-field-control">
+      {/* Name + Screen name */}
+      <div className="contrib-field-row contrib-field-row-split">
+        <label className="contrib-split-label">
+          <span className="contrib-label-text">
+            Name
+            <span className="contrib-recommended"> Recommended</span>
+          </span>
           <input
             name="name"
             className="contrib-input"
@@ -44,15 +44,9 @@ const OrganizationContributorForm = memo(function OrganizationContributorForm({
             autoComplete="off"
             spellCheck={false}
           />
-        </div>
-      </div>
-
-      {/* Screen name */}
-      <div className="contrib-field-row">
-        <div className="contrib-field-label">
-          <strong>Screen name</strong>
-        </div>
-        <div className="contrib-field-control">
+        </label>
+        <label className="contrib-split-label">
+          <span className="contrib-label-text">Screen name</span>
           <input
             name="screen_name"
             className="contrib-input"
@@ -62,7 +56,7 @@ const OrganizationContributorForm = memo(function OrganizationContributorForm({
             autoComplete="off"
             spellCheck={false}
           />
-        </div>
+        </label>
       </div>
 
       {/* Role */}
