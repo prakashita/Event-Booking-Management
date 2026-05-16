@@ -215,7 +215,7 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text('Delete submission?'),
         content: const Text(
-          'This student achievement submission will be permanently removed.',
+          'This achievement submission will be permanently removed.',
         ),
         actions: [
           TextButton(
@@ -268,7 +268,8 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
         : const Color(0xFFF4F6F8);
 
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final fabClearance = bottomInset + 16.0 + 56.0 + 12.0; // inset + margin + height + gap
+    final fabClearance =
+        bottomInset + 16.0 + 56.0 + 12.0; // inset + margin + height + gap
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -314,7 +315,7 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
                                 ),
                                 const SizedBox(height: 12),
                                 Text(
-                                  'Student Achievements',
+                                  'Other Achievements',
                                   style: theme.textTheme.headlineMedium
                                       ?.copyWith(
                                         fontWeight: FontWeight.w900,
@@ -372,8 +373,8 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
                       const SizedBox(height: 8),
                       Text(
                         _isAdmin
-                            ? 'Manage all institutional submissions.'
-                            : 'Submit student material for institutional visibility.',
+                            ? 'Manage student and faculty achievement submissions.'
+                            : 'Submit student or faculty material for institutional visibility.',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                           fontSize: 15,
@@ -425,7 +426,7 @@ class _StudentAchievementsScreenState extends State<StudentAchievementsScreen> {
                       icon: LucideIcons.award,
                       title: 'No achievements found',
                       message:
-                          'Submit institutional publicity inputs to see them here.',
+                          'Submit student or faculty publicity inputs to see them here.',
                       actionLabel: 'Submit Achievement',
                       onAction: () => _openForm(),
                     ),
@@ -490,7 +491,9 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
   final _formKey = GlobalKey<FormState>();
   final _iqacDescriptionFieldKey = GlobalKey();
   final _iqacDescriptionFocusNode = FocusNode();
+  late String _achievementType;
   late List<_StudentDraft> _students;
+  late List<_FacultyDraft> _facultyMembers;
   late TextEditingController _activityCtrl;
   late TextEditingController _contextCtrl;
   late TextEditingController _writeupCtrl;
@@ -517,6 +520,7 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
     super.initState();
     _iqacDescriptionFocusNode.addListener(_handleIqacDescriptionFocus);
     final item = widget.initialItem;
+    _achievementType = _achievementTypeFromItem(item);
     final rawStudents = item?['students'];
     _students = rawStudents is List
         ? rawStudents
@@ -526,6 +530,14 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
               .toList()
         : <_StudentDraft>[];
     if (_students.isEmpty) _students = [_StudentDraft()];
+    _facultyMembers = _achievementType == 'faculty' && rawStudents is List
+        ? rawStudents
+              .whereType<Map>()
+              .map((e) => _FacultyDraft.fromJson(Map<String, dynamic>.from(e)))
+              .where((e) => e.name.trim().isNotEmpty)
+              .toList()
+        : <_FacultyDraft>[];
+    if (_facultyMembers.isEmpty) _facultyMembers = [_FacultyDraft()];
     _activityCtrl = TextEditingController(
       text: (item?['activity_description'] ?? '').toString(),
     );
@@ -679,12 +691,31 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    final cleanedStudents = _students
-        .map((s) => s.toJson())
-        .where((s) => (s['student_name'] ?? '').toString().trim().isNotEmpty)
-        .toList();
-    if (cleanedStudents.isEmpty) {
-      setState(() => _error = 'Add at least one student name.');
+    final cleanedParticipants = _achievementType == 'faculty'
+        ? _facultyMembers
+              .map((faculty) => faculty.toStudentJson())
+              .where(
+                (faculty) => (faculty['student_name'] ?? '')
+                    .toString()
+                    .trim()
+                    .isNotEmpty,
+              )
+              .toList()
+        : _students
+              .map((student) => student.toJson())
+              .where(
+                (student) => (student['student_name'] ?? '')
+                    .toString()
+                    .trim()
+                    .isNotEmpty,
+              )
+              .toList();
+    if (cleanedParticipants.isEmpty) {
+      setState(
+        () => _error = _achievementType == 'faculty'
+            ? 'Add at least one faculty name.'
+            : 'Add at least one student name.',
+      );
       return;
     }
     final googleReady = await _confirmGoogleReadyForFiles();
@@ -698,7 +729,8 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
     try {
       final formData = FormData();
       formData.fields
-        ..add(MapEntry('students', jsonEncode(cleanedStudents)))
+        ..add(MapEntry('achievement_type', _achievementType))
+        ..add(MapEntry('students', jsonEncode(cleanedParticipants)))
         ..add(MapEntry('activity_description', _activityCtrl.text.trim()))
         ..add(
           MapEntry('additional_context_objective', _contextCtrl.text.trim()),
@@ -804,7 +836,9 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: Text(
-                          _isEdit ? 'Edit Achievement' : 'Submit Achievement',
+                          _isEdit
+                              ? 'Edit ${_achievementTypeLabel(_achievementType)}'
+                              : 'Submit ${_achievementTypeLabel(_achievementType)}',
                           style: theme.textTheme.headlineSmall?.copyWith(
                             fontWeight: FontWeight.w900,
                           ),
@@ -824,42 +858,84 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Use this for non-event institutional publicity inputs.',
+                    'Use this for student or faculty achievements that need institutional visibility.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  const SizedBox(height: 32),
-                  _SectionTitle(
-                    title: '1. Students Included',
-                    icon: LucideIcons.users,
-                    action: TextButton.icon(
-                      onPressed: () =>
-                          setState(() => _students.add(_StudentDraft())),
-                      style: TextButton.styleFrom(
-                        foregroundColor: theme.colorScheme.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                  const SizedBox(height: 24),
+                  _AchievementTypeSelector(
+                    value: _achievementType,
+                    onChanged: (value) =>
+                        setState(() => _achievementType = value),
+                  ),
+                  const SizedBox(height: 28),
+                  if (_achievementType == 'faculty') ...[
+                    _SectionTitle(
+                      title: '1. Faculty Included',
+                      icon: LucideIcons.briefcase,
+                      action: TextButton.icon(
+                        onPressed: () => setState(
+                          () => _facultyMembers.add(_FacultyDraft()),
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        icon: const Icon(LucideIcons.plus, size: 16),
+                        label: const Text(
+                          'Add Faculty',
+                          style: TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
-                      icon: const Icon(LucideIcons.plus, size: 16),
-                      label: const Text(
-                        'Add Student',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    ...List.generate(_facultyMembers.length, (index) {
+                      final faculty = _facultyMembers[index];
+                      return _FacultyEditor(
+                        key: ValueKey(faculty),
+                        faculty: faculty,
+                        canRemove: _facultyMembers.length > 1,
+                        inputDeco: inputDeco,
+                        onChanged: () => setState(() {}),
+                        onRemove: () =>
+                            setState(() => _facultyMembers.removeAt(index)),
+                      );
+                    }),
+                  ] else ...[
+                    _SectionTitle(
+                      title: '1. Students Included',
+                      icon: LucideIcons.users,
+                      action: TextButton.icon(
+                        onPressed: () =>
+                            setState(() => _students.add(_StudentDraft())),
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        icon: const Icon(LucideIcons.plus, size: 16),
+                        label: const Text(
+                          'Add Student',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                       ),
                     ),
-                  ),
-                  ...List.generate(_students.length, (index) {
-                    final student = _students[index];
-                    return _StudentEditor(
-                      key: ValueKey(student),
-                      student: student,
-                      canRemove: _students.length > 1,
-                      inputDeco: inputDeco,
-                      onChanged: () => setState(() {}),
-                      onRemove: () => setState(() => _students.removeAt(index)),
-                    );
-                  }),
+                    ...List.generate(_students.length, (index) {
+                      final student = _students[index];
+                      return _StudentEditor(
+                        key: ValueKey(student),
+                        student: student,
+                        canRemove: _students.length > 1,
+                        inputDeco: inputDeco,
+                        onChanged: () => setState(() {}),
+                        onRemove: () =>
+                            setState(() => _students.removeAt(index)),
+                      );
+                    }),
+                  ],
                   const SizedBox(height: 16),
                   const _SectionTitle(
                     title: '2. Achievement Details',
@@ -1166,7 +1242,9 @@ class _AchievementFormSheetState extends State<_AchievementFormSheet> {
                               ),
                             )
                           : Text(
-                              _isEdit ? 'Save Changes' : 'Submit Achievement',
+                              _isEdit
+                                  ? 'Save Changes'
+                                  : 'Submit ${_achievementTypeLabel(_achievementType)}',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -1208,6 +1286,7 @@ class _AchievementDetailSheet extends StatelessWidget {
     final attachments = _listOfMaps(item['attachments']);
     final iqacLabel = _buildIqacLabel(criteria, item);
     final iqacDescription = _s(item['iqac_description']);
+    final isFaculty = _isFacultyAchievement(item);
 
     return DraggableScrollableSheet(
       expand: false,
@@ -1286,9 +1365,10 @@ class _AchievementDetailSheet extends StatelessWidget {
                           ),
                           const SizedBox(height: 20),
                           _DetailCard(
-                            title: 'Students',
+                            title: isFaculty ? 'Faculty' : 'Students',
                             child: _StudentTable(
                               students: _listOfMaps(item['students']),
+                              isFaculty: isFaculty,
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -2045,7 +2125,7 @@ class _FilterPanel extends StatelessWidget {
             onSubmitted: (_) => onSearch(),
             decoration:
                 filterInputDecoration(
-                  'Search student, batch...',
+                  'Search name, batch, school...',
                   LucideIcons.search,
                 ).copyWith(
                   suffixIcon: searchController.text.isEmpty
@@ -2113,8 +2193,12 @@ class _AchievementCard extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final title = _itemTitle(item);
-    final firstStudent = title.replaceAll('Student Achievement - ', '');
-    final initials = _getInitials(firstStudent);
+    final isFaculty = _isFacultyAchievement(item);
+    final participants = _listOfMaps(item['students']);
+    final firstName = participants.isEmpty
+        ? title
+        : _studentName(participants.first);
+    final initials = _getInitials(firstName);
     final cardBg = isDark ? const Color(0xFF172033) : Colors.white;
     final borderColor = isDark
         ? const Color(0xFF334155)
@@ -2202,7 +2286,9 @@ class _AchievementCard extends StatelessWidget {
                           Row(
                             children: [
                               Icon(
-                                LucideIcons.graduationCap,
+                                isFaculty
+                                    ? LucideIcons.briefcase
+                                    : LucideIcons.graduationCap,
                                 size: 14,
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),
@@ -2255,6 +2341,12 @@ class _AchievementCard extends StatelessWidget {
                   runSpacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    _MetaChip(
+                      icon: isFaculty
+                          ? LucideIcons.briefcase
+                          : LucideIcons.graduationCap,
+                      label: isFaculty ? 'Faculty' : 'Student',
+                    ),
                     ..._buildPlatformTags(item['suggested_platforms'], theme),
                     _MetaChip(icon: LucideIcons.database, label: iqacLabel),
                   ],
@@ -2354,6 +2446,133 @@ class _AchievementCard extends StatelessWidget {
           ),
         )
         .toList();
+  }
+}
+
+class _AchievementTypeSelector extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _AchievementTypeSelector({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final options = [
+      (
+        value: 'student',
+        label: 'Student',
+        icon: LucideIcons.graduationCap,
+        hint: 'Credit one or more students',
+      ),
+      (
+        value: 'faculty',
+        label: 'Faculty',
+        icon: LucideIcons.briefcase,
+        hint: 'Credit one or more faculty members',
+      ),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.45,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: theme.colorScheme.outline.withValues(alpha: 0.12),
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked = constraints.maxWidth < 430;
+          Widget buildOption(
+            ({String value, String label, IconData icon, String hint}) option,
+          ) {
+            final selected = value == option.value;
+            return Padding(
+              padding: EdgeInsets.only(
+                right: stacked || option.value == 'faculty' ? 0 : 6,
+                bottom: stacked && option.value == 'student' ? 6 : 0,
+              ),
+              child: Material(
+                color: selected
+                    ? theme.colorScheme.primary
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () => onChanged(option.value),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          option.icon,
+                          size: 18,
+                          color: selected
+                              ? theme.colorScheme.onPrimary
+                              : theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                option.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: selected
+                                      ? theme.colorScheme.onPrimary
+                                      : theme.colorScheme.onSurface,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                option.hint,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: selected
+                                      ? theme.colorScheme.onPrimary.withValues(
+                                          alpha: 0.78,
+                                        )
+                                      : theme.colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          if (stacked) {
+            return Column(children: options.map(buildOption).toList());
+          }
+          return Row(
+            children: options
+                .map((option) => Expanded(child: buildOption(option)))
+                .toList(),
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -2472,6 +2691,108 @@ class _StudentEditor extends StatelessWidget {
   }
 }
 
+class _FacultyEditor extends StatelessWidget {
+  final _FacultyDraft faculty;
+  final bool canRemove;
+  final InputDecoration inputDeco;
+  final VoidCallback onChanged;
+  final VoidCallback onRemove;
+
+  const _FacultyEditor({
+    super.key,
+    required this.faculty,
+    required this.canRemove,
+    required this.inputDeco,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stackFields = constraints.maxWidth < 520;
+        final nameField = TextFormField(
+          initialValue: faculty.name,
+          textInputAction: TextInputAction.next,
+          decoration: inputDeco.copyWith(labelText: 'Faculty Name *'),
+          onChanged: (value) {
+            faculty.name = value;
+            onChanged();
+          },
+          validator: (_) => faculty.name.trim().isEmpty ? 'Required' : null,
+        );
+        final schoolField = TextFormField(
+          initialValue: faculty.school,
+          textInputAction: TextInputAction.done,
+          decoration: inputDeco.copyWith(labelText: 'School'),
+          onChanged: (value) => faculty.school = value,
+        );
+        final removeButton = Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.errorContainer,
+            shape: BoxShape.circle,
+          ),
+          child: IconButton(
+            tooltip: 'Remove',
+            onPressed: onRemove,
+            color: theme.colorScheme.error,
+            icon: const Icon(LucideIcons.trash2, size: 18),
+          ),
+        );
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: theme.brightness == Brightness.dark
+                  ? const Color(0xFF334155)
+                  : const Color(0xFFE8EEF7),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.26 : 0.07,
+                ),
+                blurRadius: 22,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: stackFields
+              ? Column(
+                  children: [
+                    nameField,
+                    const SizedBox(height: 14),
+                    schoolField,
+                    if (canRemove) ...[
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: removeButton,
+                      ),
+                    ],
+                  ],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 5, child: nameField),
+                    const SizedBox(width: 14),
+                    Expanded(flex: 4, child: schoolField),
+                    if (canRemove) ...[const SizedBox(width: 12), removeButton],
+                  ],
+                ),
+        );
+      },
+    );
+  }
+}
+
 class _AttachmentPickerBox extends StatelessWidget {
   final List<PlatformFile> attachments;
   final VoidCallback? onPick;
@@ -2575,8 +2896,9 @@ class _AttachmentPickerBox extends StatelessWidget {
 
 class _StudentTable extends StatelessWidget {
   final List<Map<String, dynamic>> students;
+  final bool isFaculty;
 
-  const _StudentTable({required this.students});
+  const _StudentTable({required this.students, this.isFaculty = false});
 
   @override
   Widget build(BuildContext context) {
@@ -2585,6 +2907,40 @@ class _StudentTable extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth >= 620) {
+          if (isFaculty) {
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Table(
+                columnWidths: const {
+                  0: FlexColumnWidth(1.2),
+                  1: FlexColumnWidth(1),
+                },
+                border: TableBorder(
+                  horizontalInside: BorderSide(
+                    color: theme.colorScheme.outline.withValues(alpha: 0.1),
+                  ),
+                ),
+                children: [
+                  const TableRow(
+                    children: [
+                      _StudentTableCell('Faculty Name', header: true),
+                      _StudentTableCell('School', header: true),
+                    ],
+                  ),
+                  ...students.map(
+                    (faculty) => TableRow(
+                      children: [
+                        _StudentTableCell(_studentName(faculty), bold: true),
+                        _StudentTableCell(
+                          _s(faculty['course'], fallback: '--'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
           return ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Table(
@@ -2645,7 +3001,7 @@ class _StudentTable extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          LucideIcons.user,
+                          isFaculty ? LucideIcons.briefcase : LucideIcons.user,
                           size: 16,
                           color: theme.colorScheme.primary,
                         ),
@@ -2665,20 +3021,26 @@ class _StudentTable extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _StudentMetaValue(label: 'Batch', value: batch),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _StudentMetaValue(
-                          label: 'Course',
-                          value: course,
+                  if (isFaculty)
+                    _StudentMetaValue(label: 'School', value: course)
+                  else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _StudentMetaValue(
+                            label: 'Batch',
+                            value: batch,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _StudentMetaValue(
+                            label: 'Course',
+                            value: course,
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             );
@@ -2843,6 +3205,24 @@ class _StudentDraft {
   };
 }
 
+class _FacultyDraft {
+  String name;
+  String school;
+
+  _FacultyDraft({this.name = '', this.school = ''});
+
+  factory _FacultyDraft.fromJson(Map<String, dynamic> json) => _FacultyDraft(
+    name: _studentName(json),
+    school: _s(json['school'] ?? json['course']),
+  );
+
+  Map<String, String> toStudentJson() => {
+    'student_name': name.trim(),
+    'batch': '',
+    'course': school.trim(),
+  };
+}
+
 class _IqacCriterion {
   final dynamic id;
   final String title;
@@ -2936,6 +3316,19 @@ String _studentName(Map<String, dynamic> student) {
   return _s(student['student_name'] ?? student['name']);
 }
 
+String _achievementTypeFromItem(Map<String, dynamic>? item) {
+  final value = _s(item?['achievement_type']).toLowerCase();
+  return value == 'faculty' ? 'faculty' : 'student';
+}
+
+bool _isFacultyAchievement(Map<String, dynamic> item) {
+  return _achievementTypeFromItem(item) == 'faculty';
+}
+
+String _achievementTypeLabel(String value) {
+  return value == 'faculty' ? 'Faculty Achievement' : 'Student Achievement';
+}
+
 List<Map<String, dynamic>> _listOfMaps(dynamic value) {
   if (value is! List) return [];
   return value
@@ -2945,20 +3338,27 @@ List<Map<String, dynamic>> _listOfMaps(dynamic value) {
 }
 
 String _itemTitle(Map<String, dynamic> item) {
+  final isFaculty = _isFacultyAchievement(item);
   final students = _listOfMaps(item['students']);
   final firstName = students.isEmpty ? '' : _studentName(students.first);
-  if (firstName.isNotEmpty) return 'Student Achievement - $firstName';
-  return _s(item['achievement_title'], fallback: 'Student Achievement');
+  if (firstName.isNotEmpty) {
+    return '${isFaculty ? 'Faculty' : 'Student'} Achievement - $firstName';
+  }
+  return _s(
+    item['achievement_title'],
+    fallback: isFaculty ? 'Faculty Achievement' : 'Student Achievement',
+  );
 }
 
 String _studentLine(Map<String, dynamic> item) {
+  final isFaculty = _isFacultyAchievement(item);
   final students = _listOfMaps(item['students']);
   if (students.isEmpty) return '--';
   return students
       .map(
         (student) => [
           _studentName(student),
-          _s(student['batch']),
+          if (!isFaculty) _s(student['batch']),
           _s(student['course']),
         ].where((part) => part.isNotEmpty).join(' - '),
       )

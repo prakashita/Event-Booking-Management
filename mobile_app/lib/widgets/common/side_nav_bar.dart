@@ -170,7 +170,7 @@ class SideNavBar extends StatelessWidget {
                     _buildNavItem(
                       context,
                       icon: LucideIcons.star,
-                      title: 'Student Achievements',
+                      title: 'Other Achievements',
                       route: '/student-achievements',
                     ),
                     if (canAccessIqac)

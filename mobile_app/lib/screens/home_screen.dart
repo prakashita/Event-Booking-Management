@@ -48,6 +48,36 @@ class _HomeScreenState extends State<HomeScreen> {
   final Map<String, Timer> _popupTimers = <String, Timer>{};
   NotificationProvider? _notificationProvider;
 
+  Widget _buildRoutedContent(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final padding = media.padding;
+    final viewPadding = media.viewPadding;
+
+    return MediaQuery(
+      data: media.copyWith(
+        padding: EdgeInsets.fromLTRB(
+          padding.left,
+          0,
+          padding.right,
+          padding.bottom,
+        ),
+        viewPadding: EdgeInsets.fromLTRB(
+          viewPadding.left,
+          0,
+          viewPadding.right,
+          viewPadding.bottom,
+        ),
+      ),
+      child: ChatFabVisibilityScope(
+        visibleNotifier: _chatFabVisible,
+        child: DashboardSearchScope(
+          searchQuery: _searchQuery,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1069,13 +1099,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         return Stack(
                           children: [
                             Positioned.fill(
-                              child: ChatFabVisibilityScope(
-                                visibleNotifier: _chatFabVisible,
-                                child: DashboardSearchScope(
-                                  searchQuery: _searchQuery,
-                                  child: widget.child,
-                                ),
-                              ),
+                              child: _buildRoutedContent(context),
                             ),
                             if (!isChatRoute)
                               ValueListenableBuilder<bool>(

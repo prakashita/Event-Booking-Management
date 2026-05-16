@@ -100,7 +100,7 @@ class _EventBookingAppState extends State<EventBookingApp> {
     final themeProvider = context.watch<ThemeProvider>();
 
     return MaterialApp.router(
-      title: 'Event Booking Management',
+      title: 'VU Sync',
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeProvider.themeMode,

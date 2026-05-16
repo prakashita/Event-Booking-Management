@@ -149,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen>
                                         ),
                                         SizedBox(height: isShort ? 20 : 28),
                                         Text(
-                                          'Event Booking',
+                                          'VU Sync',
                                           style: TextStyle(
                                             fontSize: titleSize,
                                             fontWeight: FontWeight.w700,
@@ -158,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen>
                                           textAlign: TextAlign.center,
                                         ),
                                         Text(
-                                          'Management',
+                                          'Events & Repository',
                                           style: TextStyle(
                                             fontSize: titleSize,
                                             fontWeight: FontWeight.w700,
@@ -168,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen>
                                         ),
                                         const SizedBox(height: 12),
                                         Text(
-                                          'Institutional Event Planning Platform',
+                                          'Institutional Operations Platform',
                                           style: TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w400,
