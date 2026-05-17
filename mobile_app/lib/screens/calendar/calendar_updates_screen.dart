@@ -2451,69 +2451,116 @@ class _CalendarActionButton extends StatelessWidget {
     final surface = isDark ? const Color(0xFF1E293B) : Colors.white;
     final border = isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
 
-    return Material(
-      color: surface,
-      elevation: isDark ? 0 : 8,
-      shadowColor: Colors.black.withValues(alpha: 0.06),
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
+    return Semantics(
+      button: true,
+      child: Material(
+        color: surface,
+        elevation: isDark ? 2 : 10,
+        shadowColor: accent.withValues(alpha: isDark ? 0.12 : 0.16),
         borderRadius: BorderRadius.circular(18),
-        child: Container(
-          constraints: BoxConstraints(minHeight: compact ? 52 : 62),
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 10 : 14,
-            vertical: compact ? 10 : 12,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: border),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: compact ? 32 : 38,
-                height: compact ? 32 : 38,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: isDark ? 0.18 : 0.1),
-                  borderRadius: BorderRadius.circular(compact ? 12 : 13),
-                ),
-                child: Icon(icon, color: accent, size: compact ? 17 : 20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          splashColor: accent.withValues(alpha: 0.10),
+          highlightColor: accent.withValues(alpha: 0.06),
+          child: Container(
+            constraints: BoxConstraints(minHeight: compact ? 52 : 62),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 10 : 14,
+              vertical: compact ? 10 : 12,
+            ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isDark
+                    ? accent.withValues(alpha: 0.34)
+                    : accent.withValues(alpha: 0.22),
+                width: 1.2,
               ),
-              SizedBox(width: compact ? 8 : 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
+              boxShadow: [
+                BoxShadow(
+                  color: border.withValues(alpha: isDark ? 0.08 : 0.28),
+                  blurRadius: 0,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Row(
                   children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: theme.colorScheme.onSurface,
-                        fontSize: compact ? 12.5 : 14,
-                        fontWeight: FontWeight.w800,
+                    Container(
+                      width: compact ? 32 : 38,
+                      height: compact ? 32 : 38,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: isDark ? 0.2 : 0.12),
+                        borderRadius: BorderRadius.circular(compact ? 12 : 13),
                       ),
+                      child: Icon(icon, color: accent, size: compact ? 17 : 20),
                     ),
-                    if (!compact) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                    SizedBox(width: compact ? 8 : 12),
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(right: compact ? 18 : 28),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: theme.colorScheme.onSurface,
+                                fontSize: compact ? 12.5 : 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            if (!compact) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                subtitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ],
                 ),
-              ),
-              if (!compact) Icon(Icons.add_rounded, color: accent, size: 22),
-            ],
+                Positioned(
+                  right: 0,
+                  child: Container(
+                    width: compact ? 18 : 24,
+                    height: compact ? 18 : 24,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.24),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.add_rounded,
+                      color: Colors.white,
+                      size: compact ? 14 : 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
