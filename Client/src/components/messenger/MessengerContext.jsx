@@ -53,6 +53,38 @@ function sortConvsByActivity(convs) {
   });
 }
 
+function getMessagePreview(message) {
+  const text = (message?.content || "").trim();
+  if (text) return text.slice(0, 120);
+  const attachments = message?.attachments || [];
+  if (attachments.length > 1) return `${attachments.length} attachments`;
+  if (attachments.length === 1) {
+    const [attachment] = attachments;
+    if (attachment?.content_type?.startsWith("image/")) return "Sent an image";
+    return attachment?.name ? `Sent ${attachment.name}` : "Sent an attachment";
+  }
+  return "New message";
+}
+
+function mergeMessagesByIdentity(currentMessages, incomingMessages) {
+  const merged = [...currentMessages];
+  for (const incoming of incomingMessages) {
+    const idx = merged.findIndex(
+      (existing) =>
+        existing.id === incoming.id ||
+        (incoming.client_id && existing.client_id === incoming.client_id)
+    );
+    if (idx >= 0) {
+      merged[idx] = { ...merged[idx], ...incoming };
+    } else {
+      merged.push(incoming);
+    }
+  }
+  return merged.sort(
+    (a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Provider
 // ---------------------------------------------------------------------------
@@ -99,6 +131,30 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
   // Debounce ref for search
   const searchDebounceRef = useRef(null);
 
+  // Stable refs for filter state (prevents loadConversations from being recreated on keystroke)
+  const searchQueryRef = useRef(searchQuery);
+  const unreadOnlyRef = useRef(unreadOnly);
+  const filterEventIdRef = useRef(filterEventId);
+  useEffect(() => { searchQueryRef.current = searchQuery; }, [searchQuery]);
+  useEffect(() => { unreadOnlyRef.current = unreadOnly; }, [unreadOnly]);
+  useEffect(() => { filterEventIdRef.current = filterEventId; }, [filterEventId]);
+
+  // Stable refs for active state (prevents sendMessage from being recreated on every state change)
+  const activeConversationStateRef = useRef(activeConversation);
+  const chatInputRef = useRef(chatInput);
+  const chatFilesRef = useRef(chatFiles);
+  const replyingToRef = useRef(replyingTo);
+  const isUploadingRef = useRef(isUploading);
+  useEffect(() => { activeConversationStateRef.current = activeConversation; }, [activeConversation]);
+  useEffect(() => { chatInputRef.current = chatInput; }, [chatInput]);
+  useEffect(() => { chatFilesRef.current = chatFiles; }, [chatFiles]);
+  useEffect(() => { replyingToRef.current = replyingTo; }, [replyingTo]);
+  useEffect(() => { isUploadingRef.current = isUploading; }, [isUploading]);
+
+  // Stable ref for conversations (prevents openApprovalThread from being recreated on every WS msg)
+  const conversationsRef = useRef(conversations);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
+
   // WebSocket
   const wsRef = useRef(null);
   const activeConversationIdRef = useRef("");
@@ -107,6 +163,9 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
   const panelOpenRef = useRef(false);
   const closeChatRef = useRef(() => {});
   const pendingApprovalThreadRef = useRef(null);
+  const reconnectTimerRef = useRef(null);
+  // Tracks consecutive failed reconnect attempts for exponential backoff
+  const reconnectAttemptRef = useRef(0);
 
   // Keep refs in sync
   useEffect(() => {
@@ -184,10 +243,13 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
       if (!user) return;
       try {
         const params = new URLSearchParams();
-        const sq = opts.search ?? searchQuery;
+        // Use refs for filter state so this callback stays stable across filter changes
+        const sq = opts.search !== undefined ? opts.search : searchQueryRef.current;
+        const uo = opts.unreadOnly !== undefined ? opts.unreadOnly : unreadOnlyRef.current;
+        const eid = opts.eventId !== undefined ? opts.eventId : filterEventIdRef.current;
         if (sq) params.set("search", sq);
-        if (opts.unreadOnly ?? unreadOnly) params.set("unread_only", "true");
-        if (opts.eventId ?? filterEventId) params.set("event_id", opts.eventId ?? filterEventId);
+        if (uo) params.set("unread_only", "true");
+        if (eid) params.set("event_id", eid);
 
         const qs = params.toString();
         const data = await api.getJson(`/chat/conversations/me${qs ? `?${qs}` : ""}`);
@@ -196,7 +258,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
         // silent
       }
     },
-    [user, searchQuery, unreadOnly, filterEventId]
+    [user] // stable: filter state is accessed via refs
   );
 
   const loadChatUsers = useCallback(async () => {
@@ -214,6 +276,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
   const loadMessages = useCallback(
     async (conversationId, before) => {
       if (!conversationId) return;
+      const shouldMergeIntoActive = !before && conversationId === activeConversationIdRef.current;
       if (before) {
         setLoadingMore(true);
       } else {
@@ -225,8 +288,17 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
         const data = await api.getJson(
           `/chat/conversations/${conversationId}/messages?${params.toString()}`
         );
+        if (activeConversationIdRef.current !== conversationId) {
+          return;
+        }
         const msgs = Array.isArray(data) ? data : [];
-        setMessages((prev) => (before ? [...msgs, ...prev] : msgs));
+        setMessages((prev) => {
+          if (before) return mergeMessagesByIdentity(msgs, prev);
+          if (shouldMergeIntoActive && prev.some((m) => m.conversation_id === conversationId)) {
+            return mergeMessagesByIdentity(prev, msgs);
+          }
+          return msgs;
+        });
         setHasMore(msgs.length >= 50);
         setChatStatus({ status: "ready", error: "" });
       } catch (err) {
@@ -264,6 +336,8 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
   const openEventThread = useCallback(
     async (thread) => {
       if (!thread?.id) return;
+      // Synchronously update the ref BEFORE async loadMessages to prevent WS race
+      activeConversationIdRef.current = thread.id;
       setActiveUser(null);
       setActiveEventThread(thread);
       setActiveConversation(thread);
@@ -303,8 +377,8 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
       openPanel();
       setChatInput("");
       try {
-        // First, try to find the conversation in already-loaded list
-        let conv = conversations.find((c) => String(c.id) === String(conversationId));
+        // Use ref to avoid recreating this callback on every conversations update
+        let conv = conversationsRef.current.find((c) => String(c.id) === String(conversationId));
         if (!conv) {
           // Refresh conversations and search again
           const convData = await api.getJson("/chat/conversations/me");
@@ -314,6 +388,8 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
           }
         }
         if (conv) {
+          // Synchronously update the ref BEFORE async loadMessages to prevent WS race
+          activeConversationIdRef.current = String(conversationId);
           setActiveConversation(conv);
           setActiveEventThread(null);
           setActiveUser(null);
@@ -329,7 +405,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
         // silently fail — user can navigate manually
       }
     },
-    [openPanel, conversations, loadMessages, markConversationRead]
+    [openPanel, loadMessages, markConversationRead] // removed `conversations` dep — using ref instead
   );
 
   useEffect(() => {
@@ -359,6 +435,8 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
           user_id: targetUser.id,
         });
         if (data?.id) {
+          // Synchronously update the ref BEFORE async loadMessages
+          activeConversationIdRef.current = data.id;
           setActiveConversation({
             ...data,
             participant_count: 2,
@@ -385,22 +463,22 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
       if (!conv?.id) return;
       if (conv.thread_kind === "event") {
         await openEventThread(conv);
-      } else if (conv.other_user) {
-        await startConversation(conv.other_user);
       } else {
-        // Fallback: open as generic conversation
+        // Synchronously update the ref BEFORE async loadMessages to prevent WS race
+        activeConversationIdRef.current = conv.id;
         setActiveEventThread(null);
-        setActiveUser(null);
+        setActiveUser(conv.other_user || null);
         setActiveConversation(conv);
         setTypingUser(null);
         setMessages([]);
         setHasMore(true);
+        setLoadingMore(false);
         setChatStatus({ status: "loading", error: "" });
         await loadMessages(conv.id);
         await markConversationRead(conv.id);
       }
     },
-    [openEventThread, startConversation, loadMessages, markConversationRead]
+    [openEventThread, loadMessages, markConversationRead]
   );
 
   const startReply = useCallback((msg) => {
@@ -451,15 +529,20 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
   }, []);
 
   const sendMessage = useCallback(async () => {
-    const trimmed = chatInput.trim();
-    if (!trimmed && chatFiles.length === 0) return;
-    if (!activeConversation?.id) {
+    // Read all state from stable refs to avoid stale closures
+    const activeConv = activeConversationStateRef.current;
+    const trimmed = (chatInputRef.current || "").trim();
+    const files = chatFilesRef.current;
+    const replyRef = replyingToRef.current;
+
+    if (!trimmed && files.length === 0) return;
+    if (!activeConv?.id) {
       setChatStatus({ status: "error", error: "Select a chat to message." });
       return;
     }
 
     // Prevent double-submission
-    if (isUploading) return;
+    if (isUploadingRef.current) return;
 
     const clientId =
       typeof crypto !== "undefined" && crypto.randomUUID
@@ -467,10 +550,10 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
         : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     try {
-      if (chatFiles.length > 0) setIsUploading(true);
+      if (files.length > 0) setIsUploading(true);
       const attachments =
-        chatFiles.length > 0
-          ? (await Promise.all(chatFiles.map(uploadAttachment))).filter(Boolean)
+        files.length > 0
+          ? (await Promise.all(files.map(uploadAttachment))).filter(Boolean)
           : [];
       setIsUploading(false);
 
@@ -478,7 +561,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
       const optimistic = {
         id: `client-${clientId}`,
         client_id: clientId,
-        conversation_id: activeConversation.id,
+        conversation_id: activeConv.id,
         sender_id: user.id,
         sender_name: user.name,
         sender_email: user.email,
@@ -491,8 +574,10 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
       };
       setMessages((prev) => [...prev, optimistic]);
 
-      // Capture reply ref before clearing state
-      const replyRef = replyingTo;
+      // Clear input state immediately for responsive UI
+      setChatInput("");
+      setChatFiles([]);
+      setReplyingTo(null);
 
       // Try WebSocket first, fallback to REST
       const ws = wsRef.current;
@@ -502,31 +587,40 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
             type: "message",
             text: trimmed,
             attachments,
-            conversation_id: activeConversation.id,
+            conversation_id: activeConv.id,
             client_id: clientId,
             reply_to_message_id: replyRef?.messageId || undefined,
           })
         );
       } else {
-        await api.postJson("/chat/messages", {
-          conversation_id: activeConversation.id,
+        const confirmed = await api.postJson("/chat/messages", {
+          conversation_id: activeConv.id,
           content: trimmed,
           attachments,
+          client_id: clientId, // Include client_id so WS broadcast can be deduplicated
           reply_to_message_id: replyRef?.messageId || undefined,
         });
+        // Replace the optimistic entry with the server-confirmed message to
+        // prevent duplication if the WS broadcast arrives with client_id.
+        if (confirmed?.id) {
+          setMessages((prev) =>
+            prev.some((m) => m.client_id === clientId)
+              ? prev.map((m) =>
+                  m.client_id === clientId ? { ...confirmed, client_id: clientId } : m
+                )
+              : prev
+          );
+        }
       }
 
-      setChatInput("");
-      setChatFiles([]);
-      setReplyingTo(null);
-
       // Stop typing indicator
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(
+      const ws2 = wsRef.current;
+      if (ws2 && ws2.readyState === WebSocket.OPEN) {
+        ws2.send(
           JSON.stringify({
             type: "typing",
             is_typing: false,
-            conversation_id: activeConversation.id,
+            conversation_id: activeConv.id,
           })
         );
       }
@@ -537,7 +631,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
         error: err?.message || UPLOAD_ERRORS.UPLOAD_FAILED,
       });
     }
-  }, [activeConversation, chatInput, chatFiles, uploadAttachment, user, isUploading, replyingTo]);
+  }, [uploadAttachment, user]); // stable: all state accessed via refs
 
   // ---------------------------------------------------------------------------
   // Message actions
@@ -661,30 +755,32 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
       const val = e.target.value;
       setChatInput(val);
       const ws = wsRef.current;
-      if (ws && ws.readyState === WebSocket.OPEN && activeConversation?.id) {
+      const activeConv = activeConversationStateRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN && activeConv?.id) {
         ws.send(
           JSON.stringify({
             type: "typing",
             is_typing: true,
-            conversation_id: activeConversation.id,
+            conversation_id: activeConv.id,
           })
         );
       }
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => {
         const active = wsRef.current;
-        if (active && active.readyState === WebSocket.OPEN && activeConversation?.id) {
+        const activeConvNow = activeConversationStateRef.current;
+        if (active && active.readyState === WebSocket.OPEN && activeConvNow?.id) {
           active.send(
             JSON.stringify({
               type: "typing",
               is_typing: false,
-              conversation_id: activeConversation.id,
+              conversation_id: activeConvNow.id,
             })
           );
         }
       }, 1500);
     },
-    [activeConversation]
+    [] // stable: reads activeConversation via ref
   );
 
   const handleFiles = useCallback((e) => {
@@ -765,36 +861,55 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
     const wsBase = `${base.replace(/^http/, "ws")}/api/v1`;
     const ws = new WebSocket(`${wsBase}/chat/ws?token=${token}`);
     wsRef.current = ws;
+    let destroyed = false;
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
 
-        if (data.type === "message" && data.message) {
+        if (["message", "message.created", "attachment.created"].includes(data.type) && data.message) {
           const incoming = data.message;
           const activeCid = activeConversationIdRef.current;
+          const knownConversation = conversationsRef.current.some(
+            (c) => c.id === incoming.conversation_id
+          );
 
           if (incoming.conversation_id === activeCid) {
-            if (incoming.client_id) {
-              setMessages((prev) => {
-                const hasMatch = prev.some((m) => m.client_id === incoming.client_id);
-                return hasMatch
-                  ? prev.map((m) => (m.client_id === incoming.client_id ? incoming : m))
-                  : [...prev, incoming];
-              });
-            } else {
-              setMessages((prev) => [...prev, incoming]);
-            }
+            setMessages((prev) => mergeMessagesByIdentity(prev, [incoming]));
+            // Keep the conversation list last_message preview in sync
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === incoming.conversation_id
+                  ? {
+                      ...c,
+                      unread_count: 0,
+                      last_message: {
+                        text: getMessagePreview(incoming),
+                        sender_id: incoming.sender_id,
+                        sender_name: incoming.sender_name,
+                        created_at: incoming.created_at,
+                        message_id: incoming.id,
+                      },
+                    }
+                  : c
+              )
+            );
           } else {
-            // Update unread in conversation list and re-sort by latest activity
+            // Update conversation list — re-sort by latest activity
             setConversations((prev) => {
+              const hasConversation = prev.some((c) => c.id === incoming.conversation_id);
+              if (!hasConversation) return prev;
               const updated = prev.map((c) =>
                 c.id === incoming.conversation_id
                   ? {
                       ...c,
-                      unread_count: (c.unread_count || 0) + 1,
+                      // Only increment unread for messages from other users, not your own
+                      unread_count:
+                        incoming.sender_id !== user?.id
+                          ? (c.unread_count || 0) + 1
+                          : c.unread_count,
                       last_message: {
-                        text: (incoming.content || "").slice(0, 120),
+                        text: getMessagePreview(incoming),
                         sender_id: incoming.sender_id,
                         sender_name: incoming.sender_name,
                         created_at: incoming.created_at,
@@ -805,6 +920,10 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
               );
               return sortConvsByActivity(updated);
             });
+          }
+
+          if (!knownConversation) {
+            loadConversations();
           }
 
           if (incoming.sender_id && incoming.sender_id !== user?.id) {
@@ -857,7 +976,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
           return;
         }
 
-        if (data.type === "message_deleted") {
+        if (["message_deleted", "message.deleted"].includes(data.type)) {
           if (data.conversation_id === activeConversationIdRef.current) {
             if (data.message) {
               setMessages((prev) =>
@@ -905,7 +1024,7 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
           return;
         }
 
-        if (data.type === "message_edited" && data.message) {
+        if (["message_edited", "message.updated"].includes(data.type) && data.message) {
           const inc = data.message;
           if (inc.conversation_id === activeConversationIdRef.current) {
             setMessages((prev) => prev.map((m) => (m.id === inc.id ? { ...m, ...inc } : m)));
@@ -981,8 +1100,58 @@ export function MessengerProvider({ children, user, onOpenWorkflowAction }) {
       }
     };
 
+    ws.onerror = () => {};
+    ws.onopen = () => {
+      // Successful connection — reset the backoff counter
+      reconnectAttemptRef.current = 0;
+      // On every (re)connect, reload conversation list so missed messages surface.
+      // Only reload the active thread if one is open.
+      loadConversations();
+      loadChatUsers();
+      const activeCid = activeConversationIdRef.current;
+      if (activeCid) {
+        loadMessages(activeCid);
+      }
+    };
+    ws.onclose = (event) => {
+      if (destroyed) return;
+      wsRef.current = null;
+      // Reconnect unless the server rejected our token (1008)
+      if (event.code !== 1008) {
+        // Exponential backoff: 3s, 6s, 12s, 24s, capped at 30s, plus random jitter (±1s)
+        const attempt = reconnectAttemptRef.current;
+        const baseDelay = Math.min(30000, 3000 * Math.pow(2, attempt));
+        const jitter = Math.random() * 1000;
+        reconnectAttemptRef.current = attempt + 1;
+        reconnectTimerRef.current = setTimeout(() => {
+          if (destroyed || wsRef.current) return;
+          const rToken = localStorage.getItem("auth_token");
+          if (!rToken) return;
+          // Create a fresh WS and attach the same shared handlers
+          const rWs = new WebSocket(`${wsBase}/chat/ws?token=${rToken}`);
+          wsRef.current = rWs;
+          rWs.onmessage = ws.onmessage;
+          rWs.onerror = ws.onerror;
+          rWs.onopen = ws.onopen;
+          rWs.onclose = ws.onclose;
+        }, baseDelay + jitter);
+      }
+    };
+
     return () => {
-      ws.close();
+      destroyed = true;
+      // Reset backoff counter so next session starts fresh
+      reconnectAttemptRef.current = 0;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      } else {
+        ws.close();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);

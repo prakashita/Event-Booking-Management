@@ -310,6 +310,18 @@ async def close_all_threads_for_approval(
 def build_last_message_snapshot(message: ChatMessage) -> dict:
     """Create a compact snapshot dict stored on the conversation for quick listing."""
     text = (message.content or "")[:120]
+    attachments = getattr(message, "attachments", None) or []
+    if not text and attachments:
+        if len(attachments) > 1:
+            text = f"{len(attachments)} attachments"
+        else:
+            attachment = attachments[0]
+            content_type = getattr(attachment, "content_type", "") or ""
+            name = getattr(attachment, "name", "") or ""
+            if content_type.startswith("image/"):
+                text = "Sent an image"
+            else:
+                text = f"Sent {name}" if name else "Sent an attachment"
     if getattr(message, "deleted_for_everyone", False):
         text = "This message was deleted"
     return {

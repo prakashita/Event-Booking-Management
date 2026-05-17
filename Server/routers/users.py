@@ -16,6 +16,7 @@ def serialize_user(user: User) -> UserAdminResponse:
         name=user.name,
         email=user.email,
         role=user.role,
+        enabled_modules=normalize_modules(getattr(user, "enabled_modules", []) or []),
         approval_status=getattr(user, "approval_status", None) or "approved",
         approved_by=getattr(user, "approved_by", None),
         approved_at=getattr(user, "approved_at", None),
@@ -29,6 +30,8 @@ def serialize_user(user: User) -> UserAdminResponse:
 
 
 ADD_USER_ALLOWED_ROLES = {
+    "admin",
+    "faculty",
     "registrar",
     "vice_chancellor",
     "deputy_registrar",
@@ -37,7 +40,21 @@ ADD_USER_ALLOWED_ROLES = {
     "marketing",
     "it",
     "transport",
+    "iqac",
 }
+
+ALLOWED_ADDON_MODULES = {"iqac"}
+
+
+def normalize_modules(modules: list[str] | None) -> list[str]:
+    seen = set()
+    normalized = []
+    for module in modules or []:
+        value = (module or "").strip().lower()
+        if value in ALLOWED_ADDON_MODULES and value not in seen:
+            seen.add(value)
+            normalized.append(value)
+    return normalized
 
 
 @router.get("", response_model=list[UserAdminResponse])
@@ -61,10 +78,12 @@ async def add_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Role must be one of: {', '.join(sorted(ADD_USER_ALLOWED_ROLES))}",
         )
+    enabled_modules = normalize_modules(payload.enabled_modules)
 
     existing = await User.find_one(User.email == email)
     if existing:
         existing.role = role
+        existing.enabled_modules = enabled_modules
         # If user was pending/rejected, adding them via admin console also approves them
         if (getattr(existing, "approval_status", None) or "approved") != "approved":
             existing.approval_status = "approved"
@@ -76,6 +95,7 @@ async def add_user(
     existing_pending = await PendingRoleAssignment.find_one(PendingRoleAssignment.email == email)
     if existing_pending:
         existing_pending.role = role
+        existing_pending.enabled_modules = enabled_modules
         existing_pending.created_by = str(admin.id)
         await existing_pending.save()
         return {"detail": "User not yet signed in. Role will apply when they log in.", "status": "pending"}
@@ -83,6 +103,7 @@ async def add_user(
     pending = PendingRoleAssignment(
         email=email,
         role=role,
+        enabled_modules=enabled_modules,
         created_by=str(admin.id),
     )
     await pending.insert()
@@ -112,6 +133,8 @@ async def update_user_role(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Role is required")
 
     user.role = role
+    if payload.enabled_modules is not None:
+        user.enabled_modules = normalize_modules(payload.enabled_modules)
     await user.save()
     return serialize_user(user)
 
@@ -139,6 +162,7 @@ async def delete_user(user_id: str, admin: User = Depends(require_admin)):
     await TransportRequest.find(TransportRequest.requester_id == user_id).delete()
     await Invite.find(Invite.created_by == user_id).delete()
     await Publication.find(Publication.created_by == user_id).delete()
+    await PendingRoleAssignment.find(PendingRoleAssignment.email == (user.email or "").strip().lower()).delete()
 
     await user.delete()
     return {"status": "deleted", "id": user_id}

@@ -15,13 +15,12 @@ const ConversationItem = React.memo(function ConversationItem({
   memberCountLabel,
   participantNamesTitle,
   onClick,
-  onClearChat,
-  onPurgeChat,
+  onDeleteForMe,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
-  const showConvMenu = Boolean(onClearChat || onPurgeChat);
+  const showConvMenu = Boolean(onDeleteForMe);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -95,24 +94,14 @@ const ConversationItem = React.memo(function ConversationItem({
             </button>
             {menuOpen && (
               <div className="msger-conv-menu" role="menu">
-                {onClearChat && (
-                  <button
-                    type="button"
-                    className="msger-conv-menu-item"
-                    role="menuitem"
-                    onClick={(e) => { e.stopPropagation(); onClearChat(); setMenuOpen(false); }}
-                  >
-                    Clear chat
-                  </button>
-                )}
-                {onPurgeChat && (
+                {onDeleteForMe && (
                   <button
                     type="button"
                     className="msger-conv-menu-item danger"
                     role="menuitem"
-                    onClick={(e) => { e.stopPropagation(); onPurgeChat(); setMenuOpen(false); }}
+                    onClick={(e) => { e.stopPropagation(); onDeleteForMe(); setMenuOpen(false); }}
                   >
-                    Delete chat
+                    Delete chat for me
                   </button>
                 )}
               </div>

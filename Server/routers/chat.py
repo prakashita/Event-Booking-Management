@@ -102,6 +102,23 @@ def serialize_message(
     if edited_at and edited_at.tzinfo is None:
         edited_at = edited_at.replace(tzinfo=timezone.utc)
 
+    attachments: list[SchemaChatAttachment] = []
+    if not deleted_for_everyone:
+        for attachment in message.attachments or []:
+            if isinstance(attachment, SchemaChatAttachment):
+                attachments.append(attachment)
+            elif isinstance(attachment, dict):
+                attachments.append(SchemaChatAttachment(**attachment))
+            else:
+                attachments.append(
+                    SchemaChatAttachment(
+                        name=getattr(attachment, "name", ""),
+                        url=getattr(attachment, "url", ""),
+                        content_type=getattr(attachment, "content_type", "application/octet-stream"),
+                        size=getattr(attachment, "size", 0),
+                    )
+                )
+
     return ChatMessageResponse(
         id=str(message.id),
         conversation_id=message.conversation_id,
@@ -109,7 +126,7 @@ def serialize_message(
         sender_name=message.sender_name,
         sender_email=message.sender_email,
         content=content,
-        attachments=[] if deleted_for_everyone else message.attachments,
+        attachments=attachments,
         read_by=message.read_by,
         created_at=created_at,
         conversation_thread_kind=thread_kind,
@@ -213,7 +230,44 @@ async def get_or_create_conversation(user_a: str, user_b: str) -> ChatConversati
     if not conversation:
         conversation = ChatConversation(participants=participants, thread_kind="direct")
         await conversation.insert()
+    else:
+        deleted_for = list(getattr(conversation, "deleted_for", None) or [])
+        restored = [uid for uid in participants if uid in deleted_for]
+        if restored:
+            conversation.deleted_for = [uid for uid in deleted_for if uid not in restored]
+            await conversation.save()
+            logger.info(
+                "chat.visibility.restore_on_open conversation_id=%s restored=%s participants=%s",
+                str(conversation.id),
+                restored,
+                participants,
+            )
     return conversation
+
+
+async def restore_conversation_visibility_for_message(
+    conversation: ChatConversation,
+    sender_id: str,
+) -> list[str]:
+    """A new canonical message makes the thread visible again to all participants.
+
+    Conversation hiding is a participant-scoped view preference only; it must not
+    detach websocket delivery or canonical thread access.
+    """
+    deleted_for = list(getattr(conversation, "deleted_for", None) or [])
+    if not deleted_for:
+        return []
+    participants = set(conversation.participants or [])
+    restored = [uid for uid in deleted_for if uid in participants]
+    if restored:
+        conversation.deleted_for = [uid for uid in deleted_for if uid not in participants]
+        logger.info(
+            "chat.visibility.restore_on_message conversation_id=%s sender_id=%s restored=%s",
+            str(conversation.id),
+            sender_id,
+            restored,
+        )
+    return restored
 
 
 async def get_chat_message_by_id(message_id: str) -> Optional[ChatMessage]:
@@ -445,7 +499,30 @@ async def get_messages(
         filters["created_at"] = {"$lt": before}
 
     messages = await ChatMessage.find(filters).sort("-created_at").limit(limit).to_list()
+    if not before and not messages:
+        canonical_count = await ChatMessage.find(ChatMessage.conversation_id == conversation_id).count()
+        if canonical_count:
+            logger.warning(
+                "chat.messages.hidden_filter_empty conversation_id=%s user_id=%s canonical_count=%s repairing_message_visibility=true",
+                conversation_id,
+                uid,
+                canonical_count,
+            )
+            await ChatMessage.find(
+                {
+                    "conversation_id": conversation_id,
+                    "deleted_for": uid,
+                }
+            ).update({"$pull": {"deleted_for": uid}})
+            messages = await ChatMessage.find(ChatMessage.conversation_id == conversation_id).sort("-created_at").limit(limit).to_list()
     messages.reverse()
+    logger.info(
+        "chat.messages.fetch conversation_id=%s user_id=%s returned=%s before=%s",
+        conversation_id,
+        uid,
+        len(messages),
+        bool(before),
+    )
     return [serialize_message(msg, conversation) for msg in messages]
 
 
@@ -480,11 +557,26 @@ async def create_message(
     now = datetime.now(timezone.utc)
     conversation.updated_at = now
     conversation.last_message = build_last_message_snapshot(message)
+    restored_users = await restore_conversation_visibility_for_message(conversation, str(current_user.id))
     await increment_participant_unreads(conversation, str(current_user.id))
     await conversation.save()
+    logger.info(
+        "chat.message.persisted path=rest conversation_id=%s message_id=%s sender_id=%s attachments=%s restored_visibility=%s",
+        payload.conversation_id,
+        str(message.id),
+        str(current_user.id),
+        len(message.attachments or []),
+        restored_users,
+    )
 
     data = serialize_message(message, conversation)
-    await manager.send_to_users(conversation.participants, {"type": "message", "message": data.model_dump()})
+    msg_dict = data.model_dump()
+    if payload.client_id:
+        msg_dict["client_id"] = payload.client_id
+    await manager.send_to_users(
+        conversation.participants,
+        {"type": "message", "event": "message.created", "message": msg_dict},
+    )
 
     # Fire-and-forget email notification
     try:
@@ -542,11 +634,23 @@ async def send_message(
     now = datetime.now(timezone.utc)
     conversation.updated_at = now
     conversation.last_message = build_last_message_snapshot(message)
+    restored_users = await restore_conversation_visibility_for_message(conversation, uid)
     await increment_participant_unreads(conversation, uid)
     await conversation.save()
+    logger.info(
+        "chat.message.persisted path=send conversation_id=%s message_id=%s sender_id=%s attachments=%s restored_visibility=%s",
+        str(conversation.id),
+        str(message.id),
+        uid,
+        len(message.attachments or []),
+        restored_users,
+    )
 
     data = serialize_message(message, conversation)
-    await manager.send_to_users(conversation.participants, {"type": "message", "message": data.model_dump()})
+    await manager.send_to_users(
+        conversation.participants,
+        {"type": "message", "event": "message.created", "message": data.model_dump()},
+    )
 
     # Fire-and-forget notification
     try:
@@ -637,6 +741,7 @@ async def delete_message(
             conversation.participants,
             {
                 "type": "message_deleted",
+                "event": "message.deleted",
                 "message_id": message_id,
                 "conversation_id": msg.conversation_id,
                 "message": serialize_message(msg, conversation).model_dump(),
@@ -666,6 +771,17 @@ async def edit_message(
     if msg.deleted_for_everyone:
         raise HTTPException(status_code=400, detail="Cannot edit a deleted message")
 
+    # Enforce 10-minute edit window
+    now_utc = datetime.now(timezone.utc)
+    created = msg.created_at
+    if created and created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    if created and (now_utc - created).total_seconds() > 600:
+        raise HTTPException(
+            status_code=403,
+            detail="Messages can only be edited within 10 minutes of sending.",
+        )
+
     text = payload.content.strip()
     if not text and not (msg.attachments or []):
         raise HTTPException(status_code=400, detail="Message cannot be empty")
@@ -692,7 +808,7 @@ async def edit_message(
     data = serialize_message(msg, conversation)
     await manager.send_to_users(
         conversation.participants,
-        {"type": "message_edited", "message": data.model_dump()},
+        {"type": "message_edited", "event": "message.updated", "message": data.model_dump()},
     )
     return data
 
@@ -743,15 +859,17 @@ async def clear_conversation_messages(
     uid = str(current_user.id)
     conversation = await require_conversation_access(current_user, conversation_id)
 
-    await ChatMessage.find(ChatMessage.conversation_id == conversation_id).delete()
-    conversation.last_message = None
-    unreads = {pid: 0 for pid in conversation.participants}
-    conversation.participant_unreads = unreads
-    conversation.updated_at = datetime.now(timezone.utc)
+    # Clear is participant-scoped: hide the conversation row only. Never mutate
+    # canonical message visibility/history.
+    deleted_for = list(getattr(conversation, "deleted_for", None) or [])
+    if uid not in deleted_for:
+        deleted_for.append(uid)
+        conversation.deleted_for = deleted_for
+    await reset_unread_for_user(conversation, uid)
     await conversation.save()
 
     await manager.send_to_users(
-        conversation.participants,
+        [uid],
         {"type": "conversation_cleared", "conversation_id": conversation_id},
     )
     return JSONResponse({"cleared": True, "conversation_id": conversation_id})
@@ -770,13 +888,15 @@ async def purge_conversation(
     uid = str(current_user.id)
     conversation = await require_conversation_access(current_user, conversation_id)
 
-    participants = list(conversation.participants)
     cid = str(conversation.id)
-    await ChatMessage.find(ChatMessage.conversation_id == cid).delete()
-    await conversation.delete()
+    deleted_for = list(getattr(conversation, "deleted_for", None) or [])
+    if uid not in deleted_for:
+        deleted_for.append(uid)
+        conversation.deleted_for = deleted_for
+        await conversation.save()
 
     await manager.send_to_users(
-        participants,
+        [uid],
         {"type": "conversation_deleted", "conversation_id": cid},
     )
     return JSONResponse({"deleted": True, "conversation_id": cid})
@@ -960,15 +1080,25 @@ async def websocket_chat(websocket: WebSocket, token: Optional[str] = Query(defa
                 # Update conversation metadata (last_message + unreads)
                 conversation.updated_at = datetime.now(timezone.utc)
                 conversation.last_message = build_last_message_snapshot(message)
+                restored_users = await restore_conversation_visibility_for_message(conversation, str(user.id))
                 await increment_participant_unreads(conversation, str(user.id))
                 await conversation.save()
+                logger.info(
+                    "chat.message.persisted path=ws conversation_id=%s message_id=%s sender_id=%s attachments=%s restored_visibility=%s participants=%s",
+                    conversation_id,
+                    str(message.id),
+                    str(user.id),
+                    len(message.attachments or []),
+                    restored_users,
+                    conversation.participants,
+                )
 
                 message_payload = serialize_message(message, conversation).model_dump()
                 if client_id:
                     message_payload["client_id"] = client_id
                 await manager.send_to_users(
                     conversation.participants,
-                    {"type": "message", "message": message_payload},
+                    {"type": "message", "event": "message.created", "message": message_payload},
                 )
 
                 # Fire-and-forget notification

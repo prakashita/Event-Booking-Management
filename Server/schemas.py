@@ -156,6 +156,7 @@ class UserAdminResponse(BaseModel):
     name: str
     email: str
     role: str
+    enabled_modules: List[str] = Field(default_factory=list)
     approval_status: Optional[str] = "approved"
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
@@ -207,6 +208,7 @@ class IQACSSRHistoryResponse(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     role: str
+    enabled_modules: Optional[List[str]] = None
 
 
 class UserApprovalAction(BaseModel):
@@ -219,6 +221,7 @@ class UserApprovalAction(BaseModel):
 class AddUserRequest(BaseModel):
     email: str = Field(..., min_length=1)
     role: str = Field(..., min_length=1)
+    enabled_modules: List[str] = Field(default_factory=list)
 
 
 class VenueCreate(BaseModel):
@@ -758,6 +761,7 @@ class ChatMessageCreate(BaseModel):
     content: Optional[str] = Field(default=None, max_length=4000)
     attachments: list[ChatAttachment] = Field(default_factory=list)
     reply_to_message_id: Optional[str] = None
+    client_id: Optional[str] = None
 
 
 class ChatMessageEdit(BaseModel):

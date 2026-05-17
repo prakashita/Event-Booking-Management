@@ -66,6 +66,41 @@ function transportRequestTypeLabel(type) {
   return type ? String(type) : "—";
 }
 
+const PRIMARY_ROLE_OPTIONS = [
+  { value: "admin", label: "Admin" },
+  { value: "faculty", label: "Faculty" },
+  { value: "registrar", label: "Registrar" },
+  { value: "vice_chancellor", label: "Vice Chancellor" },
+  { value: "deputy_registrar", label: "Deputy Registrar" },
+  { value: "finance_team", label: "Finance Team" },
+  { value: "facility_manager", label: "Facility Manager" },
+  { value: "marketing", label: "Marketing" },
+  { value: "it", label: "IT" },
+  { value: "transport", label: "Transport" },
+  { value: "iqac", label: "IQAC" },
+];
+
+const ADDON_MODULE_OPTIONS = [
+  { value: "iqac", label: "IQAC" },
+];
+
+function normalizeEnabledModules(modules) {
+  return Array.from(new Set((Array.isArray(modules) ? modules : [])
+    .map((module) => String(module || "").trim().toLowerCase())
+    .filter(Boolean)));
+}
+
+function formatRoleLabel(role) {
+  const option = PRIMARY_ROLE_OPTIONS.find((item) => item.value === role);
+  return option?.label || String(role || "Faculty").replace(/_/g, " ");
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
+}
+
 
 export default function App() {
   const location = useLocation();
@@ -327,6 +362,11 @@ export default function App() {
   // Publications state moved to PublicationsPage.jsx
 
   const [adminTab, setAdminTab] = useState("users");
+  const [usersPageTab, setUsersPageTab] = useState(
+    () => { try { return sessionStorage.getItem("admin.usersPageTab") || "approvals"; } catch { return "approvals"; } }
+  );
+  const [userEdits, setUserEdits] = useState({});
+  const [savingUserIds, setSavingUserIds] = useState(new Set());
   const [adminOverview, setAdminOverview] = useState({ status: "idle", data: null, error: "" });
   const [adminUsersState, setAdminUsersState] = useState({ status: "idle", items: [], error: "" });
   const [adminVenuesState, setAdminVenuesState] = useState({ status: "idle", items: [], error: "" });
@@ -347,6 +387,7 @@ export default function App() {
     open: false,
     email: "",
     role: "registrar",
+    enabled_modules: [],
     status: "idle",
     error: ""
   });
@@ -365,6 +406,14 @@ export default function App() {
   const loadEventsRef = useRef(null);
   const requirementsFlowQueueRef = useRef([]);
   const requirementsWizardRef = useRef(null);
+  const adminBroadcastRef = useRef(null);
+  const usersManagementLoadedRef = useRef(false);
+  // Stable ref for user — keeps loadEvents callback stable across periodic /auth/me refreshes
+  const userRef = useRef(null);
+  // Guards for one-time-per-session loads that must not repeat on user-object refresh
+  const emailsLoadedForUserRef = useRef(null);
+  // Throttle for checkGoogleScopes — prevents repeated API calls on rapid tab switches
+  const googleScopeLastCheckRef = useRef(0);
   const [requirementsWizard, setRequirementsWizard] = useState({
     open: false,
     steps: [],
@@ -388,7 +437,11 @@ export default function App() {
       return null;
     }
   });
+  // Keep stable ref in sync on every render (cost: trivial)
+  userRef.current = user;
   const normalizedUserRole = (user?.role || "").toLowerCase();
+  const enabledModules = normalizeEnabledModules(user?.enabled_modules);
+  const hasIqacModule = enabledModules.includes("iqac");
   const isAdmin = normalizedUserRole === "admin";
   const isRegistrar = normalizedUserRole === "registrar";
   const isViceChancellor = normalizedUserRole === "vice_chancellor";
@@ -404,12 +457,13 @@ export default function App() {
   const canAccessAdminConsole = isAdmin;
   const canAccessCalendarUpdates = isAdmin;
   const canAccessUserApprovals = isAdmin;
+  const canAccessEventReports = isAdmin || isRegistrarDashboard || normalizedUserRole === "faculty";
   const canAccessApprovals = isRegistrarDashboard;
   const canAccessRequirements =
     isFacilityManagerRole || isMarketingRole || isItRole || isTransportRole;
-  const canAccessIqac = ROLES_WITH_IQAC_ACCESS.includes(normalizedUserRole);
+  const canAccessIqac = ROLES_WITH_IQAC_ACCESS.includes(normalizedUserRole) || hasIqacModule;
   const canShowIqacDataCollection = canAccessIqac;
-  const canDeleteIqacFiles = ROLES_WITH_IQAC_DELETE_ACCESS.includes(normalizedUserRole);
+  const canDeleteIqacFiles = ROLES_WITH_IQAC_DELETE_ACCESS.includes(normalizedUserRole) || hasIqacModule;
   const defaultFacilitator = (user?.name || "").trim();
 
   const APPROVAL_BUDGET_VC_THRESHOLD = 30000;
@@ -474,6 +528,64 @@ export default function App() {
     if (method === "DELETE") return api.delete(path, options);
     return api.get(path, options);
   }, [handleSessionExpired]);
+
+  const syncStoredUser = useCallback((data) => {
+    if (!data) return;
+    setUser((prev) => {
+      const nextEnabled = normalizeEnabledModules(data.enabled_modules);
+      // Preserve existing reference when critical fields are unchanged to prevent
+      // cascading re-renders (loadEvents, email effects, etc.) on periodic /auth/me refresh.
+      if (
+        prev &&
+        prev.id === data.id &&
+        prev.role === (data.role ?? prev.role) &&
+        prev.name === (data.name ?? prev.name) &&
+        prev.email === (data.email ?? prev.email) &&
+        JSON.stringify(prev.enabled_modules) === JSON.stringify(nextEnabled)
+      ) {
+        return prev;
+      }
+      const nextUser = {
+        ...(prev || {}),
+        ...data,
+        enabled_modules: nextEnabled,
+      };
+      localStorage.setItem("auth_user", JSON.stringify(nextUser));
+      return nextUser;
+    });
+  }, []);
+
+  const refreshCurrentUser = useCallback(async () => {
+    if (!api.getToken()) return null;
+    const res = await api.get("/auth/me");
+    if (!res.ok) return null;
+    const data = await res.json();
+    syncStoredUser(data);
+    return data;
+  }, [syncStoredUser]);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    const refresh = () => {
+      refreshCurrentUser().catch(() => {});
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    const intervalId = window.setInterval(refresh, 60000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.clearInterval(intervalId);
+    };
+  }, [refreshCurrentUser, user?.id]);
+
+  // Persist active users subtab to sessionStorage so page refresh preserves the tab
+  useEffect(() => {
+    try { sessionStorage.setItem("admin.usersPageTab", usersPageTab); } catch {}
+  }, [usersPageTab]);
 
   // Stable success handler for PublicationsPage.
   // Using an inline arrow function directly in JSX would create a new reference
@@ -553,6 +665,37 @@ export default function App() {
       setAdminRejectedUsersState({ status: "error", items: [], error: err?.message || "Unable to load rejected users." });
     }
   }, [apiBaseUrl, apiFetch, canAccessUserApprovals]);
+
+  // Multi-tab sync for admin user management via BroadcastChannel
+  useEffect(() => {
+    if (!isAdmin) return undefined;
+    let channel;
+    try { channel = new BroadcastChannel("admin_users"); } catch { return undefined; }
+    adminBroadcastRef.current = channel;
+    channel.addEventListener("message", (event) => {
+      const msg = event.data || {};
+      if (msg.type === "user_updated" && msg.user?.id) {
+        setAdminUsersState((prev) => ({
+          ...prev,
+          items: prev.items.map((item) => (item.id === msg.user.id ? msg.user : item)),
+        }));
+      } else if (msg.type === "user_deleted" && msg.userId) {
+        setAdminUsersState((prev) => ({
+          ...prev,
+          items: prev.items.filter((item) => item.id !== msg.userId),
+        }));
+        setUserEdits((prev) => { const next = { ...prev }; delete next[msg.userId]; return next; });
+      } else if (msg.type === "users_reload") {
+        loadAdminUsers();
+        loadAdminPendingUsers();
+        loadAdminRejectedUsers();
+      }
+    });
+    return () => {
+      channel.close();
+      adminBroadcastRef.current = null;
+    };
+  }, [isAdmin, loadAdminUsers, loadAdminPendingUsers, loadAdminRejectedUsers]);
 
   const handleUserApproval = useCallback(async (userId, action, role, rejectionReason) => {
     setApprovalActionStatus({ id: userId, status: "loading", error: "" });
@@ -709,46 +852,80 @@ export default function App() {
   }, [apiBaseUrl, apiFetch, canAccessAdminConsole]);
 
 
-  const handleAdminRoleChange = useCallback(
-    async (targetUserId, role) => {
-      if (!canAccessAdminConsole) {
-        return;
-      }
+  // Stage a local role change for a user row — no immediate API call
+  const handleUserEditRole = useCallback((userId, role, item) => {
+    setUserEdits((prev) => ({
+      ...prev,
+      [userId]: {
+        role,
+        enabled_modules: normalizeEnabledModules((prev[userId] ?? item).enabled_modules),
+      },
+    }));
+  }, []);
+
+  // Stage a local addon-module toggle — no immediate API call
+  const handleUserEditModule = useCallback((userId, module, enabled, item) => {
+    setUserEdits((prev) => {
+      const base = prev[userId] ?? item;
+      const current = normalizeEnabledModules(base.enabled_modules);
+      const nextModules = enabled
+        ? normalizeEnabledModules([...current, module])
+        : current.filter((m) => m !== module);
+      return {
+        ...prev,
+        [userId]: { role: base.role || "faculty", enabled_modules: nextModules },
+      };
+    });
+  }, []);
+
+  // Persist staged edits to the backend
+  const handleAdminSaveUser = useCallback(
+    async (userId) => {
+      if (!canAccessAdminConsole) return;
+      const edit = userEdits[userId];
+      if (!edit) return;
+      setSavingUserIds((prev) => new Set([...prev, userId]));
       try {
-        const res = await apiFetch(`${apiBaseUrl}/users/${targetUserId}/role`, {
+        const res = await apiFetch(`${apiBaseUrl}/users/${userId}/role`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role })
+          body: JSON.stringify({ role: edit.role, enabled_modules: edit.enabled_modules }),
         });
         if (!res.ok) {
-          throw new Error("Unable to update role.");
+          const errData = await res.json().catch(() => null);
+          throw new Error(errData?.detail || "Unable to save user.");
         }
         const updated = await res.json();
+        setUserEdits((prev) => { const next = { ...prev }; delete next[userId]; return next; });
         setAdminUsersState((prev) => ({
           ...prev,
-          items: prev.items.map((item) => (item.id === updated.id ? updated : item))
+          items: prev.items.map((item) => (item.id === updated.id ? updated : item)),
         }));
         if (user?.id === updated.id) {
-          const nextUser = { ...user, role: updated.role };
-          setUser(nextUser);
-          localStorage.setItem("auth_user", JSON.stringify(nextUser));
+          syncStoredUser(updated);
         }
+        adminBroadcastRef.current?.postMessage({ type: "user_updated", user: updated });
+        setStatus({ type: "success", message: "User saved." });
       } catch (err) {
-        setAdminUsersState((prev) => ({
-          ...prev,
-          error: err?.message || "Unable to update role."
-        }));
+        setStatus({ type: "error", message: err?.message || "Unable to save user." });
+      } finally {
+        setSavingUserIds((prev) => { const next = new Set(prev); next.delete(userId); return next; });
       }
     },
-    [apiBaseUrl, apiFetch, canAccessAdminConsole, user]
+    [userEdits, canAccessAdminConsole, apiBaseUrl, apiFetch, user, syncStoredUser]
   );
 
+  // Discard staged edits for a row
+  const handleAdminCancelEdit = useCallback((userId) => {
+    setUserEdits((prev) => { const next = { ...prev }; delete next[userId]; return next; });
+  }, []);
+
   const handleAddUserModalOpen = useCallback(() => {
-    setAddUserModal({ open: true, email: "", role: "registrar", status: "idle", error: "" });
+    setAddUserModal({ open: true, email: "", role: "registrar", enabled_modules: [], status: "idle", error: "" });
   }, []);
 
   const handleAddUserModalClose = useCallback(() => {
-    setAddUserModal({ open: false, email: "", role: "registrar", status: "idle", error: "" });
+    setAddUserModal({ open: false, email: "", role: "registrar", enabled_modules: [], status: "idle", error: "" });
   }, []);
 
   const handleAddUserSubmit = useCallback(
@@ -765,14 +942,14 @@ export default function App() {
         const res = await apiFetch(`${apiBaseUrl}/users/add`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, role: addUserModal.role })
+          body: JSON.stringify({ email, role: addUserModal.role, enabled_modules: normalizeEnabledModules(addUserModal.enabled_modules) })
         });
         const data = res.ok ? await res.json().catch(() => ({})) : null;
         const errBody = !res.ok ? await res.json().catch(() => ({})) : null;
         if (!res.ok) {
           throw new Error(errBody?.detail || "Unable to add user.");
         }
-        setAddUserModal({ open: false, email: "", role: "registrar", status: "idle", error: "" });
+        setAddUserModal({ open: false, email: "", role: "registrar", enabled_modules: [], status: "idle", error: "" });
         setStatus({
           type: "success",
           message: data?.detail || (data?.id ? "User role updated." : "User added. They will get this role when they first sign in.")
@@ -785,6 +962,7 @@ export default function App() {
               ? prev.items.map((u) => (u.id === data.id ? data : u))
               : [...prev.items, data]
           }));
+          adminBroadcastRef.current?.postMessage({ type: "users_reload" });
         }
       } catch (err) {
         setAddUserModal((prev) => ({
@@ -794,7 +972,7 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, canAccessAdminConsole, addUserModal.email, addUserModal.role, loadAdminUsers]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole, addUserModal.email, addUserModal.role, addUserModal.enabled_modules, loadAdminUsers]
   );
 
   const handleAdminDeleteUser = useCallback(
@@ -814,6 +992,9 @@ export default function App() {
           ...prev,
           items: prev.items.filter((item) => item.id !== targetUserId)
         }));
+        setUserEdits((prev) => { const next = { ...prev }; delete next[targetUserId]; return next; });
+        adminBroadcastRef.current?.postMessage({ type: "user_deleted", userId: targetUserId });
+        loadAdminUsers();
       } catch (err) {
         setAdminUsersState((prev) => ({
           ...prev,
@@ -821,7 +1002,7 @@ export default function App() {
         }));
       }
     },
-    [apiBaseUrl, apiFetch, canAccessAdminConsole]
+    [apiBaseUrl, apiFetch, canAccessAdminConsole, loadAdminUsers]
   );
 
   const handleAdminCreateVenue = useCallback(
@@ -1143,8 +1324,7 @@ export default function App() {
 
         const data = await res.json();
         localStorage.setItem("auth_token", data.access_token);
-        localStorage.setItem("auth_user", JSON.stringify(data.user));
-        setUser(data.user);
+  syncStoredUser(data.user);
         navigate(ROUTES.DASHBOARD);
         setStatus({ type: "success", message: "Signed in successfully." });
       } catch (err) {
@@ -1154,7 +1334,7 @@ export default function App() {
         });
       }
     },
-    [apiBaseUrl]
+    [apiBaseUrl, syncStoredUser]
   );
 
   const loadVenues = useCallback(async () => {
@@ -1265,14 +1445,16 @@ export default function App() {
 
     setEventsState((prev) => ({ ...prev, status: "loading", error: "" }));
     try {
-      const role = (user?.role || "").toLowerCase();
+      // Read user from stable ref — avoids recreating loadEvents on periodic /auth/me refresh
+      const currentUser = userRef.current;
+      const role = (currentUser?.role || "").toLowerCase();
       const isAdminOrRegistrar =
         role === "admin" ||
         role === "registrar" ||
         role === "vice_chancellor" ||
         role === "deputy_registrar" ||
         role === "finance_team";
-      if (activeView === "event-reports" && user && isAdminOrRegistrar) {
+      if (activeView === "event-reports" && currentUser && isAdminOrRegistrar) {
         const reportsRes = await apiFetch(`${apiBaseUrl}/admin/event-reports`);
         if (!reportsRes.ok) {
           throw new Error("Unable to load event reports.");
@@ -1459,7 +1641,7 @@ export default function App() {
         error: err?.message || "Unable to load events."
       });
     }
-  }, [apiBaseUrl, apiFetch, activeView, user]);
+  }, [apiBaseUrl, apiFetch, activeView]); // user accessed via stable ref — not a dep
 
   const loadApprovalsInbox = useCallback(async () => {
     const token = localStorage.getItem("auth_token");
@@ -1662,6 +1844,11 @@ export default function App() {
       return;
     }
 
+    // Throttle: skip if checked within the last 5 minutes (prevents API spam on rapid tab switches)
+    const now = Date.now();
+    if (now - googleScopeLastCheckRef.current < 5 * 60 * 1000) return;
+    googleScopeLastCheckRef.current = now;
+
     try {
       const res = await apiFetch(`${apiBaseUrl}/auth/google/status`);
       if (!res.ok) {
@@ -1758,25 +1945,34 @@ export default function App() {
   useEffect(() => {
     if (user) {
       checkGoogleScopes();
+    } else {
+      // Reset throttle on logout so the next login triggers a fresh check
+      googleScopeLastCheckRef.current = 0;
     }
   }, [checkGoogleScopes, user]);
 
   useEffect(() => {
-    if (user) {
-      loadEventApprovalEmails();
-      loadFacilityManagerEmail();
-      loadMarketingEmail();
-      loadItEmail();
-      loadTransportEmail();
-    } else {
+    // Email addresses change rarely — load once per user session, not on every user-object refresh.
+    // emailsLoadedForUserRef tracks the user.id for which emails were last loaded.
+    const uid = user?.id ?? null;
+    if (!uid) {
+      emailsLoadedForUserRef.current = null;
       setRegistrarEmail("");
       setViceChancellorEmail("");
       setFacilityManagerEmail("");
       setMarketingEmail("");
       setItEmail("");
       setTransportEmail("");
+      return;
     }
-  }, [user, loadEventApprovalEmails, loadFacilityManagerEmail, loadMarketingEmail, loadItEmail, loadTransportEmail]);
+    if (emailsLoadedForUserRef.current === uid) return; // already loaded for this user
+    emailsLoadedForUserRef.current = uid;
+    loadEventApprovalEmails();
+    loadFacilityManagerEmail();
+    loadMarketingEmail();
+    loadItEmail();
+    loadTransportEmail();
+  }, [user?.id, loadEventApprovalEmails, loadFacilityManagerEmail, loadMarketingEmail, loadItEmail, loadTransportEmail]);
 
   useEffect(() => {
     if (!user) return;
@@ -1850,7 +2046,7 @@ export default function App() {
     if (
       (activeView === "approvals" && !canAccessApprovals) ||
       (activeView === "requirements" && !canAccessRequirements) ||
-      (activeView === "event-reports" && !isAdmin && !isRegistrarDashboard) ||
+      (activeView === "event-reports" && !canAccessEventReports) ||
       (activeView === "iqac-data" && !canShowIqacDataCollection) ||
       (activeView === "calendar-updates" && !canAccessCalendarUpdates) ||
       (activeView === "user-approvals" && !canAccessUserApprovals) ||
@@ -1858,7 +2054,7 @@ export default function App() {
     ) {
       navigate(ROUTES.DASHBOARD);
     }
-  }, [activeView, canAccessApprovals, canAccessRequirements, canShowIqacDataCollection, canAccessCalendarUpdates, canAccessUserApprovals, canAccessAdminConsole, isAdmin, isRegistrarDashboard, navigate]);
+  }, [activeView, canAccessApprovals, canAccessRequirements, canAccessEventReports, canShowIqacDataCollection, canAccessCalendarUpdates, canAccessUserApprovals, canAccessAdminConsole, navigate]);
 
   useEffect(() => {
     const showApprovalsOrRequirements =
@@ -1917,11 +2113,20 @@ export default function App() {
 
   useEffect(() => {
     if (!user || !canAccessUserApprovals || activeView !== "user-approvals") {
+      usersManagementLoadedRef.current = false;
       return;
     }
     loadAdminPendingUsers();
     loadAdminRejectedUsers();
   }, [activeView, canAccessUserApprovals, loadAdminPendingUsers, loadAdminRejectedUsers, user]);
+
+  useEffect(() => {
+    if (!user || !canAccessUserApprovals || activeView !== "user-approvals") return;
+    if (usersPageTab === "management" && !usersManagementLoadedRef.current) {
+      usersManagementLoadedRef.current = true;
+      loadAdminUsers();
+    }
+  }, [activeView, canAccessUserApprovals, usersPageTab, loadAdminUsers, user]);
 
   const handleLogout = () => {
     localStorage.removeItem("auth_token");
@@ -4458,9 +4663,7 @@ export default function App() {
                   const res = await api.get("/auth/me");
                   if (res.ok) {
                     const data = await res.json();
-                    const nextUser = { ...user, ...data };
-                    localStorage.setItem("auth_user", JSON.stringify(nextUser));
-                    setUser(nextUser);
+                    syncStoredUser(data);
                   }
                 } catch {}
               }}
@@ -4564,7 +4767,7 @@ export default function App() {
       if (item.id === "user-approvals" && !canAccessUserApprovals) {
         return false;
       }
-      if (item.id === "event-reports" && !isAdmin && !isRegistrarDashboard) {
+      if (item.id === "event-reports" && !canAccessEventReports) {
         return false;
       }
       if (item.id === "approvals" && !canAccessApprovals) {
@@ -4697,8 +4900,8 @@ export default function App() {
           <div className="primary-column user-approvals-page">
             <div className="user-approvals-header">
               <div>
-                <h2>User Approvals</h2>
-                <p className="admin-note">Review and approve pending registration requests.</p>
+                <h2>Users</h2>
+                <p className="admin-note">Review approvals and manage user access from one place.</p>
               </div>
               <div className="user-approvals-header-actions">
                 <div className="institution-summary-chips">
@@ -4709,12 +4912,34 @@ export default function App() {
                     {adminRejectedUsersState.items.length} Rejected
                   </span>
                 </div>
-                <button type="button" className="secondary-action" onClick={() => { loadAdminPendingUsers(); loadAdminRejectedUsers(); }}>
+                <button type="button" className="secondary-action" onClick={() => {
+                  loadAdminPendingUsers();
+                  loadAdminRejectedUsers();
+                  if (usersPageTab === "management") loadAdminUsers();
+                }}>
                   Refresh
                 </button>
               </div>
             </div>
 
+            <div className="admin-tabs" style={{ marginBottom: "18px" }}>
+              <button
+                type="button"
+                className={`tab-button ${usersPageTab === "approvals" ? "active" : ""}`}
+                onClick={() => setUsersPageTab("approvals")}
+              >
+                User Approvals
+              </button>
+              <button
+                type="button"
+                className={`tab-button ${usersPageTab === "management" ? "active" : ""}`}
+                onClick={() => setUsersPageTab("management")}
+              >
+                User Management
+              </button>
+            </div>
+
+            {usersPageTab === "approvals" ? <>
             <div className="user-approvals-section">
               <div className="approvals-section-title">
                 <h4>Pending Approval</h4>
@@ -4829,6 +5054,118 @@ export default function App() {
                 ) : null}
               </div>
             </div>
+            </> : null}
+
+            {usersPageTab === "management" ? (
+              <div className="admin-panel">
+                <div className="admin-panel-header">
+                  <h3>User Management</h3>
+                  <div>
+                    <button type="button" className="primary-action" onClick={handleAddUserModalOpen}>
+                      Add User
+                    </button>
+                    <button type="button" className="secondary-action" onClick={loadAdminUsers}>
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+                {adminUsersState.status === "loading" ? <p className="table-message">Loading users...</p> : null}
+                {adminUsersState.status === "error" ? (
+                  <p className="table-message">{adminUsersState.error}</p>
+                ) : null}
+                <div className="admin-table">
+                  <div className="admin-row header">
+                    <span>User</span>
+                    <span>Access</span>
+                    <span>Actions</span>
+                  </div>
+                  {adminUsersState.items.map((item) => {
+                    const initial = (item.name || item.email || "?").trim().charAt(0).toUpperCase();
+                    const edit = userEdits[item.id] || null;
+                    const currentRole = edit ? edit.role : (item.role || "faculty");
+                    const currentModules = edit ? edit.enabled_modules : normalizeEnabledModules(item.enabled_modules);
+                    const isDirty = !!edit;
+                    const isSaving = savingUserIds.has(item.id);
+                    return (
+                      <div className="admin-row" key={item.id}>
+                        <div className="admin-cell">
+                          <div className="admin-user">
+                            <span className="admin-avatar" aria-hidden="true">{initial}</span>
+                            <div>
+                              <p className="admin-name">{item.name || "Unnamed"}</p>
+                              <p className="admin-email">{item.email}</p>
+                              <details style={{ marginTop: "4px" }}>
+                                <summary className="admin-email" style={{ cursor: "pointer", userSelect: "none" }}>Details</summary>
+                                <p className="admin-email">Status: {(item.approval_status || "approved").replace(/_/g, " ")}</p>
+                                <p className="admin-email">Created: {formatDate(item.created_at)}</p>
+                              </details>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="admin-cell">
+                          <select
+                            value={currentRole}
+                            disabled={isSaving}
+                            onChange={(event) => handleUserEditRole(item.id, event.target.value, item)}
+                          >
+                            {PRIMARY_ROLE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "8px" }}>
+                            {ADDON_MODULE_OPTIONS.map((option) => (
+                              <label key={option.value} className="admin-email" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={currentModules.includes(option.value)}
+                                  disabled={isSaving}
+                                  onChange={(event) => handleUserEditModule(item.id, option.value, event.target.checked, item)}
+                                />
+                                {option.label} add-on
+                              </label>
+                            ))}
+                          </div>
+                          {isDirty ? <p className="admin-email" style={{ color: "var(--warning, #d97706)", marginTop: "4px" }}>Unsaved changes</p> : null}
+                        </div>
+                        <div className="admin-cell" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {isDirty ? (
+                            <>
+                              <button
+                                type="button"
+                                className="details-button approve"
+                                disabled={isSaving}
+                                onClick={() => handleAdminSaveUser(item.id)}
+                              >
+                                {isSaving ? "Saving…" : "Save"}
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-action"
+                                disabled={isSaving}
+                                onClick={() => handleAdminCancelEdit(item.id)}
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : null}
+                          <button
+                            type="button"
+                            className="details-button reject"
+                            disabled={isSaving}
+                            onClick={() => handleAdminDeleteUser(item.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {adminUsersState.items.length === 0 && adminUsersState.status === "ready" ? (
+                    <p className="table-message">No users found.</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             {/* Approve role confirmation modal */}
             {approveRoleModal.open ? (
@@ -4841,16 +5178,9 @@ export default function App() {
                     onChange={(e) => setApproveRoleModal((prev) => ({ ...prev, role: e.target.value }))}
                     style={{ width: "100%", padding: "8px", marginBottom: "16px" }}
                   >
-                    <option value="faculty">Faculty</option>
-                    <option value="registrar">Registrar</option>
-                    <option value="vice_chancellor">Vice Chancellor</option>
-                    <option value="deputy_registrar">Deputy Registrar</option>
-                    <option value="finance_team">Finance Team</option>
-                    <option value="facility_manager">Facility Manager</option>
-                    <option value="marketing">Marketing</option>
-                    <option value="it">IT</option>
-                    <option value="transport">Transport</option>
-                    <option value="iqac">IQAC</option>
+                    {PRIMARY_ROLE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                   <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
                     <button type="button" className="secondary-action" onClick={() => setApproveRoleModal({ open: false, userId: null, role: "faculty" })}>
@@ -5018,11 +5348,16 @@ export default function App() {
                 <div className="admin-table">
                   <div className="admin-row header">
                     <span>User</span>
-                    <span>Role</span>
+                    <span>Access</span>
                     <span>Actions</span>
                   </div>
                   {adminUsersState.items.map((item) => {
                     const initial = (item.name || item.email || "?").trim().charAt(0).toUpperCase();
+                    const edit = userEdits[item.id] || null;
+                    const currentRole = edit ? edit.role : (item.role || "faculty");
+                    const currentModules = edit ? edit.enabled_modules : normalizeEnabledModules(item.enabled_modules);
+                    const isDirty = !!edit;
+                    const isSaving = savingUserIds.has(item.id);
                     return (
                       <div className="admin-row" key={item.id}>
                         <div className="admin-cell">
@@ -5031,31 +5366,64 @@ export default function App() {
                             <div>
                               <p className="admin-name">{item.name || "Unnamed"}</p>
                               <p className="admin-email">{item.email}</p>
+                              <details style={{ marginTop: "4px" }}>
+                                <summary className="admin-email" style={{ cursor: "pointer", userSelect: "none" }}>Details</summary>
+                                <p className="admin-email">Status: {(item.approval_status || "approved").replace(/_/g, " ")}</p>
+                                <p className="admin-email">Created: {formatDate(item.created_at)}</p>
+                              </details>
                             </div>
                           </div>
                         </div>
                         <div className="admin-cell">
                           <select
-                            value={item.role || "faculty"}
-                            onChange={(event) => handleAdminRoleChange(item.id, event.target.value)}
+                            value={currentRole}
+                            disabled={isSaving}
+                            onChange={(event) => handleUserEditRole(item.id, event.target.value, item)}
                           >
-                            <option value="admin">Admin</option>
-                            <option value="faculty">Faculty</option>
-                            <option value="registrar">Registrar</option>
-                            <option value="vice_chancellor">Vice Chancellor</option>
-                            <option value="deputy_registrar">Deputy Registrar</option>
-                            <option value="finance_team">Finance Team</option>
-                            <option value="facility_manager">Facility Manager</option>
-                            <option value="marketing">Marketing</option>
-                            <option value="it">IT</option>
-                            <option value="transport">Transport</option>
-                            <option value="iqac">IQAC</option>
+                            {PRIMARY_ROLE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
                           </select>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "8px" }}>
+                            {ADDON_MODULE_OPTIONS.map((option) => (
+                              <label key={option.value} className="admin-email" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={currentModules.includes(option.value)}
+                                  disabled={isSaving}
+                                  onChange={(event) => handleUserEditModule(item.id, option.value, event.target.checked, item)}
+                                />
+                                {option.label} add-on
+                              </label>
+                            ))}
+                          </div>
+                          {isDirty ? <p className="admin-email" style={{ color: "var(--warning, #d97706)", marginTop: "4px" }}>Unsaved changes</p> : null}
                         </div>
-                        <div className="admin-cell">
+                        <div className="admin-cell" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {isDirty ? (
+                            <>
+                              <button
+                                type="button"
+                                className="details-button approve"
+                                disabled={isSaving}
+                                onClick={() => handleAdminSaveUser(item.id)}
+                              >
+                                {isSaving ? "Saving…" : "Save"}
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary-action"
+                                disabled={isSaving}
+                                onClick={() => handleAdminCancelEdit(item.id)}
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : null}
                           <button
                             type="button"
                             className="details-button reject"
+                            disabled={isSaving}
                             onClick={() => handleAdminDeleteUser(item.id)}
                           >
                             Delete
@@ -7613,16 +7981,31 @@ export default function App() {
                     value={addUserModal.role}
                     onChange={(e) => setAddUserModal((prev) => ({ ...prev, role: e.target.value }))}
                   >
-                    <option value="registrar">Registrar</option>
-                    <option value="vice_chancellor">Vice Chancellor</option>
-                    <option value="deputy_registrar">Deputy Registrar</option>
-                    <option value="finance_team">Finance Team</option>
-                    <option value="facility_manager">Facility Manager</option>
-                    <option value="marketing">Marketing</option>
-                    <option value="it">IT</option>
-                    <option value="transport">Transport</option>
-                    <option value="iqac">IQAC</option>
+                    {PRIMARY_ROLE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
+                </label>
+                <label className="form-field">
+                  <span>Enabled Add-ons</span>
+                  {ADDON_MODULE_OPTIONS.map((option) => {
+                    const selected = normalizeEnabledModules(addUserModal.enabled_modules).includes(option.value);
+                    return (
+                      <label key={option.value} className="admin-email" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={(e) => setAddUserModal((prev) => ({
+                            ...prev,
+                            enabled_modules: e.target.checked
+                              ? normalizeEnabledModules([...(prev.enabled_modules || []), option.value])
+                              : normalizeEnabledModules(prev.enabled_modules).filter((item) => item !== option.value)
+                          }))}
+                        />
+                        {option.label}
+                      </label>
+                    );
+                  })}
                 </label>
                 {addUserModal.error ? (
                   <p className="form-error">{addUserModal.error}</p>

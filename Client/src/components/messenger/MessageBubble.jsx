@@ -20,7 +20,11 @@ const MessageBubble = React.memo(function MessageBubble({
   const menuRef = useRef(null);
 
   const isDeleted = message.deleted_for_everyone;
-  const canEdit = isOwn && !isDeleted && (message.content || "").trim().length > 0;
+  // Edit window: 10 minutes from message creation (must match backend enforcement)
+  const withinEditWindow =
+    !message.created_at ||
+    Date.now() - new Date(message.created_at).getTime() < 10 * 60 * 1000;
+  const canEdit = isOwn && !isDeleted && (message.content || "").trim().length > 0 && withinEditWindow;
   const hasActions =
     onDeleteForMe ||
     (isOwn && onRequestDeleteForEveryone && !isDeleted) ||
@@ -156,12 +160,34 @@ const MessageBubble = React.memo(function MessageBubble({
                   return (
                     <div key={`${message.id}-${att.url}`} className="msger-attachment">
                       {isImage ? (
-                        <img src={url} alt={att.name} />
+                        <a href={url} target="_blank" rel="noreferrer">
+                          <img src={url} alt={att.name || "Image"} loading="lazy" />
+                        </a>
                       ) : isVideo ? (
                         <video src={url} controls playsInline className="msger-attachment-video" />
                       ) : (
-                        <a href={url} target="_blank" rel="noreferrer">
-                          {att.name}
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="msger-attachment-file"
+                        >
+                          <svg
+                            className="msger-attachment-file-icon"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden
+                          >
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                          </svg>
+                          <span className="msger-attachment-file-name">
+                            {att.name || "File"}
+                          </span>
                         </a>
                       )}
                     </div>
